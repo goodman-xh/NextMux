@@ -34,7 +34,7 @@
     "htmlparser2": "10.0.0",
     "ipaddr.js": "2.5.0",
     "keytar": "7.9.0",
-    "linkify-it": "5.0.2",
+    "linkify-it": "6.1.0",
     "onnxruntime-node": "1.22.0",
     "pngjs": "7.0.0",
     "proper-lockfile": "4.1.2",
