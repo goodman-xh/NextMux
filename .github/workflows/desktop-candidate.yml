@@ -1,0 +1,141 @@
+name: Verify uploaded desktop release
+run-name: Verify candidate ${{ inputs.candidate_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_id:
+        description: Candidate ID from the administrator upload list
+        type: string
+        required: true
+permissions:
+  contents: read
+# Serialize with the existing publisher. Candidate import only creates archives;
+# the normal administrator release-target transaction controls user rollout.
+concurrency:
+  group: nextmux-desktop-production-feed
+  cancel-in-progress: false
+env:
+  NEXTMUX_TRUSTED_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+jobs:
+  download:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    environment: desktop-production
+    timeout-minutes: 60
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          package-manager-cache: false
+      - id: targets
+        name: Read the native verification matrix
+        run: node --input-type=module -e 'import fs from "node:fs";import {DESKTOP_RELEASE_TARGETS} from "./scripts/desktop-release-targets.mjs";fs.appendFileSync(process.env.GITHUB_OUTPUT,"matrix="+JSON.stringify({include:DESKTOP_RELEASE_TARGETS})+"\n")'
+      - name: Claim and download private upload parts
+        env:
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          NEXTMUX_D1_DATABASE_ID: ${{ vars.NEXTMUX_D1_DATABASE_ID }}
+        run: node scripts/release-candidate-ci.mjs download --candidate "$CANDIDATE_ID" --dist candidate-dist --metadata candidate.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: candidate-input
+          path: |
+            candidate-dist/
+            candidate.json
+          if-no-files-found: error
+          retention-days: 3
+
+  verify:
+    needs: download
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.download.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    # No storage credentials or signing private keys enter a runner that
+    # executes an uploaded application, even after signature verification.
+    timeout-minutes: 150
+    env:
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      WINDOWS_PUBLISHER_NAME: ${{ vars.WINDOWS_PUBLISHER_NAME }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          package-manager-cache: false
+      - name: Install trusted verification dependencies
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.19.0 --activate
+          pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v8
+        with:
+          name: candidate-input
+          path: uploaded
+      - name: Verify signatures, identity, architecture and packaged behavior
+        run: node scripts/verify-release-candidate.mjs --metadata uploaded/candidate.json --platform ${{ matrix.platform }} --arch ${{ matrix.arch }} --directory uploaded/candidate-dist/nextmux-${{ matrix.id }} --evidence evidence/${{ matrix.id }}
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: candidate-evidence-${{ matrix.id }}
+          path: evidence/${{ matrix.id }}
+          if-no-files-found: warn
+          retention-days: 14
+
+  archive:
+    if: always() && needs.download.result == 'success'
+    needs: [download, verify]
+    runs-on: ubuntu-24.04
+    environment: desktop-production
+    timeout-minutes: 90
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      NEXTMUX_D1_DATABASE_ID: ${{ vars.NEXTMUX_D1_DATABASE_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.18.0
+          package-manager-cache: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: candidate-input
+          path: uploaded
+      - name: Record a failed native verification
+        if: needs.verify.result != 'success'
+        run: node scripts/release-candidate-ci.mjs fail --metadata uploaded/candidate.json
+      - uses: actions/download-artifact@v8
+        if: needs.verify.result == 'success'
+        with:
+          pattern: candidate-evidence-*
+          path: evidence-download
+      - name: Arrange native evidence
+        if: needs.verify.result == 'success'
+        run: |
+          mkdir evidence
+          for target in windows-x64 windows-arm64 macos-x64 macos-arm64; do
+            mv "evidence-download/candidate-evidence-$target" "evidence/$target"
+          done
+      - name: Archive verified bytes without switching live targets
+        if: needs.verify.result == 'success'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_RELEASE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_RELEASE_SECRET_ACCESS_KEY }}
+        run: node scripts/archive-release-candidate.mjs --metadata uploaded/candidate.json --dist uploaded/candidate-dist --evidence evidence --result candidate-result.json
+      - name: Commit verified status only after archive readback
+        if: needs.verify.result == 'success'
+        run: node scripts/release-candidate-ci.mjs finish --metadata uploaded/candidate.json --result candidate-result.json
+      - name: Record archive failure
+        if: failure() && needs.verify.result == 'success'
+        run: node scripts/release-candidate-ci.mjs fail --metadata uploaded/candidate.json

@@ -18,13 +18,13 @@ var ComicVisual = (() => {
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // ../comic-core/src/visual-effects/worker-entry.ts
+  // ../../packages/comic-core/src/visual-effects/worker-entry.ts
   var worker_entry_exports = {};
   __export(worker_entry_exports, {
     comicVisualWorkerCommand: () => comicVisualWorkerCommand
   });
 
-  // ../comic-core/src/visual-effects/freecut/effects/color.ts
+  // ../../packages/comic-core/src/visual-effects/freecut/effects/color.ts
   var color_exports = {};
   __export(color_exports, {
     GRADIENT_MAP_PRESETS: () => GRADIENT_MAP_PRESETS,
@@ -46,7 +46,7 @@ var ComicVisual = (() => {
     vibrance: () => vibrance
   });
 
-  // ../comic-core/src/visual-effects/freecut/shared/curve-spline.ts
+  // ../../packages/comic-core/src/visual-effects/freecut/shared/curve-spline.ts
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
   }
@@ -154,7 +154,7 @@ var ComicVisual = (() => {
     return clamp(y, 0, 1);
   }
 
-  // ../comic-core/src/visual-effects/freecut/shared/gpu-curves.ts
+  // ../../packages/comic-core/src/visual-effects/freecut/shared/gpu-curves.ts
   var DEFAULT_POINT_XS = {
     shadow: 0.25,
     highlight: 0.75
@@ -373,7 +373,7 @@ var ComicVisual = (() => {
     return parts.join("|");
   }
 
-  // ../comic-core/src/visual-effects/freecut/effects/color.ts
+  // ../../packages/comic-core/src/visual-effects/freecut/effects/color.ts
   function readNumberParam(params, key, fallback) {
     const value = params[key];
     return typeof value === "number" ? value : fallback;
@@ -1893,13 +1893,13 @@ fn gradientMapFragment(input: VertexOutput) -> @location(0) vec4f {
     }
   };
 
-  // ../comic-core/src/visual-effects/freecut/effects/lut.ts
+  // ../../packages/comic-core/src/visual-effects/freecut/effects/lut.ts
   var lut_exports = {};
   __export(lut_exports, {
     lut3d: () => lut3d
   });
 
-  // ../comic-core/src/visual-effects/freecut/lut/cube-lut.ts
+  // ../../packages/comic-core/src/visual-effects/freecut/lut/cube-lut.ts
   function decodeLutData(encoded) {
     const binary = atob(encoded);
     const data = new Uint8Array(binary.length);
@@ -1928,7 +1928,7 @@ fn gradientMapFragment(input: VertexOutput) -> @location(0) vec4f {
     return data;
   }
 
-  // ../comic-core/src/visual-effects/freecut/effects/lut.ts
+  // ../../packages/comic-core/src/visual-effects/freecut/effects/lut.ts
   var IDENTITY_LUT_SIZE = 2;
   var lut3d = {
     id: "gpu-lut",
@@ -2006,7 +2006,7 @@ fn lutFragment(input: VertexOutput) -> @location(0) vec4f {
     return Math.floor(parsed);
   }
 
-  // ../comic-core/src/visual-effects/freecut/effects/blur.ts
+  // ../../packages/comic-core/src/visual-effects/freecut/effects/blur.ts
   var blur_exports = {};
   __export(blur_exports, {
     boxBlur: () => boxBlur,
@@ -2376,7 +2376,7 @@ fn zoomBlurFragment(input: VertexOutput) -> @location(0) vec4f {
     ])
   };
 
-  // ../comic-core/src/visual-effects/freecut/effects/distort.ts
+  // ../../packages/comic-core/src/visual-effects/freecut/effects/distort.ts
   var distort_exports = {};
   __export(distort_exports, {
     blocks: () => blocks,
@@ -4116,7 +4116,7 @@ fn drosteFragment(input: VertexOutput) -> @location(0) vec4f {
     ])
   };
 
-  // ../comic-core/src/visual-effects/freecut/effects/stylize.ts
+  // ../../packages/comic-core/src/visual-effects/freecut/effects/stylize.ts
   var stylize_exports = {};
   __export(stylize_exports, {
     ascii: () => ascii,
@@ -6973,7 +6973,7 @@ fn pixelSortHqMain(@builtin(global_invocation_id) gid: vec3u) {
     ])
   };
 
-  // ../comic-core/src/visual-effects/freecut/effects/keying.ts
+  // ../../packages/comic-core/src/visual-effects/freecut/effects/keying.ts
   var keying_exports = {};
   __export(keying_exports, {
     chromaKey: () => chromaKey
@@ -7087,7 +7087,7 @@ fn chromaKeyFragment(input: VertexOutput) -> @location(0) vec4f {
     }
   };
 
-  // ../comic-core/src/visual-effects/freecut/registry.ts
+  // ../../packages/comic-core/src/visual-effects/freecut/registry.ts
   var GPU_EFFECT_REGISTRY = /* @__PURE__ */ new Map();
   var GPU_EFFECT_CATEGORIES = {
     color: [],
@@ -7114,7 +7114,7 @@ fn chromaKeyFragment(input: VertexOutput) -> @location(0) vec4f {
   registerEffects(stylize_exports);
   registerEffects(keying_exports);
 
-  // ../comic-core/src/visual-effects.ts
+  // ../../packages/comic-core/src/visual-effects.ts
   var comicMaskRanges = { x: [-4, 4], y: [-4, 4], width: [1e-3, 8], height: [1e-3, 8], rotation: [-36e3, 36e3], feather: [0, 512], opacity: [0, 1] };
   function comicVisualPropertyRange(clip, property) {
     const [kind, id, key, ...rest] = property.split(":");
@@ -7146,7 +7146,7 @@ fn chromaKeyFragment(input: VertexOutput) -> @location(0) vec4f {
     return typeof value === "number" ? value : 0;
   }
 
-  // ../comic-core/src/composition.ts
+  // ../../packages/comic-core/src/composition.ts
   var compiledCurves = /* @__PURE__ */ new WeakMap();
   var clamp3 = (n, a, b) => Math.min(b, Math.max(a, n));
   function ease(type, t) {
@@ -7264,7 +7264,7 @@ fn chromaKeyFragment(input: VertexOutput) -> @location(0) vec4f {
     return result;
   }
 
-  // ../comic-core/src/visual-effects/freecut/shared/fullscreen-quad.ts
+  // ../../packages/comic-core/src/visual-effects/freecut/shared/fullscreen-quad.ts
   var FULLSCREEN_QUAD_WGSL = (
     /* wgsl */
     `
@@ -7299,7 +7299,7 @@ fn vertexMain(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
 `
   );
 
-  // ../comic-core/src/visual-effects/freecut/common.ts
+  // ../../packages/comic-core/src/visual-effects/freecut/common.ts
   var COMMON_WGSL = (
     /* wgsl */
     `
@@ -7399,7 +7399,7 @@ fn noise2d(p: vec2f) -> f32 {
 `
   );
 
-  // ../comic-core/src/visual-effects/renderer.ts
+  // ../../packages/comic-core/src/visual-effects/renderer.ts
   var textureUsage = { COPY_SRC: 1, COPY_DST: 2, TEXTURE_BINDING: 4, STORAGE_BINDING: 8, RENDER_ATTACHMENT: 16 };
   var bufferUsage = { COPY_DST: 8, UNIFORM: 64 };
   var blit = `${FULLSCREEN_QUAD_WGSL}
@@ -7740,7 +7740,7 @@ ${def.shader}` });
     }
   };
 
-  // ../comic-core/src/visual-effects/worker-entry.ts
+  // ../../packages/comic-core/src/visual-effects/worker-entry.ts
   var renderer;
   async function comicVisualWorkerCommand(meta, bytes) {
     if (meta.command === "init") {

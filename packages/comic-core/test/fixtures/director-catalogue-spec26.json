@@ -1,0 +1,26 @@
+{
+  "poses": {
+    "count": 28,
+    "sha256": "0bfdfad989a2eade6e7900ac40953e49bc2b012c75a525968d955a0ca8408485"
+  },
+  "assets": {
+    "count": 35,
+    "sha256": "3cc4767dbd43b3571a129891b16786f7eeb384950fedb65aff273e22c41aacc9"
+  },
+  "cameras": {
+    "count": 16,
+    "sha256": "2ab8dcb0ac555daf4914e5c9ef233be4816ced9423fcea0ff8ee22670768104d"
+  },
+  "scenes": {
+    "count": 20,
+    "sha256": "ed1840f436f01ee0eef8201a6057fda8d31da4ab87e9dbc302c671fa51fbd0af"
+  },
+  "bodyTypes": {
+    "count": 7,
+    "sha256": "0307fdcfe7b27c941277da107bc165af70df5b9459363b06a10679da4e7b5f50"
+  },
+  "jointDefs": {
+    "count": 4,
+    "sha256": "661c8654a9c63fa10c3a830a64334a1cfd69e59c450d7a93b43614093dffaf1d"
+  }
+}
