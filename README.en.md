@@ -123,3 +123,7 @@ Installers and `.sha256` checksum files are written to `apps/desktop/release/`.
   pnpm scan:secrets
   ```
 - **License**: Licensed under the [Apache License 2.0](./LICENSE). See [CONTRIBUTING.md](./CONTRIBUTING.md), [SECURITY.md](./SECURITY.md), and [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) for contribution and security reporting guidelines.
+
+## Code Signing Policy
+
+Free code signing on Windows is provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/). See [CODE_SIGNING_POLICY.md](./CODE_SIGNING_POLICY.md) for details.

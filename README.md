@@ -123,3 +123,9 @@ pnpm --filter @nextmux/desktop run dist:win:arm64
   pnpm scan:secrets
   ```
 - **开源许可证**：本项目采用 [Apache License 2.0](./LICENSE) 开源许可。贡献指南与安全漏洞提交流程请参阅 [CONTRIBUTING.md](./CONTRIBUTING.md)、[SECURITY.md](./SECURITY.md) 与 [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)。
+
+## Windows 代码签名与安全声明 (Code Signing Policy)
+
+Windows 版本的免费代码签名由 [SignPath.io](https://signpath.io/) 提供，代码签名证书由 [SignPath Foundation](https://signpath.org/) 颁发。详见 [CODE_SIGNING_POLICY.md](./CODE_SIGNING_POLICY.md)。
+
+Free code signing on Windows is provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/). See [CODE_SIGNING_POLICY.md](./CODE_SIGNING_POLICY.md) for details.
