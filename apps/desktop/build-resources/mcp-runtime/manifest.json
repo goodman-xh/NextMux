@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "runtimes": {
+    "playwright": {
+      "entry": "runtimes/playwright/server.cjs",
+      "platforms": [
+        "darwin",
+        "win32",
+        "linux"
+      ],
+      "architectures": [
+        "x64",
+        "arm64"
+      ],
+      "source": {
+        "type": "npm",
+        "package": "@playwright/mcp",
+        "version": "0.0.80",
+        "integrity": "sha512-FOPXHm2SvFhAQylm10jMZ35B/SR2TaMLVkavAlwoG4N2qCb5RqbvhQYcu3zmXNyxR2DW0Ooxe+9XPVt5UjKRCQ==",
+        "bin": "cli.js"
+      }
+    },
+    "chrome-devtools": {
+      "entry": "runtimes/chrome-devtools/server.cjs",
+      "platforms": [
+        "darwin",
+        "win32",
+        "linux"
+      ],
+      "architectures": [
+        "x64",
+        "arm64"
+      ],
+      "args": [
+        "--no-usage-statistics"
+      ],
+      "source": {
+        "type": "npm",
+        "package": "chrome-devtools-mcp",
+        "version": "1.9.0",
+        "integrity": "sha512-RnzXoJiUQ44hpOihWk90uOhLD/CnwDkDy0ldHMZONJ2nYQ+dWN1fq1luHHqyd+7FuYnyIlCY6uTThbN5ut9kSQ==",
+        "bin": "build/src/bin/chrome-devtools-mcp.js"
+      }
+    },
+    "qwen-computer-use": {
+      "entry": "runtimes/qwen-computer-use/server.cjs",
+      "platforms": [
+        "darwin",
+        "win32",
+        "linux"
+      ],
+      "architectures": [
+        "x64",
+        "arm64"
+      ],
+      "source": {
+        "type": "npm",
+        "package": "@qwen-code/open-computer-use",
+        "version": "0.2.3",
+        "integrity": "sha512-Cnoofoc/1sx0zaXvktbm6mOLPlw1w3tF++KREO4gBR1VM+Oy+ZYRgkoAjY3ckhGqPywDyHLv+2iq1gfDowU08Q==",
+        "bin": "bin/open-computer-use-mcp"
+      }
+    },
+    "windows-computer-use": {
+      "entry": "runtimes/windows-computer-use/server.cjs",
+      "platforms": [
+        "win32"
+      ],
+      "architectures": [
+        "x64",
+        "arm64"
+      ],
+      "source": {
+        "type": "pypi",
+        "package": "windows-mcp",
+        "version": "0.8.5",
+        "url": "https://files.pythonhosted.org/packages/5d/7a/c52fbd66776394e4e94f8e2814a1784837f9bca3ab34562c5c851ad8c751/windows_mcp-0.8.5-py3-none-any.whl",
+        "sha256": "a68dff0a493b620cf0febdb5b31cf140199e5d54fa8b737dfadb4aa73100630d",
+        "entrypoint": "windows-mcp",
+        "pythonModule": "windows_mcp",
+        "args": [
+          "serve"
+        ]
+      }
+    },
+    "macos-automator": {
+      "entry": "runtimes/macos-automator/server.cjs",
+      "platforms": [
+        "darwin"
+      ],
+      "architectures": [
+        "x64",
+        "arm64"
+      ],
+      "source": {
+        "type": "npm",
+        "package": "@steipete/macos-automator-mcp",
+        "version": "0.4.7",
+        "integrity": "sha512-8BQhFvsWSs+ERgHPqVkTg6KwSpOL8RwEPh8bq1So6R/kbscO4iqodNByBq2pL7ugq0jUB/sQGEcml6WkSUMveQ==",
+        "bin": "dist/server.js"
+      }
+    }
+  }
+}

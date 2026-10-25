@@ -1,0 +1,187 @@
+{
+  "platform": "darwin",
+  "architecture": "arm64",
+  "rosettaQualification": false,
+  "source": {
+    "electron": {
+      "path": "node_modules/.pnpm/electron@42.3.0_supports-color@8.1.1/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron",
+      "bytes": 33968,
+      "architectures": [
+        "arm64"
+      ],
+      "sha256": "03e1f18f7d123bab134f38686759010e0f4c76d5d185704714696f0304cf059f",
+      "minimumMacosVersions": [
+        "12.0"
+      ]
+    },
+    "keytar": {
+      "path": "node_modules/.pnpm/keytar@7.9.0/node_modules/keytar/build/Release/keytar.node",
+      "bytes": 99528,
+      "architectures": [
+        "arm64"
+      ],
+      "sha256": "6c32c41c0e5a9e546616607b0383eada5bb646d0164324f20baab59d5b7963fa",
+      "minimumMacosVersions": [
+        "11.0"
+      ],
+      "version": "7.9.0",
+      "packageManifest": "node_modules/.pnpm/keytar@7.9.0/node_modules/keytar/package.json",
+      "packagingLocation": "node_modules/keytar/build/Release/keytar.node",
+      "electronAbi": {
+        "loaded": true,
+        "modules": "146",
+        "napi": "10"
+      }
+    },
+    "watcher": {
+      "path": "node_modules/.pnpm/@parcel+watcher-darwin-arm64@2.6.0/node_modules/@parcel/watcher-darwin-arm64/watcher.node",
+      "bytes": 326000,
+      "architectures": [
+        "arm64"
+      ],
+      "sha256": "bdc5c3950f2bc6dde211a17e100faf862e712e51c853555dade6f5d1aab1e921",
+      "minimumMacosVersions": [
+        "11.0"
+      ]
+    },
+    "ripgrep": {
+      "path": "node_modules/.pnpm/@vscode+ripgrep-darwin-arm64@1.18.0/node_modules/@vscode/ripgrep-darwin-arm64/bin/rg",
+      "bytes": 4528512,
+      "architectures": [
+        "arm64"
+      ],
+      "sha256": "6ef40346bf31fcce79d9614c7745c198542925a0c7d4911e1ffe794c53392ac1",
+      "minimumMacosVersions": [
+        "11.0"
+      ],
+      "version": "ripgrep 15.0.0 (rev 3a612f88b8)"
+    },
+    "ffmpeg": {
+      "path": "node_modules/.pnpm/@ffmpeg-installer+ffmpeg@1.1.0/node_modules/@ffmpeg-installer/darwin-arm64/ffmpeg",
+      "bytes": 36766920,
+      "architectures": [
+        "arm64"
+      ],
+      "sha256": "a2ad6f0fc42a3c8f5183ef1d53e906d6bb35478d14a6b67175c30ce6c17e9214",
+      "minimumMacosVersions": [
+        "11.0"
+      ],
+      "version": "ffmpeg version 4.4 Copyright (c) 2000-2021 the FFmpeg developers"
+    },
+    "speech": {
+      "path": "apps/desktop/native/speech/macos/NextMuxSpeechHelper.app/Contents/MacOS/NextMuxSpeechHelper",
+      "bytes": 221480,
+      "architectures": [
+        "x64",
+        "arm64"
+      ],
+      "executableArchitectures": [
+        "x64",
+        "arm64"
+      ],
+      "sha256": "77dea960572a17e9182c7491b88630b1a08e3b8b8525e815342823e232a04a15",
+      "engine": "macos-speech",
+      "probeStatus": "permission-required"
+    }
+  },
+  "packaged": {
+    "electron": {
+      "path": "apps/desktop/release/mac-arm64/NextMux.app/Contents/MacOS/NextMux",
+      "bytes": 33968,
+      "architectures": [
+        "arm64"
+      ],
+      "sha256": "03e1f18f7d123bab134f38686759010e0f4c76d5d185704714696f0304cf059f",
+      "minimumMacosVersions": [
+        "12.0"
+      ]
+    },
+    "fileBoundary": {
+      "schemaVersion": 1,
+      "scope": "sensitive-configuration-and-history-filenames",
+      "archiveEntries": 30990,
+      "physicalEntries": 287,
+      "forbiddenEntries": 0,
+      "followsSymbolicLinks": false,
+      "scansFileContents": false
+    },
+    "keytar": {
+      "path": "apps/desktop/release/mac-arm64/NextMux.app/Contents/Resources/app.asar.unpacked/node_modules/keytar/build/Release/keytar.node",
+      "bytes": 99528,
+      "architectures": [
+        "arm64"
+      ],
+      "sha256": "6c32c41c0e5a9e546616607b0383eada5bb646d0164324f20baab59d5b7963fa",
+      "minimumMacosVersions": [
+        "11.0"
+      ],
+      "sourceSha256Match": true,
+      "signedVariation": false,
+      "packagingLocation": "app.asar.unpacked/node_modules/keytar/build/Release/keytar.node",
+      "electronAbi": {
+        "loaded": true,
+        "modules": "146",
+        "napi": "10"
+      }
+    },
+    "watcher": {
+      "path": "apps/desktop/release/mac-arm64/NextMux.app/Contents/Resources/app.asar.unpacked/lib/backend/native/watcher.node",
+      "bytes": 326000,
+      "architectures": [
+        "arm64"
+      ],
+      "sha256": "bdc5c3950f2bc6dde211a17e100faf862e712e51c853555dade6f5d1aab1e921",
+      "minimumMacosVersions": [
+        "11.0"
+      ],
+      "sourceSha256Match": true,
+      "signedVariation": false
+    },
+    "ripgrep": {
+      "path": "apps/desktop/release/mac-arm64/NextMux.app/Contents/Resources/app.asar.unpacked/lib/backend/native/rg",
+      "bytes": 4528512,
+      "architectures": [
+        "arm64"
+      ],
+      "sha256": "6ef40346bf31fcce79d9614c7745c198542925a0c7d4911e1ffe794c53392ac1",
+      "minimumMacosVersions": [
+        "11.0"
+      ],
+      "sourceSha256Match": true,
+      "signedVariation": false,
+      "version": "ripgrep 15.0.0 (rev 3a612f88b8)"
+    },
+    "ffmpeg": {
+      "path": "apps/desktop/release/mac-arm64/NextMux.app/Contents/Resources/app.asar.unpacked/node_modules/@ffmpeg-installer/darwin-arm64/ffmpeg",
+      "bytes": 36766920,
+      "architectures": [
+        "arm64"
+      ],
+      "sha256": "a2ad6f0fc42a3c8f5183ef1d53e906d6bb35478d14a6b67175c30ce6c17e9214",
+      "minimumMacosVersions": [
+        "11.0"
+      ],
+      "sourceSha256Match": true,
+      "signedVariation": false,
+      "version": "ffmpeg version 4.4 Copyright (c) 2000-2021 the FFmpeg developers"
+    },
+    "speech": {
+      "path": "apps/desktop/release/mac-arm64/NextMux.app/Contents/Resources/speech/NextMuxSpeechHelper.app/Contents/MacOS/NextMuxSpeechHelper",
+      "bytes": 221480,
+      "architectures": [
+        "x64",
+        "arm64"
+      ],
+      "executableArchitectures": [
+        "x64",
+        "arm64"
+      ],
+      "sha256": "77dea960572a17e9182c7491b88630b1a08e3b8b8525e815342823e232a04a15",
+      "engine": "macos-speech",
+      "probeStatus": "permission-required",
+      "sourceSha256Match": true,
+      "signedVariation": false
+    }
+  },
+  "packagedResources": "apps/desktop/release/mac-arm64/NextMux.app/Contents/Resources"
+}

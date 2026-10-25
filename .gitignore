@@ -1,0 +1,71 @@
+node_modules/
+.pnpm-store/
+.cache/
+.chrome-profile/
+.chrome-provider/
+.chrome-*/
+.browser_modules/
+.reference/
+.yarn/
+lib/
+# `lib/` is compiled package output; the platform web app keeps hand-written source in lib folders.
+!apps/cloudflare-platform/web/src/**/lib/
+dist/
+release/
+build/
+apps/desktop/build-resources/computer-runtime/
+coverage/
+artifacts/
+output/
+*.tgz
+_e2e-editor.txt
+.wrangler/
+.env
+.env.*
+!.env.example
+**/.dev.vars
+apps/*/.data*/
+.qa-*/
+.nextmux-run/
+.nextmux/
+.pnpm-patch/
+*.log
+*.key
+*.pem
+*.p12
+*.pfx
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/settings.json
+# Local Windows conversation backup may contain credentials and personal data.
+/windows-codex-backup/
+# Local Codex recovery workspaces may contain the same conversations, secrets,
+# account metadata, and SQLite history. Keep them searchable on this machine,
+# but never stage or package them with the product.
+/codex-recovery-backup-*/
+/codex-recovery-preapply-*/
+/codex-repair-work-*/
+# Raw Codex rollout is a local restore bundle (huge, may contain secrets).
+/codex-thread-archive/raw/
+# Verified build-time native Git resources; reproduced from pinned upstream archives.
+/apps/desktop/build-resources/git-runtime/
+# Personal material that must never be published: conversation exports,
+# machine-access notes and local migration guides. They can contain
+# credentials (pnpm scan:secrets reports them).
+/CODEX对话记录-*.md
+/codex-thread-archive/
+/codex-protocol-schema-*/
+/Windows访问这台Mac.txt
+/如何将Codex对话迁移到新Mac.md
+/三台电脑同时开发避免冲突.md
+/项目清理说明.md
+# Generated: the web app build (vite outDir) and wrangler dry-run bundles.
+/apps/cloudflare-platform/public/
+.wrangler-dry-run/
+# Local operations helper with personal account IDs; keep it on this machine.
+/_部署平台并补测试额度.command
+# Project data the dev app writes into its workspace folder (apps/desktop when run from the repo).
+/apps/desktop/nextmux.chats/
+/apps/desktop/nextmux.comic.json
+/apps/desktop/nextmux.comic.production.json

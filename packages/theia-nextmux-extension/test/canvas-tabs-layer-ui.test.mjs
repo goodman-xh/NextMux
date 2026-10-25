@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { createRequire } from 'node:module';
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+const require=createRequire(import.meta.url),core=createRequire(require.resolve('@theia/core/package.json'));
+const desktop=createRequire(new URL('../../../apps/desktop/package.json',import.meta.url));
+const platform=createRequire(new URL('../../../apps/cloudflare-platform/package.json',import.meta.url));
+const puppeteer=(await import(platform.resolve('puppeteer'))).default;
+const repo=fileURLToPath(new URL('../../../',import.meta.url)),src=fileURLToPath(new URL('../src/browser/',import.meta.url));
+
+test('real canvas tabs remain above clipped generation and tool forms without moving their anchors', {timeout:45000},async t=>{
+ const {outputFiles}=await desktop('esbuild').build({stdin:{resolveDir:src,loader:'tsx',contents:`
+import React from 'react';import{createRoot}from'react-dom/client';
+import{ComicCanvas}from'./nextmux-comic-canvas';import{ComicCanvasTabs}from'./nextmux-comic-canvas-tabs-view';import{ComicDesk}from'./nextmux-comic-desk';
+import{createCanvasDocument}from'@nextmux/comic-core/canvas';import{createCanvasNode}from'./nextmux-comic-canvas-logic';
+const root=createRoot(document.querySelector('main')),now='2026-10-04T00:00:00Z';let active='main',serial=0;
+function make(kind){const node=kind==='videoGen'?{...createCanvasNode('videoGen',{x:40,y:70},{title:'Selected generation',videoModelId:'fixture'}),id:'selected',size:{width:360,height:260}}:{id:'selected',kind:'image',title:'Selected image',position:{x:40,y:70},size:{width:360,height:260},payload:{versions:[{id:'picture-v1',assetId:'picture',kind:'image',uri:'picture.png',createdAt:now}],currentVersionId:'picture-v1'}};if(kind==='videoGen')node.payload={...node.payload,prompt:'A calm landscape',parameters:{aspectRatio:'16:9',resolution:'720p',durationSeconds:5}};return{...createCanvasDocument({id:'canvas',projectId:'project',now}),viewport:{x:0,y:0,zoom:1},nodes:[node]};}
+let canvas=make('videoGen');const calls={switches:[],runs:[],tools:[]};
+const mode={mode:'textToVideo',outputVariants:[{id:'720p',resolution:'720p',aspectRatios:['16:9']}],duration:{kind:'fixed',seconds:5},audioGeneration:{mode:'unsupported',defaultEnabled:false}};
+const capability={id:'fixture',providerId:'fixture',providerModelId:'fixture',displayName:'Fixture',status:'available',version:'v1',modes:[mode]};
+const route={key:'fixture',modelId:'fixture',kind:'video',source:'Fixture',routeKind:'relay',available:true};
+const props={locale:'en',saveState:'saved',models:{image:[],video:[route]},families:{image:[],video:[{id:'fixture',name:'Fixture',vendor:'fixture',available:true,routes:[route]}]},defaultRoute:()=>route,routeOf:()=>route,capabilityOf:()=>({capability}),jobOf:()=>undefined,waiting:new Set(),submitting:new Set(),mediaUrl:()=> 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="%234a7898"/></svg>',defaults:{aspectRatio:'16:9',durationSeconds:5},onChange(next){canvas=next;render();},onUndo(){},onRedo(){},onSetRoute(){},onRun:ids=>calls.runs.push(ids),onExtract(){},onImport(){},onUsePortrait(){},onRetrySave(){},onNotice(){},toolProgress:new Map(),onTool:async(...args)=>{calls.tools.push(args);return false;},onCancelTool(){},onPickLut:async()=>undefined,onDirectorCapture:async()=>{},onSaveMarks:async()=>{throw Error('unused')},onDirectorImport:async()=>{throw Error('unused')}};
+const no=async()=>{};
+function render(){const view=<><ComicCanvasTabs locale='en' tabs={['main','second'].map((id,index)=>({id,title:index?'Second canvas':'Main canvas',kind:index?'free':'main',active:id===active,saveState:'saved'}))} closed={[]} pending={[]} activeCanvasId={active} switching={false} media={[]} onSwitch={async id=>{calls.switches.push(id);active=id;render();}} onCreate={no} onClose={async()=>true} onRename={no} onDelete={no} onResolveDelete={no}/><div className='nmx-canvas-tab-panel' role='tabpanel' id={'nmx-canvas-panel-'+active} aria-labelledby={'nmx-canvas-tab-'+active}><ComicCanvas key={serial} {...props} canvas={canvas} canUndo={false} canRedo={false}/></div></>;
+root.render(<div className='nmx-comic-studio'><ComicDesk locale='en' step='canvas' projectTitle='Tabs layer QA' reachable={new Set(['canvas','edit'])} episodes={[]} cards={[]} stopped={false} shooting={false} paused={false} splitting={false} adapting={false} canShoot={false} toEditorDisabled={true} canvasView={view} onStep={()=>{}} onMinimize={()=>{}}/></div>);}
+window.fixture={calls,get canvas(){return canvas;},get active(){return active;},move(dx,dy){const zoom=document.querySelector('[data-id=selected]').getBoundingClientRect().width/canvas.nodes[0].size.width;canvas={...canvas,nodes:canvas.nodes.map(n=>({...n,position:{x:n.position.x+dx/zoom,y:n.position.y+dy/zoom}}))};render();},reset(kind){canvas=make(kind);active='main';serial++;render();}};render();
+`},bundle:true,write:false,platform:'browser',format:'iife',loader:{'.css':'empty','.svg':'dataurl'},alias:{react:core.resolve('react'),'react/jsx-runtime':core.resolve('react/jsx-runtime'),'react-dom':core.resolve('react-dom'),'react-dom/client':core.resolve('react-dom/client'),'@nextmux/comic-core/canvas':repo+'packages/comic-core/src/canvas.ts','@nextmux/comic-core/canvas-capabilities':repo+'packages/comic-core/src/canvas-capabilities.ts'}});
+ const evidence=repo+'.nextmux-run/reference-input-fix-2026-10-04';await mkdir(evidence,{recursive:true});
+ const browser=await puppeteer.launch({headless:true});t.after(()=>browser.close());const page=await browser.newPage(),errors=[];page.setDefaultTimeout(6000);page.on('pageerror',e=>errors.push(e.message));
+ await page.setViewport({width:1200,height:850});await page.setRequestInterception(true);page.on('request',r=>void r.respond({status:200,contentType:'text/html',body:'<main class="nmx-desktop-widget nmx-shell"></main>'}));await page.goto('https://canvas-tabs-layer.test/');
+ for(const name of ['nextmux.css','nextmux-desktop-production.css','nextmux-comic-studio.css','nextmux-comic-desk.css','nextmux-comic-canvas.css','nextmux-comic-canvas-float.css','nextmux-comic-canvas-view-controls.css','nextmux-comic-canvas-dock.css','nextmux-comic-canvas-camera.css'])await page.addStyleTag({content:await readFile(src+'style/'+name,'utf8')});
+ await page.addStyleTag({content:await readFile(require.resolve('@xyflow/react/dist/style.css'),'utf8')});
+ await page.addStyleTag({content:'html,body{height:100%;margin:0}main.nmx-shell{position:absolute;inset:16px;display:block;width:calc(100% - 32px);height:calc(100% - 32px);--nmx-bg:#171717;--nmx-panel:#222;--nmx-panel-2:#333;--nmx-text:#eee;--nmx-muted:#aaa;--nmx-border:#555;--nmx-accent:#b18cdb;font:13px system-ui}.nmx-comic-studio{height:100%}'});
+ await page.addStyleTag({content:(await readFile(core.resolve('@vscode/codicons/dist/codicon.css'),'utf8')).replace(/url\([^)]*codicon\.ttf[^)]*\)/g,'url(data:font/ttf;base64,'+(await readFile(core.resolve('@vscode/codicons/dist/codicon.ttf'))).toString('base64')+')')});
+ await page.addScriptTag({content:outputFiles[0].text});
+ const settle=()=>page.evaluate(()=>new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done))));
+ const geometry=selector=>page.evaluate(selector=>{const rect=e=>{const r=e.getBoundingClientRect();return{left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height};};const tab=document.querySelector('#nmx-canvas-tab-second'),r=tab.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2,overlay=document.querySelector(selector),panel=document.querySelector('.nmx-canvas-tab-panel');return{node:rect(document.querySelector('[data-id="selected"]')),overlay:rect(overlay),board:rect(document.querySelector('.nmx-board')),tab:rect(tab),toolbar:document.querySelector('.nmx-board-toolbar')?rect(document.querySelector('.nmx-board-toolbar')):undefined,hitTab:tab.contains(document.elementFromPoint(x,y)),overflow:getComputedStyle(panel).overflow,isolation:getComputedStyle(panel).isolation,point:{x,y}};},selector);
+ const near=(a,b,label)=>assert.ok(Math.abs(a-b)<1,`${label}: ${a} vs ${b}`);
+ const anchored=async(selector,kind)=>{await settle();const g=await geometry(selector);if(kind==='videoGen'){near(g.overlay.top,g.node.bottom+10,'form remains 10px below node');near(g.overlay.left+g.overlay.width/2,g.node.left+g.node.width/2,'form centre follows node');}else{near(g.overlay.top,g.toolbar.bottom+6,'tool menu remains 6px below toolbar');near(g.overlay.right,g.toolbar.right,'tools align with toolbar right');}return g;};
+ const results=[];
+ for(const kind of ['videoGen','image'])await t.test(kind==='videoGen'?'generation form is clipped below tabs':'tool menu is clipped below tabs',async()=>{
+  await page.evaluate(kind=>fixture.reset(kind),kind);await page.waitForSelector('[data-id="selected"] header');await settle();await page.click('[data-id="selected"] header');
+  const selector=kind==='videoGen'?'.nmx-board-panel-layer':'.nmx-board-tools';
+  if(kind==='image'){await page.waitForSelector('.nmx-board-toolbar button:has(.codicon-tools)');await page.click('.nmx-board-toolbar button:has(.codicon-tools)');}
+  await page.waitForSelector(selector);const initial=await anchored(selector,kind);
+  assert.ok(initial.overlay.top>=initial.board.top,'fixture begins with the real form below the top boundary');
+  await page.evaluate(({x,y})=>fixture.move(x,y),{x:initial.point.x-(initial.overlay.left+Math.min(50,initial.overlay.width/2)),y:initial.point.y-12-initial.overlay.top});
+  await page.waitForFunction(({selector,y})=>Math.abs(document.querySelector(selector).getBoundingClientRect().top-y)<1,{}, {selector,y:initial.point.y-12}).catch(async error=>{await writeFile(evidence+'/tabs-'+kind+'-diagnostic.json',JSON.stringify({initial,after:await geometry(selector),canvas:await page.evaluate(()=>fixture.canvas),errors},null,2));await page.screenshot({path:evidence+'/tabs-'+kind+'-diagnostic.png'});throw error;});
+  const crossed=await anchored(selector,kind);assert.ok(crossed.overlay.left<crossed.point.x&&crossed.overlay.right>crossed.point.x&&crossed.overlay.top<crossed.point.y&&crossed.overlay.bottom>crossed.point.y,'actual form box geometrically crosses the tab click point');
+  assert.equal(crossed.overflow,'clip');assert.equal(crossed.isolation,'isolate');assert.equal(crossed.hitTab,true,'the selected tab owns hit testing despite the overlapping form rectangle');near(crossed.overlay.width,initial.overlay.width,'clipping does not shrink form width');
+  await page.screenshot({path:evidence+'/tabs-'+kind+'-clipped.png'});
+  await page.mouse.click(crossed.point.x,crossed.point.y);await page.waitForFunction(()=>fixture.active==='second');assert.equal(await page.$eval('#nmx-canvas-tab-second',e=>e.getAttribute('aria-selected')),'true');
+  const before=await geometry(selector);await page.evaluate(()=>fixture.move(0,120));await page.waitForFunction(({selector,y})=>Math.abs(document.querySelector(selector).getBoundingClientRect().top-y)<1,{}, {selector,y:before.overlay.top+120});
+  const restored=await anchored(selector,kind);assert.ok(restored.overlay.top>=restored.board.top);near(restored.overlay.width,initial.overlay.width,'returning below tabs preserves width');
+  const interactive=await page.$eval(selector,e=>{const r=e.getBoundingClientRect();for(let y=Math.max(r.top+8,document.querySelector('.nmx-board').getBoundingClientRect().top+8);y<Math.min(r.bottom-8,innerHeight-10);y+=12)for(let x=Math.max(r.left+8,8);x<Math.min(r.right-8,innerWidth-8);x+=20){const hit=document.elementFromPoint(x,y);if(e.contains(hit))return true;}return false;});assert.equal(interactive,true,'the visible form still receives pointer hits below the clip boundary');
+  results.push({kind,initial,crossed,restored});
+ });
+ assert.deepEqual(await page.evaluate(()=>fixture.calls.switches),['second','second']);assert.deepEqual(await page.evaluate(()=>fixture.calls.runs),[]);assert.deepEqual(await page.evaluate(()=>fixture.calls.tools),[]);assert.deepEqual(errors,[]);
+ await writeFile(evidence+'/tabs-layer-geometry.json',JSON.stringify({results,errors},null,2)+'\n');
+});

@@ -1,0 +1,34 @@
+{
+  "schema": "nextmux.app-plugin/1",
+  "id": "com.nextmux.notepad-helper",
+  "version": "1.0.0",
+  "name": { "zh-CN": "记事本导航示例", "en": "Notepad navigation example" },
+  "description": { "zh-CN": "用预设目标演示文本导航；仅发送 Home、End 或等待，不改写文档。", "en": "A goal-button example that navigates text with Home, End or wait." },
+  "author": { "name": "NextMux" },
+  "apps": [
+    { "platform": "macos", "bundleId": "com.apple.TextEdit" },
+    { "platform": "windows", "program": "Notepad", "titleIncludes": "记事本" }
+  ],
+  "input": { "modes": ["foreground"], "keys": ["home", "end"] },
+  "loop": { "tickMs": 250 },
+  "perception": {
+    "signals": [{ "id": "changed", "type": "change", "rect": [0, 0, 1, 1] }]
+  },
+  "actions": {
+    "start": { "label": "行首", "steps": [{ "key": "home" }], "cooldownMs": 1000 },
+    "end": { "label": "行尾", "steps": [{ "key": "end" }], "cooldownMs": 1000 },
+    "wait": { "label": "等待", "steps": [{ "wait": 100 }] }
+  },
+  "decisions": [{
+    "id": "navigation", "type": "choice", "everyMs": 1000,
+    "question": "Select start or end once to follow the user's navigation goal, then wait. Never modify text.",
+    "options": ["start", "end", "wait"], "fallback": "wait"
+  }],
+  "presets": [
+    { "id": "line_start", "label": "定位行首", "goal": "定位到当前行的行首，然后等待。" },
+    { "id": "line_end", "label": "定位行尾", "goal": "定位到当前行的行尾，然后等待。" },
+    { "id": "observe", "label": "观察变化", "goal": "保持等待，观察文档变化，不发送导航按键。" }
+  ],
+  "goals": { "default": "保持等待，直到用户选择导航目标。" },
+  "limits": { "maxRunMinutes": 5 }
+}

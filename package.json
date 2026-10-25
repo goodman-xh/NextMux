@@ -1,0 +1,31 @@
+{
+  "name": "nextmux",
+  "version": "0.1.0-alpha.5",
+  "license": "Apache-2.0",
+  "private": true,
+  "description": "NextMux open-source AI coding and comic-drama desktop client workbench",
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "desktop:prepare": "pnpm --filter @nextmux/agent-runtime build && pnpm --filter @nextmux/model-runtime build && pnpm --filter @nextmux/comic-core build && pnpm --filter @nextmux/media-core build && pnpm --filter @nextmux/theia-extension build",
+    "desktop:build": "pnpm desktop:prepare && pnpm --filter @nextmux/desktop build",
+    "desktop:build:release": "pnpm desktop:prepare && pnpm --filter @nextmux/desktop build:release",
+    "desktop:start:debug": "pnpm --filter @nextmux/desktop start:debug",
+    "desktop:audit": "node scripts/desktop-cdp.mjs audit",
+    "desktop:start": "pnpm --filter @nextmux/desktop start",
+    "desktop:dist:win": "pnpm desktop:prepare && pnpm --filter @nextmux/desktop dist:win",
+    "desktop:dist:mac": "pnpm desktop:prepare && pnpm --filter @nextmux/desktop dist:mac",
+    "official:qa": "node scripts/official-model-qa-server.mjs",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "check": "pnpm typecheck && pnpm test",
+    "check:local": "node scripts/local-check.mjs",
+    "check:quick": "node scripts/local-check.mjs --quick",
+    "scan:secrets": "node scripts/secret-scan.mjs ."
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "electron": "42.3.0",
+    "supports-color": "8.1.1",
+    "typescript": "6.0.3"
+  }
+}

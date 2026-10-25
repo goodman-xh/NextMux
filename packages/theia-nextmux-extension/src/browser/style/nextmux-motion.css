@@ -1,0 +1,157 @@
+/* NextMux motion layer (REQUIREMENTS §4). Loaded last.
+ *
+ * Parameters are copied, not invented:
+ *  - Dialog / AlertDialog open: shadcn/ui (MIT) `data-[state=open]:animate-in
+ *    fade-in-0 zoom-in-95 duration-200` via tailwindcss-animate (MIT); overlay
+ *    `fade-in-0`.
+ *  - Sheet open: shadcn/ui Sheet `slide-in-from-right` (shortened to the
+ *    150–250 ms budget used by the Codex desktop app).
+ *  - Hover/press colour: Radix Themes (MIT) `transition: background-color,
+ *    color, box-shadow` at ~100–150 ms with `ease-out`.
+ * Only opacity/transform animate on open; nothing loops while idle. */
+
+.nmx-desktop-widget,
+.nmx-model-effort-portal {
+    --nmx-motion-fast: 120ms;
+    --nmx-motion-base: 200ms;
+    --nmx-motion-ease-out: cubic-bezier(.2, .8, .2, 1);
+}
+
+@keyframes nmx-motion-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes nmx-motion-dialog-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes nmx-motion-sheet-in { from { opacity: .6; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@keyframes nmx-motion-sheet-in-rtl { from { opacity: .6; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+@keyframes nmx-motion-window-in { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes nmx-motion-flight-landed {
+    0%, 100% { background-color: transparent; }
+    35% { background-color: color-mix(in srgb, var(--nmx-accent, #c7a6b3) 22%, transparent); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    /* Modal overlays: backdrop fades, the dialog fades in with a slight zoom. */
+    .nmx-shell .nmx-dialog-backdrop,
+    .nmx-project-memory-backdrop {
+        animation: nmx-motion-fade-in 150ms ease-out;
+    }
+    .nmx-shell .nmx-dialog-backdrop > :not(.nmx-branch-dialog),
+    .nmx-project-memory-backdrop > *,
+    .nmx-shell .nmx-sheet-backdrop:not(.nmx-dialog-backdrop) > .nmx-permission-sheet {
+        animation: nmx-motion-dialog-in var(--nmx-motion-base) var(--nmx-motion-ease-out);
+        transform-origin: 50% 50%;
+    }
+
+    /* Side sheets slide in from the inline end. */
+    .nmx-shell .nmx-sheet-backdrop:not(.nmx-dialog-backdrop) {
+        animation: nmx-motion-fade-in 150ms ease-out;
+    }
+    .nmx-shell .nmx-sheet-backdrop:not(.nmx-dialog-backdrop) > :is(.nmx-purchase-sheet, .nmx-diff-sheet) {
+        animation: nmx-motion-sheet-in 220ms var(--nmx-motion-ease-out);
+    }
+    [dir='rtl'] .nmx-shell .nmx-sheet-backdrop:not(.nmx-dialog-backdrop) > :is(.nmx-purchase-sheet, .nmx-diff-sheet) {
+        animation-name: nmx-motion-sheet-in-rtl;
+    }
+
+    /* Hover / press / focus colour changes ease instead of snapping. Zero
+       specificity: any component that declares its own transition wins. */
+    :where(.nmx-desktop-widget, .nmx-model-effort-portal) :where(button, a[href], summary, [role='button'], [role='tab'],
+        [role='menuitem'], [role='menuitemradio'], [role='option'], .nmx-session-row, .nmx-project-row) {
+        transition-property: color, background-color, border-color, box-shadow, opacity, outline-color;
+        transition-duration: var(--nmx-motion-fast);
+        transition-timing-function: ease-out;
+    }
+
+    /* A tiled conversation window eases in when it is shown. */
+    .nmx-desktop-widget.nmx-conversation-entering .nmx-shell.is-detached-conversation {
+        animation: nmx-motion-window-in 220ms var(--nmx-motion-ease-out);
+    }
+
+    /* The "collapse tiles" control briefly lights up where the cue lands. */
+    .nmx-titlebar-actions [data-conversation-window-menu].is-flight-landed {
+        animation: nmx-motion-flight-landed 520ms ease-out;
+    }
+}
+
+/* Pointer focus never shows the browser/Theia blue ring; keyboard focus keeps
+   the theme ring declared in nextmux-desktop-production.css (:focus-visible). */
+:is(.nmx-desktop-widget, .nmx-model-effort-portal) :focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* Hidden documents (window closed to the tray, a tile hidden after reclaim)
+   pause any running CSS animation instead of ticking in the background. */
+html.nmx-document-hidden :is(.nmx-desktop-widget, .nmx-model-effort-portal) *,
+html.nmx-document-hidden :is(.nmx-desktop-widget, .nmx-model-effort-portal) *::before,
+html.nmx-document-hidden :is(.nmx-desktop-widget, .nmx-model-effort-portal) *::after {
+    animation-play-state: paused !important;
+}
+
+/* Final typography contract. Feature sheets load after the production sheet;
+   applying the family to text descendants also covers native controls, portal
+   menus and literal user text that do not inherit their parent's font. Icon
+   glyphs retain their dedicated font; code/terminal descendants are handled
+   separately below, including syntax-highlighted spans and Monaco inputs. */
+body,
+.nmx-shell,
+.nmx-portal,
+.nmx-model-picker-portal,
+.nmx-model-effort-portal,
+.nmx-floating-file-window,
+.nmx-floating-note-window,
+body :where(*):not(:where(
+    code, code *, pre, pre *, kbd, kbd *, samp, samp *,
+    .nmx-inline-code, .nmx-inline-code *, .nmx-md-code-block, .nmx-md-code-block *,
+    .monaco-editor, .monaco-editor *, .xterm, .xterm *,
+    .codicon, .fa, .fas, .far, .fab, [class^='fa-'], [class*=' fa-']
+)) {
+    font-family: var(--nmx-ui-font) !important;
+}
+
+body :is(
+    code, code *, pre, pre *, kbd, kbd *, samp, samp *,
+    .nmx-inline-code, .nmx-inline-code *, .nmx-md-code-block, .nmx-md-code-block *,
+    .monaco-editor, .monaco-editor *, .xterm, .xterm *
+):not(:where(.codicon, .fa, .fas, .far, .fab, [class^='fa-'], [class*=' fa-'])) {
+    font-family: var(--nmx-mono-font) !important;
+}
+
+/* Keep the editable text and its Markdown overlay metrically identical, even
+   when feature sheets give their wrappers a different inherited text size. */
+.nmx-shell :is(.nmx-composer textarea, .nmx-composer-markdown-overlay, .nmx-comic-chat-dock textarea) {
+    font-family: var(--nmx-ui-font) !important;
+    font-size: 14px !important;
+    line-height: 21px !important;
+    font-weight: 400;
+    letter-spacing: -0.005em;
+}
+
+.nmx-shell :is(.nmx-composer-relay-button, .nmx-route-button, .nmx-permission-button, .nmx-composer-footer button),
+.nmx-model-picker-portal *,
+.nmx-model-effort-portal *,
+.nmx-relay-picker-popover * {
+    font-size: 13px !important;
+    line-height: 18px !important;
+}
+
+.nmx-shell :is(.nmx-settings-page, .nmx-settings-surface, .nmx-settings-surface p) {
+    font-size: 14px !important;
+    line-height: 21px !important;
+}
+
+.nmx-shell :is(
+    .nmx-settings-nav button,
+    .nmx-settings-surface input, .nmx-settings-surface select, .nmx-settings-surface textarea,
+    .nmx-settings-surface button, .nmx-settings-surface label, .nmx-settings-surface td, .nmx-settings-surface th
+) {
+    font-size: 13px !important;
+    line-height: 18px !important;
+}
+
+.nmx-shell :is(.nmx-turn-copy time, .nmx-task-turn time, .nmx-turn-meta time),
+.nmx-session-time-tooltip,
+time {
+    font-family: var(--nmx-ui-font) !important;
+    font-size: 12px !important;
+    line-height: 16px !important;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+}

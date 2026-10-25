@@ -1,0 +1,14 @@
+{
+  "name": "@nextmux/model-trust-core",
+  "version": "0.1.0-alpha.3",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.mjs"
+  },
+  "scripts": {
+    "typecheck": "node --check src/index.mjs",
+    "test": "node --test test/*.test.mjs"
+  }
+}

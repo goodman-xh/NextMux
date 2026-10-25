@@ -1,0 +1,323 @@
+/*
+ * Model/relay pickers, settings pages and usage analytics (REQUIREMENTS §6.1, §6.8, §4.2).
+ * Motion follows Radix UI / shadcn open animations (fade, 150–200 ms, ease-out) and
+ * only animates opacity/transform; reduced motion disables it.
+ */
+
+/* ---- Picker and floating-layer enter motion (opacity only: geometry stays exact) ---- */
+@keyframes nmx-popover-fade-in { from { opacity: 0; } }
+.nmx-model-picker-popover,
+.nmx-model-effort-portal :is(.nmx-model-effort-menu, .nmx-model-evidence-menu) {
+    animation: nmx-popover-fade-in 150ms cubic-bezier(.16, 1, .3, 1);
+}
+
+/* ---- Relay picker: a relay needs an account when signed out ---- */
+.nmx-relay-sign-in-note {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    margin: 0 10px 4px;
+    color: var(--nmx-muted);
+    font-size: 11px;
+    line-height: 18px;
+}
+/* The drawer keeps the model picker's width, so the note wraps instead of losing its second half. */
+.nmx-relay-sign-in-note > span { min-width: 0; overflow-wrap: anywhere; white-space: normal; line-height: 1.4; }
+.nmx-relay-sign-in-note > .codicon { flex: none; font-size: 12px; }
+
+/* ---- Relay picker: a favorite that left the public directory (U072) ---- */
+.nmx-relay-option-metrics.is-delisted,
+.nmx-model-picker-relay-view .nmx-relay-option-metrics.is-delisted {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-inline-end: 6px;
+}
+.nmx-relay-option-metrics.is-delisted > em {
+    height: 18px;
+    padding: 0 7px;
+    border: 1px solid var(--nmx-border);
+    border-radius: 999px;
+    color: var(--nmx-muted);
+    font-size: 11px;
+    font-style: normal;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+/* ---- Settings: panel switch fades in; the account page holds appearance & language ---- */
+@keyframes nmx-settings-fade-in { from { opacity: 0; transform: translateY(4px); } }
+.nmx-settings-page > .nmx-settings-panel { animation: nmx-settings-fade-in 180ms cubic-bezier(.16, 1, .3, 1); }
+.nmx-account-settings > .nmx-profile-card { margin-bottom: 14px; }
+.nmx-settings-page .nmx-settings-group > header { min-height: 46px; }
+
+/* ---- Usage analytics ---- */
+.nmx-usage-analytics {
+    --nmx-usage-mark: #d86890;
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+    margin-top: 12px;
+    container-type: inline-size;
+}
+.nmx-shell.nmx-theme-light .nmx-usage-analytics { --nmx-usage-mark: #a73862; }
+.nmx-usage-summary-title strong { color: var(--nmx-subtle); font-size: 12px; font-weight: 500; }
+.nmx-usage-kpis {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+}
+.nmx-usage-kpis > article {
+    display: grid;
+    align-content: start;
+    gap: 4px;
+    min-width: 0;
+    padding: 11px 12px;
+    border: 1px solid var(--nmx-border);
+    border-radius: 10px;
+    background: var(--nmx-panel);
+}
+.nmx-usage-kpis > article > span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    color: var(--nmx-subtle);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.nmx-usage-kpis > article > span > .codicon { color: var(--nmx-muted); font-size: 13px; }
+.nmx-usage-kpis > article > strong {
+    overflow: hidden;
+    color: var(--nmx-text);
+    /* Six-decimal amounts ("US$0.026981") fit a fifth of the panel instead of ending in "…". */
+    font-size: clamp(14px, 1.35vw, 18px);
+    letter-spacing: -0.01em;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.nmx-usage-kpis > article > small {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--nmx-muted);
+    font-size: 11px;
+    line-height: 1.45;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+@keyframes nmx-usage-pulse { 50% { opacity: .45; } }
+.nmx-usage-skeleton {
+    display: block;
+    width: 60%;
+    height: 18px;
+    border-radius: 5px;
+    background: var(--nmx-panel-2);
+    animation: nmx-usage-pulse 1.4s ease-in-out infinite;
+}
+.nmx-usage-loading, .nmx-usage-empty {
+    min-height: 240px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--nmx-muted);
+    font-size: 13px;
+}
+.nmx-usage-empty > strong { color: var(--nmx-subtle); font-weight: 500; }
+.nmx-usage-error {
+    display: grid;
+    gap: 2px;
+    padding: 10px 12px;
+    border: 1px solid var(--nmx-border);
+    border-radius: 10px;
+    color: var(--nmx-danger, #d46a74);
+    font-size: 12px;
+}
+.nmx-usage-error small { color: var(--nmx-muted); }
+.nmx-usage-card {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--nmx-border);
+    border-radius: 12px;
+    background: var(--nmx-panel);
+    animation: nmx-settings-fade-in 200ms cubic-bezier(.16, 1, .3, 1);
+}
+.nmx-usage-card > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.nmx-usage-card h3 { margin: 0; color: var(--nmx-text); font-size: 13px; font-weight: 600; }
+.nmx-usage-note { margin: 10px 0 0; color: var(--nmx-muted); font-size: 11px; }
+.nmx-usage-segmented { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--nmx-panel-2); }
+.nmx-shell .nmx-usage-segmented > button {
+    height: 24px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--nmx-subtle);
+    font-size: 12px;
+    transition: background-color 150ms ease, color 150ms ease;
+}
+.nmx-shell .nmx-usage-segmented > button[aria-pressed='true'] { background: var(--nmx-bg); color: var(--nmx-text); box-shadow: 0 1px 2px #0000001f; }
+
+/* Daily bars: one hue, 4px rounded data end on the baseline, 2px gaps, recessive axes. */
+.nmx-usage-chart { position: relative; margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; }
+.nmx-usage-chart-scale {
+    grid-row: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-width: 0;
+    height: 160px;
+    color: var(--nmx-muted);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+}
+.nmx-usage-cache .nmx-usage-chart-scale, .nmx-usage-cache .nmx-usage-chart-plot { height: 96px; }
+.nmx-usage-chart-plot {
+    grid-row: 1;
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    height: 160px;
+    border-bottom: 1px solid var(--nmx-border);
+    background: linear-gradient(to bottom, var(--nmx-border) 1px, transparent 1px) 0 0 / 100% 50%;
+}
+.nmx-shell .nmx-usage-chart-bar {
+    flex: 1 1 0;
+    min-width: 0;
+    height: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    display: flex;
+    align-items: flex-end;
+    cursor: default;
+}
+.nmx-usage-chart-bar > i {
+    display: block;
+    width: 100%;
+    max-width: 22px;
+    margin-inline: auto;
+    border-radius: 4px 4px 0 0;
+    background: var(--nmx-usage-mark);
+    opacity: .9;
+    transition: opacity 120ms ease;
+}
+.nmx-usage-chart-bar:hover > i, .nmx-usage-chart-bar.is-active > i, .nmx-usage-chart-bar:focus-visible > i { opacity: 1; }
+.nmx-usage-chart-plot:has(.is-active) .nmx-usage-chart-bar:not(.is-active) > i { opacity: .55; }
+.nmx-usage-chart-axis {
+    grid-column: 2;
+    position: relative;
+    height: 18px;
+    color: var(--nmx-muted);
+    font-size: 10px;
+}
+.nmx-usage-chart-axis > span { position: absolute; top: 4px; transform: translateX(-50%); white-space: nowrap; }
+[dir='rtl'] .nmx-usage-chart-axis > span { transform: translateX(50%); }
+.nmx-usage-chart-axis > span:first-child { transform: none; }
+.nmx-usage-chart-axis > span:last-child:not(:first-child) { transform: translateX(-100%); }
+[dir='rtl'] .nmx-usage-chart-axis > span:last-child:not(:first-child) { transform: translateX(100%); }
+.nmx-usage-chart-tip {
+    position: absolute;
+    top: -6px;
+    z-index: 2;
+    display: grid;
+    gap: 2px;
+    min-width: 120px;
+    padding: 7px 9px;
+    border: 1px solid var(--nmx-menu-border, var(--nmx-border));
+    border-radius: 8px;
+    background: var(--nmx-menu-background, var(--nmx-panel));
+    color: var(--nmx-text);
+    box-shadow: 0 6px 18px #0000002e;
+    font-size: 11px;
+    pointer-events: none;
+    transform: translate(-50%, -100%);
+    animation: nmx-popover-fade-in 120ms ease-out;
+}
+.nmx-usage-chart-tip.is-start { transform: translate(0, -100%); }
+.nmx-usage-chart-tip.is-end { transform: translate(-100%, -100%); }
+[dir='rtl'] .nmx-usage-chart-tip { transform: translate(50%, -100%); }
+[dir='rtl'] .nmx-usage-chart-tip.is-start { transform: translate(0, -100%); }
+[dir='rtl'] .nmx-usage-chart-tip.is-end { transform: translate(100%, -100%); }
+.nmx-usage-chart-tip > span { color: var(--nmx-subtle); font-variant-numeric: tabular-nums; }
+
+.nmx-usage-split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 14px; }
+.nmx-usage-hbars { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.nmx-usage-hbars > li { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 12px; }
+.nmx-usage-hbars > li > span:first-child { overflow: hidden; color: var(--nmx-subtle); text-overflow: ellipsis; white-space: nowrap; }
+.nmx-usage-hbar { height: 10px; }
+.nmx-usage-hbar > i { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--nmx-usage-mark); }
+[dir='rtl'] .nmx-usage-hbar > i { border-radius: 4px 0 0 4px; }
+.nmx-usage-hbars > li > strong { color: var(--nmx-text); font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.nmx-usage-cache dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 12px; }
+.nmx-usage-cache dt { color: var(--nmx-muted); font-size: 11px; }
+.nmx-usage-cache dd { margin: 2px 0 0; color: var(--nmx-text); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: start; }
+.nmx-usage-table-card { padding-inline: 0; padding-bottom: 4px; }
+.nmx-usage-table-card > header, .nmx-usage-table-card > .nmx-usage-note { padding-inline: 14px; }
+.nmx-usage-table-card > .nmx-usage-note { padding-bottom: 10px; }
+.nmx-usage-table-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+.nmx-usage-table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.nmx-usage-table th, .nmx-usage-table td { padding: 8px 14px; border-top: 1px solid var(--nmx-border); text-align: end; white-space: nowrap; }
+.nmx-usage-table thead th { border-top: 0; color: var(--nmx-muted); font-size: 11px; font-weight: 500; }
+.nmx-usage-table :is(thead th, tbody th):first-child { max-width: 240px; overflow: hidden; text-align: start; text-overflow: ellipsis; }
+.nmx-usage-table tbody th { color: var(--nmx-text); font-weight: 500; }
+.nmx-usage-table tbody th small { display: block; margin-top: 2px; color: var(--nmx-muted); font-size: 10px; font-weight: 400; }
+.nmx-usage-table td { color: var(--nmx-subtle); }
+.nmx-usage-table td strong { color: var(--nmx-text); font-weight: 500; }
+.nmx-usage-table tbody tr { transition: background-color 120ms ease; }
+.nmx-usage-table tbody tr:hover { background: var(--nmx-hover, var(--nmx-panel-2)); }
+.nmx-usage-table td.is-self_reported_conflict { color: var(--nmx-warning, #d09a4a); }
+
+/* Usage page chrome in the app's own light/dark tokens (Theia theme variables can differ). */
+.nmx-shell .nmx-model-usage-source-tabs { border-color: var(--nmx-border); background: var(--nmx-panel-2); }
+.nmx-shell .nmx-model-usage-source-tabs > button { color: var(--nmx-subtle); transition: background-color 150ms ease, color 150ms ease; }
+.nmx-shell .nmx-model-usage-source-tabs > button:hover { color: var(--nmx-text); }
+.nmx-shell .nmx-model-usage-source-tabs > button[aria-selected='true'] { color: var(--nmx-text); background: var(--nmx-bg); box-shadow: 0 1px 2px #0000001f; }
+.nmx-shell .nmx-model-usage-toolbar label > span { color: var(--nmx-muted); }
+.nmx-shell .nmx-model-usage-toolbar select { color: var(--nmx-text); background: var(--nmx-control-background, var(--nmx-panel)); border-color: var(--nmx-border); }
+.nmx-shell .nmx-model-usage-toolbar > button {
+    margin-inline-start: auto;
+    width: 32px;
+    height: 32px;
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid var(--nmx-border);
+    border-radius: 8px;
+    background: var(--nmx-panel);
+    color: var(--nmx-subtle);
+}
+.nmx-shell .nmx-model-usage-toolbar > button:hover:not(:disabled) { background: var(--nmx-hover, var(--nmx-panel-2)); color: var(--nmx-text); }
+.nmx-shell .nmx-model-usage-state { color: var(--nmx-muted); }
+.nmx-shell .nmx-model-usage-state > strong { color: var(--nmx-text); }
+@container (max-width: 860px) {
+    .nmx-usage-kpis { grid-template-columns: repeat(auto-fit, minmax(126px, 1fr)); }
+    .nmx-usage-split { grid-template-columns: minmax(0, 1fr); }
+}
+@container (max-width: 420px) {
+    .nmx-usage-kpis { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .nmx-usage-hbars > li { grid-template-columns: minmax(0, 1fr) auto; }
+    .nmx-usage-hbars > li > .nmx-usage-hbar { grid-column: 1 / -1; grid-row: 2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nmx-model-picker-popover,
+    .nmx-model-effort-portal :is(.nmx-model-effort-menu, .nmx-model-evidence-menu),
+    .nmx-settings-page > .nmx-settings-panel,
+    .nmx-usage-card,
+    .nmx-usage-chart-tip,
+    .nmx-usage-skeleton { animation: none !important; }
+}

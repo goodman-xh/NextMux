@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "id": "windows-x64",
+      "platform": "windows",
+      "arch": "x64",
+      "runner": "windows-2025"
+    },
+    {
+      "id": "windows-arm64",
+      "platform": "windows",
+      "arch": "arm64",
+      "runner": "windows-11-arm"
+    },
+    {
+      "id": "macos-x64",
+      "platform": "macos",
+      "arch": "x64",
+      "runner": "macos-26-intel"
+    },
+    {
+      "id": "macos-arm64",
+      "platform": "macos",
+      "arch": "arm64",
+      "runner": "macos-26"
+    }
+  ]
+}

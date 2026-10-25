@@ -1,0 +1,381 @@
+diff --git a/lib/node/mcp-oauth-client-provider.js b/lib/node/mcp-oauth-client-provider.js
+index 928d5c4256a8b6791a418189bb42ac1e7424fa6e..93006324d87807375e059ac82c00974119c8ea96 100644
+--- a/lib/node/mcp-oauth-client-provider.js
++++ b/lib/node/mcp-oauth-client-provider.js
+@@ -122,9 +122,9 @@ class MCPOAuthClientProvider {
+             await this.frontendDelegate.openExternal(authorizationUrl.toString());
+         }
+         catch (error) {
+-            console.warn(`Failed to open MCP OAuth authorization URL for server "${this.serverName}".`, error);
++            console.warn('Failed to open MCP OAuth authorization URL.');
+             // Preserve the underlying cause on the thrown chain (ES2022 `cause`) so downstream error handlers
+-            // and the badge hover can surface the root reason; the warn above keeps it in logs as well.
++            // and existing error handling can surface the root reason; diagnostics omit the potentially sensitive cause.
+             throw new mcp_oauth_errors_1.MCPOAuthAuthorizationRequiredError({ cause: error });
+         }
+     }
+@@ -207,9 +207,7 @@ class MCPOAuthClientProvider {
+         }
+         if (this.config.authorizationServer
+             && (0, mcp_oauth_keystore_1.normalizeOAuthUrl)(discovery.authorizationServerUrl) !== (0, mcp_oauth_keystore_1.normalizeOAuthUrl)(this.config.authorizationServer)) {
+-            console.debug(`Ignoring stored MCP OAuth discovery state for server "${this.serverName}": stored authorization server `
+-                + `"${discovery.authorizationServerUrl}" does not match configured "${this.config.authorizationServer}". `
+-                + 'Re-discovering.');
++            console.debug('Ignoring mismatched MCP OAuth discovery state; re-discovering.');
+             return undefined;
+         }
+         return discovery;
+@@ -264,7 +262,7 @@ class MCPOAuthClientProvider {
+         catch (error) {
+             // Self-heal corrupt entries (e.g. partial write, manual edit of the credential store) so the
+             // SDK can re-acquire the value. The warn is deliberate: silent deletion leaves no audit trail.
+-            console.warn(`Discarding corrupt MCP OAuth value for server "${this.serverName}" key "${key}".`, error);
++            console.warn('Discarding corrupt stored MCP OAuth value.');
+             await this.delete(key);
+             return undefined;
+         }
+diff --git a/lib/node/mcp-server-manager-impl.js b/lib/node/mcp-server-manager-impl.js
+index 79e6c7c405f9e827ac1f792bc63eac15b5cd6b81..7e2cd9dca77c0c72280f722afd520311610951cd 100644
+--- a/lib/node/mcp-server-manager-impl.js
++++ b/lib/node/mcp-server-manager-impl.js
+@@ -50,7 +50,7 @@ let MCPServerManagerImpl = class MCPServerManagerImpl {
+                     await server.stop();
+                 }
+                 catch (error) {
+-                    console.error(`Failed to stop MCP server "${serverName}" during sign-out`, error);
++                    console.error('Failed to stop MCP server during sign-out.');
+                 }
+             }
+             await this.credentialStore.clear(serverName);
+@@ -160,7 +160,7 @@ let MCPServerManagerImpl = class MCPServerManagerImpl {
+                 await server.stop();
+             }
+             catch (error) {
+-                console.error(`Failed to stop MCP server "${name}" during removal`, error);
++                console.error('Failed to stop MCP server during removal.');
+             }
+             await this.credentialStore.clear(name);
+             this.servers.delete(name);
+@@ -250,16 +250,15 @@ let MCPServerManagerImpl = class MCPServerManagerImpl {
+         }
+         if (this.client === client) {
+             this.client = undefined;
+-            this.stopServersAfterDisconnect().catch(error => console.error('Failed to stop MCP servers after frontend disconnect', error));
++            this.stopServersAfterDisconnect().catch(() => console.error('Failed to stop MCP servers after frontend disconnect.'));
+         }
+     }
+     async stopServersAfterDisconnect() {
+         const entries = Array.from(this.servers.entries());
+         const results = await Promise.allSettled(entries.map(async ([, server]) => server.stop()));
+-        results.forEach((result, index) => {
++        results.forEach(result => {
+             if (result.status === 'rejected') {
+-                const [name] = entries[index];
+-                console.error(`Failed to stop MCP server "${name}" after frontend disconnect`, result.reason);
++                console.error('Failed to stop MCP server after frontend disconnect.');
+             }
+         });
+     }
+@@ -271,7 +270,7 @@ let MCPServerManagerImpl = class MCPServerManagerImpl {
+             this.client.didUpdateMCPServers();
+         }
+         catch (error) {
+-            console.error('Failed to notify MCP frontend client', error);
++            console.error('Failed to notify MCP frontend client.');
+         }
+     }
+     readResource(serverName, resourceId) {
+diff --git a/lib/node/mcp-server.js b/lib/node/mcp-server.js
+index b57a47e694064cbfdc0c510e7414b8c038041d1d..4e06ba7649bd2f3884ebc82a1437378e9a07c7d9 100644
+--- a/lib/node/mcp-server.js
++++ b/lib/node/mcp-server.js
+@@ -96,7 +96,7 @@ class MCPServer {
+                 }));
+             }
+             catch (error) {
+-                console.error('Error fetching tools for description:', error);
++                console.error('Failed to fetch MCP tools for description.');
+             }
+         }
+         return {
+@@ -141,8 +141,7 @@ class MCPServer {
+         try {
+             if ((0, common_1.isLocalMCPServerDescription)(this.description)) {
+                 this.setStatus(common_1.MCPServerStatus.Starting);
+-                console.log(`Starting server "${this.description.name}" with command: ${this.description.command} ` +
+-                    `and args: ${this.description.args?.join(' ')} and env: ${JSON.stringify(this.description.env)}`);
++                console.log('Starting local MCP server.');
+                 const sanitizedEnv = Object.fromEntries(Object.entries(process.env).filter((entry) => entry[1] !== undefined));
+                 const mergedEnv = {
+                     ...sanitizedEnv,
+@@ -156,7 +155,7 @@ class MCPServer {
+             }
+             else if ((0, common_1.isRemoteMCPServerDescription)(this.description)) {
+                 this.setStatus(common_1.MCPServerStatus.Connecting);
+-                console.log(`Connecting to server "${this.description.name}" via MCP Server Communication with URL: ${this.description.serverUrl}`);
++                console.log('Connecting to remote MCP server.');
+                 if (this.description.headers) {
+                     descHeaders = this.description.headers;
+                 }
+@@ -178,7 +177,7 @@ class MCPServer {
+                 try {
+                     await this.connectTransport(this.authProvider, descHeaders);
+                     connected = true;
+-                    console.log(`MCP Streamable HTTP successful connected: ${this.description.serverUrl}`);
++                    console.log('MCP Streamable HTTP connected.');
+                 }
+                 catch (e) {
+                     // An OAuth-flow outcome (success, cancel, denial, retry-required) is final for this authorization;
+@@ -190,14 +189,14 @@ class MCPServer {
+                         await this.handleStartupError(e);
+                         return;
+                     }
+-                    console.log(`MCP SSE fallback initiated: ${this.description.serverUrl}`, e);
++                    console.log('MCP SSE fallback initiated.');
+                     if (this.transport instanceof streamableHttp_js_1.StreamableHTTPClientTransport) {
+                         // Best-effort terminate of any session created during the failed connect, mirroring stop().
+                         try {
+                             await this.transport.terminateSession();
+                         }
+                         catch (terminateError) {
+-                            console.warn(`Failed to terminate Streamable HTTP session before SSE fallback for MCP server "${this.description.name}"`, terminateError);
++                            console.warn('Failed to terminate MCP Streamable HTTP session before SSE fallback.');
+                         }
+                     }
+                     await this.client.close();
+@@ -315,10 +314,10 @@ class MCPServer {
+             this.error = this.authenticationRequiredErrorMessage(error);
+             this.setStatus(common_1.MCPServerStatus.AuthenticationRequired);
+             // close() is async and this handler is sync, so fire-and-forget.
+-            this.client.close().catch(closeError => console.warn(`Failed to close MCP client after steady-state OAuth re-auth signal for "${this.description.name}"`, closeError));
++            this.client.close().catch(() => console.warn('Failed to close MCP client after OAuth re-auth signal.'));
+             return;
+         }
+-        console.error(errorPrefix, error);
++        console.error('MCP connection failed.');
+         this.error = errorPrefix + error;
+         this.setStatus(common_1.MCPServerStatus.Errored);
+     }
+@@ -406,7 +405,7 @@ class MCPServer {
+                             await this.transport.terminateSession();
+                         }
+                         catch (terminateError) {
+-                            console.warn(`Failed to terminate previous Streamable HTTP session for MCP server "${this.description.name}"`, terminateError);
++                            console.warn('Failed to terminate previous MCP Streamable HTTP session.');
+                         }
+                     }
+                     await this.client.close();
+@@ -461,8 +460,7 @@ class MCPServer {
+             args = JSON.parse(arg_string);
+         }
+         catch (error) {
+-            console.error(`Failed to parse arguments for calling tool "${toolName}" in MCP server "${this.description.name}".
+-                Invalid JSON: ${arg_string}`, error);
++            console.error('Failed to parse MCP tool arguments.');
+         }
+         const params = {
+             name: toolName,
+@@ -509,7 +507,7 @@ class MCPServer {
+                     await this.transport.terminateSession();
+                 }
+                 catch (error) {
+-                    console.warn(`Failed to terminate session for MCP server "${this.description.name}"`, error);
++                    console.warn('Failed to terminate MCP session.');
+                 }
+             }
+             await this.client.close();
+diff --git a/src/node/mcp-oauth-client-provider.ts b/src/node/mcp-oauth-client-provider.ts
+index e8926bd31f4d88dd0754f08775ad261f8974430c..81a5f03b6fed01c9e3372d1ce8fe3896126cebfe 100644
+--- a/src/node/mcp-oauth-client-provider.ts
++++ b/src/node/mcp-oauth-client-provider.ts
+@@ -169,9 +169,9 @@ export class MCPOAuthClientProvider implements OAuthClientProvider {
+         try {
+             await this.frontendDelegate.openExternal(authorizationUrl.toString());
+         } catch (error) {
+-            console.warn(`Failed to open MCP OAuth authorization URL for server "${this.serverName}".`, error);
++            console.warn('Failed to open MCP OAuth authorization URL.');
+             // Preserve the underlying cause on the thrown chain (ES2022 `cause`) so downstream error handlers
+-            // and the badge hover can surface the root reason; the warn above keeps it in logs as well.
++            // and existing error handling can surface the root reason; diagnostics omit the potentially sensitive cause.
+             throw new MCPOAuthAuthorizationRequiredError({ cause: error });
+         }
+     }
+@@ -267,11 +267,7 @@ export class MCPOAuthClientProvider implements OAuthClientProvider {
+         }
+         if (this.config.authorizationServer
+             && normalizeOAuthUrl(discovery.authorizationServerUrl) !== normalizeOAuthUrl(this.config.authorizationServer)) {
+-            console.debug(
+-                `Ignoring stored MCP OAuth discovery state for server "${this.serverName}": stored authorization server `
+-                + `"${discovery.authorizationServerUrl}" does not match configured "${this.config.authorizationServer}". `
+-                + 'Re-discovering.'
+-            );
++            console.debug('Ignoring mismatched MCP OAuth discovery state; re-discovering.');
+             return undefined;
+         }
+         return discovery;
+@@ -331,7 +327,7 @@ export class MCPOAuthClientProvider implements OAuthClientProvider {
+         } catch (error) {
+             // Self-heal corrupt entries (e.g. partial write, manual edit of the credential store) so the
+             // SDK can re-acquire the value. The warn is deliberate: silent deletion leaves no audit trail.
+-            console.warn(`Discarding corrupt MCP OAuth value for server "${this.serverName}" key "${key}".`, error);
++            console.warn('Discarding corrupt stored MCP OAuth value.');
+             await this.delete(key);
+             return undefined;
+         }
+diff --git a/src/node/mcp-server-manager-impl.ts b/src/node/mcp-server-manager-impl.ts
+index 601191ed15013c4d5d1962ad3ae260cbf5f5f1d6..1fb75effba9e4067f1c2ab0f31e8d3db66bbbadd 100644
+--- a/src/node/mcp-server-manager-impl.ts
++++ b/src/node/mcp-server-manager-impl.ts
+@@ -58,7 +58,7 @@ export class MCPServerManagerImpl implements MCPServerManager {
+                 try {
+                     await server.stop();
+                 } catch (error) {
+-                    console.error(`Failed to stop MCP server "${serverName}" during sign-out`, error);
++                    console.error('Failed to stop MCP server during sign-out.');
+                 }
+             }
+             await this.credentialStore.clear(serverName);
+@@ -181,7 +181,7 @@ export class MCPServerManagerImpl implements MCPServerManager {
+             try {
+                 await server.stop();
+             } catch (error) {
+-                console.error(`Failed to stop MCP server "${name}" during removal`, error);
++                console.error('Failed to stop MCP server during removal.');
+             }
+             await this.credentialStore.clear(name);
+             this.servers.delete(name);
+@@ -288,17 +288,16 @@ export class MCPServerManagerImpl implements MCPServerManager {
+         }
+         if (this.client === client) {
+             this.client = undefined;
+-            this.stopServersAfterDisconnect().catch(error => console.error('Failed to stop MCP servers after frontend disconnect', error));
++            this.stopServersAfterDisconnect().catch(() => console.error('Failed to stop MCP servers after frontend disconnect.'));
+         }
+     }
+ 
+     protected async stopServersAfterDisconnect(): Promise<void> {
+         const entries = Array.from(this.servers.entries());
+         const results = await Promise.allSettled(entries.map(async ([, server]) => server.stop()));
+-        results.forEach((result, index) => {
++        results.forEach(result => {
+             if (result.status === 'rejected') {
+-                const [name] = entries[index];
+-                console.error(`Failed to stop MCP server "${name}" after frontend disconnect`, result.reason);
++                console.error('Failed to stop MCP server after frontend disconnect.');
+             }
+         });
+     }
+@@ -310,7 +309,7 @@ export class MCPServerManagerImpl implements MCPServerManager {
+         try {
+             this.client.didUpdateMCPServers();
+         } catch (error) {
+-            console.error('Failed to notify MCP frontend client', error);
++            console.error('Failed to notify MCP frontend client.');
+         }
+     }
+ 
+diff --git a/src/node/mcp-server.ts b/src/node/mcp-server.ts
+index ea11196c580d8166f496bc4c96ccbf23c3637ecd..7e1324dbf5a5be11e874d70c8776bff19056ed9d 100644
+--- a/src/node/mcp-server.ts
++++ b/src/node/mcp-server.ts
+@@ -118,7 +118,7 @@ export class MCPServer {
+                     description: tool.description
+                 }));
+             } catch (error) {
+-                console.error('Error fetching tools for description:', error);
++                console.error('Failed to fetch MCP tools for description.');
+             }
+         }
+ 
+@@ -167,10 +167,7 @@ export class MCPServer {
+         try {
+             if (isLocalMCPServerDescription(this.description)) {
+                 this.setStatus(MCPServerStatus.Starting);
+-                console.log(
+-                    `Starting server "${this.description.name}" with command: ${this.description.command} ` +
+-                    `and args: ${this.description.args?.join(' ')} and env: ${JSON.stringify(this.description.env)}`
+-                );
++                console.log('Starting local MCP server.');
+ 
+                 const sanitizedEnv: Record<string, string> = Object.fromEntries(
+                     Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)
+@@ -187,7 +184,7 @@ export class MCPServer {
+                 });
+             } else if (isRemoteMCPServerDescription(this.description)) {
+                 this.setStatus(MCPServerStatus.Connecting);
+-                console.log(`Connecting to server "${this.description.name}" via MCP Server Communication with URL: ${this.description.serverUrl}`);
++                console.log('Connecting to remote MCP server.');
+ 
+                 if (this.description.headers) {
+                     descHeaders = this.description.headers;
+@@ -214,7 +211,7 @@ export class MCPServer {
+                 try {
+                     await this.connectTransport(this.authProvider, descHeaders);
+                     connected = true;
+-                    console.log(`MCP Streamable HTTP successful connected: ${this.description.serverUrl}`);
++                    console.log('MCP Streamable HTTP connected.');
+                 } catch (e) {
+                     // An OAuth-flow outcome (success, cancel, denial, retry-required) is final for this authorization;
+                     // SSE fallback would create a fresh provider and re-prompt a user who was already involved.
+@@ -225,13 +222,13 @@ export class MCPServer {
+                         await this.handleStartupError(e);
+                         return;
+                     }
+-                    console.log(`MCP SSE fallback initiated: ${this.description.serverUrl}`, e);
++                    console.log('MCP SSE fallback initiated.');
+                     if (this.transport instanceof StreamableHTTPClientTransport) {
+                         // Best-effort terminate of any session created during the failed connect, mirroring stop().
+                         try {
+                             await this.transport.terminateSession();
+                         } catch (terminateError) {
+-                            console.warn(`Failed to terminate Streamable HTTP session before SSE fallback for MCP server "${this.description.name}"`, terminateError);
++                            console.warn('Failed to terminate MCP Streamable HTTP session before SSE fallback.');
+                         }
+                     }
+                     await this.client.close();
+@@ -355,11 +352,11 @@ export class MCPServer {
+             this.error = this.authenticationRequiredErrorMessage(error);
+             this.setStatus(MCPServerStatus.AuthenticationRequired);
+             // close() is async and this handler is sync, so fire-and-forget.
+-            this.client.close().catch(closeError =>
+-                console.warn(`Failed to close MCP client after steady-state OAuth re-auth signal for "${this.description.name}"`, closeError));
++            this.client.close().catch(() =>
++                console.warn('Failed to close MCP client after OAuth re-auth signal.'));
+             return;
+         }
+-        console.error(errorPrefix, error);
++        console.error('MCP connection failed.');
+         this.error = errorPrefix + error;
+         this.setStatus(MCPServerStatus.Errored);
+     }
+@@ -457,7 +454,7 @@ export class MCPServer {
+                         try {
+                             await this.transport.terminateSession();
+                         } catch (terminateError) {
+-                            console.warn(`Failed to terminate previous Streamable HTTP session for MCP server "${this.description.name}"`, terminateError);
++                            console.warn('Failed to terminate previous MCP Streamable HTTP session.');
+                         }
+                     }
+                     await this.client.close();
+@@ -513,11 +510,7 @@ export class MCPServer {
+         try {
+             args = JSON.parse(arg_string);
+         } catch (error) {
+-            console.error(
+-                `Failed to parse arguments for calling tool "${toolName}" in MCP server "${this.description.name}".
+-                Invalid JSON: ${arg_string}`,
+-                error
+-            );
++            console.error('Failed to parse MCP tool arguments.');
+         }
+         const params = {
+             name: toolName,
+@@ -567,7 +560,7 @@ export class MCPServer {
+                 try {
+                     await this.transport.terminateSession();
+                 } catch (error) {
+-                    console.warn(`Failed to terminate session for MCP server "${this.description.name}"`, error);
++                    console.warn('Failed to terminate MCP session.');
+                 }
+             }
+             await this.client.close();

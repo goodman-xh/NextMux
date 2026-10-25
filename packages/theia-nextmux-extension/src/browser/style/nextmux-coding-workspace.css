@@ -1,0 +1,1408 @@
+/*
+ * Coding workspace polish: sidebar sorting feedback and small interaction
+ * states. Loaded after nextmux-motion.css. Colour changes use the existing
+ * theme tokens; only opacity and box-shadow change (no layout movement).
+ */
+
+/* Drag-sort feedback (dnd-kit Sortable pattern): the source dims and a 2 px
+   insertion edge marks where the conversation or project lands. */
+.nmx-desktop-widget .nmx-coding-context :is(.nmx-session-row, .nmx-project-tree).is-dragging {
+    opacity: .45;
+}
+.nmx-desktop-widget .nmx-coding-context :is(.nmx-session-row, .nmx-project-tree).is-drop-before {
+    box-shadow: inset 0 2px 0 var(--nmx-focus-ring, #a9a2a7);
+}
+.nmx-desktop-widget .nmx-coding-context :is(.nmx-session-row, .nmx-project-tree).is-drop-after {
+    box-shadow: inset 0 -2px 0 var(--nmx-focus-ring, #a9a2a7);
+}
+
+/* The light theme's blanket `* { border-color }` override painted all four
+   sides of the running spinner in the background colour, so a running
+   conversation showed no indicator at all. */
+.nmx-shell.nmx-theme-light .nmx-thread-spinner {
+    border-color: #8b8286 !important;
+    border-right-color: transparent !important;
+}
+
+/* Conversation titles keep their own direction (dir=auto) so an English
+   title in the Arabic UI truncates at its end, while the column still reads
+   from the right like the rest of the RTL sidebar. */
+[dir='rtl'] .nmx-coding-context .nmx-session-open > span[dir='auto'] {
+    text-align: right;
+    /* RTL titles overflow at the left, so fade towards the left instead of hiding the end with an ellipsis. */
+    -webkit-mask-image: linear-gradient(270deg, #000 0%, #000 calc(100% - 18px), transparent 100%);
+    mask-image: linear-gradient(270deg, #000 0%, #000 calc(100% - 18px), transparent 100%);
+    text-overflow: clip;
+}
+
+/* RTL: project conversations indent from the right and the row's "…" menu
+   sits at the inline end (left), mirroring the LTR layout. */
+[dir='rtl'] .nmx-coding-context .nmx-project-tree .nmx-session-row {
+    margin-left: 0;
+    margin-right: 25px;
+}
+[dir='rtl'] .nmx-coding-context .nmx-context-nav button.nmx-session-more {
+    right: auto;
+    left: 0;
+}
+[dir='rtl'] .nmx-coding-context .nmx-session-open {
+    padding-right: 8px !important;
+    padding-left: 8px !important;
+}
+[dir='rtl'] .nmx-coding-context .nmx-session-row:is(:hover, .is-current) .nmx-session-open {
+    padding-left: 32px !important;
+}
+
+/* The row menu is anchored to its row and escapes the scrolling sidebar
+   (Floating UI "flip" behaviour via CSS anchor positioning): a row near the
+   bottom opens its menu upwards instead of being clipped by the account dock. */
+.nmx-desktop-widget .nmx-coding-context .nmx-session-menu {
+    position: fixed;
+    position-anchor: --nmx-session-hover-anchor;
+    top: calc(anchor(bottom) + 3px);
+    right: anchor(right);
+    bottom: auto;
+    left: auto;
+    width: max-content;
+    min-width: 202px;
+    max-width: min(300px, calc(100vw - 20px));
+    max-height: calc(100dvh - 16px);
+    overflow-y: auto;
+    position-try-fallbacks: flip-block;
+}
+[dir='rtl'] .nmx-desktop-widget .nmx-coding-context .nmx-session-menu,
+.nmx-desktop-widget[dir='rtl'] .nmx-coding-context .nmx-session-menu,
+.nmx-desktop-widget [dir='rtl'] .nmx-coding-context .nmx-session-menu {
+    right: auto;
+    left: anchor(left);
+}
+
+/* Light theme: the conversation search field was a dark bar with a white
+   input inside. Give it the light popover surface used elsewhere. */
+.nmx-shell.nmx-theme-light .nmx-sidebar-search {
+    border-color: #ddd6d2 !important;
+    background: #fbfaf9;
+    box-shadow: 0 8px 24px rgba(60, 45, 50, .12);
+}
+.nmx-shell.nmx-theme-light .nmx-sidebar-search input {
+    color: #2b272a !important;
+    background: transparent !important;
+}
+.nmx-shell.nmx-theme-light .nmx-sidebar-search > i {
+    color: #8b8286;
+}
+
+/* Hover details would cover the rows being sorted. */
+.nmx-coding-context:has(.nmx-session-row.is-dragging) .nmx-session-time-tooltip {
+    display: none !important;
+}
+
+/* Composer: the permission label ("Workspace write", "Lecture seule", …) was
+   cut at 140 px in most locales; the container query still collapses it to
+   an icon on narrow composers. */
+.nmx-composer .nmx-permission-button {
+    max-width: min(190px, 36cqw);
+}
+
+/* Light theme: the conversation top bar matched the darker sidebar heading
+   and drew a stray band across the transcript; dark theme has none. */
+.nmx-shell.nmx-theme-light .nmx-workspace-topbar.nmx-coding-topbar {
+    background: #f1efed !important;
+}
+
+/* A short provider name no longer reserves 156 px, which squeezed the
+   permission label to its icon on medium-width composers. */
+.nmx-composer .nmx-composer-relay-button {
+    min-width: min(120px, 28cqw);
+}
+
+/* Tool permission lives under the composer (as in Codex), small and quiet;
+   its menu opens upward from the button, over the composer. */
+.nmx-composer-below { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; overflow: hidden; min-height: 30px; padding: 6px 6px 0; }
+.nmx-composer-below .nmx-permission-button { flex: 0 1 auto; min-width: 0; height: 26px; max-width: min(260px, 40%); padding: 0 8px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
+.nmx-composer-below .nmx-permission-button > span { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+.nmx-composer-below .nmx-permission-button > i { font-size: 13px; }
+.nmx-composer-below .nmx-permission-button:is(:hover:not(:disabled), .is-active) { background: var(--nmx-hover); }
+.nmx-composer-below .nmx-permission-button:disabled { opacity: .55; cursor: default; }
+/* Every notice under the composer shares one single-line capsule: the route
+   price change, a missing file report and the council/agent hints. The full
+   explanation is shown by SurfaceTooltips (`data-help`) in a floating bubble,
+   so hovering must never grow the notice itself into multiple lines. */
+.nmx-composer-below :is(.nmx-route-price-notice, .nmx-council-below-notice) {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: min(360px, 52vw);
+    height: 26px;
+    margin-inline-start: auto;
+    padding: 3px 10px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, #d9a63a 28%, transparent);
+    border-radius: 999px;
+    color: var(--nmx-text);
+    background: color-mix(in srgb, #d9a63a 12%, transparent);
+    font-size: 11.5px;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+.nmx-composer-below :is(.nmx-route-price-notice, .nmx-council-below-notice):hover {
+    background: color-mix(in srgb, #d9a63a 17%, transparent);
+    white-space: nowrap;
+}
+.nmx-composer-below :is(.nmx-route-price-notice, .nmx-council-below-notice) > i {
+    flex: 0 0 auto;
+    color: #d3a139;
+    font-size: 12px;
+    line-height: 1;
+}
+.nmx-composer-below :is(.nmx-route-price-notice, .nmx-council-below-notice) > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.nmx-composer-below :is(.nmx-route-price-notice, .nmx-council-below-notice) > button {
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    display: grid;
+    place-items: center;
+    margin: 0 0 0 2px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    color: var(--nmx-muted);
+    background: transparent;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+.nmx-composer-below :is(.nmx-route-price-notice, .nmx-council-below-notice) > button:hover {
+    color: var(--nmx-text);
+    background: var(--nmx-hover);
+}
+.nmx-theme-light .nmx-composer-below :is(.nmx-route-price-notice, .nmx-council-below-notice),
+[data-nextmux-theme='light'] .nmx-composer-below :is(.nmx-route-price-notice, .nmx-council-below-notice) {
+    border-color: color-mix(in srgb, #b8891f 26%, transparent);
+    color: #5b4a24;
+    background: color-mix(in srgb, #d9a63a 10%, transparent);
+}
+.nmx-theme-light .nmx-composer-below :is(.nmx-route-price-notice, .nmx-council-below-notice):hover,
+[data-nextmux-theme='light'] .nmx-composer-below :is(.nmx-route-price-notice, .nmx-council-below-notice):hover {
+    background: color-mix(in srgb, #d9a63a 16%, transparent);
+}
+.nmx-theme-light .nmx-composer-below :is(.nmx-route-price-notice, .nmx-council-below-notice) > i,
+[data-nextmux-theme='light'] .nmx-composer-below :is(.nmx-route-price-notice, .nmx-council-below-notice) > i {
+    color: #a97612;
+}
+/* Notification capsules take their tone from the notice: amber stays for warnings and price/council notices;
+   a failure is red, a done action green, plain information neutral. Text keeps ≥4.5:1 in both themes. */
+.nmx-composer-below .nmx-council-below-notice.is-error {
+    border-color: color-mix(in srgb, #e5484d 34%, transparent);
+    background: color-mix(in srgb, #e5484d 13%, transparent);
+}
+.nmx-composer-below .nmx-council-below-notice.is-error > i { color: #f07f82; }
+.nmx-composer-below .nmx-council-below-notice.is-success {
+    border-color: color-mix(in srgb, #3fa46a 32%, transparent);
+    background: color-mix(in srgb, #3fa46a 12%, transparent);
+}
+.nmx-composer-below .nmx-council-below-notice.is-success > i { color: #61c990; }
+.nmx-composer-below .nmx-council-below-notice.is-info {
+    border-color: var(--nmx-border-strong, #413d40);
+    background: color-mix(in srgb, var(--nmx-text, #eeecee) 6%, transparent);
+}
+.nmx-composer-below .nmx-council-below-notice.is-info > i { color: var(--nmx-subtle, #b1adb1); }
+:is(.nmx-theme-light, [data-nextmux-theme='light']) .nmx-composer-below .nmx-council-below-notice.is-error {
+    border-color: color-mix(in srgb, #c43c40 26%, transparent);
+    color: #6e2226;
+    background: color-mix(in srgb, #d93a3f 9%, transparent);
+}
+:is(.nmx-theme-light, [data-nextmux-theme='light']) .nmx-composer-below .nmx-council-below-notice.is-error > i { color: #b3262b; }
+:is(.nmx-theme-light, [data-nextmux-theme='light']) .nmx-composer-below .nmx-council-below-notice.is-success {
+    border-color: color-mix(in srgb, #2e8a57 26%, transparent);
+    color: #1d4d32;
+    background: color-mix(in srgb, #3fa46a 10%, transparent);
+}
+:is(.nmx-theme-light, [data-nextmux-theme='light']) .nmx-composer-below .nmx-council-below-notice.is-success > i { color: #167544; }
+:is(.nmx-theme-light, [data-nextmux-theme='light']) .nmx-composer-below .nmx-council-below-notice.is-info {
+    border-color: var(--nmx-border-strong, #c7c1c4);
+    color: var(--nmx-text, #282527);
+    background: color-mix(in srgb, var(--nmx-text, #282527) 5%, transparent);
+}
+:is(.nmx-theme-light, [data-nextmux-theme='light']) .nmx-composer-below .nmx-council-below-notice.is-info > i { color: var(--nmx-subtle, #5d575a); }
+/* The one action a notice can carry (e.g. "Set up models"): a small pill, never the 18px close glyph. */
+.nmx-composer-below :is(.nmx-route-price-notice, .nmx-council-below-notice) > button.nmx-council-below-action {
+    flex: 0 0 auto;
+    width: auto;
+    height: 20px;
+    margin: 0 -6px 0 2px;
+    padding: 0 9px;
+    color: inherit;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.nmx-composer-below :is(.nmx-route-price-notice, .nmx-council-below-notice) > button.nmx-council-below-action:hover {
+    color: inherit;
+    background: color-mix(in srgb, currentColor 18%, transparent);
+}
+/* The notices that used to stack above the composer ("请先选择模型。", a failed attachment, the balance fuse and the
+   Esc note) take this row's notice slot: one single-line capsule at the right end, in the capsule language above.
+   The stack is rendered only while one of them applies (the other corner notices wait meanwhile); when several
+   apply, the last one rendered is shown. The full text is a SurfaceTooltips bubble (data-help). The widget id
+   outranks the standalone .nmx-attachment-error rules (nextmux.css, nextmux-conversation-stream.css and the
+   Variables sheet's §16e, which loads later), so none of them can grow a capsule into a block. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack {
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 0;
+    min-width: 0;
+    max-width: min(420px, 56vw);
+    margin-block: 0;
+    margin-inline: auto 0;
+}
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error:not(:last-child) {
+    display: none !important;
+}
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error {
+    box-sizing: border-box;
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+    height: 26px;
+    min-height: 26px;
+    margin: 0;
+    padding: 3px 6px 3px 10px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, #e5484d 34%, transparent);
+    border-radius: 999px;
+    color: var(--nmx-text);
+    background: color-mix(in srgb, #e5484d 13%, transparent);
+    font-size: 11.5px;
+    line-height: 1.4;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+/* Tones follow the capsules above: a failed attachment is an error, the balance fuse a warning, "select a relay /
+   a model first" calm guidance in the accent, and the Esc note neutral information. Text keeps ≥4.5:1. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error.is-route {
+    border-color: color-mix(in srgb, var(--nmx-accent, #ca3b68) 36%, transparent);
+    background: color-mix(in srgb, var(--nmx-accent, #ca3b68) 12%, transparent);
+}
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error.is-balance {
+    border-color: color-mix(in srgb, #d9a63a 28%, transparent);
+    background: color-mix(in srgb, #d9a63a 12%, transparent);
+}
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error.is-desktop-control {
+    border-color: var(--nmx-border-strong, #413d40);
+    background: color-mix(in srgb, var(--nmx-text, #eeecee) 6%, transparent);
+}
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error {
+    border-color: color-mix(in srgb, #c43c40 26%, transparent);
+    color: #6e2226;
+    background: color-mix(in srgb, #d93a3f 9%, transparent);
+}
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error.is-route {
+    border-color: color-mix(in srgb, var(--nmx-accent, #a82851) 26%, transparent);
+    color: var(--nmx-text, #242124);
+    background: color-mix(in srgb, var(--nmx-accent, #a82851) 8%, transparent);
+}
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error.is-balance {
+    border-color: color-mix(in srgb, #b8891f 26%, transparent);
+    color: #5b4a24;
+    background: color-mix(in srgb, #d9a63a 10%, transparent);
+}
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error.is-desktop-control {
+    border-color: var(--nmx-border-strong, #c7c1c4);
+    color: var(--nmx-text, #242124);
+    background: color-mix(in srgb, var(--nmx-text, #242124) 5%, transparent);
+}
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error > .codicon {
+    flex: 0 0 auto;
+    color: var(--nmx-subtle, #b1adb1);
+    font-size: 12px;
+    line-height: 1;
+}
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error > span {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    overflow-wrap: normal;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* The notice's own action (选择模型, 立即充值, 恢复控制): a quiet 20px pill tinted by the capsule's text colour, like the
+   council notice's action, so a light-theme hover keeps a dark label on a light fill. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error > :is(.nmx-attachment-error-action, .nmx-balance-recharge, .nmx-desktop-control-resume) {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    min-width: max-content;
+    height: 20px;
+    margin: 0;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 999px;
+    color: inherit;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 120ms ease;
+}
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error > :is(.nmx-attachment-error-action, .nmx-balance-recharge, .nmx-desktop-control-resume):hover {
+    color: inherit;
+    background: color-mix(in srgb, currentColor 18%, transparent);
+}
+/* A pill that ends the capsule (恢复控制) tucks in to sit as close to the edge as it does to the top and bottom. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error > :is(.nmx-attachment-error-action, .nmx-balance-recharge, .nmx-desktop-control-resume):last-child {
+    margin-inline-end: -3px;
+}
+/* Close: the same 18px round glyph as the notices above. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error > button:last-child:not(.nmx-attachment-error-action, .nmx-balance-recharge, .nmx-desktop-control-resume) {
+    flex: 0 0 18px;
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    margin-block: 0;
+    margin-inline: 2px -2px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    color: var(--nmx-muted);
+    background: transparent;
+    opacity: 1;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error > button:last-child:not(.nmx-attachment-error-action, .nmx-balance-recharge, .nmx-desktop-control-resume):hover {
+    color: var(--nmx-text);
+    background: var(--nmx-hover);
+}
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error > button > .codicon {
+    font-size: 12px;
+    line-height: 1;
+}
+/* The capsule clips its overflow, so keyboard focus rings are drawn inside the control. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error > button:focus-visible {
+    outline: 2px solid var(--nmx-focus-ring, #a9a2a7);
+    outline-offset: -2px;
+}
+@media (forced-colors: active) {
+    #nextmux\.desktop\.widget .nmx-shell .nmx-composer-below > .nmx-composer-alert-stack > .nmx-attachment-error > :is(.nmx-attachment-error-action, .nmx-balance-recharge, .nmx-desktop-control-resume) {
+        border: 1px solid ButtonText;
+    }
+}
+/* Speed and token total of this conversation (LobeChat #10): one small centred line in the dock's bottom margin,
+   under the permission row, so showing it never makes the composer area taller. */
+.nmx-composer-wrap > .nmx-composer-telemetry {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    max-width: calc(100% - 24px);
+    height: 16px;
+    padding: 0 6px;
+    overflow: hidden;
+    transform: translateX(-50%);
+    color: var(--nmx-muted);
+    font-size: 10.5px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .01em;
+    line-height: 16px;
+    white-space: nowrap;
+    cursor: default;
+    user-select: none;
+}
+.nmx-composer-wrap > .nmx-composer-telemetry > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nmx-composer-wrap > .nmx-composer-telemetry > i { font-style: normal; opacity: .6; }
+.nmx-composer-wrap .nmx-permission-popover { left: 2px; bottom: 40px; }
+.nmx-permission-popover .nmx-permission-timing { margin: 4px 10px 8px; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; opacity: .8; }
+
+/* Account dock: avatar (opens the account sheet) + gear (opens settings). */
+.nmx-context-account-dock { grid-template-columns: minmax(0, 1fr) auto auto; }
+.nmx-context-account-dock .nmx-account-trigger-copy { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.nmx-context-account-dock .nmx-account-trigger-copy small { color: var(--nmx-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.nmx-account-settings-button { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; color: var(--nmx-muted); background: transparent; cursor: pointer; }
+.nmx-account-settings-button:is(:hover, .is-active) { color: var(--nmx-text); background: var(--nmx-hover); }
+.nmx-account-settings-button > i { font-size: 16px; }
+
+/* The account sheet rises from the dock. */
+.nmx-account-sheet { position: absolute; z-index: 1700; left: 8px; right: 8px; bottom: calc(100% + 6px); padding: 6px; border: 1px solid var(--nmx-menu-border, var(--nmx-border)); border-radius: 12px;
+    color: var(--nmx-menu-foreground, var(--nmx-text)); background: var(--nmx-menu-background, var(--nmx-panel)); box-shadow: 0 18px 48px rgba(0, 0, 0, .32);
+    transform-origin: 50% 100%; animation: nmx-account-sheet-in 160ms cubic-bezier(.2, .8, .2, 1); }
+@keyframes nmx-account-sheet-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .nmx-account-sheet { animation: none; } }
+.nmx-account-sheet > header { display: grid; grid-template-columns: 32px minmax(0, 1fr); align-items: center; gap: 9px; padding: 6px 6px 10px; border-bottom: 1px solid var(--nmx-border); }
+.nmx-account-sheet > header > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nmx-account-sheet > header :is(strong, small) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-account-sheet > header strong { font-size: 13.5px; }
+.nmx-account-sheet > header small { color: var(--nmx-muted); font-size: 12px; }
+.nmx-account-sheet-avatar { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--nmx-border-strong); border-radius: 50%; color: var(--nmx-muted); background: var(--nmx-panel-2); font-weight: 700; }
+.nmx-account-sheet-avatar.is-linked { color: var(--nmx-text); }
+.nmx-account-sheet-balance { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0 4px; padding: 10px 10px; border-radius: 9px; background: var(--nmx-panel-2); }
+.nmx-account-sheet-balance > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nmx-account-sheet-balance small { color: var(--nmx-muted); font-size: 11.5px; }
+.nmx-account-sheet-balance strong { font-size: 17px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-account-sheet .nmx-account-sheet-topup { flex: none; height: 28px; padding: 0 14px; border: 1px solid color-mix(in srgb, var(--nmx-accent) 45%, transparent); border-radius: 999px;
+    color: var(--nmx-accent); background: color-mix(in srgb, var(--nmx-accent) 10%, transparent); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.nmx-account-sheet .nmx-account-sheet-topup:hover { background: color-mix(in srgb, var(--nmx-accent) 18%, transparent); }
+.nmx-account-sheet > button { width: 100%; min-height: 36px; display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 2px; padding: 5px 8px;
+    border: 0; border-radius: 8px; color: inherit; background: transparent; font-size: 13px; text-align: start; cursor: pointer; }
+.nmx-account-sheet > button:hover:not(:disabled) { background: var(--nmx-menu-hover, var(--nmx-hover)); }
+.nmx-account-sheet > button:disabled { opacity: .5; cursor: default; }
+.nmx-account-sheet > button > span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.nmx-account-sheet > button small { color: var(--nmx-muted); font-size: 11.5px; }
+.nmx-account-sheet > button > i { color: var(--nmx-muted); font-size: 15px; }
+.nmx-account-sheet > .nmx-account-sheet-signout { margin-top: 4px; border-top: 1px solid var(--nmx-border); border-radius: 0 0 8px 8px; }
+.nmx-account-sheet > .nmx-account-sheet-signout.is-armed, .nmx-account-sheet > .nmx-account-sheet-signout.is-armed > i { color: var(--nmx-danger); }
+.nmx-account-sheet > .nmx-account-sheet-signin { color: var(--nmx-accent); }
+
+/* Feedback dialog. */
+.nmx-feedback-sheet { width: min(520px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 12px; }
+.nmx-feedback-sheet > header p { margin: 4px 0 0; color: var(--nmx-muted); font-size: 12.5px; line-height: 1.5; }
+.nmx-feedback-kinds { display: flex; gap: 6px; flex-wrap: wrap; }
+.nmx-feedback-kinds > button { height: 28px; padding: 0 12px; border: 1px solid var(--nmx-border); border-radius: 999px; color: var(--nmx-text); background: transparent; font-size: 12.5px; cursor: pointer; }
+.nmx-feedback-kinds > button.is-active { border-color: var(--nmx-accent); color: var(--nmx-accent); background: color-mix(in srgb, var(--nmx-accent) 10%, transparent); }
+.nmx-feedback-sheet textarea { width: 100%; min-height: 150px; resize: vertical; padding: 10px 12px; border: 1px solid var(--nmx-border-strong); border-radius: 10px;
+    color: var(--nmx-text); background: var(--nmx-control-background, var(--nmx-panel-2)); font: inherit; font-size: 13px; line-height: 1.55; }
+.nmx-feedback-sheet textarea:focus { outline: 2px solid color-mix(in srgb, var(--nmx-accent) 55%, transparent); outline-offset: 0; }
+.nmx-feedback-meta { display: flex; justify-content: space-between; color: var(--nmx-muted); font-size: 11.5px; }
+.nmx-feedback-meta .is-warning { color: var(--nmx-warning); }
+.nmx-feedback-meta .is-error { color: var(--nmx-danger); }
+.nmx-feedback-sheet footer { display: flex; justify-content: flex-end; gap: 8px; }
+.nmx-feedback-sent { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 8px 4px; text-align: center; }
+.nmx-feedback-sent > i { font-size: 34px; color: var(--nmx-success); }
+.nmx-feedback-sent h2 { margin: 6px 0 0; font-size: 17px; }
+.nmx-feedback-sent p { margin: 0 0 10px; color: var(--nmx-muted); font-size: 13px; }
+
+/* Settings → Import */
+.nmx-import-panel { display: grid; gap: 14px; }
+.nmx-import-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.nmx-import-header h3 { margin: 0 0 4px; font-size: 15px; }
+.nmx-import-header p { margin: 0; max-width: 560px; color: var(--nmx-muted); font-size: 12.5px; line-height: 1.6; }
+.nmx-import-header > div:last-child { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+.nmx-import-header > div:last-child small { color: var(--nmx-muted); font-size: 11.5px; }
+.nmx-import-header .nmx-secondary-button { display: inline-flex; align-items: center; gap: 6px; }
+.nmx-import-source { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--nmx-border); border-radius: 12px; background: var(--nmx-panel); }
+.nmx-import-source > header { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.nmx-import-source > header > div:nth-child(2) { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nmx-import-source > header strong { font-size: 14px; }
+.nmx-import-source > header small { color: var(--nmx-muted); font-size: 12px; }
+.nmx-import-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; color: #fff; font-size: 11.5px; font-weight: 700; letter-spacing: .02em; }
+.nmx-import-mark.is-claude-code { background: #c96442; }
+.nmx-import-mark.is-claude-cowork { background: #a2563c; }
+.nmx-import-mark.is-codex { background: #202123; border: 1px solid var(--nmx-border-strong); }
+.nmx-import-mark.is-cursor { background: #3b3b3b; }
+.nmx-import-actions { display: flex; gap: 8px; }
+.nmx-import-roots { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--nmx-muted); }
+.nmx-import-roots li { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.nmx-import-roots li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--nmx-code-font, ui-monospace, monospace); font-size: 11.5px; }
+.nmx-import-roots li.is-found > i { color: var(--nmx-success); }
+.nmx-import-roots li.is-blocked > i { color: var(--nmx-warning); }
+.nmx-import-roots li.is-missing { opacity: .7; }
+.nmx-import-roots .nmx-link-button { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.nmx-import-hint { margin: 0; color: var(--nmx-muted); font-size: 12px; line-height: 1.5; }
+.nmx-import-result { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--nmx-panel-2); font-size: 12.5px; }
+.nmx-import-result details { flex-basis: 100%; }
+.nmx-import-result details ul { margin: 6px 0 0; padding-inline-start: 18px; color: var(--nmx-muted); }
+.nmx-import-list { display: grid; gap: 8px; }
+.nmx-import-list-tools { display: flex; align-items: center; gap: 10px; }
+.nmx-import-list-tools input[type='search'] { flex: 1; min-width: 0; height: 30px; padding: 0 10px; border: 1px solid var(--nmx-border-strong); border-radius: 8px; color: var(--nmx-text); background: var(--nmx-control-background, var(--nmx-panel-2)); }
+.nmx-import-list-tools label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; white-space: nowrap; }
+.nmx-import-list > ul { max-height: 340px; overflow: auto; margin: 0; padding: 0; list-style: none; border: 1px solid var(--nmx-border); border-radius: 9px; }
+.nmx-import-list > ul > li + li { border-top: 1px solid var(--nmx-border); }
+.nmx-import-list > ul label { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; }
+.nmx-import-list > ul label > span { display: flex; flex-direction: column; min-width: 0; }
+.nmx-import-list > ul strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
+.nmx-import-list > ul small { color: var(--nmx-muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-import-list > ul em { font-style: normal; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--nmx-panel-2); color: var(--nmx-muted); white-space: nowrap; }
+.nmx-import-list > ul .is-new em { color: var(--nmx-accent); background: color-mix(in srgb, var(--nmx-accent) 12%, transparent); }
+.nmx-import-list > ul .is-updated em { color: var(--nmx-warning); }
+.nmx-import-list > ul .is-imported { opacity: .6; }
+.nmx-import-custom-tag { flex: none; padding: 1px 7px; border-radius: 999px; background: var(--nmx-panel-2); color: var(--nmx-muted); font-size: 11px; font-style: normal; }
+.nmx-import-manage { display: flex; justify-content: flex-end; }
+.nmx-import-manage .nmx-link-button { font-size: 12px; color: var(--nmx-muted); }
+.nmx-import-manage .nmx-link-button.is-danger { color: var(--nmx-danger); }
+/* The generic sheet rules (.nmx-permission-sheet > div, > div > button) right-align rows and restyle buttons. */
+.nmx-permission-sheet.nmx-feedback-sheet > .nmx-feedback-kinds { justify-content: flex-start; }
+.nmx-permission-sheet.nmx-feedback-sheet > .nmx-feedback-kinds > button { height: 28px; min-height: 28px; padding: 0 12px; border: 1px solid var(--nmx-border); border-radius: 999px; color: var(--nmx-text); background: transparent; font-size: 12.5px; }
+/* A shell rule paints every sheet button's colour/border/background with !important; the selected kind must win it. */
+.nmx-shell .nmx-permission-sheet.nmx-feedback-sheet > .nmx-feedback-kinds > button.is-active { border-color: var(--nmx-accent) !important; color: var(--nmx-accent) !important; background: color-mix(in srgb, var(--nmx-accent) 12%, transparent) !important; }
+.nmx-permission-sheet.nmx-feedback-sheet > .nmx-feedback-meta { justify-content: space-between; }
+
+/* Read-only log of the commands the AI ran, shown in the terminal drawer. */
+.nmx-shell .nmx-terminal-agent-log { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; }
+.nmx-shell .nmx-terminal-agent-log > header { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; min-width: 0; height: 26px; padding: 0 10px; border-bottom: 1px solid var(--nmx-border, #2c292a); color: var(--nmx-subtle, #8a8487); font-size: 12px; }
+.nmx-shell .nmx-terminal-agent-log > header > i { font-size: 12px; opacity: .8; }
+.nmx-shell .nmx-terminal-agent-log > header > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-shell .nmx-terminal-agent-log > header > small { margin-inline-start: auto; overflow: hidden; max-width: 40%; text-overflow: ellipsis; white-space: nowrap; opacity: .8; }
+.nmx-shell .nmx-agent-command-xterm.is-fill { flex: 1 1 auto; height: auto; max-height: none; padding: 0; }
+.nmx-shell .nmx-agent-command-xterm.is-fill > .xterm { padding: 6px 12px 4px 10px; box-sizing: border-box; }
+.nmx-shell .nmx-terminal-list article.is-agent-log { grid-template-columns: minmax(0, 1fr); cursor: default; }
+.nmx-shell .nmx-terminal-list article.is-agent-log .nmx-terminal-select { grid-template-columns: 18px minmax(0, 1fr) auto; padding-inline-end: 8px; }
+.nmx-shell .nmx-terminal-list article.is-agent-log .nmx-terminal-select > i { color: var(--nmx-accent, #8fb4ff); }
+.nmx-shell .nmx-terminal-log-count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: color-mix(in srgb, var(--nmx-text, #ddd) 10%, transparent); color: var(--nmx-subtle, #9a9497); font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; box-sizing: border-box; }
+/* The AI is running a command while the drawer is closed. */
+.nmx-shell button.has-agent-command { position: relative; }
+.nmx-shell button.has-agent-command::after { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: #73a8ef; box-shadow: 0 0 0 2px var(--nmx-panel, #1b1b1b); content: ''; animation: nmx-agent-command-pulse 1.4s ease-in-out infinite; }
+@keyframes nmx-agent-command-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .nmx-shell button.has-agent-command::after { animation: none; } }
+
+.nmx-shell { --nmx-steer: #6f9dff; }
+.nmx-shell.nmx-theme-light { --nmx-steer: #3f6fd8; }
+/* While the AI works: “Send now” reaches it at its next step without stopping it; the round button queues. */
+.nmx-desktop-widget .nmx-composer .nmx-steer-button {
+    display: inline-flex; align-items: center; gap: 5px; width: auto; height: 31px; min-height: 31px; padding: 0 11px 0 9px;
+    border: 1px solid color-mix(in srgb, var(--nmx-steer) 55%, transparent) !important; border-radius: 999px;
+    color: var(--nmx-text, #e6e2e4) !important; background: color-mix(in srgb, var(--nmx-steer) 14%, transparent) !important;
+    font-size: 12.5px; font-weight: 560; white-space: nowrap; cursor: pointer; transition: background 120ms ease, border-color 120ms ease;
+}
+.nmx-desktop-widget .nmx-composer .nmx-steer-button > i { font-size: 13px; }
+.nmx-desktop-widget .nmx-composer .nmx-steer-button:hover:not(:disabled) { background: color-mix(in srgb, var(--nmx-steer) 24%, transparent) !important; }
+.nmx-desktop-widget .nmx-composer .nmx-steer-button:disabled { opacity: .45; cursor: default; }
+@media (max-width: 760px) { .nmx-desktop-widget .nmx-composer .nmx-steer-button > span { display: none; } .nmx-desktop-widget .nmx-composer .nmx-steer-button { width: 31px; padding: 0; justify-content: center; } }
+
+/* Message queue above the composer: one quiet line per message, actions on the right. */
+.nmx-shell .nmx-follow-up-queue > header { display: flex; align-items: center; gap: 7px; min-height: 32px; padding: 0 10px; }
+.nmx-shell .nmx-follow-up-queue > header > i { font-size: 13px; color: var(--nmx-muted); }
+.nmx-shell .nmx-follow-up-queue > header > strong { color: var(--nmx-text); font-size: 12.5px; font-weight: 600; }
+.nmx-shell .nmx-follow-up-queue > header > span { min-width: 18px; padding: 0 6px; font-size: 11px; line-height: 17px; }
+.nmx-shell .nmx-follow-up-queue > header > small { min-width: 0; margin-inline-start: auto; overflow: hidden; color: var(--nmx-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-shell .nmx-follow-up-queue > article { grid-template-columns: 22px minmax(0, 1fr) auto 28px 28px 28px; min-height: 40px; }
+.nmx-shell .nmx-follow-up-queue > article > .nmx-follow-up-index { width: 20px; height: 20px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.nmx-shell .nmx-follow-up-queue > article > .nmx-follow-up-index > i { font-size: 12px; }
+.nmx-shell .nmx-follow-up-queue > article strong { font-size: 13.5px; }
+.nmx-shell .nmx-follow-up-queue > article.is-error > div > em { display: block; margin-top: 1px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nmx-shell .nmx-follow-up-queue > article > button.nmx-follow-up-direction {
+    display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px 0 7px; border: 1px solid color-mix(in srgb, var(--nmx-steer) 45%, transparent);
+    border-radius: 999px; color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-steer) 10%, transparent); font-size: 12px;
+}
+.nmx-shell .nmx-follow-up-queue > article > button.nmx-follow-up-direction > i { font-size: 12px; }
+.nmx-shell .nmx-follow-up-queue > article > button.nmx-follow-up-direction:hover:not(:disabled) { background: color-mix(in srgb, var(--nmx-steer) 22%, transparent); }
+.nmx-shell .nmx-follow-up-queue > article > button.nmx-follow-up-direction:disabled { border-color: var(--nmx-border); background: transparent; }
+/* The row's secondary actions stay visible but quiet until hovered. */
+.nmx-shell .nmx-follow-up-queue > article > button:not(.nmx-follow-up-direction) { opacity: .6; }
+.nmx-shell .nmx-follow-up-queue > article:hover > button:not(.nmx-follow-up-direction):not(:disabled),
+.nmx-shell .nmx-follow-up-queue > article:focus-within > button:not(.nmx-follow-up-direction):not(:disabled) { opacity: 1; }
+.nmx-shell .nmx-follow-up-queue > article.is-sending { opacity: .75; }
+.nmx-shell .nmx-follow-up-menu { width: auto; min-width: 170px; }
+.nmx-shell .nmx-follow-up-menu > button:disabled { opacity: .4; cursor: default; }
+.nmx-shell .nmx-follow-up-menu > button.is-danger:hover { color: #e38c94; }
+
+/* A message sent to the running AI: its own bubble with a clear delivery state. */
+.nmx-shell .nmx-steering-message { border-style: dashed; border-color: color-mix(in srgb, var(--nmx-steer) 45%, var(--nmx-border-strong)); }
+.nmx-shell .nmx-steering-message > small > i { font-size: 12px; }
+.nmx-shell .nmx-steering-message > small > i.codicon-check { color: #68aa7e; }
+/* “All conversations” rows carry a second line (the conversation); give them room instead of overlapping. */
+.nmx-shell .nmx-terminal-list article .nmx-terminal-select { height: auto; min-height: 39px; padding-top: 4px; padding-bottom: 4px; }
+.nmx-shell .nmx-terminal-list > div { display: flex; flex-direction: column; gap: 2px; }
+.nmx-shell .nmx-terminal-drawer > header nav button { max-width: 190px; }
+.nmx-shell .nmx-terminal-drawer > header { cursor: default; user-select: none; }
+
+/* How long each AI reply took; counts up live while the AI works. */
+.nmx-shell .nmx-turn-duration { display: inline-flex; align-items: center; gap: 4px; margin-inline-end: 6px; color: var(--nmx-muted); font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nmx-shell .nmx-turn-duration > i { font-size: 12px; opacity: .85; }
+.nmx-shell .nmx-turn-copy.is-running { margin-bottom: 4px; }
+.nmx-shell .nmx-turn-duration.is-running { color: var(--nmx-subtle); }
+/* The reply timer's icon: a spark that turns and breathes while the model thinks, with two twinkles; still when done. */
+.nmx-thinking-spark { flex: none; overflow: visible; color: currentColor; }
+.nmx-thinking-spark-core { fill: currentColor; opacity: .75; transform-box: view-box; transform-origin: 12px 12px; }
+.nmx-thinking-spark-twinkle { fill: currentColor; opacity: 0; transform-box: fill-box; transform-origin: center; }
+.nmx-thinking-spark.is-running { color: var(--nmx-accent, #ca3b68); }
+.nmx-thinking-spark.is-running .nmx-thinking-spark-core { opacity: 1; animation: nmx-spark-think 1.8s cubic-bezier(.45, 0, .25, 1) infinite; }
+.nmx-thinking-spark.is-running .nmx-thinking-spark-twinkle { animation: nmx-spark-twinkle 1.8s ease-in-out infinite; }
+.nmx-thinking-spark.is-running .nmx-thinking-spark-twinkle.is-second { animation-delay: .9s; }
+@keyframes nmx-spark-think { 0% { transform: rotate(0deg) scale(.82); } 50% { transform: rotate(45deg) scale(1.06); } 100% { transform: rotate(90deg) scale(.82); } }
+@keyframes nmx-spark-twinkle { 0%, 100% { opacity: 0; transform: scale(.3); } 35% { opacity: .9; transform: scale(1); } 60% { opacity: 0; transform: scale(.4); } }
+@media (prefers-reduced-motion: reduce) {
+    .nmx-thinking-spark.is-running .nmx-thinking-spark-core { animation: nmx-spark-breathe 2.4s ease-in-out infinite; }
+    .nmx-thinking-spark.is-running .nmx-thinking-spark-twinkle { animation: none; }
+    @keyframes nmx-spark-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+}
+
+/* GitHub MCP directory in Settings → MCP (same frame as the community Skills list). */
+.nmx-shell .nmx-mcp-registry { margin-top: 18px; }
+.nmx-shell .nmx-mcp-registry > .nmx-mcp-registry-toolbar { max-height: none; overflow: visible; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--nmx-border); }
+.nmx-shell .nmx-mcp-registry-toolbar > label { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 9px; border: 1px solid var(--nmx-border); border-radius: 7px; background: var(--nmx-panel-2); }
+.nmx-shell .nmx-mcp-registry-toolbar > label > i { color: var(--nmx-muted); font-size: 13px; }
+.nmx-shell .nmx-mcp-registry-toolbar input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--nmx-text); font: inherit; font-size: 13px; }
+.nmx-shell .nmx-mcp-registry-toolbar > button { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 1px solid var(--nmx-border); border-radius: 7px; background: transparent; color: var(--nmx-subtle); cursor: pointer; }
+.nmx-shell .nmx-mcp-registry > .nmx-mcp-registry-list { max-height: 520px; overflow-y: auto; }
+.nmx-shell .nmx-mcp-registry article > div > strong small { color: var(--nmx-muted); font-weight: 400; }
+.nmx-shell .nmx-mcp-registry article > div > span { display: -webkit-box; overflow: hidden; color: var(--nmx-subtle); font-size: 12.5px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.nmx-shell .nmx-mcp-registry article > div > small { color: var(--nmx-muted); font-size: 12px; }
+.nmx-shell .nmx-mcp-registry-actions { display: flex; align-items: center; gap: 4px; }
+.nmx-shell .nmx-mcp-registry-actions > button:not(.is-link) { height: 28px; padding: 0 12px; border: 1px solid var(--nmx-border-strong); border-radius: 7px; background: var(--nmx-panel-2); color: var(--nmx-text); font-size: 12.5px; cursor: pointer; }
+.nmx-shell .nmx-mcp-registry-actions > button:disabled { opacity: .5; cursor: default; }
+.nmx-shell .nmx-mcp-registry-actions > small { color: var(--nmx-muted); font-size: 12px; white-space: nowrap; }
+.nmx-shell .nmx-mcp-registry button.is-link { width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--nmx-muted); cursor: pointer; }
+.nmx-shell .nmx-mcp-registry-source { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 9px 12px; border-top: 1px solid var(--nmx-border); color: var(--nmx-muted); font-size: 12px; }
+.nmx-shell .nmx-mcp-registry-source > button.is-link { width: auto; height: auto; padding: 0; color: var(--nmx-subtle); text-decoration: underline; text-underline-offset: 2px; }
+.nmx-shell .nmx-mcp-registry > .nmx-settings-inline-error { margin: 8px 10px 0; }
+
+/* A project that only has another tool's instruction file (CLAUDE.md, .cursorrules, …). */
+.nmx-shell .nmx-agent-instructions-note.is-import { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 11px; border: 1px solid var(--nmx-border); border-radius: 8px; background: color-mix(in srgb, var(--nmx-steer, #6f9dff) 8%, transparent); }
+.nmx-shell .nmx-agent-instructions-note.is-import > span { flex: 1 1 260px; min-width: 0; }
+.nmx-shell .nmx-agent-instructions-note.is-import > button { height: 28px; padding: 0 11px; border: 1px solid var(--nmx-border-strong); border-radius: 7px; background: var(--nmx-panel-2); color: var(--nmx-text); cursor: pointer; }
+
+/* Settings → Skills: one wrapping line for the installed Skills; the chips open the same dialog. */
+.nmx-shell .nmx-installed-skills-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; max-width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--nmx-border); border-radius: 8px; background: var(--nmx-panel); }
+.nmx-shell .nmx-installed-skills-summary > i { flex: none; color: #b9a8d8; font-size: 16px; }
+.nmx-shell .nmx-installed-skills-summary > span { flex: 1 1 180px; min-width: 0; max-width: 100%; display: flex; flex-direction: column; gap: 2px; }
+.nmx-shell .nmx-installed-skills-summary > span > strong { color: var(--nmx-text); font-size: 13.5px; font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
+.nmx-shell .nmx-installed-skills-summary > span > small { color: var(--nmx-muted); font-size: 12.5px; white-space: normal; overflow-wrap: anywhere; }
+.nmx-shell .nmx-installed-skills-chips { flex: 1 1 220px; min-width: 0; max-width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; overflow: hidden; -webkit-mask-image: none; mask-image: none; }
+.nmx-shell .nmx-installed-skills-chip { flex: 0 1 auto; min-width: 0; max-width: 100%; box-sizing: border-box; height: 24px; padding: 0 8px; border: 1px solid var(--nmx-border); border-radius: 999px; background: var(--nmx-panel-2); color: var(--nmx-subtle); font-size: 11.5px; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.nmx-shell .nmx-installed-skills-chip:hover { border-color: var(--nmx-border-strong); color: var(--nmx-text); }
+.nmx-shell .nmx-installed-skills-chip.is-more { color: var(--nmx-muted); }
+.nmx-shell .nmx-installed-skills-summary > button { flex: 0 0 auto; margin-inline-start: auto; height: 30px; padding: 0 14px; border: 1px solid var(--nmx-border-strong); border-radius: 7px; background: var(--nmx-panel-2); color: var(--nmx-text); cursor: pointer; }
+.nmx-shell .nmx-permission-sheet.nmx-installed-skills-sheet { width: min(620px, calc(100vw - 32px)); max-height: min(640px, calc(100vh - 64px)); display: flex; flex-direction: column; box-sizing: border-box; }
+.nmx-shell .nmx-installed-skills-sheet h2 small { margin-inline-start: 8px; color: var(--nmx-muted); font-size: 13px; font-weight: 500; }
+.nmx-shell .nmx-installed-skills-sheet header p { margin-top: 6px; color: var(--nmx-subtle); font-size: 13px; line-height: 1.55; }
+.nmx-shell .nmx-installed-skills-list { min-height: 0; overflow-y: auto; margin-top: 12px; border: 1px solid var(--nmx-border); border-radius: 8px; }
+/* `.nmx-permission-sheet > div` right-aligns a dialog's actions; the Skills
+   dialog reuses that class for its list, so restore a top-aligned column. */
+.nmx-shell .nmx-installed-skills-sheet > .nmx-installed-skills-list {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 0;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+}
+.nmx-shell .nmx-installed-skills-list > article { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; max-width: 100%; box-sizing: border-box; padding: 10px 12px; border-bottom: 1px solid var(--nmx-border); }
+.nmx-shell .nmx-installed-skills-list > article:last-child { border-bottom: 0; }
+.nmx-shell .nmx-installed-skills-list > article > i { flex: 0 0 auto; color: #b9a8d8; }
+.nmx-shell .nmx-installed-skills-list > article > span { flex: 1 1 200px; min-width: 0; max-width: 100%; display: flex; flex-direction: column; gap: 2px; }
+.nmx-shell .nmx-installed-skills-list > article strong { color: var(--nmx-text); font-size: 13px; }
+.nmx-shell .nmx-installed-skills-list > article small { color: var(--nmx-subtle); font-size: 12.5px; display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.nmx-shell .nmx-installed-skills-list > article code { overflow: hidden; color: var(--nmx-muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+/* Long names / descriptions / paths wrap inside the modal row instead of
+   widening it past the dialog's horizontal edge. */
+.nmx-shell .nmx-installed-skills-list > article > span :is(strong, small, code) { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
+.nmx-shell .nmx-installed-skills-list > article > button { flex: 0 0 auto; height: 28px; padding: 0 12px; border: 1px solid var(--nmx-border-strong); border-radius: 7px; background: var(--nmx-panel-2); color: var(--nmx-text); cursor: pointer; }
+.nmx-shell .nmx-installed-skills-empty { margin: 0; padding: 18px; color: var(--nmx-muted); text-align: center; }
+
+/* Settings → Local data: backup/transfer cards, storage used, diagnostics. */
+.nmx-shell .nmx-settings-page .nmx-conversation-archive { padding: 16px; }
+.nmx-shell .nmx-conversation-archive > .nmx-archive-header h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; }
+.nmx-shell .nmx-conversation-archive > .nmx-archive-header p { margin: 6px 0 0; color: var(--nmx-subtle); font-size: 13px; line-height: 1.55; }
+.nmx-shell .nmx-archive-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 14px; }
+.nmx-shell .nmx-archive-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px; border: 1px solid var(--nmx-border); border-radius: 10px; background: var(--nmx-panel); }
+.nmx-shell .nmx-archive-card > h4 { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--nmx-text); font-size: 13.5px; font-weight: 600; }
+.nmx-shell .nmx-archive-card > p { margin: 0; color: var(--nmx-subtle); font-size: 12.5px; line-height: 1.55; }
+.nmx-shell .nmx-archive-card > .nmx-settings-actions { margin-top: auto; padding-top: 2px; }
+.nmx-shell .nmx-archive-card .nmx-archive-opt-in { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: 9px; margin: 0; cursor: pointer; }
+.nmx-shell .nmx-archive-card .nmx-archive-opt-in > input { width: 15px; height: 15px; margin: 2px 0 0; }
+.nmx-shell .nmx-archive-card .nmx-archive-opt-in > span { display: flex; flex-direction: column; gap: 3px; }
+.nmx-shell .nmx-archive-card .nmx-archive-opt-in strong { color: var(--nmx-text); font-size: 13px; font-weight: 560; }
+.nmx-shell .nmx-archive-card .nmx-archive-opt-in small { color: var(--nmx-muted); font-size: 12px; line-height: 1.5; }
+.nmx-shell .nmx-archive-card .nmx-archive-export-projects { margin: 0; padding: 10px; border-radius: 8px; background: var(--nmx-panel-2); }
+.nmx-shell .nmx-archive-card .nmx-archive-export-projects > p { margin: 0 0 8px; color: var(--nmx-muted); font-size: 12px; }
+.nmx-shell .nmx-conversation-archive > .nmx-archive-privacy { margin: 12px 0 0; font-size: 12px; }
+.nmx-shell .nmx-conversation-archive > .nmx-archive-state { margin: 10px 0 0; color: var(--nmx-subtle); font-size: 12.5px; }
+.nmx-shell .nmx-local-data-heading { display: flex; align-items: center; gap: 10px; margin: 22px 0 4px; }
+.nmx-shell .nmx-local-data-heading > h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; }
+.nmx-shell .nmx-local-data-heading > span { margin-inline-start: auto; color: var(--nmx-muted); font-size: 12.5px; }
+.nmx-shell .nmx-local-data-heading > span > b { color: var(--nmx-text); font-weight: 600; }
+.nmx-shell .nmx-local-data-heading > button { height: 28px; padding: 0 11px; border: 1px solid var(--nmx-border-strong); border-radius: 7px; background: var(--nmx-panel-2); color: var(--nmx-text); font-size: 12.5px; cursor: pointer; }
+.nmx-shell .nmx-local-data-lead { margin: 0 0 10px; color: var(--nmx-subtle); font-size: 12.5px; }
+.nmx-shell .nmx-local-data-diagnostics { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-top: 18px; padding: 12px 14px; border: 1px solid var(--nmx-border); border-radius: 10px; background: var(--nmx-panel); }
+.nmx-shell .nmx-local-data-diagnostics > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.nmx-shell .nmx-local-data-diagnostics strong { color: var(--nmx-text); font-size: 13.5px; }
+.nmx-shell .nmx-local-data-diagnostics small { color: var(--nmx-muted); font-size: 12px; line-height: 1.5; }
+.nmx-shell .nmx-local-data-diagnostics > button { height: 30px; padding: 0 13px; border: 1px solid var(--nmx-border-strong); border-radius: 7px; background: var(--nmx-panel-2); color: var(--nmx-text); cursor: pointer; white-space: nowrap; }
+
+/* Settings cards use a neutral surface; the dark theme's rose-tinted panel read as a warning there. */
+.nmx-shell:not(.nmx-theme-light) .nmx-settings-page { --nmx-panel: #232122; }
+/* Import: the source cards are the cards; no second frame around them. */
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel { padding: 0; border: 0; background: transparent; box-shadow: none; }
+.nmx-shell .nmx-import-header { align-items: flex-end; flex-wrap: wrap; row-gap: 10px; }
+.nmx-shell .nmx-import-header > div:last-child { flex-direction: row-reverse; align-items: center; gap: 10px; }
+.nmx-shell .nmx-import-source > header .nmx-import-actions { flex-wrap: wrap; justify-content: flex-end; }
+
+/* Settings → Models: “Enable anonymous models”, right-aligned under the list. */
+.nmx-shell label.nmx-anonymous-models-toggle { display: flex; flex-direction: row; justify-content: flex-start; align-items: center; gap: 7px; width: fit-content; margin: 14px 0 0 auto; padding: 4px 2px; border: 0; background: none; color: var(--nmx-text); font-size: 13px; cursor: pointer; }
+.nmx-shell label.nmx-anonymous-models-toggle > input { width: 15px; min-width: 15px; height: 15px; min-height: 15px; padding: 0; margin: 0; flex: 0 0 15px; appearance: auto; accent-color: var(--nmx-accent); cursor: pointer; }
+.nmx-shell label.nmx-anonymous-models-toggle:focus-within { outline: 2px solid var(--nmx-focus-ring, var(--nmx-accent)); outline-offset: 3px; border-radius: 3px; }
+.nmx-shell .nmx-anonymous-models-toggle > span { white-space: nowrap; }
+
+/* Settings → Models footer: the preview-model switch beside the response style, a three-stop slider
+   (严谨 · 正常 · 发散) whose thumb slides under the chosen stop. */
+.nmx-shell .nmx-models-settings-footer-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 22px; margin-top: 14px; }
+.nmx-shell .nmx-models-settings-footer-bar > label.nmx-anonymous-models-toggle { margin: 0; }
+.nmx-shell .nmx-creativity-mode-control { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.nmx-shell .nmx-creativity-mode-label { color: var(--nmx-muted); font-size: 13px; white-space: nowrap; }
+.nmx-shell .nmx-creativity-mode-segmented {
+    --nmx-creativity-position: 1;
+    position: relative;
+    display: inline-grid;
+    grid-template-columns: repeat(3, 1fr);
+    padding: 2px;
+    border: 1px solid var(--nmx-border);
+    border-radius: 999px;
+    background: var(--nmx-panel-2);
+    isolation: isolate;
+}
+.nmx-shell .nmx-creativity-mode-segmented[data-position='0'] { --nmx-creativity-position: 0; }
+.nmx-shell .nmx-creativity-mode-segmented[data-position='2'] { --nmx-creativity-position: 2; }
+.nmx-shell .nmx-creativity-mode-thumb {
+    position: absolute;
+    z-index: 0;
+    top: 2px;
+    bottom: 2px;
+    inset-inline-start: 2px;
+    width: calc((100% - 4px) / 3);
+    border-radius: 999px;
+    background: var(--nmx-panel);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .22), 0 0 0 1px color-mix(in srgb, var(--nmx-border) 80%, transparent);
+    transform: translateX(calc(100% * var(--nmx-creativity-position)));
+    transition: transform 180ms cubic-bezier(.2, .8, .2, 1);
+}
+.nmx-shell .nmx-creativity-mode-thumb:dir(rtl) { transform: translateX(calc(-100% * var(--nmx-creativity-position))); }
+.nmx-shell .nmx-creativity-mode-segmented > button {
+    position: relative;
+    z-index: 1;
+    min-width: 52px;
+    height: 26px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--nmx-muted);
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 140ms ease;
+}
+.nmx-shell .nmx-creativity-mode-segmented > button:hover,
+.nmx-shell .nmx-creativity-mode-segmented > button.is-active { color: var(--nmx-text); }
+.nmx-shell .nmx-creativity-mode-segmented > button.is-active { font-weight: 600; }
+.nmx-shell .nmx-creativity-mode-segmented > button:focus-visible { outline: 2px solid var(--nmx-focus-ring, var(--nmx-accent)); outline-offset: -2px; }
+.nmx-shell.nmx-theme-light .nmx-creativity-mode-thumb { background: #fff; box-shadow: 0 1px 2px rgba(31, 27, 30, .14), 0 0 0 1px rgba(31, 27, 30, .08); }
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell .nmx-creativity-mode-thumb,
+    .nmx-shell .nmx-creativity-mode-segmented > button { transition: none; }
+}
+@media (forced-colors: active) {
+    .nmx-shell .nmx-creativity-mode-thumb { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
+    .nmx-shell .nmx-creativity-mode-segmented > button.is-active { color: Highlight; }
+}
+
+/* Settings → Account → GitHub */
+.nmx-shell .nmx-github-account .nmx-github-intro,
+.nmx-shell .nmx-github-account .nmx-github-profile,
+.nmx-shell .nmx-github-account .nmx-github-agent-toggle,
+.nmx-shell .nmx-github-account .nmx-github-connect,
+.nmx-shell .nmx-github-account .nmx-github-confirm,
+.nmx-shell .nmx-github-account .nmx-github-lead,
+.nmx-shell .nmx-github-account .nmx-github-error { margin: 0; padding: 12px 14px; }
+.nmx-shell .nmx-github-account .nmx-github-intro { display: flex; align-items: center; gap: 14px; justify-content: space-between; }
+.nmx-shell .nmx-github-account .nmx-github-intro p { margin: 0; color: var(--nmx-muted); font-size: 12.5px; line-height: 1.5; }
+.nmx-shell .nmx-github-account button { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 11px; border: 1px solid var(--nmx-border); border-radius: 7px; color: var(--nmx-text); background: transparent; font-size: 12.5px; white-space: nowrap; cursor: pointer; }
+.nmx-shell .nmx-github-account button:hover:not(:disabled) { border-color: var(--nmx-border-strong, var(--nmx-border)); background: color-mix(in srgb, var(--nmx-text) 6%, transparent); }
+.nmx-shell .nmx-github-account button:disabled { opacity: .55; cursor: default; }
+.nmx-shell .nmx-github-account button.is-primary { border-color: transparent; color: #fff; background: var(--nmx-accent); }
+.nmx-shell .nmx-github-account button.is-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--nmx-accent) 88%, #000); }
+.nmx-shell .nmx-github-account button.is-danger { color: var(--nmx-danger); }
+.nmx-shell .nmx-github-account .nmx-link-button { min-height: 0; padding: 0; border: 0; color: var(--nmx-muted); background: none; font-size: 12px; }
+.nmx-shell .nmx-github-account .nmx-link-button:hover:not(:disabled) { color: var(--nmx-text); background: none; text-decoration: underline; }
+.nmx-shell .nmx-github-profile { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.nmx-shell .nmx-github-profile > img, .nmx-shell .nmx-github-profile .nmx-github-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
+.nmx-shell .nmx-github-profile .nmx-github-avatar { display: grid; place-items: center; color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 10%, transparent); font-weight: 600; }
+.nmx-shell .nmx-github-profile > span:nth-of-type(1) { display: grid; gap: 3px; min-width: 0; }
+.nmx-shell .nmx-github-profile strong { overflow: hidden; color: var(--nmx-text); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-shell .nmx-github-profile small { overflow: hidden; color: var(--nmx-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-shell .nmx-github-actions { display: flex; gap: 8px; }
+.nmx-shell .nmx-github-account .nmx-github-agent-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--nmx-border); cursor: pointer; }
+.nmx-shell .nmx-github-agent-toggle > span:first-child { display: grid; gap: 3px; }
+.nmx-shell .nmx-github-agent-toggle strong { color: var(--nmx-text); font-size: 13px; font-weight: 560; }
+.nmx-shell .nmx-github-agent-toggle small { color: var(--nmx-muted); font-size: 12px; line-height: 1.5; }
+.nmx-shell .nmx-github-account .nmx-github-connect { display: grid; gap: 10px; border-top: 1px solid var(--nmx-border); }
+.nmx-shell .nmx-github-connect ol { display: grid; gap: 12px; margin: 0; padding-left: 18px; color: var(--nmx-muted); font-size: 12.5px; line-height: 1.5; list-style: decimal; }
+.nmx-shell .nmx-github-connect li::marker { color: var(--nmx-muted); font-variant-numeric: tabular-nums; }
+.nmx-shell .nmx-github-connect li { display: list-item; padding-left: 2px; }
+.nmx-shell .nmx-github-connect li > span:first-child, .nmx-shell .nmx-github-connect label { color: var(--nmx-text); }
+.nmx-shell .nmx-github-links, .nmx-shell .nmx-github-token-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.nmx-shell .nmx-github-token-row input { flex: 1 1 260px; min-width: 0; height: 30px; padding: 0 10px; border: 1px solid var(--nmx-border); border-radius: 7px; outline: none; color: var(--nmx-text); background: var(--nmx-input, transparent); font: 12.5px/1 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.nmx-shell .nmx-github-token-row input:focus { border-color: var(--nmx-accent); }
+.nmx-shell .nmx-github-privacy { display: flex; align-items: center; gap: 6px; color: var(--nmx-muted); font-size: 12px; }
+.nmx-shell .nmx-github-account .nmx-github-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border-top: 1px solid var(--nmx-border); color: var(--nmx-text); font-size: 12.5px; line-height: 1.5; background: color-mix(in srgb, var(--nmx-danger) 7%, transparent); }
+.nmx-shell .nmx-github-confirm > span { flex: 1 1 260px; }
+.nmx-shell .nmx-github-account .nmx-github-error { display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--nmx-border); color: var(--nmx-danger); font-size: 12.5px; }
+@media (max-width: 640px) {
+    .nmx-shell .nmx-github-profile { grid-template-columns: 36px minmax(0, 1fr); }
+    .nmx-shell .nmx-github-actions { grid-column: 1 / -1; }
+    .nmx-shell .nmx-github-account .nmx-github-intro { flex-direction: column; align-items: flex-start; }
+}
+.nmx-shell .nmx-mcp-registry .nmx-mcp-registry-builtin { display: flex; align-items: flex-start; gap: 7px; margin: 0 0 10px; padding: 9px 11px; border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-muted); font-size: 12.5px; line-height: 1.5; }
+.nmx-shell .nmx-mcp-registry .nmx-mcp-registry-builtin > i { margin-top: 2px; color: var(--nmx-success, #5fb98c); }
+.nmx-shell .nmx-mcp-registry .nmx-mcp-registry-builtin-badge { display: inline-flex; align-items: center; gap: 4px; color: var(--nmx-success, #5fb98c); font-size: 12px; white-space: nowrap; }
+
+/* "Apply to NextMux" link from a relay website: shown above the prefilled ＋ Compatible API form. */
+.nmx-shell .nmx-official-form > .nmx-import-source { display: grid; gap: 6px; margin: 0 0 4px; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--nmx-accent) 34%, var(--nmx-border)); border-radius: 10px; background: color-mix(in srgb, var(--nmx-accent) 8%, transparent); font-size: 12.5px; line-height: 1.55; }
+.nmx-shell .nmx-import-source > strong { display: flex; align-items: center; gap: 7px; color: var(--nmx-text); font-size: 13.5px; overflow-wrap: anywhere; }
+.nmx-shell .nmx-import-source > strong > i { color: var(--nmx-accent); }
+.nmx-shell .nmx-import-source > p { margin: 0; color: var(--nmx-muted); overflow-wrap: anywhere; }
+.nmx-shell .nmx-import-source > p.is-trust { display: flex; align-items: flex-start; gap: 6px; }
+.nmx-shell .nmx-import-source > p.is-trust > i { margin-top: 2px; }
+
+/* Settings → Downloads (nextmux-downloads-panel.tsx) */
+.nmx-shell .nmx-downloads { display: flex; flex-direction: column; gap: 14px; }
+.nmx-shell .nmx-downloads-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+/* Beat the settings page's two-column label grid so the box sits right next to its words. */
+.nmx-shell .nmx-settings-page label.nmx-downloads-auto { display: inline-flex; align-items: center; gap: 7px; margin: 0; color: var(--nmx-text); font-size: 13px; cursor: pointer; }
+.nmx-shell .nmx-downloads-auto > input { width: 15px; height: 15px; margin: 0; appearance: auto; accent-color: var(--nmx-accent); }
+.nmx-shell .nmx-downloads-toolbar .nmx-link-button { display: inline-flex; align-items: center; gap: 5px; }
+.nmx-shell .nmx-downloads-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.nmx-shell .nmx-downloads-item {
+    display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; grid-template-areas: 'icon copy status' 'icon copy actions';
+    align-items: center; gap: 4px 12px; padding: 12px 14px; border: 1px solid var(--nmx-border); border-radius: 10px; background: var(--nmx-panel);
+}
+.nmx-shell .nmx-downloads-icon { grid-area: icon; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--nmx-panel-2); color: var(--nmx-muted); align-self: start; }
+.nmx-shell .nmx-downloads-item.is-ready .nmx-downloads-icon { color: #2f9e5f; background: color-mix(in srgb, #2f9e5f 12%, transparent); }
+.nmx-shell .nmx-downloads-copy { grid-area: copy; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.nmx-shell .nmx-downloads-copy strong { display: flex; align-items: center; gap: 6px; color: var(--nmx-text); font-size: 13.5px; font-weight: 600; }
+.nmx-shell .nmx-downloads-copy strong em { padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, #8e4ec6 14%, transparent); color: #8e4ec6; font-size: 11px; font-style: normal; font-weight: 500; }
+.nmx-shell .nmx-downloads-copy small { color: var(--nmx-muted); font-size: 12px; line-height: 1.5; }
+.nmx-shell .nmx-downloads-meta { opacity: .85; }
+.nmx-shell .nmx-downloads-error { color: #d64566 !important; }
+.nmx-shell .nmx-downloads-progress { display: block; height: 4px; margin-top: 4px; border-radius: 999px; background: var(--nmx-border); overflow: hidden; }
+.nmx-shell .nmx-downloads-progress > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ff5f8a, #8e4ec6); transition: width 300ms ease; }
+.nmx-shell .nmx-downloads-status { grid-area: status; justify-self: end; color: var(--nmx-muted); font-size: 12px; white-space: nowrap; }
+.nmx-shell .nmx-downloads-status.is-ready { color: #2f9e5f; }
+.nmx-shell .nmx-downloads-status.is-failed { color: #d64566; }
+.nmx-shell .nmx-downloads-status:is(.is-downloading, .is-installing, .is-queued) { color: #8e4ec6; }
+.nmx-shell .nmx-downloads-actions { grid-area: actions; display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+.nmx-shell .nmx-downloads-actions :is(.nmx-primary-button, .nmx-secondary-button) { min-height: 28px; padding: 0 12px; font-size: 12px; }
+.nmx-shell .nmx-settings-panel .nmx-downloads-actions .nmx-link-button { display: inline-flex; align-items: center; gap: 3px; min-height: 28px; padding: 0 4px; border: 0; color: var(--nmx-muted); background: none; font-size: 12px; }
+.nmx-shell .nmx-settings-panel .nmx-downloads-actions .nmx-link-button:hover { color: var(--nmx-text); background: none; text-decoration: underline; }
+@media (max-width: 700px) {
+    .nmx-shell .nmx-downloads-item { grid-template-columns: 34px minmax(0, 1fr); grid-template-areas: 'icon copy' 'icon status' 'icon actions'; }
+    .nmx-shell .nmx-downloads-status, .nmx-shell .nmx-downloads-actions { justify-self: start; justify-content: flex-start; }
+}
+
+/* Own API → 模型列表: every model this key listed, grouped locally by kind (nextmux-own-model-kind.ts). */
+.nmx-shell .nmx-saved-connections article > .nmx-own-model-list { grid-column: 1 / -1; box-sizing: border-box; min-width: 0; max-width: 100%; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 2px 0 12px; padding: 10px 12px; border: 1px solid var(--nmx-border); border-radius: 10px; background: var(--nmx-panel, transparent); }
+.nmx-shell .nmx-own-model-list > header { display: grid; gap: 6px; }
+.nmx-shell .nmx-own-model-list > header input { box-sizing: border-box; width: 100%; height: 30px; padding: 0 10px; border: 1px solid var(--nmx-border); border-radius: 7px; color: var(--nmx-text); background: var(--nmx-bg); font-size: 12.5px; }
+.nmx-shell .nmx-own-model-list > header small, .nmx-shell .nmx-own-model-list > p { margin: 0; color: var(--nmx-muted); font-size: 12px; }
+.nmx-shell .nmx-own-model-list details { min-width: 0; border-top: 1px solid var(--nmx-border); padding-top: 6px; }
+.nmx-shell .nmx-own-model-list summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--nmx-text); font-size: 12.5px; cursor: pointer; }
+.nmx-shell .nmx-own-model-list summary b { min-width: 22px; padding: 0 6px; border-radius: 10px; color: var(--nmx-muted); background: var(--nmx-hover); font-size: 11.5px; font-weight: 600; text-align: center; }
+.nmx-shell .nmx-own-model-list ul { max-height: 220px; margin: 6px 0 0; padding: 0; overflow: auto; overscroll-behavior: contain; list-style: none; }
+.nmx-shell .nmx-own-model-list li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; padding: 3px 0; font-size: 12px; }
+.nmx-shell .nmx-own-model-list li bdi { min-width: 0; overflow: hidden; color: var(--nmx-text); text-overflow: ellipsis; white-space: nowrap; }
+.nmx-shell .nmx-own-model-list li code { flex: 0 1 auto; min-width: 0; overflow: hidden; color: var(--nmx-muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 应用操控: the icon button beside the permission button, the picked app on its own row at the top left of the
+ * composer, and the same app as a chip on the sent message. */
+.nmx-composer-below .nmx-app-control-button { flex: 0 0 auto; display: grid; place-items: center; width: 28px; height: 26px; padding: 0; border: 0; border-radius: 7px; color: var(--nmx-muted); background: transparent; cursor: pointer; }
+.nmx-composer-below .nmx-app-control-button:is(:hover:not(:disabled), .is-active) { color: var(--nmx-text); background: var(--nmx-hover); }
+.nmx-composer-below .nmx-app-control-button:focus-visible { outline: 2px solid var(--nmx-focus-ring, #6b8afd); outline-offset: 1px; }
+.nmx-composer-below .nmx-app-control-button.is-picking { opacity: .6; cursor: progress; }
+.nmx-composer-below .nmx-app-control-button > svg { display: block; }
+.nmx-app-control-icon { display: block; flex: 0 0 auto; object-fit: contain; border-radius: 4px; }
+.nmx-app-control-icon.is-generic { display: grid; place-items: center; border-radius: 6px; color: var(--nmx-muted); background: color-mix(in srgb, var(--nmx-text) 8%, transparent); }
+.nmx-app-control-glyph { display: block; flex: 0 0 auto; }
+/* The picked app's icon with a pointer over its bottom left corner: this app is driven by NextMux. */
+.nmx-app-control-icon-wrap { position: relative; display: block; flex: 0 0 auto; }
+.nmx-app-control-icon-wrap > .nmx-app-control-icon { width: 100%; height: 100%; }
+.nmx-app-control-pointer { position: absolute; left: -3px; bottom: -4px; width: 9px; height: 12px; filter: drop-shadow(0 1px 1px rgb(0 0 0 / .35)); pointer-events: none; }
+.nmx-composer-app-row { display: flex; justify-content: flex-start; margin: 0 0 8px; padding: 0 2px; }
+.nmx-composer-app { display: inline-flex; align-items: center; gap: 8px; max-width: min(320px, 100%); height: 34px; padding: 0 4px 0 8px; border: 1px solid var(--nmx-border); border-radius: 9px; color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 5%, transparent); font-size: 12.5px; line-height: 1; }
+.nmx-composer-app .nmx-app-control-icon-wrap { width: 22px; height: 22px; margin-inline-start: 1px; }
+.nmx-composer-app-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.nmx-composer-app .nmx-composer-app-remove { flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; color: var(--nmx-muted); background: transparent; cursor: pointer; }
+.nmx-composer-app .nmx-composer-app-remove:hover:not(:disabled) { color: var(--nmx-text); background: var(--nmx-hover); }
+.nmx-composer-app .nmx-composer-app-remove > i { font-size: 13px; }
+.nmx-turn-app-row { display: flex; justify-content: flex-start; margin-bottom: 6px; }
+.nmx-turn-app { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; height: 24px; padding: 0 9px 0 7px; border-radius: 7px; color: var(--nmx-muted); background: color-mix(in srgb, var(--nmx-text) 7%, transparent); font-size: 12px; line-height: 1; }
+.nmx-turn-app > .nmx-app-control-glyph { width: 13px; height: 13px; }
+.nmx-turn-app > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-composer-app-row { align-items: center; gap: 10px; flex-wrap: wrap; }
+.nmx-composer-app-notice { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--nmx-muted); font-size: 12px; line-height: 1.4; }
+.nmx-composer-app-notice > button { flex: 0 0 auto; height: 24px; padding: 0 9px; border: 1px solid var(--nmx-border); border-radius: 7px; color: var(--nmx-text); background: transparent; font-size: 12px; cursor: pointer; }
+.nmx-composer-app-notice > button:hover { background: var(--nmx-hover); }
+/* The composer sizes every button at 15px !important (nextmux.css); the app row keeps its own compact scale. */
+.nmx-composer .nmx-composer-app-row button { min-height: 0; font-size: 12px !important; }
+.nmx-composer .nmx-composer-app-notice > button { height: 24px; color: var(--nmx-text); background: transparent; }
+.nmx-composer .nmx-composer-app-notice > button:hover { background: var(--nmx-hover); }
+.nmx-composer .nmx-composer-app-notice { margin-inline-start: 2px; }
+
+/* Settings → tool permissions: what happens to the apps NextMux opened for tabs. */
+.nmx-settings-panel .nmx-tab-app-close { margin-top: 10px; padding: 14px 12px 14px 16px; border: 1px solid var(--nmx-border); border-radius: 10px; gap: 16px; }
+.nmx-settings-panel .nmx-tab-app-close > span:first-child { flex: 1 1 260px; }
+.nmx-settings-panel .nmx-tab-app-close small { font-size: 12.5px; line-height: 1.5; }
+.nmx-tab-app-close .nmx-segmented { flex: 0 0 auto; display: inline-flex; padding: 3px; gap: 2px; border: 1px solid var(--nmx-border); border-radius: 9px; background: color-mix(in srgb, var(--nmx-text) 4%, transparent); }
+.nmx-tab-app-close .nmx-segmented > button { min-height: 28px; padding: 0 12px; border: 0; border-radius: 6px; color: var(--nmx-muted); background: transparent; font-size: 12.5px; white-space: nowrap; cursor: pointer; }
+.nmx-tab-app-close .nmx-segmented > button:hover { color: var(--nmx-text); }
+.nmx-tab-app-close .nmx-segmented > button.is-selected { color: var(--nmx-text); background: var(--nmx-selected, var(--nmx-hover)); box-shadow: 0 1px 2px rgba(0, 0, 0, .18); }
+.nmx-tab-app-close .nmx-segmented > button:focus-visible { outline: 2px solid var(--nmx-focus-ring, #6b8afd); outline-offset: 1px; }
+
+/* ---------------------------------------------------------------------------
+ * Skill plugins (技能插件): Settings page, dialogs, a tab's plugin bar, menu and readings.
+ * ------------------------------------------------------------------------ */
+.nmx-plugins-settings { display: flex; flex-direction: column; gap: 16px; }
+.nmx-plugins-lead { display: flex; flex-direction: column; gap: 12px; }
+.nmx-plugins-lead > p { margin: 0; color: var(--nmx-muted); font-size: 13px; line-height: 1.6; }
+.nmx-plugins-toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
+.nmx-plugins-toolbar > button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: transparent; font-size: 13px; cursor: pointer; }
+.nmx-plugins-toolbar > button:hover:not(:disabled) { background: var(--nmx-hover); }
+.nmx-plugins-toolbar > button.is-primary { border-color: transparent; color: #fff; background: #3b6ef5; }
+.nmx-plugins-toolbar > button.is-primary:hover:not(:disabled) { background: #3160dd; }
+.nmx-plugins-toolbar > button.is-link { border-color: transparent; color: var(--nmx-muted); }
+.nmx-plugins-toolbar > button:disabled { opacity: .6; cursor: default; }
+.nmx-plugins-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 16px; border: 1px dashed var(--nmx-border); border-radius: 12px; color: var(--nmx-muted); text-align: center; }
+.nmx-plugins-empty > i { font-size: 28px; opacity: .7; }
+.nmx-plugins-empty > strong { color: var(--nmx-text); font-size: 14px; }
+.nmx-plugins-empty > span { max-width: 420px; font-size: 12.5px; line-height: 1.6; }
+.nmx-plugin-list { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.nmx-plugin-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--nmx-border); border-radius: 12px; background: color-mix(in srgb, var(--nmx-text) 3%, transparent); }
+.nmx-plugin-card-main { display: flex; align-items: flex-start; gap: 12px; }
+.nmx-plugin-icon { flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px; object-fit: cover; }
+.nmx-plugin-icon.is-placeholder { color: var(--nmx-muted); background: color-mix(in srgb, var(--nmx-text) 8%, transparent); }
+.nmx-plugin-icon.is-placeholder > i { font-size: 18px; }
+.nmx-plugin-card-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.nmx-plugin-card-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.nmx-plugin-card-title > strong { color: var(--nmx-text); font-size: 14px; font-weight: 600; }
+.nmx-plugin-version { color: var(--nmx-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.nmx-plugin-status { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 10px; font-size: 11.5px; font-weight: 500; line-height: 1; white-space: nowrap; }
+.nmx-plugin-status.is-ok { color: #2f9e5b; background: color-mix(in srgb, #2f9e5b 14%, transparent); }
+.nmx-plugin-status.is-warning { color: #c98f1c; background: color-mix(in srgb, #d9a63a 16%, transparent); }
+.nmx-plugin-status.is-danger { color: #d9534f; background: color-mix(in srgb, #d9534f 14%, transparent); }
+.nmx-plugin-status.is-muted { color: var(--nmx-muted); background: color-mix(in srgb, var(--nmx-text) 8%, transparent); }
+.nmx-plugin-status.is-running { color: #3b82f6; background: color-mix(in srgb, #3b82f6 14%, transparent); }
+.nmx-plugin-status.is-dev { color: #8b5cf6; background: color-mix(in srgb, #8b5cf6 14%, transparent); }
+.nmx-plugin-meta { margin: 0; color: var(--nmx-muted); font-size: 12px; overflow-wrap: anywhere; }
+.nmx-plugin-description { margin: 0; color: var(--nmx-text); font-size: 13px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.nmx-plugin-card.is-expanded .nmx-plugin-description { -webkit-line-clamp: unset; }
+.nmx-plugin-description.is-error { color: #d9534f; }
+.nmx-plugin-model { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 2px 0 0; color: var(--nmx-muted); font-size: 12.5px; }
+.nmx-plugin-model > b { color: var(--nmx-text); font-weight: 500; }
+.nmx-plugin-model > button.is-link, .nmx-plugin-card-actions > button, .nmx-plugin-muted { font-size: 12.5px; }
+.nmx-plugin-model > button.is-link { margin-inline-start: 6px; padding: 0; border: 0; color: #3b82f6; background: none; cursor: pointer; }
+.nmx-plugin-model > button.is-link:hover { text-decoration: underline; }
+.nmx-plugin-card-actions { display: flex; flex-wrap: wrap; gap: 6px; padding-inline-start: 52px; }
+.nmx-plugin-card-actions > button { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border: 1px solid var(--nmx-border); border-radius: 7px; color: var(--nmx-text); background: transparent; cursor: pointer; }
+.nmx-plugin-card-actions > button:hover:not(:disabled) { background: var(--nmx-hover); }
+.nmx-plugin-card-actions > button:disabled { opacity: .5; cursor: default; }
+.nmx-plugin-card-actions > button.is-danger-text { color: #d9534f; }
+.nmx-plugin-card-actions > button > i { font-size: 13px; }
+.nmx-plugin-tests { padding: 8px 12px; border-radius: 8px; font-size: 12.5px; }
+.nmx-plugin-tests.is-ok { color: #2f9e5b; background: color-mix(in srgb, #2f9e5b 10%, transparent); }
+.nmx-plugin-tests.is-failed { color: #d9534f; background: color-mix(in srgb, #d9534f 10%, transparent); }
+.nmx-plugin-tests ul { margin: 4px 0 0; padding-inline-start: 18px; }
+.nmx-plugin-details { display: flex; flex-direction: column; gap: 12px; }
+.nmx-plugin-facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 12.5px; }
+.nmx-plugin-facts > div { display: contents; }
+.nmx-plugin-facts dt { color: var(--nmx-muted); }
+.nmx-plugin-facts dd { margin: 0; color: var(--nmx-text); overflow-wrap: anywhere; }
+.nmx-plugin-facts kbd { display: inline-block; margin: 0 4px 3px 0; padding: 1px 6px; border: 1px solid var(--nmx-border); border-bottom-width: 2px; border-radius: 5px; font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.nmx-plugin-risk { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 9px 12px; border-radius: 8px; color: var(--nmx-text); background: color-mix(in srgb, #d9a63a 14%, transparent); font-size: 12.5px; line-height: 1.55; }
+.nmx-plugin-risk > i { flex: 0 0 auto; margin-top: 2px; color: #c98f1c; }
+.nmx-plugin-safety { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: var(--nmx-muted); font-size: 12.5px; line-height: 1.55; }
+.nmx-plugin-safety > i { flex: 0 0 auto; margin-top: 2px; }
+.nmx-plugin-rules { display: grid; gap: 10px; font-size: 12.5px; }
+.nmx-plugin-rules h4 { margin: 0 0 4px; color: var(--nmx-muted); font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.nmx-plugin-rules ul { margin: 0; padding-inline-start: 16px; color: var(--nmx-text); line-height: 1.6; }
+.nmx-plugin-rules code { padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--nmx-text) 8%, transparent); font-size: 12px; }
+.nmx-plugin-rules small { color: var(--nmx-muted); }
+.nmx-plugin-readme { max-height: 260px; margin: 0; padding: 10px 12px; overflow: auto; border-radius: 8px; color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 5%, transparent); font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+.nmx-plugin-folder { margin: 0; color: var(--nmx-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Dialogs (the app's sheet frame, wider and with a scrolling body). */
+.nmx-thread-dialog.nmx-plugin-dialog { width: min(560px, calc(100vw - 32px)); max-height: min(720px, calc(100vh - 48px)); display: flex; flex-direction: column; }
+.nmx-plugin-dialog .nmx-plugin-dialog-body { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; padding: 2px 2px 4px; }
+.nmx-plugin-dialog .nmx-plugin-dialog-body > p { margin: 0; }
+.nmx-plugin-install-head { display: flex; align-items: center; gap: 12px; }
+.nmx-plugin-install-head > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nmx-plugin-install-head strong { color: var(--nmx-text); font-size: 15px; }
+.nmx-plugin-install-head span, .nmx-plugin-install-head small { color: var(--nmx-muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.nmx-plugin-update { margin: 0; padding: 8px 12px; border-radius: 8px; color: var(--nmx-text); background: color-mix(in srgb, #3b82f6 10%, transparent); font-size: 12.5px; }
+.nmx-plugin-update.is-warning { background: color-mix(in srgb, #d9a63a 14%, transparent); }
+.nmx-plugin-errors { margin: 0; padding-inline-start: 18px; color: #d9534f; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.nmx-plugin-dialog-lead { color: var(--nmx-muted); font-size: 13px; line-height: 1.55; }
+.nmx-plugin-sources { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.nmx-plugin-source { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; padding: 10px 12px; border: 1px solid var(--nmx-border); border-radius: 10px; color: var(--nmx-text); background: transparent; text-align: start; cursor: pointer; }
+.nmx-plugin-source:hover { background: var(--nmx-hover); }
+.nmx-plugin-source.is-selected { border-color: #3b82f6; box-shadow: 0 0 0 1px #3b82f6 inset; }
+.nmx-plugin-source > strong { font-size: 13px; }
+.nmx-plugin-source > small { color: var(--nmx-muted); font-size: 11.5px; line-height: 1.45; }
+.nmx-plugin-model-list { display: flex; flex-direction: column; gap: 6px; }
+.nmx-plugin-model-option { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--nmx-border); border-radius: 9px; color: var(--nmx-text); background: transparent; text-align: start; cursor: pointer; }
+.nmx-plugin-model-option:hover { background: var(--nmx-hover); }
+.nmx-plugin-model-option.is-selected { border-color: #3b82f6; }
+.nmx-plugin-model-option > span { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+.nmx-plugin-model-option strong { font-size: 13px; }
+.nmx-plugin-model-option small { color: var(--nmx-muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-plugin-model-option > em { flex: 0 0 auto; color: var(--nmx-muted); font-size: 11.5px; font-style: normal; }
+.nmx-plugin-model-option > i { flex: 0 0 auto; color: #3b82f6; }
+.nmx-plugin-muted { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--nmx-muted); line-height: 1.55; }
+.nmx-plugin-muted.is-error { color: #d9534f; }
+.nmx-plugin-local, .nmx-plugin-vision { display: flex; flex-direction: column; gap: 10px; }
+.nmx-plugin-vision { padding-top: 12px; border-top: 1px solid var(--nmx-border); }
+.nmx-plugin-vision > h3 { margin: 0; color: var(--nmx-text); font-size: 13.5px; }
+.nmx-plugin-local label, .nmx-plugin-vision label, .nmx-plugin-field { display: flex; flex-direction: column; gap: 5px; }
+.nmx-plugin-local label > span, .nmx-plugin-vision label > span, .nmx-plugin-field > span { color: var(--nmx-muted); font-size: 12px; }
+.nmx-plugin-dialog input:not([type='checkbox']), .nmx-plugin-dialog select { height: 32px; padding: 0 10px; border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 4%, transparent); font-size: 13px; box-sizing: border-box; }
+.nmx-plugin-dialog input:focus-visible, .nmx-plugin-dialog select:focus-visible { outline: 2px solid var(--nmx-focus-ring, #6b8afd); outline-offset: 0; }
+.nmx-plugin-inline { display: flex; gap: 8px; }
+.nmx-plugin-inline > input { flex: 1 1 auto; min-width: 0; }
+.nmx-plugin-inline > button, .nmx-plugin-chips > button { flex: 0 0 auto; height: 32px; padding: 0 12px; border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: transparent; font-size: 12.5px; cursor: pointer; }
+.nmx-plugin-inline > button:hover:not(:disabled), .nmx-plugin-chips > button:hover { background: var(--nmx-hover); }
+.nmx-plugin-check { display: flex !important; flex-direction: row !important; align-items: flex-start; gap: 8px; color: var(--nmx-text); font-size: 12.5px; line-height: 1.5; cursor: pointer; }
+.nmx-plugin-check > input { margin-top: 3px; }
+.nmx-plugin-check > span { color: var(--nmx-text) !important; font-size: 12.5px !important; }
+.nmx-plugin-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.nmx-plugin-chips > button { height: 26px; padding: 0 10px; border-radius: 13px; font-size: 12px; }
+.nmx-plugin-limits { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.nmx-plugin-dialog .nmx-segmented { display: inline-flex; align-self: flex-start; padding: 3px; gap: 2px; border: 1px solid var(--nmx-border); border-radius: 9px; }
+.nmx-plugin-dialog .nmx-segmented > button { min-height: 26px; padding: 0 12px; border: 0; border-radius: 6px; color: var(--nmx-muted); background: transparent; font-size: 12.5px; cursor: pointer; }
+.nmx-plugin-dialog .nmx-segmented > button.is-selected { color: var(--nmx-text); background: var(--nmx-selected, var(--nmx-hover)); }
+@media (max-width: 560px) { .nmx-plugin-sources { grid-template-columns: 1fr; } .nmx-plugin-limits { grid-template-columns: 1fr; } .nmx-plugin-card-actions, .nmx-plugin-details, .nmx-plugin-tests { margin-inline-start: 0; padding-inline-start: 0; } }
+
+/* A tab's plugin: header button with its menu, the run bar, and the readings over the picture. */
+.nmx-visual-tab-action.nmx-plugin-tab-market.is-active { background: var(--nmx-hover); }
+.nmx-plugin-menu { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 30; display: flex; flex-direction: column; gap: 2px; min-width: 240px; max-width: 320px; padding: 6px;
+  border: 1px solid var(--nmx-menu-border, var(--nmx-border)); border-radius: 10px; background: var(--nmx-menu-background, var(--nmx-panel)); box-shadow: 0 12px 32px rgba(0, 0, 0, .28); }
+.nmx-plugin-menu > button { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; border-radius: 7px; color: var(--nmx-menu-foreground, var(--nmx-text)); background: transparent; text-align: start; cursor: pointer; }
+.nmx-plugin-menu > button:hover { background: var(--nmx-menu-hover, var(--nmx-hover)); }
+.nmx-plugin-menu > button > span { display: flex; flex-direction: column; min-width: 0; }
+.nmx-plugin-menu > button strong { font-size: 13px; font-weight: 500; }
+.nmx-plugin-menu > button small { color: var(--nmx-menu-muted, var(--nmx-muted)); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-plugin-menu > .nmx-plugin-menu-settings { margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--nmx-border); border-radius: 0 0 7px 7px; color: var(--nmx-menu-muted, var(--nmx-muted)); font-size: 12.5px; }
+.nmx-plugin-menu > .nmx-plugin-muted { padding: 8px; font-size: 12.5px; }
+.nmx-plugin-runbar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--nmx-border); border-radius: 10px;
+  background: color-mix(in srgb, #3b82f6 7%, transparent); font-size: 12.5px; }
+.nmx-plugin-runbar.is-paused { background: color-mix(in srgb, #d9a63a 10%, transparent); }
+.nmx-plugin-runbar.is-ended { background: color-mix(in srgb, var(--nmx-text) 4%, transparent); }
+.nmx-plugin-runbar-dot { width: 8px; height: 8px; border-radius: 50%; background: #3b82f6; }
+.nmx-plugin-runbar.is-running .nmx-plugin-runbar-dot { box-shadow: 0 0 0 3px color-mix(in srgb, #3b82f6 25%, transparent); }
+.nmx-plugin-runbar.is-paused .nmx-plugin-runbar-dot { background: #d9a63a; }
+.nmx-plugin-runbar.is-ended .nmx-plugin-runbar-dot { background: var(--nmx-muted); }
+.nmx-plugin-runbar > strong { color: var(--nmx-text); font-weight: 600; }
+.nmx-plugin-runbar-meta { color: var(--nmx-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nmx-plugin-runbar-goal { flex: 1 1 160px; min-width: 0; color: var(--nmx-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-plugin-runbar-actions { display: inline-flex; gap: 6px; margin-inline-start: auto; }
+.nmx-plugin-runbar-actions > button { height: 26px; padding: 0 10px; border: 1px solid var(--nmx-border); border-radius: 7px; color: var(--nmx-text); background: transparent; font-size: 12px; cursor: pointer; }
+.nmx-plugin-runbar-actions > button:hover { background: var(--nmx-hover); }
+.nmx-plugin-runbar-actions > button.is-active { background: var(--nmx-hover); }
+.nmx-plugin-runbar-actions > button.is-danger { border-color: transparent; color: #fff; background: #d9534f; }
+.nmx-plugin-runbar-actions > button.is-danger:hover { background: #c64541; }
+.nmx-shell .nmx-visual-tab-overlay { position: absolute; pointer-events: none; }
+.nmx-plugin-overlay { position: absolute; inset: 0; }
+.nmx-plugin-overlay-box { position: absolute; border: 1.5px solid rgba(59, 130, 246, .9); border-radius: 3px; background: rgba(59, 130, 246, .08); }
+.nmx-plugin-overlay-box.is-bar { border-color: rgba(239, 68, 68, .9); background: rgba(239, 68, 68, .08); }
+.nmx-plugin-overlay-box.is-template { border-style: dashed; }
+.nmx-plugin-overlay-box.is-change { border-color: rgba(168, 85, 247, .8); background: transparent; }
+.nmx-plugin-overlay-box.is-text { border-color: rgba(34, 197, 94, .9); background: rgba(34, 197, 94, .08); }
+.nmx-plugin-overlay-box > span { position: absolute; top: -18px; inset-inline-start: -1px; padding: 1px 5px; border-radius: 4px 4px 4px 0; color: #fff; background: rgba(17, 24, 39, .85); font: 10.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
+.nmx-plugin-overlay-hit { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid #facc15; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0, 0, 0, .35); }
+.nmx-plugin-overlay-point { position: absolute; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #22d3ee; box-shadow: 0 0 0 2px rgba(0, 0, 0, .35); }
+.nmx-plugin-rules > section { margin: 0; padding: 0; border: 0; }
+.nmx-plugins-settings .nmx-plugin-rules small { color: var(--nmx-muted); font-size: 11px; }
+.nmx-plugins-tabs { display: inline-flex; align-self: flex-start; gap: 2px; padding: 3px; border: 1px solid var(--nmx-border); border-radius: 10px; }
+.nmx-plugins-tabs > button { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 14px; border: 0; border-radius: 7px; color: var(--nmx-muted); background: transparent; font-size: 13px; cursor: pointer; }
+.nmx-plugins-tabs > button:hover { color: var(--nmx-text); }
+.nmx-plugins-tabs > button.is-selected { color: var(--nmx-text); background: var(--nmx-selected, var(--nmx-hover)); box-shadow: 0 1px 2px rgba(0, 0, 0, .18); }
+.nmx-plugins-tabs > button > small { min-width: 18px; padding: 0 5px; border-radius: 9px; background: color-mix(in srgb, var(--nmx-text) 10%, transparent); font-size: 11px; text-align: center; }
+.nmx-plugin-market { display: flex; flex-direction: column; gap: 12px; }
+/* The coding 插件 page: 技能插件 / Skills / MCP as one segmented control beside the heading. */
+/* Full content width like the model center (26px 32px gutters), not the 760px settings column. */
+.nmx-settings-page.nmx-coding-plugins { align-self: stretch; flex: 1 1 auto; width: 100%; min-width: 0; box-sizing: border-box; padding: 26px 32px 56px; }
+.nmx-settings-page.nmx-coding-plugins > :is(.nmx-settings-heading, .nmx-settings-panel) { width: 100%; max-width: none; }
+.nmx-settings-page .nmx-coding-plugins-heading { align-items: flex-end; flex-wrap: wrap; row-gap: 14px; }
+.nmx-coding-plugins-tabs { display: inline-flex; flex: 0 0 auto; gap: 2px; padding: 3px; border: 1px solid var(--nmx-border); border-radius: 11px; background: color-mix(in srgb, var(--nmx-text) 3%, transparent); }
+.nmx-coding-plugins-tabs > button { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px; border: 0; border-radius: 8px; color: var(--nmx-muted); background: transparent; font-size: 13px; font-weight: 560; cursor: pointer; white-space: nowrap; }
+.nmx-coding-plugins-tabs > button:hover { color: var(--nmx-text); }
+.nmx-coding-plugins-tabs > button.is-selected { color: var(--nmx-text); background: var(--nmx-selected, var(--nmx-hover)); box-shadow: 0 1px 2px rgba(0, 0, 0, .18); }
+.nmx-coding-plugins-tabs > button > .codicon { font-size: 14px; }
+.nmx-coding-plugins-tabs > button > small { min-width: 18px; margin: 0; padding: 0 5px; border-radius: 9px; color: inherit; background: color-mix(in srgb, var(--nmx-text) 10%, transparent); font-size: 11px; line-height: 17px; text-align: center; }
+.nmx-coding-plugins > .nmx-settings-panel { margin-top: 18px; }
+.nmx-plugin-market-search.is-local { margin-bottom: 2px; }
+.nmx-plugin-market-search > input[type='search']::-webkit-search-cancel-button { cursor: pointer; }
+.nmx-plugin-market-search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border: 1px solid var(--nmx-border); border-radius: 10px; background: color-mix(in srgb, var(--nmx-text) 3%, transparent); }
+.nmx-plugin-market-search > i { color: var(--nmx-muted); }
+.nmx-plugin-market-search > input { flex: 1 1 auto; min-width: 0; height: 100%; border: 0; outline: 0; color: var(--nmx-text); background: transparent; font-size: 13px; }
+.nmx-plugin-get { flex: 0 0 auto; align-self: center; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 14px; border: 1px solid var(--nmx-border); border-radius: 15px; color: var(--nmx-text); background: transparent; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.nmx-plugin-get.is-primary { border-color: transparent; color: #fff; background: #3b6ef5; }
+.nmx-plugin-get.is-primary:hover:not(:disabled) { background: #3160dd; }
+.nmx-plugin-get.is-installed { color: var(--nmx-muted); cursor: default; }
+.nmx-plugin-get:disabled { opacity: .75; }
+.nmx-plugin-more { align-self: center; height: 30px; padding: 0 16px; border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: transparent; font-size: 12.5px; cursor: pointer; }
+.nmx-plugin-status > i { margin-inline-end: 3px; font-size: 12px; }
+.nmx-plugin-origin { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: var(--nmx-muted); font-size: 12.5px; line-height: 1.55; }
+.nmx-plugin-origin.is-verified { color: #2f9e5b; }
+.nmx-plugin-origin > i { flex: 0 0 auto; margin-top: 2px; }
+/* The start dialog: checkboxes line up with their text; goal examples stay small (the dialog frame sizes buttons at 15px). */
+.nmx-plugin-dialog .nmx-plugin-check > input { flex: 0 0 auto; width: 14px; height: 14px; margin: 3px 0 0; }
+.nmx-thread-dialog.nmx-plugin-dialog .nmx-plugin-chips > button { min-height: 0; font-size: 12px !important; }
+/* Plugin studio: pick areas and colours on the live picture. */
+.nmx-shell .nmx-plugin-studio { position: absolute; z-index: 3; cursor: crosshair; touch-action: none; }
+.nmx-plugin-studio-box { position: absolute; border: 1.5px dashed #facc15; background: rgba(250, 204, 21, .1); pointer-events: none; }
+.nmx-plugin-studio-panel { position: absolute; bottom: 12px; inset-inline-start: 12px; z-index: 4; display: flex; flex-direction: column; gap: 8px; width: min(420px, calc(100% - 24px)); padding: 10px 12px;
+  border: 1px solid var(--nmx-border); border-radius: 10px; color: var(--nmx-text); background: var(--nmx-menu-background, var(--nmx-panel)); box-shadow: 0 10px 28px rgba(0, 0, 0, .3); font-size: 12.5px; }
+.nmx-plugin-studio-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.nmx-plugin-studio-panel > header > button { width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; color: var(--nmx-muted); background: transparent; font-size: 15px; line-height: 1; cursor: pointer; }
+.nmx-plugin-studio-panel > header > button:hover { color: var(--nmx-text); background: var(--nmx-hover); }
+.nmx-plugin-studio-panel > p { margin: 0; color: var(--nmx-muted); line-height: 1.5; }
+.nmx-plugin-studio-result { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
+.nmx-plugin-studio-result > span { display: inline-flex; align-items: center; gap: 6px; color: var(--nmx-muted); white-space: nowrap; }
+.nmx-plugin-studio-result > span > i { width: 14px; height: 14px; border: 1px solid var(--nmx-border); border-radius: 4px; }
+.nmx-plugin-studio-result > code { min-width: 0; padding: 4px 6px; overflow: hidden; border-radius: 6px; background: color-mix(in srgb, var(--nmx-text) 7%, transparent); font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-plugin-studio-result > button { height: 26px; padding: 0 10px; border: 1px solid var(--nmx-border); border-radius: 7px; color: var(--nmx-text); background: transparent; font-size: 12px; cursor: pointer; }
+.nmx-plugin-studio-result > button:hover { background: var(--nmx-hover); }
+.nmx-plugin-menu > .nmx-plugin-menu-settings.is-last { margin-top: 0; padding-top: 7px; border-top: 0; }
+
+/* Plugin model dialog: dropdowns per source, price line, and the scan-again button at the left of the footer. */
+.nmx-plugin-pickers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; align-items: end; }
+.nmx-plugin-pickers > .nmx-plugin-muted, .nmx-plugin-pickers > .nmx-plugin-check, .nmx-plugin-pickers > .nmx-plugin-price { grid-column: 1 / -1; }
+.nmx-plugin-pickers select, .nmx-plugin-vision select { width: 100%; min-width: 0; }
+.nmx-plugin-price { margin: 0; color: var(--nmx-muted); font-size: 12px; }
+.nmx-thread-dialog.nmx-plugin-dialog > footer { align-items: center; }
+.nmx-thread-dialog.nmx-plugin-dialog > footer button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.nmx-thread-dialog.nmx-plugin-dialog > footer button > i { font-size: 14px; }
+.nmx-plugin-footer-space { flex: 1 1 auto; }
+@media (max-width: 560px) { .nmx-plugin-pickers { grid-template-columns: 1fr; } }
+
+/* A tab's 插件市场 dialog: installed plugins for this app, then the marketplace's. */
+.nmx-thread-dialog.nmx-plugin-dialog.nmx-plugin-hub { width: min(600px, calc(100vw - 32px)); }
+.nmx-plugin-hub-section { display: flex; flex-direction: column; gap: 8px; }
+.nmx-plugin-hub-section + .nmx-plugin-hub-section { padding-top: 14px; border-top: 1px solid var(--nmx-border); }
+.nmx-plugin-hub-section > h3 { margin: 0; color: var(--nmx-muted); font-size: 12px; font-weight: 600; }
+.nmx-plugin-hub-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.nmx-plugin-hub-list > li { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 10px; }
+.nmx-plugin-hub-list > li:hover { background: color-mix(in srgb, var(--nmx-text) 4%, transparent); }
+.nmx-plugin-hub-text { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nmx-plugin-hub-text > strong { overflow: hidden; color: var(--nmx-text); font-size: 13.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-plugin-hub-text > small { overflow: hidden; color: var(--nmx-muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-plugin-hub-text > em { display: -webkit-box; overflow: hidden; color: var(--nmx-text); font-size: 12px; font-style: normal; line-height: 1.5; opacity: .85; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.nmx-plugin-hub-text > em.is-risk { display: flex; align-items: center; gap: 5px; color: #d08a16; opacity: 1; }
+/* Settings → 本地数据 → 数据位置: the path, notes and several actions (same card as the diagnostics row). */
+.nmx-shell .nmx-data-location { margin-top: 0; margin-bottom: 18px; align-items: start; }
+.nmx-shell .nmx-data-location > .codicon { margin-top: 2px; }
+.nmx-shell .nmx-data-location code { font-family: var(--monaco-monospace-font, ui-monospace, monospace); font-size: 11.5px; color: var(--nmx-text); overflow-wrap: anywhere; }
+.nmx-shell .nmx-data-location small.is-error { color: var(--nmx-danger, #d9534f); }
+.nmx-shell .nmx-data-location-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.nmx-shell .nmx-data-location-actions > button { height: 30px; padding: 0 13px; border: 1px solid var(--nmx-border-strong); border-radius: 7px; background: var(--nmx-panel-2); color: var(--nmx-text); cursor: pointer; white-space: nowrap; }
+.nmx-shell .nmx-data-location-actions > button:disabled { opacity: .5; cursor: default; }
+@container (max-width: 560px) { .nmx-shell .nmx-data-location { grid-template-columns: 22px minmax(0, 1fr); } .nmx-shell .nmx-data-location-actions { grid-column: 2; justify-content: flex-start; } }
+/* A model row: its name, then what is known about it (context, price with its source, capabilities). */
+.nmx-shell .nmx-own-model-list li { flex-direction: column; align-items: stretch; gap: 3px; }
+.nmx-shell .nmx-own-model-list li > .nmx-own-model-name { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.nmx-shell .nmx-own-model-list .nmx-own-model-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--nmx-muted); font-size: 11.5px; line-height: 1.45; }
+.nmx-shell .nmx-own-model-list .nmx-own-model-facts em { margin-inline-start: 6px; padding: 0 5px; border-radius: 4px; color: var(--nmx-subtle); background: var(--nmx-control-background); font-style: normal; font-size: 10.5px; }
+
+/* 我的插件: each upload with its versions and the review result; refused uploads below. */
+.nmx-plugin-mine { display: flex; flex-direction: column; gap: 16px; }
+.nmx-plugin-mine .nmx-settings-inline-error { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.nmx-plugin-mine-versions { display: flex; flex-direction: column; gap: 7px; margin: 0; padding: 0 0 0 52px; list-style: none; }
+[dir='rtl'] .nmx-plugin-mine-versions { padding: 0 52px 0 0; }
+.nmx-plugin-mine-versions > li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12.5px; }
+:is(.nmx-plugin-mine-versions, .nmx-plugin-mine-rejections) time { color: var(--nmx-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.nmx-plugin-mine-reason {
+    flex-basis: 100%; margin: 0; padding: 8px 11px; border-inline-start: 3px solid color-mix(in srgb, #d9534f 70%, transparent); border-radius: 8px;
+    color: var(--nmx-text); background: color-mix(in srgb, #d9534f 8%, transparent); font-size: 12.5px; line-height: 1.55;
+}
+.nmx-plugin-mine-rejections { display: flex; flex-direction: column; gap: 8px; }
+.nmx-plugin-mine-rejections > h4 { margin: 4px 0 0; color: var(--nmx-muted); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+.nmx-plugin-mine-rejections > ul { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.nmx-plugin-mine-rejections > ul > li { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; border: 1px solid var(--nmx-border); border-radius: 12px; }
+.nmx-plugin-mine-rejections li > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.nmx-plugin-mine-rejections li strong { color: var(--nmx-text); font-size: 13.5px; font-weight: 600; }
+.nmx-plugin-mine-rejections li > small { color: var(--nmx-muted); font-size: 12px; }
+.nmx-plugin-mine-empty-action {
+    display: inline-flex; align-items: center; gap: 6px; height: 32px; margin-top: 6px; padding: 0 14px; border: 0; border-radius: 8px;
+    color: #fff; background: #3b6ef5; font-size: 13px; cursor: pointer;
+}
+/* 上传插件到市场 */
+.nmx-plugin-upload-dialog .nmx-plugin-dialog-body { display: flex; flex-direction: column; gap: 16px; }
+.nmx-plugin-upload-field { display: flex; flex-direction: column; gap: 6px; }
+.nmx-plugin-upload-field > span { color: var(--nmx-text); font-size: 12.5px; font-weight: 600; }
+.nmx-plugin-upload-field > small { color: var(--nmx-muted); font-size: 12px; line-height: 1.5; }
+.nmx-plugin-upload-field > input {
+    box-sizing: border-box; width: 100%; height: 34px; padding: 0 11px; border: 1px solid var(--nmx-border); border-radius: 8px;
+    color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 3%, transparent); font-size: 13px;
+}
+.nmx-plugin-upload-field > input:focus { border-color: color-mix(in srgb, var(--nmx-accent) 60%, var(--nmx-border)); outline: none; }
+.nmx-plugin-upload-file {
+    display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 10px 14px; border: 1px dashed var(--nmx-border-strong, var(--nmx-border)); border-radius: 10px;
+    color: var(--nmx-muted); background: transparent; font-size: 13px; text-align: start; cursor: pointer;
+}
+.nmx-plugin-upload-file:hover:not(:disabled) { border-color: color-mix(in srgb, var(--nmx-accent) 55%, var(--nmx-border)); color: var(--nmx-text); }
+.nmx-plugin-upload-file.has-file { border-style: solid; color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 3%, transparent); }
+.nmx-plugin-upload-file > .codicon { flex: none; font-size: 18px; }
+.nmx-plugin-upload-file > b { min-width: 0; overflow: hidden; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+
+/* 付费插件: price badge on market cards, free / paid in the upload dialog, and the buy dialog. */
+.nmx-plugin-price { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; color: var(--nmx-muted); background: color-mix(in srgb, var(--nmx-text) 8%, transparent); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.nmx-plugin-price.is-paid { color: #d9a441; background: color-mix(in srgb, #d9a441 15%, transparent); }
+.nmx-plugin-upload-login { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 10px 12px; border-radius: 10px; color: var(--nmx-text); background: color-mix(in srgb, #3b6ef5 12%, transparent); font-size: 12.5px; line-height: 1.55; }
+.nmx-plugin-upload-login > .codicon { flex: none; margin-top: 2px; color: #6f95ff; }
+.nmx-plugin-upload-price { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.nmx-plugin-upload-segment { display: inline-flex; padding: 3px; border: 1px solid var(--nmx-border); border-radius: 9px; background: color-mix(in srgb, var(--nmx-text) 3%, transparent); }
+.nmx-plugin-upload-segment > button { height: 28px; margin: 0; padding: 0 14px; border: 0; border-radius: 7px; color: var(--nmx-muted); background: transparent; font-size: 12.5px; cursor: pointer; }
+.nmx-plugin-upload-segment > button.is-selected { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 12%, transparent); font-weight: 600; }
+.nmx-plugin-upload-amount { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 10px; border: 1px solid var(--nmx-border); border-radius: 8px; background: color-mix(in srgb, var(--nmx-text) 3%, transparent); }
+.nmx-plugin-upload-amount > span { color: var(--nmx-muted); font-size: 13px; }
+.nmx-plugin-upload-amount > input { width: 88px; border: 0; outline: none; color: var(--nmx-text); background: transparent; font-size: 13px; font-variant-numeric: tabular-nums; }
+.nmx-plugin-upload-amount.is-invalid { border-color: color-mix(in srgb, #d9534f 70%, var(--nmx-border)); }
+/* Paid plugins: an honest note that published plugins get copied and cracked. */
+.nmx-shell .nmx-plugin-upload-field > .nmx-plugin-upload-piracy { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, #d9a13b 38%, var(--nmx-border)); border-radius: 10px; color: var(--nmx-text); background: color-mix(in srgb, #d9a13b 9%, transparent); font-size: 12.5px; line-height: 1.6; }
+.nmx-shell .nmx-plugin-upload-field > .nmx-plugin-upload-piracy > .codicon { flex: none; margin-top: 2px; color: #c98a1b; font-size: 14px; }
+.nmx-plugin-upload-field > small.is-error { color: #d9534f; }
+.nmx-plugin-buy-dialog .nmx-plugin-install-head { align-items: center; }
+.nmx-plugin-buy-price { margin-inline-start: auto; color: var(--nmx-text); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.nmx-plugin-buy-balance { margin: 0; color: var(--nmx-muted); font-size: 12.5px; }
+.nmx-plugin-buy-balance.is-short { color: #d9534f; }
+
+/* 加载本地插件: what a plugin is, then a .nmxplugin file or a plugin folder. */
+.nmx-plugin-load-dialog { width: min(620px, calc(100vw - 32px)); }
+.nmx-plugin-load-dialog .nmx-plugin-dialog-body { gap: 14px; }
+.nmx-plugin-load-lead { margin: 0; color: var(--nmx-muted); font-size: 12.5px; line-height: 1.6; }
+.nmx-plugin-load-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.nmx-plugin-load-options > section {
+    display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--nmx-border); border-radius: 12px;
+    background: color-mix(in srgb, var(--nmx-text) 3%, transparent);
+}
+.nmx-plugin-load-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: #6f95ff; background: color-mix(in srgb, #3b6ef5 14%, transparent); }
+.nmx-plugin-load-icon > .codicon { font-size: 17px; }
+.nmx-plugin-load-options strong { display: block; color: var(--nmx-text); font-size: 13.5px; font-weight: 600; }
+.nmx-plugin-load-options p { margin: 4px 0 0; color: var(--nmx-muted); font-size: 12px; line-height: 1.55; }
+.nmx-plugin-load-options :is(code, pre) {
+    display: block; margin: 8px 0 0; padding: 7px 9px; border-radius: 7px; color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 6%, transparent);
+    font-family: var(--nmx-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 11.5px; line-height: 1.5; white-space: pre; overflow-x: auto;
+}
+.nmx-plugin-load-options > section > button {
+    align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; height: 32px; margin: auto 0 0; padding: 0 14px;
+    border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: transparent; font-size: 13px; cursor: pointer;
+}
+.nmx-plugin-load-options > section > button:hover:not(:disabled) { border-color: color-mix(in srgb, #3b6ef5 55%, var(--nmx-border)); }
+.nmx-plugin-load-options > section > button.is-primary { border-color: transparent; color: #fff; background: #3b6ef5; }
+.nmx-plugin-load-options > section > button.is-primary:hover:not(:disabled) { background: #3160dd; }
+.nmx-plugin-load-options > section > button:disabled { opacity: .55; cursor: default; }
+.nmx-plugin-load-note { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--nmx-muted); font-size: 12px; }
+.nmx-plugin-load-dialog footer > .is-link { display: inline-flex; align-items: center; gap: 5px; margin-inline-end: auto; border: 0; color: #6f95ff; background: transparent; cursor: pointer; }
+@media (max-width: 560px) { .nmx-plugin-load-options { grid-template-columns: 1fr; } }
+
+/* Arrows and chevrons that mean back/next point the other way in right-to-left languages. `scale` composes with any
+   rotation a component already applies through `transform`, so expand/collapse chevrons keep working. The upward
+   drag arrow of the permission helper is physical and is not a codicon. */
+[dir='rtl'] .nmx-shell :is(.codicon-arrow-left, .codicon-arrow-right, .codicon-chevron-left, .codicon-chevron-right, .codicon-arrow-small-left, .codicon-arrow-small-right) {
+    scale: -1 1;
+}
+
+/* Composer icon buttons: the glyph sits in the middle of its hover background (a bare inline icon rode ~3px high on
+   the text baseline). The microphone stays lit while dictation listens. */
+.nmx-shell :is(.nmx-composer, .nmx-comic-chat-dock) :is(.nmx-composer-tool, .nmx-mic-button) {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+    padding: 0;
+    line-height: 0;
+    border-radius: 8px;
+}
+.nmx-shell :is(.nmx-composer, .nmx-comic-chat-dock) :is(.nmx-composer-tool, .nmx-mic-button) > i { display: block; line-height: 1; }
+.nmx-shell .nmx-mic-button[aria-pressed="true"] {
+    color: var(--nmx-accent, #7c9cff) !important;
+    background: color-mix(in srgb, var(--nmx-accent, #7c9cff) 18%, transparent) !important;
+}
+.nmx-shell .nmx-mic-button[aria-pressed="true"]:hover { background: color-mix(in srgb, var(--nmx-accent, #7c9cff) 26%, transparent) !important; }
+
+/* The conversation's project folder, between the permission and app-control buttons; opens the folder itself. */
+.nmx-composer-below .nmx-project-path-button { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: min(320px, 40%); height: 26px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--nmx-muted, #9a9497); font-size: 12.5px; cursor: pointer; }
+.nmx-composer-below .nmx-project-path-button > i { flex: 0 0 auto; font-size: 13px; }
+.nmx-composer-below .nmx-project-path-button > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--nmx-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: 11.5px; }
+.nmx-composer-below .nmx-project-path-button:hover { color: var(--nmx-text); background: var(--nmx-hover); }
+.nmx-composer-below .nmx-project-path-button:focus-visible { outline: 2px solid var(--nmx-focus-ring, #6b8afd); outline-offset: 1px; }
+
+/* Incognito keeps the existing compact toolbar geometry. */
+.nmx-new-conversation-actions { display:flex; align-items:center; gap:4px; min-width:0; }
+.nmx-new-conversation-actions > button:first-child { flex:1; min-width:0; }
+.nmx-new-conversation-actions > button[data-create-incognito] { display:inline-grid; grid-template-columns:1fr; place-items:center; flex:0 0 30px; width:30px; height:31px; gap:0; padding:0; }
+.nmx-incognito-badge { display:inline-flex; align-items:center; gap:5px; flex:0 1 auto; min-width:0; font-size:11px; color:var(--theia-descriptionForeground); white-space:nowrap; }
+.nmx-incognito-badge > span { overflow:hidden; text-overflow:ellipsis; }
+.nmx-composer .nmx-incognito-toggle { width:auto; height:26px; max-width:40%; padding:0 5px; border:0; border-radius:7px; background:transparent; cursor:pointer; }
+.nmx-composer .nmx-incognito-toggle > i { font-size:13px; }
+.nmx-composer .nmx-incognito-toggle > span { display:inline; font-size:12.5px; }
+.nmx-composer .nmx-incognito-toggle:hover:not(:disabled) { background:var(--nmx-hover); }
+.nmx-composer .nmx-incognito-toggle:focus-visible { outline:2px solid var(--nmx-focus-ring, #6b8afd); outline-offset:1px; }
+.nmx-composer .nmx-incognito-toggle:disabled { opacity:.55; cursor:not-allowed; }
+
+/* -------------------------------------------------------------------------
+ * Rendering performance: drawer, file list and conversation stream
+ * ---------------------------------------------------------------------- */
+
+/* The right-hand drawer and its file tree are independent layout roots. Their
+   row/header changes must not invalidate the conversation, Monaco or Virtuoso
+   layout tree. Layout/style containment does not clip, so the drawer's own
+   absolutely positioned menus stay visible. Layout containment does make the
+   drawer the containing block for fixed-position children, so it is withheld
+   while the viewport-positioned file context menu or its dismiss backdrop is
+   mounted; otherwise the menu would be shifted by the drawer's offset. */
+.nmx-shell .nmx-context-file-list {
+    contain: layout style;
+}
+
+.nmx-shell .nmx-work-context:not(:has(.nmx-file-tab-menu, .nmx-file-tab-menu-backdrop)) {
+    contain: layout style;
+}
+
+/* Monaco renders its hover, suggest and find widgets as `position: fixed`
+   overflow widgets (fixedOverflowWidgets: true), so the editor body must never
+   receive layout or paint containment. Strip only the animation work that
+   would force a synchronous reflow on every frame. */
+.nmx-shell .nmx-file-editor-body,
+.nmx-shell .nmx-monaco-file-editor {
+    transition: none !important;
+    backdrop-filter: none !important;
+}
+
+/* The floating project rail paints over the virtualized transcript. A full
+   14-16px backdrop blur re-samples the whole scroller on every wheel tick;
+   the translucent surface remains legible without it. */
+.nmx-shell :is(
+    .nmx-thread-float-tab,
+    .nmx-thread-files > div,
+    .nmx-thread-notes-float > .nmx-thread-notes
+) {
+    backdrop-filter: none !important;
+}
+
+/* The legacy rail animated `width` on hover, which re-laid out every visible
+   row. Keep the state change instant and transition paint properties only. */
+.nmx-shell .nmx-thread-files > div {
+    transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease !important;
+}

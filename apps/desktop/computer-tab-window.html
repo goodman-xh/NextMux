@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob: mediastream:; img-src 'self' data:">
+<title>NextMux</title>
+<style>
+:root { --bg: #1b1b1d; --panel: #232326; --text: #ececf1; --muted: #9a9aa3; --border: rgba(255,255,255,.12); --accent: #d14a79; --danger: #f06a7b; }
+:root[data-theme="light"] { --bg: #f5f5f7; --panel: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --border: rgba(0,0,0,.12); --danger: #c4314b; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 12px -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif; }
+body { display: flex; flex-direction: column; }
+/* One tab, as in a browser window torn off from another: drag it onto the conversation's tab strip to merge. */
+nav { flex: none; display: flex; align-items: flex-end; gap: 4px; padding: 8px 12px 0; -webkit-user-select: none; user-select: none; -webkit-app-region: drag; }
+.tab { -webkit-app-region: no-drag; display: inline-flex; align-items: center; gap: 7px; min-width: 112px; max-width: 280px; height: 30px; padding: 0 6px 0 12px;
+  border: 1px solid var(--border); border-bottom: 0; border-radius: 9px 9px 0 0; background: var(--panel); color: var(--text); font-weight: 600; cursor: grab; }
+.tab:active { cursor: grabbing; }
+.tab .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tab .icon { width: 14px; height: 14px; flex: none; opacity: .8; }
+.tab button { flex: none; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; color: var(--muted); background: transparent; font-size: 15px; line-height: 1; cursor: pointer; }
+.tab button:hover { color: var(--text); background: rgba(127,127,127,.18); }
+header { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--border); background: var(--panel); -webkit-user-select: none; user-select: none; }
+:root[data-platform="darwin"] nav { padding-inline-start: 84px; }
+.status { margin-inline-end: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.status.live { color: var(--text); font-weight: 600; }
+.status.live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 3px rgba(229,72,77,.22); }
+.error { color: var(--danger); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+label, .segment button, .action { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 9px; border: 1px solid var(--border); border-radius: 7px; color: var(--muted); background: transparent; font: inherit; white-space: nowrap; cursor: pointer; }
+label:has(input:checked) { color: var(--text); background: rgba(127,127,127,.12); }
+input { margin: 0; accent-color: var(--accent); }
+.segment { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; }
+.segment button { border: 0; height: 22px; }
+.segment button[aria-pressed="true"] { color: var(--text); background: var(--panel); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.action:hover, .segment button:not([aria-pressed="true"]):hover { color: var(--text); }
+button:focus-visible, label:has(input:focus-visible) { outline: 2px solid #6b8afd; outline-offset: 1px; }
+main { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; padding: 12px; }
+/* Over the box, not in its flow: shown at the window's own size, scaled down (never up) to fit, never cropped. */
+.picture { position: absolute; inset: 12px; }
+video { position: absolute; inset: 0; margin: auto; max-width: 100%; max-height: 100%; object-fit: contain; opacity: 0; transition: opacity 160ms ease-out; }
+video.ready { opacity: 1; }
+#keys { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; resize: none; pointer-events: none; }
+body.pointer video { cursor: pointer; }
+.empty { color: var(--muted); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<nav><span class="tab" id="tab" draggable="true"><svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2 3.5A1.5 1.5 0 0 1 3.5 2h9A1.5 1.5 0 0 1 14 3.5v7a1.5 1.5 0 0 1-1.5 1.5H9.5v1.5H11V14H5v-.5h1.5V12h-3A1.5 1.5 0 0 1 2 10.5v-7Zm1.5-.5a.5.5 0 0 0-.5.5v7a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.5-.5h-9Z"/></svg><span class="name" id="name"></span><button type="button" id="closeTab">×</button></span></nav>
+<header>
+  <span class="status" id="status"></span>
+  <span class="error" id="error" role="status"></span>
+  <label id="mouseSwitch" hidden><input type="checkbox" id="mouse"><span id="mouseText"></span></label>
+  <label id="soundSwitch" hidden><input type="checkbox" id="sound"><span id="soundText"></span></label>
+  <span class="segment" id="placement" role="group" hidden><button type="button" data-place="tab"></button><button type="button" data-place="desktop"></button></span>
+</header>
+<main><div class="picture"><video id="video" muted playsinline hidden></video><textarea id="keys" tabindex="-1" autocapitalize="off" autocorrect="off" spellcheck="false" hidden></textarea></div><span class="empty" id="empty"></span></main>
+<script src="computer-tab-window.js"></script>
+</body>
+</html>

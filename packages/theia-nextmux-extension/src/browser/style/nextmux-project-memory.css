@@ -1,0 +1,30 @@
+.nmx-project-memory-backdrop { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; background: #0007; padding: 48px 20px 20px; }
+.nmx-project-memory-panel { width: min(900px, 100%); max-height: 86vh; display: flex; flex-direction: column; color: var(--theia-foreground); background: var(--theia-editor-background); border: 1px solid var(--theia-panel-border); border-radius: 12px; box-shadow: 0 18px 56px #0004; overflow: hidden; }
+.nmx-project-memory-panel header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 10px; }
+.nmx-project-memory-panel h2 { font: inherit; font-size: 19px; font-weight: 600; margin: 0 0 5px; }
+.nmx-project-memory-panel header p { margin: 0; opacity: .65; }
+.nmx-project-memory-intro { padding: 0 22px 14px; line-height: 1.6; opacity: .8; }
+.nmx-project-memory-panel nav { display: flex; gap: 8px; padding: 0 22px 14px; border-bottom: 1px solid var(--theia-panel-border); flex-wrap: wrap; }
+.nmx-project-memory-panel button { border: 1px solid var(--theia-panel-border); border-radius: 5px; background: transparent; color: inherit; padding: 7px 10px; cursor: pointer; }
+.nmx-project-memory-panel button:hover:not(:disabled) { background: var(--theia-list-hoverBackground); }
+.nmx-project-memory-panel button:disabled { opacity: .45; cursor: default; }
+.nmx-project-memory-panel button:focus-visible, .nmx-project-memory-panel input:focus-visible, .nmx-project-memory-panel textarea:focus-visible, .nmx-project-memory-panel select:focus-visible { outline: 2px solid var(--theia-focusBorder); outline-offset: 1px; }
+.nmx-project-memory-body { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 0; overflow: auto; }
+.nmx-project-memory-body aside { padding: 14px; border-inline-end: 1px solid var(--theia-panel-border); display: flex; flex-direction: column; gap: 7px; overflow-wrap: anywhere; }
+.nmx-project-memory-body aside button { text-align: start; border-color: transparent; }
+.nmx-project-memory-body aside button strong, .nmx-project-memory-body aside button small { display: block; }
+.nmx-project-memory-body aside button small { margin-top: 4px; opacity: .65; }
+.nmx-project-memory-body aside .is-selected { background: var(--theia-list-activeSelectionBackground); color: var(--theia-list-activeSelectionForeground); }
+.nmx-project-memory-body aside p { line-height: 1.7; opacity: .65; padding: 0 8px; }
+.nmx-project-memory-editor { padding: 18px 22px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.nmx-project-memory-editor label { display: flex; flex-direction: column; gap: 6px; font-weight: 500; }
+.nmx-project-memory-editor input, .nmx-project-memory-editor textarea, .nmx-project-memory-editor select { box-sizing: border-box; width: 100%; background: var(--theia-input-background); color: var(--theia-input-foreground); border: 1px solid var(--theia-input-border, var(--theia-panel-border)); border-radius: 5px; padding: 8px; font: inherit; line-height: 1.6; }
+.nmx-project-memory-editor textarea { resize: vertical; min-height: 60px; }
+.nmx-project-memory-editor small { opacity: .65; overflow-wrap: anywhere; }
+.nmx-project-memory-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.nmx-project-memory-actions .is-primary { background: var(--theia-button-background); color: var(--theia-button-foreground); }
+.nmx-project-memory-adoption { border-top: 1px solid var(--theia-panel-border); padding-top: 15px; line-height: 1.6; }
+.nmx-project-memory-adoption p { opacity: .75; margin: 6px 0 12px; }
+.nmx-project-memory-adoption button { margin-top: 10px; }
+.nmx-project-memory-error { color: var(--theia-errorForeground, #d33); padding: 0 22px; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .nmx-project-memory-body { grid-template-columns: 1fr; } .nmx-project-memory-body aside { max-height: 160px; overflow-y: auto; border-inline-end: 0; border-bottom: 1px solid var(--theia-panel-border); } .nmx-project-memory-backdrop { padding: 36px 8px 8px; } }

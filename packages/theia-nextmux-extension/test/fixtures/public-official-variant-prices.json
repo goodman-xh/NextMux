@@ -1,0 +1,200 @@
+[
+  {
+    "canonicalModel": "anthropic/claude-haiku-4.5",
+    "pricingDetails": {
+      "status": "complete",
+      "currency": "USD",
+      "quoteAt": 1789844433959,
+      "multiplierBps": 10000,
+      "referenceBasis": {
+        "kind": "contract_official_reference",
+        "version": 1,
+        "canonicalModel": "anthropic/claude-haiku-4.5",
+        "region": "global",
+        "serviceTier": "standard",
+        "speed": "standard",
+        "selection": "global_standard",
+        "upstreamDeployment": "not_asserted"
+      },
+      "rateBasis": "maximum_context_tier",
+      "dimensions": [
+        {
+          "metric": "input_token",
+          "currency": "USD",
+          "official": {
+            "unitSize": 1000000,
+            "amountMicros": 1000000,
+            "sourceType": "official_variant",
+            "sourceUrl": "https://platform.claude.com/docs/en/models/haiku-4-5/overview",
+            "referencePriceVariantId": "anthropic-20260914:haiku-4-5:input_token:0",
+            "dimensions": {
+              "api": "claude",
+              "context_max_tokens": 200000,
+              "inference_geo": "global",
+              "service_tier": "standard",
+              "speed": "standard"
+            }
+          },
+          "user": {
+            "unitSize": 1000000,
+            "amountMicros": 1000000
+          }
+        },
+        {
+          "metric": "cached_input_token",
+          "currency": "USD",
+          "official": {
+            "unitSize": 1000000,
+            "amountMicros": 100000,
+            "sourceType": "official_variant",
+            "sourceUrl": "https://platform.claude.com/docs/en/models/haiku-4-5/overview"
+          },
+          "user": {
+            "unitSize": 1000000,
+            "amountMicros": 100000
+          }
+        },
+        {
+          "metric": "output_token",
+          "currency": "USD",
+          "official": {
+            "unitSize": 1000000,
+            "amountMicros": 5000000,
+            "sourceType": "official_variant",
+            "sourceUrl": "https://platform.claude.com/docs/en/models/haiku-4-5/overview",
+            "referencePriceVariantId": "anthropic-20260914:haiku-4-5:output_token:0",
+            "dimensions": {
+              "api": "claude",
+              "context_max_tokens": 200000,
+              "inference_geo": "global",
+              "service_tier": "standard",
+              "speed": "standard"
+            }
+          },
+          "user": {
+            "unitSize": 1000000,
+            "amountMicros": 5000000
+          }
+        }
+      ]
+    }
+  },
+  {
+    "canonicalModel": "openai/gpt-6-astra",
+    "pricingDetails": {
+      "status": "complete",
+      "currency": "USD",
+      "quoteAt": 1789844433959,
+      "multiplierBps": 10000,
+      "referenceBasis": {
+        "kind": "contract_official_reference",
+        "version": 1,
+        "canonicalModel": "openai/gpt-6-astra",
+        "region": "global",
+        "serviceTier": "standard",
+        "speed": "standard",
+        "selection": "global_standard",
+        "upstreamDeployment": "not_asserted"
+      },
+      "rateBasis": "maximum_context_tier",
+      "dimensions": [
+        {
+          "metric": "input_token",
+          "currency": "USD",
+          "official": {
+            "unitSize": 1000000,
+            "amountMicros": 20000000,
+            "sourceType": "official_variant",
+            "sourceUrl": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+            "referencePriceVariantId": "official-20260920:openai/gpt-6-astra:input_token:1",
+            "dimensions": {
+              "api": "openai",
+              "context_max_tokens": 1050000,
+              "inference_geo": "global",
+              "prompt_max_tokens": 1050000,
+              "prompt_min_tokens": 272001,
+              "service_tier": "standard",
+              "speed": "standard"
+            }
+          },
+          "user": {
+            "unitSize": 1000000,
+            "amountMicros": 20000000
+          }
+        },
+        {
+          "metric": "cached_input_token",
+          "currency": "USD",
+          "official": {
+            "unitSize": 1000000,
+            "amountMicros": 2000000,
+            "sourceType": "official_variant",
+            "sourceUrl": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+            "referencePriceVariantId": "official-20260920:openai/gpt-6-astra:cached_input_token:1",
+            "dimensions": {
+              "api": "openai",
+              "context_max_tokens": 1050000,
+              "inference_geo": "global",
+              "prompt_max_tokens": 1050000,
+              "prompt_min_tokens": 272001,
+              "service_tier": "standard",
+              "speed": "standard"
+            }
+          },
+          "user": {
+            "unitSize": 1000000,
+            "amountMicros": 2000000
+          }
+        },
+        {
+          "metric": "cache_write_token",
+          "currency": "USD",
+          "official": {
+            "unitSize": 1000000,
+            "amountMicros": 25000000,
+            "sourceType": "official_variant",
+            "sourceUrl": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+            "referencePriceVariantId": "official-20260920:openai/gpt-6-astra:cache_write_token:1",
+            "dimensions": {
+              "api": "openai",
+              "context_max_tokens": 1050000,
+              "inference_geo": "global",
+              "prompt_max_tokens": 1050000,
+              "prompt_min_tokens": 272001,
+              "service_tier": "standard",
+              "speed": "standard"
+            }
+          },
+          "user": {
+            "unitSize": 1000000,
+            "amountMicros": 25000000
+          }
+        },
+        {
+          "metric": "output_token",
+          "currency": "USD",
+          "official": {
+            "unitSize": 1000000,
+            "amountMicros": 75000000,
+            "sourceType": "official_variant",
+            "sourceUrl": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+            "referencePriceVariantId": "official-20260920:openai/gpt-6-astra:output_token:1",
+            "dimensions": {
+              "api": "openai",
+              "context_max_tokens": 1050000,
+              "inference_geo": "global",
+              "prompt_max_tokens": 1050000,
+              "prompt_min_tokens": 272001,
+              "service_tier": "standard",
+              "speed": "standard"
+            }
+          },
+          "user": {
+            "unitSize": 1000000,
+            "amountMicros": 75000000
+          }
+        }
+      ]
+    }
+  }
+]

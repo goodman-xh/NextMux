@@ -1,0 +1,14 @@
+.nmx-mt-visual-panel { min-width:0; color:inherit; font:inherit; }
+.nmx-mt-visual-panel details { min-width:0; margin-block:6px; }
+.nmx-mt-visual-panel summary { cursor:pointer; padding-block:4px; font:inherit; overflow-wrap:anywhere; }
+.nmx-mt-visual-panel .nmx-mt-visual-actions { display:flex; flex-wrap:wrap; gap:4px; align-items:center; margin-block:6px; }
+.nmx-mt-visual-actions label { display:inline-flex; align-items:center; gap:4px; min-width:0; margin-inline-end:auto; }
+.nmx-mt-visual-actions input[type=checkbox] { width:14px; height:14px; margin:0; flex:0 0 14px; }
+.nmx-mt-visual-actions button { flex:0 0 auto; min-width:22px; padding:2px 4px; }
+.nmx-mt-visual-panel .nmx-mt-field select { min-width:0; max-width:100%; flex:1 1 auto; }
+.nmx-mt-visual-panel input[type=file] { min-width:0; width:100%; }
+.nmx-mt-visual-points { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) 24px; gap:4px; align-items:center; }
+.nmx-mt-visual-points input { width:100%; min-width:0; box-sizing:border-box; }
+.nmx-mt-visual-panel input,.nmx-mt-visual-panel select { color:inherit; background:var(--nmx-bg); border:1px solid var(--nmx-border); border-radius:3px; font:inherit; }
+.nmx-mt-visual-panel button { color:inherit; background:var(--nmx-panel-2); border:1px solid var(--nmx-border); border-radius:3px; font:inherit; cursor:pointer; }
+.nmx-mt-visual-panel button:disabled { opacity:.45; cursor:not-allowed; }

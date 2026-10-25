@@ -1,0 +1,28 @@
+{
+  "name": "@nextmux/media-core",
+  "version": "0.1.0-alpha.3",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./runtime": {
+      "types": "./lib/runtime.d.ts",
+      "default": "./lib/runtime.js"
+    }
+  },
+  "dependencies": {
+    "@nextmux/model-runtime": "workspace:*",
+    "proper-lockfile": "4.1.2"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "pnpm build && tsc -p tsconfig.json",
+    "test": "pnpm build && node --test --experimental-strip-types test/*.test.mts"
+  }
+}

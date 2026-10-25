@@ -1,0 +1,22 @@
+diff --git a/lib/electron-main/messaging/electron-messaging-contribution.js b/lib/electron-main/messaging/electron-messaging-contribution.js
+--- a/lib/electron-main/messaging/electron-messaging-contribution.js
++++ b/lib/electron-main/messaging/electron-messaging-contribution.js
+@@ -79,8 +79,16 @@ class ElectronMessagingContribution {
+                 channel.onClose(() => console.debug(`Closing channel on service path '${id}'.`));
+             }
+         });
+-        sender.once('did-navigate', () => this.deleteChannel(sender.id, 'Window was refreshed'));
+-        sender.once('destroyed', () => this.deleteChannel(sender.id, 'Window was closed'));
++        const onDidNavigate = () => {
++            sender.removeListener('destroyed', onDestroyed);
++            this.deleteChannel(sender.id, 'Window was refreshed');
++        };
++        const onDestroyed = () => {
++            sender.removeListener('did-navigate', onDidNavigate);
++            this.deleteChannel(sender.id, 'Window was closed');
++        };
++        sender.once('did-navigate', onDidNavigate);
++        sender.once('destroyed', onDestroyed);
+         this.openChannels.set(sender.id, mainChannel);
+         return mainChannel;
+     }

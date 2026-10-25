@@ -1,0 +1,13 @@
+{
+  "name": "drivelist",
+  "version": "12.0.2",
+  "private": true,
+  "description": "NextMux portable mount-point adapter for Theia desktop",
+  "license": "Apache-2.0",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "typecheck": "node -e \"require('./index.js').list().then(drives => { if (!Array.isArray(drives)) process.exit(1) })\"",
+    "test": "node --test test.js"
+  }
+}

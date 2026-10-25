@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+const root = fileURLToPath(new URL('../../../', import.meta.url)).replace(/\/$/, '');
+const src = `${root}/packages/theia-nextmux-extension/src/browser`, require = createRequire(`${root}/packages/theia-nextmux-extension/package.json`);
+const core = createRequire(require.resolve('@theia/core/package.json')), desktop = createRequire(`${root}/apps/desktop/package.json`);
+const platform = createRequire(`${root}/apps/cloudflare-platform/package.json`), puppeteer = (await import(platform.resolve('puppeteer'))).default;
+
+test('actual React path chooser keeps branch/order explicit, protects old edit and returns focus on Escape', { timeout: 60000 }, async t => {
+    const { outputFiles } = await desktop('esbuild').build({ stdin: { loader: 'tsx', resolveDir: src, contents: `
+import React from 'react';import {createRoot} from 'react-dom/client';
+import {ComicCanvasTimelineChoice,ComicCanvasTimelineHistory} from './nextmux-comic-canvas-timeline-choice';
+import {createCanvasDocument} from '@nextmux/comic-core/canvas';import {resolveCanvasSequence} from '@nextmux/comic-core/canvas-sequence';
+const canvas={...createCanvasDocument({id:'canvas-choice',projectId:'project-choice'}),nodes:['a','b','c','d'].map(id=>({id,kind:'video',title:id.toUpperCase(),position:{x:0,y:0},size:{width:280,height:180},payload:{versions:[]}})),sequenceLinks:[['a','b'],['a','c'],['c','d']].map(([sourceNodeId,targetNodeId],index)=>({id:'s'+index,sourceNodeId,targetNodeId}))};
+const root=createRoot(document.querySelector('main'));let opened=false,legacy=false,history=false;window.outcomes=[];
+function render(){root.render(<div><button id='open' onClick={()=>{opened=true;render();}}>Choose order</button><button id='legacy' onClick={()=>{legacy=true;opened=true;render();}}>Keep old edit</button><button id='history' onClick={()=>{history=true;render();}}>Saved edit</button>{opened&&<ComicCanvasTimelineChoice canvas={canvas} locale='en' legacy={legacy} onCancel={()=>{opened=false;legacy=false;render();}} onChoose={(paths,keep)=>{window.outcomes.push(keep?{legacy:true}:{paths,ordered:resolveCanvasSequence(canvas,paths)});opened=false;legacy=false;render();}}/>}{history&&<ComicCanvasTimelineHistory locale='en' entries={[{id:'timeline-saved',title:'Saved cut',source:'Source canvas deleted',updatedAt:'2026-10-03T00:00:00Z'}]} onCancel={()=>{history=false;render();}} onOpen={id=>{window.outcomes.push({opened:id});history=false;render();}}/>}</div>)}render();
+` }, bundle: true, write: false, platform: 'browser', format: 'iife', alias: { react: core.resolve('react'), 'react-dom/client': core.resolve('react-dom/client'),
+        '@nextmux/comic-core/canvas': `${root}/packages/comic-core/src/canvas.ts`, '@nextmux/comic-core/canvas-sequence': `${root}/packages/comic-core/src/canvas-sequence.ts` } });
+    const browser = await puppeteer.launch({ headless: true }); t.after(() => browser.close());
+    const page = await browser.newPage(), errors = []; page.on('pageerror', error => errors.push(error.message));
+    await page.setViewport({ width: 1200, height: 850 }); await page.setRequestInterception(true);
+    page.on('request', request => void request.respond({ status: 200, contentType: 'text/html', body: '<main></main>' }));
+    await page.goto('https://timeline-choice.test/');
+    await page.addStyleTag({ content: await readFile(`${src}/style/nextmux-comic-canvas.css`, 'utf8') });
+    await page.addStyleTag({ content: 'main{--nmx-panel:#222;--nmx-text:#eee;--nmx-border:#444;--cv-float:#222;font:14px system-ui}body{margin:0;background:#111}' });
+    await page.addScriptTag({ content: outputFiles[0].text });
+    const clickText = async text => { await page.waitForFunction(value => [...document.querySelectorAll('button')].some(button => button.textContent === value), {}, text);
+        await page.evaluate(value => [...document.querySelectorAll('button')].find(button => button.textContent === value).click(), text); };
+    await page.click('#open'); await page.waitForSelector('.nmx-canvas-timeline-choice');
+    assert.equal(await page.$eval('.nmx-board-modal-layer', element => element.open && element.contains(document.activeElement)), true);
+    assert.equal(await page.$eval('.nmx-canvas-timeline-choice footer button:last-child', element => element.disabled), true);
+    await page.select('select[aria-label="1 Starting video 1"]', 'a');
+    await page.select('select[aria-label="1 Next video 2"]', 'c');
+    await page.select('select[aria-label="1 Next video 3"]', 'd');
+    await clickText('Add another chain'); await page.select('select[aria-label="2 Starting video 1"]', 'b');
+    assert.deepEqual(await page.$eval('select[aria-label="2 Starting video 1"]', element => [...element.options].map(option => option.value)), ['', 'b']);
+    await clickText('Create edit'); await page.waitForFunction(() => !document.querySelector('.nmx-board-modal-layer'));
+    assert.deepEqual(await page.evaluate(() => window.outcomes[0]), { paths: [['a','c','d'],['b']], ordered: ['a','c','d','b'] });
+    await page.click('#legacy'); await page.waitForSelector('.nmx-canvas-timeline-choice');
+    await clickText('Keep existing edit'); assert.deepEqual(await page.evaluate(() => window.outcomes[1]), { legacy: true });
+    await page.click('#open'); await page.waitForSelector('.nmx-canvas-timeline-choice'); await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.nmx-board-modal-layer'));
+    assert.equal(await page.$eval('#open', element => element === document.activeElement), true);
+    await page.click('#history'); await page.waitForSelector('.nmx-canvas-timeline-history');
+    assert.equal(await page.evaluate(() => window.outcomes.length), 2, 'showing history does not open another canvas edit automatically');
+    assert.match(await page.$eval('.nmx-canvas-timeline-history', element => element.textContent), /Source canvas deleted/);
+    await clickText('Open edit'); await page.waitForFunction(() => !document.querySelector('.nmx-board-modal-layer'));
+    assert.deepEqual(await page.evaluate(() => window.outcomes[2]), { opened: 'timeline-saved' });
+    assert.deepEqual(errors, []);
+});

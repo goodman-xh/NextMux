@@ -1,0 +1,83 @@
+{
+  "name": "@nextmux/agent-runtime",
+  "version": "0.1.0-alpha.3",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    "./capacity-reasons": {
+      "types": "./lib/capacity-reasons.d.ts",
+      "default": "./lib/capacity-reasons.js"
+    },
+    "./output-parts": {
+      "types": "./lib/output-parts.d.ts",
+      "default": "./lib/output-parts.js"
+    },
+    "./citations": {
+      "types": "./runtime/citations.d.cts",
+      "default": "./runtime/citations.cjs"
+    },
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./task-plan": {
+      "types": "./lib/task-plan.d.ts",
+      "default": "./lib/task-plan.js"
+    },
+    "./task-context": {
+      "types": "./lib/task-context.d.ts",
+      "default": "./lib/task-context.js"
+    },
+    "./token-budget": {
+      "types": "./lib/token-budget.d.ts",
+      "default": "./lib/token-budget.js"
+    },
+    "./errors": {
+      "types": "./lib/errors.d.ts",
+      "default": "./lib/errors.js"
+    },
+    "./semantic-messages": {
+      "types": "./lib/semantic-messages.d.ts",
+      "default": "./lib/semantic-messages.js"
+    },
+    "./model-error-signals": {
+      "types": "./lib/model-error-signals.d.ts",
+      "default": "./lib/model-error-signals.js"
+    },
+    "./permission": {
+      "types": "./lib/permission.d.ts",
+      "default": "./lib/permission.js"
+    },
+    "./run-verification": {
+      "types": "./lib/run-verification.d.ts",
+      "default": "./lib/run-verification.js"
+    },
+    "./council": {
+      "types": "./lib/council.d.ts",
+      "default": "./lib/council.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "pnpm build && tsc -p tsconfig.json",
+    "test": "pnpm build && node --test --experimental-strip-types test/*.test.mts"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "1.4.0",
+    "@anthropic-ai/sandbox-runtime": "0.0.77",
+    "@vscode/tree-sitter-wasm": "0.3.1",
+    "cross-spawn": "7.0.6",
+    "diff": "7.0.0",
+    "ignore": "6.0.2",
+    "minisearch": "7.2.0",
+    "node-pty": "1.2.0-beta.14",
+    "typescript": "6.0.3"
+  },
+  "devDependencies": {
+    "@types/cross-spawn": "6.0.6",
+    "@types/diff": "5.2.3"
+  }
+}

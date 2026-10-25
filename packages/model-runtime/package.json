@@ -1,0 +1,92 @@
+{
+  "name": "@nextmux/model-runtime",
+  "version": "0.1.0-alpha.3",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    "./capacity-reasons": {
+      "types": "./lib/capacity-reasons.d.ts",
+      "default": "./lib/capacity-reasons.js"
+    },
+    "./errors": {
+      "types": "./lib/errors.d.ts",
+      "default": "./lib/errors.js"
+    },
+    "./endpoint-url": {
+      "types": "./lib/endpoint-url.d.ts",
+      "default": "./lib/endpoint-url.js"
+    },
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./presets": {
+      "types": "./lib/presets.d.ts",
+      "default": "./lib/presets.js"
+    },
+    "./capabilities": {
+      "types": "./lib/capabilities.d.ts",
+      "default": "./lib/capabilities.js"
+    },
+    "./media-template": {
+      "types": "./lib/media-api-template.d.ts",
+      "default": "./lib/media-api-template.js"
+    },
+    "./merchant-modalities": {
+      "types": "./lib/merchant-modalities.d.ts",
+      "default": "./lib/merchant-modalities.js"
+    },
+    "./price-summary": {
+      "types": "./lib/price-summary.d.ts",
+      "default": "./lib/price-summary.js"
+    },
+    "./model-contract": {
+      "types": "./lib/model-contract.d.ts",
+      "default": "./lib/model-contract.js"
+    },
+    "./reasoning-evidence": {
+      "types": "./lib/reasoning-evidence.d.ts",
+      "default": "./lib/reasoning-evidence.js"
+    },
+    "./model-task-capabilities": {
+      "types": "./lib/model-task-capabilities.d.ts",
+      "default": "./lib/model-task-capabilities.js"
+    },
+    "./model-taxonomy": {
+      "types": "./lib/model-taxonomy.d.ts",
+      "default": "./lib/model-taxonomy.js"
+    },
+    "./native-web-research": {
+      "types": "./lib/native-web-research.d.ts",
+      "default": "./lib/native-web-research.js"
+    },
+    "./decision-adapter": {
+      "types": "./lib/decision-adapter.d.ts",
+      "default": "./lib/decision-adapter.js"
+    }
+  },
+  "dependencies": {
+    "@ai-sdk/alibaba": "2.0.39",
+    "@ai-sdk/amazon-bedrock": "5.0.71",
+    "@ai-sdk/anthropic": "4.0.36",
+    "@ai-sdk/azure": "4.0.58",
+    "@ai-sdk/cohere": "4.0.37",
+    "@ai-sdk/deepseek": "3.0.37",
+    "@ai-sdk/google": "4.0.39",
+    "@ai-sdk/google-vertex": "5.0.73",
+    "@ai-sdk/mistral": "4.0.37",
+    "@ai-sdk/openai": "4.0.36",
+    "@ai-sdk/openai-compatible": "3.0.27",
+    "@ai-sdk/xai": "4.0.50",
+    "@nextmux/agent-runtime": "workspace:*",
+    "ai": "7.0.58"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "pnpm build && tsc -p tsconfig.json",
+    "test": "pnpm build && node --test --experimental-strip-types test/*.test.mts"
+  }
+}

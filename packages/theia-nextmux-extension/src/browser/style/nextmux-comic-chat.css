@@ -1,0 +1,512 @@
+/*
+ * 漫剧对话 — the comic sidebar's project folders and conversations, the chat surface (thread, composer with
+ * modes, results), its right-click menu, the materials drawer and the 剪辑 window lead. The composer card
+ * itself is the coding composer's (.nmx-composer-wrap / .nmx-composer), so it looks and reads the same.
+ */
+
+/* ── Sidebar: project folders with conversations; the four kinds pinned above 人物库 ── */
+.nmx-shell .nmx-comic-project-folder { --kind-a: #7b5cff; --kind-b: #d9468b; display: flex; flex-direction: column; }
+.nmx-shell .nmx-comic-project-folder.is-image { --kind-a: #1fa2ff; --kind-b: #16c79a; }
+.nmx-shell .nmx-comic-project-folder.is-topic { --kind-a: #ff8a4c; --kind-b: #ff4f8b; }
+.nmx-shell .nmx-comic-project-folder.is-music { --kind-a: #14b8a6; --kind-b: #6366f1; }
+.nmx-shell .nmx-comic-context .nmx-comic-project-folder .nmx-comic-library-item > .nmx-comic-library-row { padding-inline-end: 64px; }
+.nmx-shell .nmx-comic-context .nmx-comic-library-item > .nmx-comic-library-add {
+    position: absolute; inset-inline-end: 34px; top: 50%; transform: translateY(-50%);
+    display: grid; place-items: center; width: 26px; min-width: 0; height: 26px; min-height: 0; margin: 0; padding: 0;
+    border: 0; border-radius: 7px; color: var(--nmx-muted); background: transparent; opacity: 0; cursor: pointer;
+    transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
+}
+.nmx-shell .nmx-comic-context .nmx-comic-library-item:is(:hover, :focus-within) > .nmx-comic-library-add { opacity: 1; }
+.nmx-shell .nmx-comic-context .nmx-comic-library-item > .nmx-comic-library-add:is(:hover, :focus-visible) { color: var(--nmx-text); background: var(--nmx-panel-2); }
+.nmx-shell .nmx-comic-context .nmx-comic-library-item > .nmx-comic-library-add .codicon { font-size: 14px; }
+.nmx-shell .nmx-comic-context .nmx-comic-library-item.is-dragging > .nmx-comic-library-add { opacity: 0; }
+
+.nmx-shell .nmx-comic-chat-list { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 6px; padding-inline-start: 22px; }
+.nmx-shell .nmx-comic-chat-item { position: relative; }
+.nmx-shell .nmx-comic-context .nmx-comic-chat-row {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-height: 30px; margin: 0; padding: 5px 34px 5px 8px;
+    border: 0; border-radius: 8px; color: var(--nmx-muted); background: transparent; font-size: 12.5px; text-align: start; cursor: pointer;
+}
+.nmx-shell .nmx-comic-context .nmx-comic-chat-row > span { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell .nmx-comic-context .nmx-comic-chat-row > .codicon { flex: 0 0 auto; font-size: 13px; }
+.nmx-shell .nmx-comic-context .nmx-comic-chat-row:hover { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 5%, transparent); }
+.nmx-shell .nmx-comic-context .nmx-comic-chat-row.is-active { color: var(--nmx-text); background: var(--nmx-panel-2); box-shadow: inset 2px 0 0 var(--kind-a, #7b5cff); }
+.nmx-shell .nmx-comic-context .nmx-comic-chat-row.is-studio > .codicon { color: var(--kind-a, #7b5cff); }
+.nmx-shell .nmx-comic-context .nmx-comic-chat-delete {
+    position: absolute; inset-inline-end: 4px; top: 50%; transform: translateY(-50%);
+    display: grid; place-items: center; width: 24px; height: 24px; min-width: 0; min-height: 0; margin: 0; padding: 0;
+    border: 0; border-radius: 6px; color: var(--nmx-muted); background: transparent; opacity: 0; cursor: pointer;
+}
+.nmx-shell .nmx-comic-context .nmx-comic-chat-item:is(:hover, :focus-within) > .nmx-comic-chat-delete { opacity: 1; }
+.nmx-shell .nmx-comic-context .nmx-comic-chat-delete:is(:hover, :focus-visible) { color: var(--nmx-danger, #e5484d); background: color-mix(in srgb, var(--nmx-danger, #e5484d) 13%, transparent); }
+.nmx-shell .nmx-comic-context .nmx-comic-chat-delete .codicon { font-size: 13px; }
+.nmx-shell .nmx-comic-context .nmx-comic-chat-list > .nmx-project-empty { padding: 4px 8px 6px; color: var(--nmx-muted); font-size: 11.5px; }
+.nmx-shell .nmx-comic-context .nmx-comic-new-chat { display: flex; align-items: center; gap: 9px; min-height: 34px; margin: 0 0 6px; }
+.nmx-shell .nmx-comic-context .nmx-comic-new-chat.is-active { color: var(--nmx-text); background: var(--nmx-panel-2); }
+
+.nmx-shell .nmx-comic-context > .nmx-comic-kind-dock { flex: none; display: flex; flex-direction: column; gap: 0; margin: 0 10px; padding: 6px 0 2px; border-top: 1px solid var(--nmx-border); }
+.nmx-shell .nmx-comic-context .nmx-comic-kind-group.is-docked { margin: 0; }
+.nmx-shell .nmx-comic-context .nmx-comic-kind-group.is-docked > header { min-height: 32px; padding-block: 2px; }
+.nmx-shell .nmx-comic-context .nmx-comic-kind-group.is-docked .nmx-comic-kind-toggle { cursor: pointer; }
+
+/* ── The chat surface: header, thread and composer stacked ── */
+.nmx-shell .nmx-comic-chat-body { position: relative; display: flex; flex: 1 1 auto; min-height: 0; }
+.nmx-shell .nmx-comic-chat-loading { display: grid; flex: 1; place-items: center; color: var(--nmx-muted); font-size: 18px; }
+.nmx-shell .nmx-comic-chat-header .nmx-studio-header-actions > button > small { padding: 0 6px; border-radius: 999px; color: var(--nmx-muted); background: var(--nmx-panel-2); font-size: 10.5px; }
+.nmx-shell .nmx-comic-chat-thread { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding: 18px 0 8px; scrollbar-width: thin; }
+.nmx-shell .nmx-comic-chat-column { display: flex; flex-direction: column; gap: 22px; width: min(760px, calc(100% - 48px)); margin: 0 auto; }
+
+.nmx-shell .nmx-comic-chat-welcome { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 5vh 0 4px; text-align: center; }
+.nmx-shell .nmx-comic-chat-welcome-mark { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; color: #fff; background: linear-gradient(135deg, #7b5cff, #d9468b); font-size: 20px; box-shadow: 0 12px 30px rgba(123, 92, 255, .25); }
+.nmx-shell .nmx-comic-chat-welcome h2 { margin: 6px 0 0; color: var(--nmx-text); font-size: 22px; font-weight: 650; letter-spacing: -.01em; }
+.nmx-shell .nmx-comic-chat-welcome p { max-width: 540px; margin: 0; color: var(--nmx-muted); font-size: 13px; line-height: 1.6; }
+.nmx-shell .nmx-comic-chat-welcome p.is-note { font-size: 12px; }
+.nmx-shell .nmx-comic-chat-skills { width: 100%; margin-top: 16px; text-align: start; }
+.nmx-shell .nmx-comic-chat-skills > h3 { margin: 0 0 8px; color: var(--nmx-muted); font-size: 11.5px; font-weight: 600; letter-spacing: .02em; }
+.nmx-shell .nmx-comic-chat-skills > div { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.nmx-shell .nmx-comic-chat-skill {
+    --mode-a: #7b5cff; --mode-b: #d9468b;
+    display: grid; grid-template-columns: 32px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 10px; row-gap: 2px; align-items: center;
+    margin: 0; padding: 11px 12px; border: 1px solid var(--nmx-border); border-radius: 12px; color: var(--nmx-text); background: var(--nmx-panel); text-align: start; cursor: pointer;
+    transition: border-color 120ms ease, transform 120ms ease, background-color 120ms ease;
+}
+.nmx-shell .nmx-comic-chat-skill:hover:not(:disabled) { border-color: color-mix(in srgb, var(--mode-a) 45%, var(--nmx-border)); background: color-mix(in srgb, var(--mode-a) 5%, var(--nmx-panel)); transform: translateY(-1px); }
+.nmx-shell .nmx-comic-chat-skill-icon { grid-row: 1 / span 2; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; color: #fff; background: linear-gradient(135deg, var(--mode-a), var(--mode-b)); }
+.nmx-shell .nmx-comic-chat-skill > strong { font-size: 13px; font-weight: 600; }
+.nmx-shell .nmx-comic-chat-skill > small { overflow: hidden; color: var(--nmx-muted); font-size: 11.5px; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell :is(.nmx-comic-chat-skill, .nmx-comic-chat-proposal).is-image,
+.nmx-shell .nmx-comic-chat-modes > [role='tablist'] > button:nth-child(1) { --mode-a: #1fa2ff; --mode-b: #16c79a; }
+.nmx-shell :is(.nmx-comic-chat-skill, .nmx-comic-chat-proposal).is-video,
+.nmx-shell .nmx-comic-chat-modes > [role='tablist'] > button:nth-child(2) { --mode-a: #ff8a4c; --mode-b: #ff4f8b; }
+.nmx-shell :is(.nmx-comic-chat-skill, .nmx-comic-chat-proposal).is-music,
+.nmx-shell .nmx-comic-chat-modes > [role='tablist'] > button:nth-child(3) { --mode-a: #14b8a6; --mode-b: #6366f1; }
+.nmx-shell :is(.nmx-comic-chat-skill, .nmx-comic-chat-proposal).is-speech { --mode-a: #f59e0b; --mode-b: #ef4444; }
+/* 配音 chosen through its skill card: an active tab of its own until the user leaves it (×). */
+.nmx-shell .nmx-comic-chat-modes > [role='tablist'] > button.nmx-comic-chat-voice-mode { --mode-a: #f59e0b; --mode-b: #ef4444; }
+.nmx-shell .nmx-comic-chat-modes > [role='tablist'] > button.nmx-comic-chat-voice-mode > .codicon-close { margin-inline-start: 2px; font-size: 12px; opacity: .75; }
+
+/* A turn: the request on the right, what it made below. */
+.nmx-shell .nmx-comic-chat-turn { display: flex; flex-direction: column; gap: 10px; }
+.nmx-shell .nmx-comic-chat-ask {
+    align-self: flex-end; display: flex; flex-direction: column; gap: 6px; max-width: min(78%, 560px);
+    padding: 10px 13px 8px; border: 1px solid var(--nmx-border); border-radius: 16px 16px 4px 16px; background: var(--nmx-panel-2);
+}
+[dir='rtl'] .nmx-shell .nmx-comic-chat-ask, .nmx-shell[dir='rtl'] .nmx-comic-chat-ask { border-radius: 16px 16px 16px 4px; }
+.nmx-shell .nmx-comic-chat-ask > p { margin: 0; color: var(--nmx-text); font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.nmx-shell .nmx-comic-chat-ask > .nmx-user-markdown { margin: 0; color: var(--nmx-text); font-size: 13.5px; line-height: 1.55; overflow-wrap: anywhere; }
+.nmx-shell .nmx-comic-chat-ask > .nmx-user-markdown > p:first-child { margin-top: 0; }
+.nmx-shell .nmx-comic-chat-ask > .nmx-user-markdown > p:last-child { margin-bottom: 0; }
+.nmx-shell .nmx-comic-chat-ask-refs { display: flex; flex-wrap: wrap; gap: 6px; }
+.nmx-shell .nmx-comic-chat-ask-refs > .nmx-comic-chat-ask-ref { padding: 0; margin: 0; border: 0; background: transparent; border-radius: 8px; overflow: hidden; cursor: zoom-in; display: inline-flex; }
+.nmx-shell .nmx-comic-chat-ask-refs :is(> img, > .nmx-comic-chat-ask-ref > img) { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; display: block; }
+.nmx-shell .nmx-comic-chat-ask-refs > .codicon { display: grid; place-items: center; width: 54px; height: 54px; border-radius: 8px; color: var(--nmx-muted); background: var(--nmx-panel); }
+.nmx-shell .nmx-comic-chat-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--nmx-muted); font-size: 11px; }
+.nmx-shell .nmx-comic-chat-meta > time { font-size: 11px !important; line-height: 15px !important; margin-inline-start: 4px; }
+.nmx-shell .nmx-comic-chat-meta > .codicon { font-size: 12px; }
+.nmx-shell .nmx-comic-chat-copy { display: grid; place-items: center; width: 22px; height: 22px; margin: 0 0 0 auto; padding: 0; border: 0; border-radius: 6px; color: var(--nmx-muted); background: transparent; opacity: 0; cursor: pointer; }
+.nmx-shell .nmx-comic-chat-ask:is(:hover, :focus-within) .nmx-comic-chat-copy { opacity: 1; }
+.nmx-shell .nmx-comic-chat-copy:hover { color: var(--nmx-text); background: var(--nmx-panel); }
+.nmx-shell .nmx-comic-chat-error { margin: 0; color: var(--nmx-danger, #e5484d); font-size: 12.5px; line-height: 1.5; }
+
+.nmx-shell .nmx-comic-chat-results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.nmx-shell .nmx-comic-chat-results.is-count-1 { grid-template-columns: minmax(0, 520px); }
+.nmx-shell .nmx-comic-chat-results.is-video.is-count-1 { grid-template-columns: minmax(0, 640px); }
+.nmx-shell .nmx-comic-chat-results:is(.is-music, .is-speech) { grid-template-columns: minmax(0, 520px); }
+.nmx-shell .nmx-comic-chat-media {
+    position: relative; display: block; box-sizing: border-box; width: 100%; margin: 0; padding: 0; overflow: hidden;
+    border: 1px solid var(--nmx-border); border-radius: 12px; background: color-mix(in srgb, var(--nmx-text) 5%, var(--nmx-panel));
+}
+.nmx-shell .nmx-comic-chat-media > :is(img, video) { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* A result never grows taller than about 60% of the window: portrait pictures narrow instead of running off screen. */
+.nmx-shell .nmx-comic-chat-media:is(.is-image, .is-video)[style*='--nmx-media-ratio'] { width: min(100%, calc(min(60vh, 600px) * var(--nmx-media-ratio, 1))); }
+.nmx-shell .nmx-comic-chat-media.is-image.is-done { cursor: zoom-in; }
+.nmx-shell .nmx-comic-chat-media.is-video.is-done > video { cursor: pointer; background: #000; object-fit: contain; }
+.nmx-shell .nmx-comic-chat-media.is-audio { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.nmx-shell .nmx-comic-chat-media.is-audio > .codicon { color: var(--nmx-muted); font-size: 16px; }
+.nmx-shell .nmx-comic-chat-media.is-audio > audio { flex: 1 1 auto; min-width: 0; height: 34px; }
+.nmx-shell .nmx-comic-chat-media:not(.is-done) { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 120px; padding: 12px; }
+.nmx-shell .nmx-comic-chat-media:is(.is-music, .is-speech):not(.is-done) { min-height: 64px; flex-direction: row; justify-content: space-between; }
+.nmx-shell .nmx-comic-chat-media.is-failed { border-color: color-mix(in srgb, var(--nmx-danger, #e5484d) 45%, var(--nmx-border)); }
+.nmx-shell .nmx-comic-chat-media-state { display: flex; flex-direction: column; align-items: center; gap: 4px; max-width: 100%; color: var(--nmx-muted); font-size: 12px; text-align: center; }
+.nmx-shell .nmx-comic-chat-media:is(.is-music, .is-speech) .nmx-comic-chat-media-state { flex-direction: row; gap: 8px; }
+/* In the one-row state the title and buttons keep their words whole; the reason takes the remaining width. */
+.nmx-shell .nmx-comic-chat-media:is(.is-music, .is-speech) .nmx-comic-chat-media-state > strong,
+.nmx-shell .nmx-comic-chat-media-actions button { flex: none; white-space: nowrap; }
+.nmx-shell .nmx-comic-chat-media-state > .codicon { font-size: 18px; }
+.nmx-shell .nmx-comic-chat-media-state > strong { color: var(--nmx-text); font-size: 12.5px; font-weight: 600; }
+.nmx-shell .nmx-comic-chat-media-state > small { font-variant-numeric: tabular-nums; }
+.nmx-shell .nmx-comic-chat-media-state > small.is-error { display: -webkit-box; max-width: 100%; overflow: hidden; color: var(--nmx-danger, #e5484d); line-height: 1.5; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+/* A failed picture or clip has no shape to keep: its reason is shown whole (the tile grows to fit). */
+.nmx-shell .nmx-comic-chat-media:is(.is-image, .is-video).is-failed .nmx-comic-chat-media-state > small.is-error { display: block; max-width: 44ch; -webkit-line-clamp: unset; }
+.nmx-shell .nmx-comic-chat-media-actions > button.is-primary { border-color: color-mix(in srgb, var(--nmx-accent) 55%, var(--nmx-border)); color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-accent) 16%, transparent); }
+.nmx-shell .nmx-comic-chat-media-actions { display: flex; gap: 6px; }
+.nmx-shell .nmx-comic-chat-media-actions > button { height: 26px; padding: 0 10px; border: 1px solid var(--nmx-border); border-radius: 7px; color: var(--nmx-text); background: var(--nmx-panel); font-size: 12px; cursor: pointer; }
+.nmx-shell .nmx-comic-chat-play { position: absolute; inset: 0; display: grid; place-items: center; width: 52px; height: 52px; margin: auto; padding: 0; border: 0; border-radius: 50%; color: #fff; background: rgba(0, 0, 0, .55); cursor: pointer; }
+.nmx-shell .nmx-comic-chat-play > .codicon { font-size: 22px; }
+
+.nmx-shell .nmx-comic-chat-answer { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.nmx-shell .nmx-comic-chat-thinking { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--nmx-muted); font-size: 13px; }
+.nmx-shell .nmx-comic-chat-thought {
+    margin: 0; border: 1px solid var(--nmx-border); border-radius: 10px;
+    background: color-mix(in srgb, var(--nmx-panel-2) 65%, transparent); overflow: hidden;
+}
+.nmx-shell .nmx-comic-chat-thought-summary {
+    display: flex; align-items: center; gap: 7px; padding: 7px 11px; color: var(--nmx-muted);
+    font-size: 12px; font-weight: 500; line-height: 1.4; cursor: pointer; user-select: none; list-style: none;
+    transition: color 120ms ease, background-color 120ms ease;
+}
+.nmx-shell .nmx-comic-chat-thought-summary::-webkit-details-marker { display: none; }
+.nmx-shell .nmx-comic-chat-thought-summary:hover { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 4%, transparent); }
+.nmx-shell .nmx-comic-chat-thought-summary > .codicon-sparkle { color: var(--nmx-accent, #7b5cff); font-size: 13px; }
+.nmx-shell .nmx-comic-chat-thought-chevron { margin-inline-start: auto; font-size: 12px; transition: transform 150ms ease; }
+.nmx-shell .nmx-comic-chat-thought[open] > .nmx-comic-chat-thought-summary > .nmx-comic-chat-thought-chevron { transform: rotate(90deg); }
+.nmx-shell .nmx-comic-chat-thought-body {
+    padding: 8px 12px 10px; border-top: 1px solid var(--nmx-border); color: var(--nmx-muted);
+    font-size: 12.5px; line-height: 1.55; max-height: 320px; overflow-y: auto; scrollbar-width: thin;
+}
+.nmx-shell .nmx-comic-chat-thought-body .nmx-thought-markdown > :first-child { margin-top: 0; }
+.nmx-shell .nmx-comic-chat-thought-body .nmx-thought-markdown > :last-child { margin-bottom: 0; }
+/* Plain-text thinking (the adaptation desk and its footer) keeps the model's line breaks. */
+.nmx-shell .nmx-comic-chat-thought-body.is-plain { white-space: pre-wrap; overflow-wrap: anywhere; }
+.nmx-shell .nmx-comic-chat-thought-summary > small { color: var(--nmx-muted); font-weight: 400; opacity: .8; font-variant-numeric: tabular-nums; }
+.nmx-shell .nmx-comic-chat-thought.is-running > .nmx-comic-chat-thought-summary > .codicon-loading { color: var(--nmx-muted); font-size: 13px; }
+/* The desk's thinking block sits inside the desk's padding; its body stays short while the desk is in view. */
+.nmx-shell .nmx-comic-chat-thought.nmx-desk-thinking { margin: 6px 16px 0; }
+.nmx-shell .nmx-desk-thinking > .nmx-comic-chat-thought-body { max-height: 160px; color: var(--nmx-text); }
+/* Under the desk footer's progress note, the thinking block takes the full row. */
+.nmx-shell .nmx-desk-footer:has(> .nmx-desk-footer-thought) { flex-wrap: wrap; }
+.nmx-shell .nmx-comic-chat-thought.nmx-desk-footer-thought { flex: 1 1 100%; order: 3; min-width: 0; }
+@media (prefers-reduced-motion: reduce) { .nmx-shell .nmx-comic-chat-thought-chevron { transition: none; } }
+/* A media-mode message answered as conversation says so, quietly, above the reply. */
+.nmx-shell .nmx-comic-chat-divert { display: flex; align-items: center; gap: 6px; margin: 2px 0 8px; color: var(--nmx-muted); font-size: 12px; line-height: 1.5; }
+.nmx-shell .nmx-comic-chat-divert > .codicon { flex: none; font-size: 13px; opacity: .8; }
+.nmx-shell .nmx-comic-chat-proposals { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--nmx-border); border-radius: 14px; background: var(--nmx-panel); }
+.nmx-shell .nmx-comic-chat-proposals > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 2px; }
+.nmx-shell .nmx-comic-chat-proposals > header > strong { color: var(--nmx-text); font-size: 12.5px; }
+.nmx-shell .nmx-comic-chat-proposals > header > button { display: inline-flex; align-items: center; gap: 6px; }
+.nmx-shell .nmx-comic-chat-proposal { --mode-a: #7b5cff; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; background: var(--nmx-panel-2); box-shadow: inset 3px 0 0 var(--mode-a); }
+.nmx-shell .nmx-comic-chat-proposal-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.nmx-shell .nmx-comic-chat-proposal-copy > span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--nmx-muted); font-size: 11.5px; }
+.nmx-shell .nmx-comic-chat-proposal-copy > span > em { padding: 0 6px; border-radius: 999px; background: var(--nmx-panel); font-style: normal; }
+.nmx-shell .nmx-comic-chat-proposal-copy > strong { color: var(--nmx-text); font-size: 13px; }
+.nmx-shell .nmx-comic-chat-proposal-copy > p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--nmx-text); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+.nmx-shell .nmx-comic-chat-proposal > footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.nmx-shell .nmx-comic-chat-proposal > footer > small { color: var(--nmx-muted); font-size: 11.5px; }
+.nmx-shell .nmx-comic-chat-proposal > footer > small.is-error { color: #d9822b; }
+.nmx-shell .nmx-comic-chat-proposal > footer > button { height: 28px; padding: 0 14px; border: 1px solid var(--nmx-border-strong, var(--nmx-border)); border-radius: 8px; color: var(--nmx-text); background: var(--nmx-panel); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+
+/* ── Composer: modes above the coding composer card, settings in its tool row ── */
+.nmx-shell .nmx-comic-chat-dock { display: flex; flex: none; justify-content: center; padding: 6px 0 14px; }
+.nmx-shell .nmx-comic-chat-dock > .nmx-composer-wrap { width: min(760px, calc(100% - 48px)); }
+.nmx-shell .nmx-comic-chat-modes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
+.nmx-shell .nmx-comic-chat-modes > [role='tablist'] { display: flex; flex-wrap: wrap; gap: 4px; }
+/* The conversation's folder (or 选择文件夹) before the functions, set apart by a thin rule. */
+.nmx-shell .nmx-comic-chat-modes > .nmx-comic-chat-folder { position: relative; flex: none; max-width: 240px; height: 28px; margin: 0 9px 0 0; }
+.nmx-shell .nmx-comic-chat-modes > .nmx-comic-chat-folder::after { content: ''; position: absolute; top: 6px; bottom: 6px; inset-inline-end: -9px; width: 1px; background: var(--nmx-border); }
+[dir='rtl'] .nmx-shell .nmx-comic-chat-modes > .nmx-comic-chat-folder { margin: 0 0 0 9px; }
+.nmx-shell .nmx-comic-chat-modes > .nmx-comic-chat-folder > :is(b, span) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell .nmx-comic-chat-modes > [role='tablist'] > button {
+    --mode-a: #7b5cff; --mode-b: #d9468b;
+    display: inline-flex; align-items: center; gap: 6px; height: 28px; margin: 0; padding: 0 11px; border: 1px solid var(--nmx-border); border-radius: 999px;
+    color: var(--nmx-muted); background: transparent; font-size: 12px; cursor: pointer;
+}
+.nmx-shell .nmx-comic-chat-modes > [role='tablist'] > button:hover:not(:disabled) { color: var(--nmx-text); }
+.nmx-shell .nmx-comic-chat-modes > [role='tablist'] > button.is-active { border-color: color-mix(in srgb, var(--mode-a) 55%, var(--nmx-border)); color: var(--nmx-text); background: color-mix(in srgb, var(--mode-a) 12%, var(--nmx-panel)); font-weight: 600; }
+.nmx-shell .nmx-comic-chat-modes > [role='tablist'] > button.is-active > .codicon { color: var(--mode-a); }
+.nmx-shell .nmx-comic-chat-dock .nmx-composer > div:last-child { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.nmx-shell .nmx-comic-chat-dock .nmx-composer textarea { field-sizing: content; max-height: 220px; }
+.nmx-shell .nmx-comic-chat-chip { position: relative; display: inline-flex; align-items: center; height: 28px; border: 1px solid var(--nmx-border); border-radius: 8px; background: transparent; }
+.nmx-shell .nmx-comic-chat-chip > select { height: 100%; margin: 0; padding: 0 22px 0 9px; border: 0; color: var(--nmx-text); background: transparent; font-size: 12px; cursor: pointer; appearance: none; -webkit-appearance: none; }
+.nmx-shell .nmx-comic-chat-chip > select:focus-visible { outline: 2px solid color-mix(in srgb, var(--nmx-accent) 55%, transparent); outline-offset: 1px; border-radius: 7px; }
+.nmx-shell .nmx-comic-chat-chip > .codicon { position: absolute; inset-inline-end: 6px; color: var(--nmx-muted); font-size: 12px; pointer-events: none; }
+.nmx-shell .nmx-comic-chat-chip > select option { color: var(--nmx-text); background: var(--nmx-panel); }
+.nmx-shell .nmx-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.nmx-shell :is(.nmx-comic-chat-add, .nmx-comic-chat-pickers) { position: relative; display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.nmx-shell .nmx-comic-chat-pickers > button { max-width: 200px; }
+.nmx-shell .nmx-comic-chat-pickers > button > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell .nmx-comic-chat-popover {
+    position: absolute; bottom: calc(100% + 8px); inset-inline-start: 0; z-index: 30; display: flex; flex-direction: column; gap: 2px;
+    min-width: 220px; max-width: 340px; max-height: 340px; overflow-y: auto; padding: 6px;
+    border: 1px solid var(--nmx-border-strong, var(--nmx-border)); border-radius: 12px; background: var(--nmx-panel); box-shadow: 0 16px 40px rgba(0, 0, 0, .28);
+}
+.nmx-shell .nmx-comic-chat-pickers > .nmx-comic-chat-popover { inset-inline-start: auto; inset-inline-end: 0; }
+.nmx-shell .nmx-comic-chat-popover > header { padding: 4px 9px 6px; color: var(--nmx-muted); font-size: 11px; }
+.nmx-shell .nmx-comic-chat-popover > small { padding: 4px 9px 2px; color: var(--nmx-muted); font-size: 11px; }
+.nmx-shell .nmx-comic-chat-popover > button {
+    display: flex; align-items: center; gap: 8px; min-height: 30px; margin: 0; padding: 6px 9px; border: 0; border-radius: 8px;
+    color: var(--nmx-text); background: transparent; font-size: 12.5px; text-align: start; cursor: pointer;
+}
+.nmx-shell .nmx-comic-chat-popover > button > span { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell .nmx-comic-chat-popover > button > small { flex: none; color: var(--nmx-muted); font-size: 11px; }
+.nmx-shell .nmx-comic-chat-popover > button:is(:hover, :focus-visible) { background: var(--nmx-panel-2); }
+.nmx-shell .nmx-comic-chat-popover > button.is-active { font-weight: 600; }
+.nmx-shell .nmx-comic-chat-popover > button > .codicon-check { color: var(--nmx-accent); }
+.nmx-shell .nmx-comic-chat-refs { display: flex; flex-wrap: wrap; gap: 10px; padding: 4px 4px 8px; }
+.nmx-shell .nmx-comic-chat-ref { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 64px; }
+.nmx-shell .nmx-comic-chat-ref > img { width: 64px; height: 64px; border: 1px solid var(--nmx-border); border-radius: 10px; object-fit: cover; }
+.nmx-shell .nmx-comic-chat-ref > .codicon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 10px; color: var(--nmx-muted); background: var(--nmx-panel-2); }
+.nmx-shell .nmx-comic-chat-ref > small { color: var(--nmx-muted); font-size: 10.5px; }
+.nmx-shell .nmx-comic-chat-ref > button {
+    position: absolute; top: -6px; inset-inline-end: -6px; display: grid; place-items: center; width: 20px; height: 20px; margin: 0; padding: 0;
+    border: 1px solid var(--nmx-border); border-radius: 50%; color: var(--nmx-text); background: var(--nmx-panel); cursor: pointer;
+}
+.nmx-shell .nmx-comic-chat-ref > button > .codicon { font-size: 11px; }
+.nmx-shell .nmx-comic-chat-drop {
+    position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 8px; border: 2px dashed color-mix(in srgb, var(--nmx-accent) 70%, transparent);
+    border-radius: inherit; color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-accent) 10%, var(--nmx-panel)); font-size: 13px; pointer-events: none;
+}
+/* One line under the comic composer, like the coding one: the estimate on the left, at most one notice capsule on the right. */
+.nmx-shell .nmx-comic-chat-below { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; min-width: 0; margin-top: 6px; padding: 0 4px; color: var(--nmx-muted); font-size: 11.5px; }
+.nmx-shell .nmx-comic-chat-below > .nmx-comic-chat-note { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-shell .nmx-comic-chat-project { position: relative; display: inline-flex; align-items: center; gap: 5px; max-width: 280px; min-width: 0; }
+.nmx-shell .nmx-comic-chat-project > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell .nmx-comic-chat-project > select { max-width: 240px; margin: 0; padding: 0 16px 0 0; border: 0; color: var(--nmx-muted); background: transparent; font-size: 11.5px; text-overflow: ellipsis; cursor: pointer; appearance: none; -webkit-appearance: none; }
+.nmx-shell .nmx-comic-chat-project > select option { color: var(--nmx-text); background: var(--nmx-panel); }
+.nmx-shell .nmx-comic-chat-project > .codicon-chevron-down { position: absolute; inset-inline-end: 0; font-size: 11px; pointer-events: none; }
+.nmx-shell .nmx-comic-chat-note.is-warning { color: #d9822b; }
+.nmx-shell .nmx-comic-chat-note.is-error { color: var(--nmx-danger, #e5484d); }
+
+/* ── Right-click menu ── */
+.nmx-comic-chat-menu {
+    position: fixed; z-index: 3000; display: flex; flex-direction: column; min-width: 200px; padding: 5px;
+    border: 1px solid var(--nmx-border-strong, var(--nmx-border)); border-radius: 10px; background: var(--nmx-panel); box-shadow: 0 16px 42px rgba(0, 0, 0, .3);
+}
+.nmx-comic-chat-menu > button { display: flex; align-items: center; gap: 9px; height: 30px; margin: 0; padding: 0 10px; border: 0; border-radius: 7px; color: var(--nmx-text); background: transparent; font-size: 12.5px; text-align: start; cursor: pointer; }
+.nmx-comic-chat-menu > button:is(:hover, :focus-visible):not(:disabled) { background: var(--nmx-panel-2); outline: none; }
+.nmx-comic-chat-menu > button:disabled { opacity: .45; cursor: default; }
+.nmx-comic-chat-menu > button > .codicon { width: 16px; color: var(--nmx-muted); font-size: 14px; }
+.nmx-comic-chat-menu-separator { height: 1px; margin: 4px 6px; background: var(--nmx-border); }
+
+/* ── 素材库: a drawer over the thread ── */
+.nmx-shell .nmx-comic-materials {
+    position: absolute; top: 0; bottom: 0; inset-inline-end: 0; z-index: 12; display: flex; flex-direction: column; width: min(420px, 92%);
+    border-inline-start: 1px solid var(--nmx-border); background: var(--nmx-panel); box-shadow: -18px 0 40px rgba(0, 0, 0, .18); outline: none;
+    animation: nmx-comic-materials-in 160ms ease-out;
+}
+@keyframes nmx-comic-materials-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .nmx-shell .nmx-comic-materials { animation: none; } }
+.nmx-shell .nmx-comic-materials > header { display: flex; align-items: flex-start; gap: 10px; padding: 14px 14px 10px; border-bottom: 1px solid var(--nmx-border); }
+.nmx-shell .nmx-comic-materials > header > div { display: flex; flex: 1 1 auto; flex-direction: column; gap: 3px; min-width: 0; }
+.nmx-shell .nmx-comic-materials > header strong { color: var(--nmx-text); font-size: 14px; }
+.nmx-shell .nmx-comic-materials > header small { color: var(--nmx-muted); font-size: 11.5px; line-height: 1.45; }
+.nmx-shell .nmx-comic-materials-close { display: grid; place-items: center; width: 28px; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 8px; color: var(--nmx-muted); background: transparent; cursor: pointer; }
+.nmx-shell .nmx-comic-materials-close:hover { color: var(--nmx-text); background: var(--nmx-panel-2); }
+.nmx-shell .nmx-comic-materials-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; }
+.nmx-shell .nmx-comic-materials-filters > div { display: flex; flex-wrap: wrap; gap: 4px; }
+.nmx-shell .nmx-comic-materials-filters > div > button { display: inline-flex; align-items: center; gap: 5px; height: 26px; margin: 0; padding: 0 10px; border: 1px solid var(--nmx-border); border-radius: 999px; color: var(--nmx-muted); background: transparent; font-size: 12px; cursor: pointer; }
+.nmx-shell .nmx-comic-materials-filters > div > button.is-active { color: var(--nmx-text); background: var(--nmx-panel-2); font-weight: 600; }
+.nmx-shell .nmx-comic-materials-filters > div > button > b { color: var(--nmx-muted); font-size: 10.5px; font-weight: 500; }
+.nmx-shell .nmx-comic-materials-empty { margin: 24px 14px; color: var(--nmx-muted); font-size: 12.5px; text-align: center; }
+.nmx-shell .nmx-comic-materials-grid { display: grid; flex: 1 1 auto; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); align-content: start; gap: 12px 10px; min-height: 0; overflow-y: auto; padding: 4px 14px 16px; }
+.nmx-shell .nmx-comic-material { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; padding: 0; border: 0; color: var(--nmx-text); background: transparent; text-align: start; cursor: pointer; }
+.nmx-shell .nmx-comic-material-thumb { position: relative; display: grid; place-items: center; width: 100%; aspect-ratio: 1 !important; overflow: hidden; border: 1px solid var(--nmx-border); border-radius: 10px; color: var(--nmx-muted); background: var(--nmx-panel-2); }
+.nmx-shell .nmx-comic-material-thumb > :is(img, video) { width: 100%; height: 100%; object-fit: cover; }
+.nmx-shell .nmx-comic-material-thumb > .codicon { font-size: 22px; }
+.nmx-shell .nmx-comic-material-play { position: absolute; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: #fff; background: rgba(0, 0, 0, .5); font-size: 14px !important; }
+.nmx-shell .nmx-comic-material:hover .nmx-comic-material-thumb { border-color: color-mix(in srgb, var(--nmx-accent) 55%, var(--nmx-border)); }
+.nmx-shell .nmx-comic-material.is-focus .nmx-comic-material-thumb { outline: 2px solid var(--nmx-accent); outline-offset: 1px; }
+.nmx-shell .nmx-comic-material > strong { overflow: hidden; font-size: 11.5px; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell .nmx-comic-material > small { color: var(--nmx-muted); font-size: 10.5px; }
+.nmx-shell .nmx-comic-materials.is-picking .nmx-comic-material-thumb { cursor: copy; }
+
+/* ── 剪辑 window lead, image viewer, delete confirmation ── */
+.nmx-shell .nmx-desk-header > .nmx-desk-lead { margin: 0 auto; color: var(--nmx-muted); font-size: 12px; }
+.nmx-shell .nmx-comic-chat-viewer .nmx-attachment-lightbox-stage > img { max-width: 100%; max-height: 78vh; object-fit: contain; }
+.nmx-shell .nmx-comic-chat-delete .nmx-primary-button.is-danger { border-color: transparent; color: #fff; background: var(--nmx-danger, #e5484d); }
+/* The sidebar's generic “label pushed to the end” rule is for counters; 新对话 reads left to right. */
+.nmx-shell .nmx-comic-context .nmx-context-nav > button.nmx-comic-new-chat { justify-content: flex-start; }
+.nmx-shell .nmx-comic-context .nmx-context-nav > button.nmx-comic-new-chat > span:last-child { margin-inline-start: 0; padding-inline-start: 0; }
+.nmx-shell .nmx-comic-chat-header .nmx-studio-desk.is-active { border-color: color-mix(in srgb, var(--nmx-accent) 50%, var(--nmx-border)); }
+
+/* ── 对话模式 folders (the coding project list's rows), 最近, and a folder's menu ── */
+.nmx-shell .nmx-comic-context .nmx-comic-folder.is-missing .nmx-project-row { opacity: .6; }
+.nmx-shell .nmx-comic-context .nmx-comic-folder.is-missing .nmx-project-row > .codicon-warning { color: var(--nmx-warning, #d9a441); }
+.nmx-shell .nmx-comic-context .nmx-comic-folder.is-missing .nmx-comic-folder-remove { opacity: 1; }
+.nmx-shell .nmx-comic-context .nmx-project-menu-note { display: block; max-width: 220px; padding: 4px 10px 6px; color: var(--nmx-muted); font-size: 11px; line-height: 1.4; }
+.nmx-shell .nmx-comic-context .nmx-comic-folder-empty { width: 100%; justify-content: flex-start; color: var(--nmx-muted); }
+.nmx-shell .nmx-comic-context .nmx-comic-folder-empty:hover { color: var(--nmx-text); }
+.nmx-shell .nmx-comic-context .nmx-comic-chat-item .nmx-session-open > .codicon { flex: none; margin-inline-end: 6px; font-size: 12px; }
+.nmx-shell .nmx-comic-chat-header .nmx-studio-project small { display: inline-flex; align-items: center; gap: 5px; }
+.nmx-shell .nmx-comic-chat-header .nmx-studio-project small > .codicon { font-size: 12px; }
+.nmx-shell .nmx-comic-chat-header .nmx-studio-desk.is-primary { border-color: color-mix(in srgb, var(--nmx-accent) 55%, var(--nmx-border)); color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-accent) 16%, transparent); }
+
+/* ── Composer: folder chip on top-left (as in coding), 推荐模型 switch, relay/model drawers sliding out to its left ── */
+.nmx-shell .nmx-comic-chat-dock .nmx-comic-chat-refs { align-items: flex-start; }
+.nmx-shell .nmx-comic-chat-dock .nmx-comic-chat-refs > :is(.nmx-composer-project-chip, .nmx-composer-project-select) { align-self: center; }
+.nmx-shell .nmx-comic-chat-pickers { gap: 6px; }
+.nmx-shell .nmx-comic-chat-drawers {
+    display: inline-flex; align-items: center; gap: 4px; max-width: 0; overflow: hidden; opacity: 0; transform: translateX(14px);
+    transition: max-width 260ms cubic-bezier(.2, .8, .2, 1), opacity 180ms ease, transform 260ms cubic-bezier(.2, .8, .2, 1);
+}
+.nmx-shell .nmx-comic-chat-pickers.is-open > .nmx-comic-chat-drawers { max-width: 440px; opacity: 1; transform: none; }
+.nmx-shell .nmx-comic-chat-drawers > button { max-width: 150px; flex: none; }
+/* With 推荐模型 off the source and model buttons fill the row: they give way first, and the microphone and send
+   buttons stay at the right end even when the row wraps. */
+.nmx-shell .nmx-comic-chat-dock .nmx-comic-chat-pickers { flex: 0 1 auto; }
+.nmx-shell .nmx-comic-chat-dock .nmx-mic-button { margin-inline-start: auto; }
+.nmx-shell .nmx-comic-chat-drawers > button > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell .nmx-comic-chat-drawers > button > small { padding: 0 5px; border-radius: 8px; color: var(--nmx-muted); background: var(--nmx-panel-2); font-size: 10.5px; }
+[dir='rtl'] .nmx-shell .nmx-comic-chat-drawers { transform: translateX(-14px); }
+@media (prefers-reduced-motion: reduce) { .nmx-shell .nmx-comic-chat-drawers { transition: none; } }
+.nmx-shell .nmx-comic-chat-recommend {
+    display: inline-flex; align-items: center; gap: 6px; height: 28px; margin: 0; padding: 0 5px 0 9px; border: 1px solid var(--nmx-border); border-radius: 999px;
+    color: var(--nmx-muted); background: transparent; font-size: 12px; white-space: nowrap; cursor: pointer;
+}
+.nmx-shell .nmx-comic-chat-recommend > .codicon { font-size: 12px; }
+/* The same switch as Settings (.nmx-switch): grey knob when off, green track when on. */
+.nmx-shell .nmx-comic-chat-recommend > b {
+    position: relative; flex: none; box-sizing: border-box; width: 28px; height: 16px; border: 1px solid var(--nmx-border-strong, var(--nmx-border)); border-radius: 999px;
+    background: #25272b; transition: background 160ms ease, border-color 160ms ease;
+}
+.nmx-shell .nmx-comic-chat-recommend > b::after { content: ''; position: absolute; top: 1px; inset-inline-start: 1px; width: 12px; height: 12px; border-radius: 50%; background: #9a9da4; transition: transform 160ms ease, background 160ms ease; }
+.nmx-shell .nmx-comic-chat-recommend.is-on { border-color: #39795f; color: var(--nmx-text); }
+.nmx-shell .nmx-comic-chat-recommend.is-on > .codicon { color: #6fcf9f; }
+.nmx-shell .nmx-comic-chat-recommend.is-on > b { border-color: #39795f; background: #244a3c; }
+.nmx-shell .nmx-comic-chat-recommend.is-on > b::after { background: #ccebdd; transform: translateX(12px); }
+[dir='rtl'] .nmx-shell .nmx-comic-chat-recommend.is-on > b::after { transform: translateX(-12px); }
+.nmx-shell.nmx-theme-light .nmx-comic-chat-recommend > b { background: #e4e1e3; }
+.nmx-shell.nmx-theme-light .nmx-comic-chat-recommend > b::after { background: #fff; box-shadow: 0 1px 2px rgba(40, 30, 36, .28); }
+.nmx-shell.nmx-theme-light .nmx-comic-chat-recommend.is-on { border-color: #2f7d5b; }
+.nmx-shell.nmx-theme-light .nmx-comic-chat-recommend.is-on > .codicon { color: #2f7d5b; }
+.nmx-shell.nmx-theme-light .nmx-comic-chat-recommend.is-on > b { border-color: #2f7d5b; background: #3a8f69; }
+.nmx-shell.nmx-theme-light .nmx-comic-chat-recommend.is-on > b::after { background: #fff; }
+.nmx-shell .nmx-comic-chat-recommend:focus-visible { outline: 2px solid color-mix(in srgb, var(--nmx-accent) 55%, transparent); outline-offset: 1px; }
+.nmx-shell .nmx-comic-chat-caps { display: inline-flex; flex: none; flex-wrap: wrap; gap: 3px; }
+.nmx-shell .nmx-comic-chat-caps > em { padding: 1px 5px; border-radius: 5px; color: var(--nmx-muted); background: var(--nmx-panel-2); font-size: 10px; font-style: normal; line-height: 1.5; }
+.nmx-shell .nmx-comic-chat-caps > em.is-here { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-accent) 22%, transparent); }
+/* The model panel: one tab per function (with the model it uses), the chosen relay's models below. */
+.nmx-shell .nmx-comic-chat-popover.is-models { width: min(400px, calc(100vw - 48px)); max-width: none; max-height: 460px; padding: 8px; gap: 8px; overflow: hidden; }
+.nmx-shell .nmx-comic-chat-popover.is-models > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px 0; font-size: 12px; }
+.nmx-shell .nmx-comic-chat-popover.is-models > header > span { overflow: hidden; color: var(--nmx-text); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell .nmx-comic-chat-model-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.nmx-shell .nmx-comic-chat-model-tabs > button {
+    display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 5px; min-width: 0; margin: 0; padding: 6px 7px; border: 1px solid var(--nmx-border); border-radius: 9px;
+    color: var(--nmx-muted); background: transparent; text-align: start; cursor: pointer;
+}
+.nmx-shell .nmx-comic-chat-model-tabs > button > .codicon { grid-row: span 2; font-size: 13px; }
+.nmx-shell .nmx-comic-chat-model-tabs > button > strong { overflow: hidden; color: var(--nmx-text); font-size: 12px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell .nmx-comic-chat-model-tabs > button > small { overflow: hidden; font-size: 10.5px; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell .nmx-comic-chat-model-tabs > button:not(.is-set) > small { color: var(--nmx-warning, #d9a441); }
+.nmx-shell .nmx-comic-chat-model-tabs > button:hover { background: var(--nmx-panel-2); }
+.nmx-shell .nmx-comic-chat-model-tabs > button.is-active { border-color: color-mix(in srgb, var(--nmx-accent) 60%, var(--nmx-border)); background: color-mix(in srgb, var(--nmx-accent) 12%, transparent); }
+.nmx-shell .nmx-comic-chat-model-tabs > button.is-active > .codicon { color: var(--nmx-accent); }
+.nmx-shell .nmx-comic-chat-model-lead { margin: 0 4px; color: var(--nmx-muted); font-size: 11.5px; line-height: 1.45; }
+.nmx-shell .nmx-comic-chat-model-list { display: flex; flex: 1 1 auto; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; }
+.nmx-shell .nmx-comic-chat-model { display: flex; align-items: center; gap: 6px; border-radius: 8px; }
+.nmx-shell .nmx-comic-chat-model:hover { background: var(--nmx-panel-2); }
+.nmx-shell .nmx-comic-chat-model > button[role='option'] {
+    display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 3px; min-width: 0; margin: 0; padding: 7px 9px; border: 0;
+    color: var(--nmx-text); background: transparent; font-size: 12.5px; text-align: start; cursor: pointer;
+}
+.nmx-shell .nmx-comic-chat-model > button[role='option'] > span[data-nmx-literal] { flex: 1 1 140px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell .nmx-comic-chat-model > button[role='option'] > small { flex-basis: 100%; color: var(--nmx-muted); font-size: 11px; }
+.nmx-shell .nmx-comic-chat-model > button[role='option'] > .codicon-check { color: var(--nmx-accent); }
+.nmx-shell .nmx-comic-chat-model.is-active > button[role='option'] { font-weight: 600; }
+.nmx-shell .nmx-comic-chat-model-all {
+    flex: none; margin: 0 6px 0 0; padding: 3px 8px; border: 1px solid var(--nmx-border); border-radius: 999px; color: var(--nmx-muted); background: transparent;
+    font-size: 11px; white-space: nowrap; cursor: pointer; opacity: 0; transition: opacity 120ms ease;
+}
+.nmx-shell .nmx-comic-chat-model:is(:hover, :focus-within, .is-active) > .nmx-comic-chat-model-all { opacity: 1; }
+.nmx-shell .nmx-comic-chat-model-all:hover:not(:disabled) { color: var(--nmx-text); border-color: color-mix(in srgb, var(--nmx-accent) 55%, var(--nmx-border)); }
+.nmx-shell .nmx-comic-chat-model-all:disabled { cursor: default; opacity: .45 !important; }
+.nmx-shell .nmx-comic-chat-model-empty { margin: 6px 4px 8px; color: var(--nmx-muted); font-size: 12px; line-height: 1.5; }
+/* 从人物库选择: the library's portraits as a small grid. */
+.nmx-shell .nmx-comic-chat-popover.is-cast { width: 300px; max-width: none; }
+.nmx-shell .nmx-comic-chat-popover.is-cast > header { display: flex; align-items: center; gap: 4px; padding: 0 2px 4px; }
+.nmx-shell .nmx-comic-chat-popover.is-cast > header > button { display: grid; place-items: center; width: 24px; height: 24px; margin: 0; padding: 0; border: 0; border-radius: 6px; color: var(--nmx-muted); background: transparent; cursor: pointer; }
+.nmx-shell .nmx-comic-chat-popover.is-cast > header > button:hover { color: var(--nmx-text); background: var(--nmx-panel-2); }
+.nmx-shell .nmx-comic-chat-cast-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 2px; }
+.nmx-shell .nmx-comic-chat-cast-grid > button { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; margin: 0; padding: 0; border: 0; color: var(--nmx-text); background: transparent; cursor: pointer; }
+.nmx-shell .nmx-comic-chat-cast-grid > button > :is(img, .codicon) { width: 100%; aspect-ratio: 3 / 4; border: 1px solid var(--nmx-border); border-radius: 9px; object-fit: cover; background: var(--nmx-panel-2); }
+.nmx-shell .nmx-comic-chat-cast-grid > button > .codicon { display: grid; place-items: center; color: var(--nmx-muted); font-size: 20px; }
+.nmx-shell .nmx-comic-chat-cast-grid > button > span { overflow: hidden; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; text-align: center; }
+.nmx-shell .nmx-comic-chat-cast-grid > button:hover:not(:disabled) > :is(img, .codicon) { border-color: color-mix(in srgb, var(--nmx-accent) 60%, var(--nmx-border)); }
+.nmx-shell .nmx-comic-chat-cast-grid > button:disabled { cursor: not-allowed; opacity: .5; }
+.nmx-shell .nmx-comic-chat-cast-empty { margin: 6px 6px 8px; color: var(--nmx-muted); font-size: 12px; }
+.nmx-shell .nmx-comic-chat-popover.is-add > button > .codicon.is-end { margin-inline-start: auto; font-size: 12px; }
+
+/* ── Materials: scope (本对话 / 本文件夹 / 全部素材) ── */
+.nmx-shell .nmx-comic-materials-scope { display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; gap: 2px; margin: 10px 14px 0; padding: 3px; border: 1px solid var(--nmx-border); border-radius: 10px; }
+.nmx-shell .nmx-comic-materials-scope > button { height: 26px; margin: 0; padding: 0 8px; border: 0; border-radius: 7px; color: var(--nmx-muted); background: transparent; font-size: 12px; cursor: pointer; }
+.nmx-shell .nmx-comic-materials-scope > button.is-active { color: var(--nmx-text); background: var(--nmx-panel-2); font-weight: 600; }
+.nmx-shell .nmx-comic-materials.is-picking .nmx-comic-materials-scope { margin-bottom: 8px; }
+.nmx-shell .nmx-comic-chat-viewer .nmx-attachment-lightbox-stage > video { max-width: 100%; max-height: 78vh; border-radius: 8px; background: #000; }
+.nmx-shell .nmx-comic-chat-viewer .nmx-attachment-lightbox-stage > audio { width: min(520px, 80vw); }
+
+/* ── The comic sidebar's folders and conversations mirror the coding project list (same rules, comic scope) ── */
+.nmx-comic-context .nmx-project-row, .nmx-comic-context .nmx-context-simple-row { min-height: 31px; display: grid; grid-template-columns: 20px minmax(0, 1fr) 17px; gap: 7px; padding: 0 8px; border-radius: 7px; }
+.nmx-comic-context .nmx-project-row > i, .nmx-comic-context .nmx-context-simple-row > i { color: #aaa2a5; font-size: 14px; }
+.nmx-comic-context .nmx-project-row > span, .nmx-comic-context .nmx-context-simple-row > span { min-width: 0; overflow: hidden; color: #d6cfd1; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-comic-context .nmx-project-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 30px; padding: 5px 8px; border-radius: 5px; color: var(--theia-errorForeground, #ed9595); }
+.nmx-comic-context .nmx-project-menu button:focus-visible { outline: 2px solid var(--theia-focusBorder, #6a9ce8); outline-offset: -2px; }
+.nmx-comic-context .nmx-project-row:focus, .nmx-comic-context .nmx-project-row:focus-visible { outline: 0 !important; box-shadow: none !important; }
+.nmx-comic-context .nmx-project-header .nmx-project-row { min-width: 0; padding-right: 2px; background: transparent; }
+.nmx-comic-context .nmx-project-header .nmx-project-row:hover { background: transparent; }
+.nmx-comic-context .nmx-project-add { width: 25px; min-height: 25px; display: grid; grid-template-columns: 1fr; place-items: center; padding: 0; border-radius: 6px; color: #8c8588; opacity: .72; visibility: visible; cursor: pointer; }
+.nmx-comic-context .nmx-project-add:hover { color: #e2dddf; background: rgba(255, 255, 255, .075); }
+.nmx-comic-context .nmx-project-header .nmx-project-add { width: 25px; height: 25px; min-height: 25px; grid-template-columns: 1fr; padding: 0; }
+.nmx-comic-context .nmx-context-nav button.nmx-session-more { width: 26px; min-width: 26px; max-width: 26px; display: inline-grid !important; grid-template-columns: 1fr !important; place-items: center !important; gap: 0 !important; padding: 0 !important; right: 0; }
+.nmx-comic-context .nmx-context-nav button.nmx-session-more:hover { color: #f0ebed !important; background: #322e30 !important; }
+.nmx-theme-light .nmx-comic-context .nmx-context-nav button.nmx-session-more { color: #686166 !important; background: transparent !important; }
+.nmx-theme-light .nmx-comic-context .nmx-context-nav button.nmx-session-more:hover, .nmx-theme-light .nmx-comic-context .nmx-context-nav button.nmx-session-more:focus-visible { color: #292529 !important; background: #dedad7 !important; }
+.nmx-desktop-widget .nmx-comic-context .nmx-session-row.is-dragging { opacity: .45; }
+.nmx-desktop-widget .nmx-comic-context .nmx-session-row.is-drop-before { box-shadow: inset 0 2px 0 var(--nmx-focus-ring, #a9a2a7); }
+.nmx-desktop-widget .nmx-comic-context .nmx-session-row.is-drop-after { box-shadow: inset 0 -2px 0 var(--nmx-focus-ring, #a9a2a7); }
+[dir='rtl'] .nmx-comic-context .nmx-session-open > span[dir='auto'] { text-align: right; -webkit-mask-image: none; mask-image: none; text-overflow: ellipsis; }
+[dir='rtl'] .nmx-comic-context .nmx-project-tree .nmx-session-row { margin-left: 0; margin-right: 25px; }
+[dir='rtl'] .nmx-comic-context .nmx-context-nav button.nmx-session-more { right: auto; left: 0; }
+[dir='rtl'] .nmx-comic-context .nmx-session-open { padding-right: 8px !important; padding-left: 8px !important; }
+[dir='rtl'] .nmx-comic-context .nmx-session-row:is(:hover, .is-current) .nmx-session-open { padding-left: 32px !important; }
+
+/* ── 素材库: count badge, first-time hint, and the tile flying in after 右键 → 加入素材库 ── */
+.nmx-shell .nmx-comic-library-anchor { position: relative; display: inline-flex; }
+.nmx-shell .nmx-comic-chat-header .nmx-studio-header-actions .nmx-comic-library-anchor > button > .nmx-comic-library-badge {
+    display: inline-grid; place-items: center; min-width: 18px; height: 18px; box-sizing: border-box; padding: 0 5px; border-radius: 999px;
+    color: #fff; background: linear-gradient(135deg, #7b5cff, #d9468b); box-shadow: 0 0 0 2px var(--nmx-panel); font-size: 10.5px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
+}
+.nmx-shell .nmx-comic-chat-header .nmx-studio-desk.has-hint { border-color: color-mix(in srgb, #7b5cff 60%, var(--nmx-border)); animation: nmx-library-glow 2.4s ease-in-out infinite; }
+@keyframes nmx-library-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(123, 92, 255, 0); }
+    50% { box-shadow: 0 0 0 4px rgba(123, 92, 255, .28); }
+}
+.nmx-shell .nmx-comic-library-hint {
+    position: absolute; top: calc(100% + 10px); inset-inline-end: 0; z-index: 30; display: grid; grid-template-columns: auto 1fr; align-items: start; gap: 10px 11px;
+    width: 300px; box-sizing: border-box; padding: 13px 14px 12px; border: 1px solid color-mix(in srgb, #7b5cff 40%, var(--nmx-border)); border-radius: 12px;
+    color: var(--nmx-text); background: var(--nmx-panel); box-shadow: 0 14px 34px rgba(0, 0, 0, .28); animation: nmx-library-hint-in 260ms cubic-bezier(.2, .8, .2, 1);
+}
+.nmx-shell .nmx-comic-library-hint::before {
+    content: ''; position: absolute; top: -6px; inset-inline-end: 34px; width: 10px; height: 10px; border-top: 1px solid color-mix(in srgb, #7b5cff 40%, var(--nmx-border));
+    border-left: 1px solid color-mix(in srgb, #7b5cff 40%, var(--nmx-border)); background: var(--nmx-panel); transform: rotate(45deg);
+}
+.nmx-shell .nmx-comic-library-hint-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: #fff; background: linear-gradient(135deg, #7b5cff, #d9468b); }
+.nmx-shell .nmx-comic-library-hint > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.nmx-shell .nmx-comic-library-hint strong { font-size: 13px; font-weight: 600; }
+.nmx-shell .nmx-comic-library-hint p { margin: 0; color: var(--nmx-muted); font-size: 12px; line-height: 1.55; }
+.nmx-shell .nmx-comic-library-hint > button {
+    grid-column: 2; justify-self: end; height: 26px; margin: 0; padding: 0 12px; border: 1px solid var(--nmx-border); border-radius: 999px;
+    color: var(--nmx-text); background: var(--nmx-panel-2); font-size: 12px; cursor: pointer;
+}
+.nmx-shell .nmx-comic-library-hint > button:hover { border-color: color-mix(in srgb, #7b5cff 55%, var(--nmx-border)); }
+@keyframes nmx-library-hint-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+/* The flying copy lives on document.body (outside the widget), so it carries its own colours. */
+.nmx-comic-library-ghost {
+    position: fixed; z-index: 2147483000; display: grid; place-items: center; overflow: hidden; box-sizing: border-box; border-radius: 10px; pointer-events: none;
+    transform-origin: center; box-shadow: 0 12px 30px rgba(0, 0, 0, .35); will-change: transform, opacity;
+}
+.nmx-comic-library-ghost > :is(img, canvas) { display: block; width: 100%; height: 100%; object-fit: cover; }
+.nmx-comic-library-ghost.is-icon { border: 1px solid rgba(255, 255, 255, .16); border-radius: 14px; color: #fff; background: linear-gradient(135deg, #14b8a6, #6366f1); }
+.nmx-comic-library-ghost.is-icon > .codicon { font-size: 22px; }
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell .nmx-comic-chat-header .nmx-studio-desk.has-hint, .nmx-shell .nmx-comic-library-hint { animation: none; }
+}
+.nmx-shell .nmx-comic-chat-header .nmx-comic-chat-folder-open {
+    display: inline-flex; align-items: center; gap: 5px; margin: 0; padding: 1px 6px; border: 0; border-radius: 6px;
+    color: var(--nmx-muted); background: transparent; font-size: 11.5px; line-height: 1.4; cursor: pointer;
+    transition: color 120ms ease, background-color 120ms ease;
+}
+.nmx-shell .nmx-comic-chat-header .nmx-comic-chat-folder-open:is(:hover, :focus-visible) {
+    color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 7%, transparent);
+}
+.nmx-shell .nmx-desk.is-chat-edit {
+    grid-template-rows: minmax(0, 1fr);
+}

@@ -1,0 +1,45 @@
+{
+  "nodePtyVersion": "1.2.0-beta.14",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "installed": {
+    "pty.node": {
+      "path": "node_modules/.pnpm/node-pty@1.2.0-beta.14/node_modules/node-pty/prebuilds/darwin-arm64/pty.node",
+      "bytes": 86904,
+      "architecture": "macho-100000c",
+      "sha256": "72ea0c3d8bdaa7fdb850ab28d09caa900b653f6b3a6db3db243624c671047e37",
+      "nodePtyVersion": "1.2.0-beta.14"
+    },
+    "spawn-helper": {
+      "path": "node_modules/.pnpm/node-pty@1.2.0-beta.14/node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper",
+      "bytes": 50480,
+      "architecture": "macho-100000c",
+      "sha256": "926dfd78b6a4967a40f1e2fe85f6978237096ecfd55735c29de1ad38bba34deb",
+      "nodePtyVersion": "1.2.0-beta.14"
+    }
+  },
+  "packagedVersions": [
+    "1.2.0-beta.14"
+  ],
+  "packaged": {
+    "pty.node": {
+      "path": "apps/desktop/release/mac-arm64/NextMux.app/Contents/Resources/app.asar.unpacked/lib/prebuilds/darwin-arm64/pty.node",
+      "bytes": 86904,
+      "architecture": "macho-100000c",
+      "sha256": "72ea0c3d8bdaa7fdb850ab28d09caa900b653f6b3a6db3db243624c671047e37",
+      "nodePtyVersion": "1.2.0-beta.14",
+      "sourceSha256Match": true,
+      "signedVariation": false
+    },
+    "spawn-helper": {
+      "path": "apps/desktop/release/mac-arm64/NextMux.app/Contents/Resources/app.asar.unpacked/lib/prebuilds/darwin-arm64/spawn-helper",
+      "bytes": 50480,
+      "architecture": "macho-100000c",
+      "sha256": "926dfd78b6a4967a40f1e2fe85f6978237096ecfd55735c29de1ad38bba34deb",
+      "nodePtyVersion": "1.2.0-beta.14",
+      "sourceSha256Match": true,
+      "signedVariation": false
+    }
+  },
+  "packagedResources": "apps/desktop/release/mac-arm64/NextMux.app/Contents/Resources"
+}

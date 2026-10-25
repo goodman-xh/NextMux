@@ -1,0 +1,62 @@
+{
+  "name": "@steipete/macos-automator-mcp",
+  "version": "0.4.7",
+  "description": "MCP Server to execute AppleScript and JXA on macOS.",
+  "keywords": [
+    "applescript",
+    "automation",
+    "jxa",
+    "macos",
+    "mcp"
+  ],
+  "homepage": "https://github.com/steipete/macos-automator-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/steipete/macos-automator-mcp/issues"
+  },
+  "license": "MIT",
+  "author": "steipete",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/steipete/macos-automator-mcp.git"
+  },
+  "bin": {
+    "macos-automator-mcp": "dist/server.js"
+  },
+  "files": [
+    "dist/**/*",
+    "knowledge_base/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/server.ts",
+    "start": "node dist/server.js",
+    "lint": "pnpm format:check && oxlint --deny-warnings src tests scripts",
+    "format": "oxfmt --write .",
+    "validate": "tsx scripts/validate-kb.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "format:check": "oxfmt --check ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "fuse.js": "^7.5.0",
+    "gray-matter": "^4.0.3",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "oxfmt": "^0.65.0",
+    "oxlint": "^1.80.0",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "packageManager": "pnpm@11.24.0"
+}

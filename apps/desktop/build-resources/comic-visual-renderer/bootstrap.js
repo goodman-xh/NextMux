@@ -1,0 +1,1 @@
+comicVisualHost.onCommand(async(meta,bytes)=>{try{const result=await ComicVisual.comicVisualWorkerCommand(meta,bytes);comicVisualHost.result(result);}catch(error){comicVisualHost.result(null,error instanceof Error?error.message:String(error));}});comicVisualHost.ready();

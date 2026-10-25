@@ -1,0 +1,143 @@
+{
+  "name": "@nextmux/comic-core",
+  "version": "0.1.0-alpha.3",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    "./composition": {
+      "types": "./lib/composition.d.ts",
+      "default": "./lib/composition.js"
+    },
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./voice": {
+      "types": "./lib/voice.d.ts",
+      "default": "./lib/voice.js"
+    },
+    "./adaptation": {
+      "types": "./lib/adaptation-brief.d.ts",
+      "default": "./lib/adaptation-brief.js"
+    },
+    "./music-mv": {
+      "types": "./lib/music-mv.d.ts",
+      "default": "./lib/music-mv.js"
+    },
+    "./default-titles": {
+      "types": "./lib/default-titles.d.ts",
+      "default": "./lib/default-titles.js"
+    },
+    "./media-timing": {
+      "types": "./lib/media-timing.d.ts",
+      "default": "./lib/media-timing.js"
+    },
+    "./canvas": {
+      "types": "./lib/canvas.d.ts",
+      "default": "./lib/canvas.js"
+    },
+    "./canvas-sequence": {
+      "types": "./lib/canvas-sequence.d.ts",
+      "default": "./lib/canvas-sequence.js"
+    },
+    "./canvas-timeline": {
+      "types": "./lib/canvas-timeline.d.ts",
+      "default": "./lib/canvas-timeline.js"
+    },
+    "./canvas-capabilities": {
+      "types": "./lib/canvas-capabilities.d.ts",
+      "default": "./lib/canvas-capabilities.js"
+    },
+    "./canvas-model-registry": {
+      "types": "./lib/canvas-model-registry.d.ts",
+      "default": "./lib/canvas-model-registry.js"
+    },
+    "./canvas-model-registry-aliases": {
+      "types": "./lib/canvas-model-registry-aliases.d.ts",
+      "default": "./lib/canvas-model-registry-aliases.js"
+    },
+    "./canvas-model-registry-routes": {
+      "types": "./lib/canvas-model-registry-routes.d.ts",
+      "default": "./lib/canvas-model-registry-routes.js"
+    },
+    "./canvas-project": {
+      "types": "./lib/canvas-project.d.ts",
+      "default": "./lib/canvas-project.js"
+    },
+    "./pipeline": {
+      "types": "./lib/pipeline.d.ts",
+      "default": "./lib/pipeline.js"
+    },
+    "./canvas-camera": {
+      "types": "./lib/canvas-camera.d.ts",
+      "default": "./lib/canvas-camera.js"
+    },
+    "./canvas-batch-import": {
+      "types": "./lib/canvas-batch-import.d.ts",
+      "default": "./lib/canvas-batch-import.js"
+    },
+    "./canvas-characters": {
+      "types": "./lib/canvas-characters.d.ts",
+      "default": "./lib/canvas-characters.js"
+    },
+    "./canvas-character-generation": {
+      "types": "./lib/canvas-character-generation.d.ts",
+      "default": "./lib/canvas-character-generation.js"
+    },
+    "./canvas-authoring": {
+      "types": "./lib/canvas-authoring.d.ts",
+      "default": "./lib/canvas-authoring.js"
+    },
+    "./project-organizer": {
+      "types": "./lib/project-organizer.d.ts",
+      "default": "./lib/project-organizer.js"
+    },
+    "./canvas-registry": {
+      "types": "./lib/canvas-registry.d.ts",
+      "default": "./lib/canvas-registry.js"
+    },
+    "./canvas-image-presets": {
+      "types": "./lib/canvas-image-presets.d.ts",
+      "default": "./lib/canvas-image-presets.js"
+    },
+    "./canvas-image-tools": {
+      "types": "./lib/canvas-image-tools.d.ts",
+      "default": "./lib/canvas-image-tools.js"
+    },
+    "./canvas-image-tool-routes": {
+      "types": "./lib/canvas-image-tool-routes.d.ts",
+      "default": "./lib/canvas-image-tool-routes.js"
+    },
+    "./director-scene": {
+      "types": "./lib/director-scene.d.ts",
+      "default": "./lib/director-scene.js"
+    },
+    "./director-catalogue": {
+      "types": "./lib/director-catalogue.d.ts",
+      "default": "./lib/director-catalogue.js"
+    },
+    "./canvas-continuity": {
+      "types": "./lib/canvas-continuity.d.ts",
+      "default": "./lib/canvas-continuity.js"
+    },
+    "./visual-effects": {
+      "types": "./lib/visual-effects.d.ts",
+      "default": "./lib/visual-effects.js"
+    },
+    "./visual-renderer": {
+      "types": "./lib/visual-effects/renderer.d.ts",
+      "default": "./lib/visual-effects/renderer.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "pnpm build && tsc -p tsconfig.json",
+    "test": "pnpm build && node --test --experimental-strip-types test/*.test.mts"
+  },
+  "dependencies": {
+    "proper-lockfile": "4.1.2"
+  }
+}

@@ -1,0 +1,58 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+storeDir: .pnpm-store
+
+# Theia's bundle-plugin resolves Electron and node-pty from its own module
+# context. pnpm 11 keeps package-manager settings in this workspace manifest;
+# public hoisting makes the pinned native ABI visible without a NODE_PATH hack.
+publicHoistPattern:
+  - electron
+  - node-pty
+
+overrides:
+  '@theia/ffmpeg': "link:packages/theia-ffmpeg-portable"
+  'app-builder-lib@26.15.3>@electron/get': "5.1.0"
+  drivelist: "link:packages/drivelist-portable"
+  node-pty: "1.2.0-beta.14"
+
+allowBuilds:
+  '@ffmpeg-installer/darwin-arm64': true
+  '@ffmpeg-installer/darwin-x64': true
+  '@ffmpeg-installer/linux-arm': false
+  '@ffmpeg-installer/linux-arm64': false
+  '@ffmpeg-installer/linux-ia32': false
+  '@ffmpeg-installer/linux-x64': false
+  '@parcel/watcher': true
+  '@qwen-code/cua-sdk': false # the desktop app ships its own driver under apps/desktop/build-resources/computer-runtime
+  '@vscode/windows-ca-certs': false
+  drivelist: false
+  electron-winstaller: true
+  esbuild: true
+  keytar: true
+  msgpackr-extract: true
+  native-keymap: false
+  node-pty: true
+  onnxruntime-node: false # CPU binaries are shipped by npm; skip optional CUDA downloads.
+  puppeteer: true
+  tesseract.js: false
+
+minimumReleaseAgeExclude:
+  - '@ai-sdk/amazon-bedrock@5.0.71'
+  - '@ai-sdk/anthropic@4.0.47'
+  - '@ai-sdk/azure@4.0.58'
+  - '@ai-sdk/deepseek@3.0.38'
+  - '@ai-sdk/google-vertex@5.0.73'
+  - '@ai-sdk/google@4.0.61'
+  - '@ai-sdk/openai-compatible@3.0.42'
+  - '@ai-sdk/openai@4.0.55'
+  - '@ai-sdk/provider-utils@5.0.35'
+  - '@ai-sdk/provider@4.0.10'
+  - '@anthropic-ai/sandbox-runtime@0.0.77'
+
+patchedDependencies:
+  '@theia/ai-mcp@1.74.1': patches/@theia__ai-mcp@1.74.1.patch
+  '@theia/core@1.74.1': patches/@theia+core@1.74.1.patch
+  'app-builder-lib@26.15.3': patches/app-builder-lib@26.15.3.patch
+  xterm@5.3.0: patches/xterm@5.3.0.patch

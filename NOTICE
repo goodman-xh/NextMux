@@ -1,0 +1,17 @@
+NextMux
+Copyright 2026 NextMux contributors
+
+This product includes software developed by third parties. Their licences and
+notices remain applicable to their respective components.
+
+The OpenRouter reasoning-detail fragment accumulation in
+packages/model-runtime/src/openrouter.ts is adapted from
+OpenRouterTeam/ai-sdk-provider, src/chat/index.ts, revision
+1b22b05352cb0f9243a6c3fdd326038dd3705544, licensed under Apache-2.0:
+https://github.com/OpenRouterTeam/ai-sdk-provider
+NextMux adds bounded local state and preserves distinct block identities.
+
+Plugin title and OCR matching uses RE2JS 2.8.6, copyright (c) 2023
+Oleksii Vasyliev, under the MIT License:
+https://github.com/le0pard/re2js
+The full license is distributed with the re2js dependency (LICENSE).

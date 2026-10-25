@@ -1,0 +1,68 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {fileURLToPath} from 'node:url';
+import {readFile,mkdir,writeFile} from 'node:fs/promises';
+import {createRequire} from 'node:module';
+const base=fileURLToPath(new URL('../../../',import.meta.url)).replace(/\/$/,''),pkg=base+'/packages/theia-nextmux-extension',src=pkg+'/src/browser';
+const req=createRequire(pkg+'/package.json'),core=createRequire(req.resolve('@theia/core/package.json')),desktop=createRequire(base+'/apps/desktop/package.json'),platform=createRequire(base+'/apps/cloudflare-platform/package.json');
+const ts=req('typescript'),puppeteer=(await import(platform.resolve('puppeteer'))).default;
+const source=ts.createSourceFile('canvas.tsx',await readFile(src+'/nextmux-comic-canvas.tsx','utf8'),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+const functions=['withCameraState','capabilityInputs','nodeProblems','statusOf','InlineCanvasText','ReferenceMedia','ReferenceInputs','GenerationPanel','DurationField'].map(name=>source.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name).getText(source)).join('\n');
+test('first-frame aspect repair and footer controls receive real pointer clicks beside the canvas dock', {timeout:60000}, async t=>{
+const {outputFiles}=await desktop('esbuild').build({stdin:{loader:'tsx',resolveDir:src,contents:`
+import React from 'react';import {createRoot} from 'react-dom/client';
+import {createCanvasDocument,applyCanvasCommand,resolveCanvasInputs} from '@nextmux/comic-core/canvas';
+import {assertCanvasContinuityInputs} from '@nextmux/comic-core/canvas-continuity';
+import {continuityText} from './nextmux-comic-continuity-text';
+import {CanvasFloatingForm} from './nextmux-comic-canvas-float';
+import {CameraControl,CameraTags} from './nextmux-comic-canvas-camera';
+import {composeCanvasCameraPrompt,deriveCanvasCameraPrompt} from './nextmux-comic-canvas-camera-state';
+import {CanvasRouteSelector,useCanvasRouteSelection} from './nextmux-comic-canvas-route-selector';
+import {canvasLibraryReferenceRoles,removeCanvasDirectReference} from './nextmux-comic-canvas-reference-inputs';
+import {comicAssetLibraryText} from './nextmux-comic-asset-library-text';
+import {isCanvasDurationValid,reconcileCanvasGenerationParameters,resolveCanvasCapability,resolveCanvasGenerationOptions,validateCanvasGenerationParameters} from '@nextmux/comic-core/canvas-capabilities';
+import {createCanvasNode,canvasMediaCardSize,canvasCurrentVersion,canvasVersionReady,deleteFromCanvas,canvasLatestJob,canvasPendingUpstream,CANVAS_ACTIVE_JOB} from './nextmux-comic-canvas-logic';
+import {canvasText,canvasIssueText} from './nextmux-comic-canvas-text';
+import {ImeInput,ImeTextarea} from './nextmux-ime-field';
+import {panelText} from './nextmux-comic-canvas-panels-text';
+import {storyboardText} from './nextmux-comic-canvas-storyboard-text';
+import {canvasOptionAdjustments,canvasOptionsText} from './nextmux-comic-canvas-options-text';
+import {fitCanvasNodeOptions,switchCanvasModeKeepingInputs} from './nextmux-comic-canvas-options';
+import {ReactFlowProvider} from '@xyflow/react';
+import {CanvasViewControls} from './nextmux-comic-canvas-view-controls';
+import {normalizeCanvasSettings} from './nextmux-comic-canvas-settings';
+import {connectCanvasNodes} from './nextmux-comic-canvas-logic';
+const CanvasContext=React.createContext(undefined),now=()=>new Date().toISOString();
+${functions}
+const output={id:'768p',resolution:'768p',aspectRatios:['16:9','3:4'],defaultAspectRatio:'16:9',requestAudioOverride:false};
+const shape=(aspectRatio,width,height,firstFrame)=>({aspectRatio,width,height,firstFrame,lastFrame:false,durationSeconds:15,referenceImages:0,requestAudio:false});
+const mode={mode:'textToVideo',defaultResolution:'768p',duration:{kind:'fixed',seconds:15},audioGeneration:{mode:'required',defaultEnabled:true},outputVariants:[{...output,requestShapes:[shape('16:9',1366,768,false),shape('3:4',768,1024,false)]}]};
+const capability={id:'fixture',providerId:'fixture',providerModelId:'fixture',displayName:'Fixture',status:'available',version:'v1',modes:[mode,{...mode,mode:'imageToVideo',firstFrame:true,outputVariants:[{...output,aspectRatios:['auto'],defaultAspectRatio:'auto',derivedAspectRatio:{inputRole:'firstFrame',aspectRatios:['16:9','3:4'],tolerance:.02,allowOmission:false},requestShapes:[shape('16:9',1366,768,true),shape('3:4',768,1024,true)]}]}]};
+const route={key:'route',modelId:'fixture',source:'Fixture relay',sourceKind:'relay',sourceKey:'fixture',sourceLabel:'Fixture relay',available:true};
+const node=createCanvasNode('videoGen',{x:0,y:0},{title:'Review video',aspectRatio:'16:9'});
+node.payload={...node.payload,modelId:'fixture',prompt:'[Authored scene note]\\n验收测试：清晨街道，一名角色缓慢转身。\\n\\n【分镜1】【时间】0.0s-5.0s【运镜】拉近 · 正常【角色转身】',mode:'textToVideo',parameters:{resolution:'768p',aspectRatio:'16:9',durationSeconds:15,generateAudio:true}};
+const image='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1376"><rect width="1024" height="1376" fill="#ac89cb"/></svg>');
+const frame={id:'frame',kind:'image',title:'Portrait',position:{x:0,y:-400},size:{width:300,height:400},payload:{currentVersionId:'v',versions:[{id:'v',assetId:'a',kind:'image',uri:image,createdAt:now(),metadata:{width:1024,height:1376,mimeType:'image/jpeg'}}]}};
+let doc=applyCanvasCommand(createCanvasDocument({id:'canvas',projectId:'fixture'}),{type:'node.add',node});doc=applyCanvasCommand(doc,{type:'node.add',node:frame});
+const changes=[],owner={locale:'zh-CN',canvas:doc,mediaUrl:uri=>uri,submitting:new Set(),waiting:new Set(),jobOf:()=>undefined,routeOf:()=>route,capabilityOf:()=>({capability}),families:{image:[],video:[{id:'family',name:'Fixture video',available:true,routes:[route]}]},onChange(next){owner.canvas=next;changes.push(next);render();},onNotice:()=>{},onSetRoute:()=>{}};
+const root=createRoot(document.querySelector('#fixture-root')),board=React.createRef();
+function render(){root.render(<ReactFlowProvider><CanvasContext.Provider value={{props:owner,selectNode:()=>{},pickReference:()=>{},change:next=>owner.onChange(next),t:(key,args)=>canvasText('zh-CN',key,args),run:()=>{},openStoryboard:()=>{}}}><div ref={board} className='nmx-board'><div className='nmx-board-panel-layer' style={{position:'absolute',left:309,top:350}}><CanvasFloatingForm locale='zh-CN' title='Review video'><GenerationPanel node={owner.canvas.nodes[0]}/></CanvasFloatingForm></div><CanvasViewControls locale='zh-CN' root={board} settings={normalizeCanvasSettings({})} onSettings={()=>{}} compareCount={0} onCompare={()=>{}} onSelectAll={()=>{}}/></div></CanvasContext.Provider></ReactFlowProvider>);}
+window.review={owner,changes,attach(){const result=connectCanvasNodes(owner.canvas,'frame',node.id,now(),'firstFrame');if(result.error)throw Error(result.error);owner.onChange(result.canvas);}};render();
+`},bundle:true,write:false,platform:'browser',format:'iife',loader:{'.css':'empty'},alias:{'react/jsx-runtime':core.resolve('react/jsx-runtime'),react:core.resolve('react'),'react-dom/client':core.resolve('react-dom/client'),'@nextmux/comic-core/canvas':base+'/packages/comic-core/src/canvas.ts','@nextmux/comic-core/canvas-camera':base+'/packages/comic-core/src/canvas-camera.ts','@nextmux/comic-core/canvas-capabilities':base+'/packages/comic-core/src/canvas-capabilities.ts'}});
+const browser=await puppeteer.launch({headless:true});t.after(()=>browser.close());const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.setViewport({width:1411,height:818});await page.setRequestInterception(true);page.on('request',r=>void r.respond({status:200,contentType:'text/html',body:'<main class="nmx-shell"><section class="nmx-comic-studio"><div class="nmx-desk is-canvas" id="fixture-root"></div></section></main>'}));await page.goto('https://canvas-repair.test/');
+for(const name of ['nextmux-comic-canvas.css','nextmux-comic-canvas-float.css','nextmux-comic-canvas-view-controls.css','nextmux-comic-canvas-camera.css','nextmux.css','nextmux-desktop-production.css','nextmux-comic-desk.css','nextmux-comic-studio.css'])await page.addStyleTag({content:await readFile(src+'/style/'+name,'utf8')});
+// Match the reported workbench and node anchor. All form/media/dock dimensions use production CSS.
+await page.addStyleTag({content:'body{margin:0;background:#171717}main.nmx-shell{display:block;width:1411px;height:818px}main>.nmx-comic-studio{height:818px}#fixture-root{width:1411px;height:818px}#fixture-root>.nmx-board{position:fixed;left:276px;top:123px;width:1135px;height:695px}main{--nmx-bg:#171717;--nmx-panel:#212121;--nmx-panel-2:#292929;--nmx-border:#3d3d3d;--nmx-muted:#aaa;--nmx-text:#eee;--cv-float:#212121;font:13px system-ui}'});
+await page.addScriptTag({content:outputFiles[0].text});await page.waitForSelector('.nmx-board-panel');await page.waitForFunction(()=>!document.querySelector('.nmx-board-generate').disabled);
+await page.evaluate(()=>window.review.attach());await page.waitForSelector('.nmx-board-problems button');
+await page.waitForFunction(()=>[...document.querySelectorAll('.nmx-board-reference-inputs img')].every(img=>img.complete&&img.naturalWidth>0));
+const geometry=await page.$eval('.nmx-board-problems button',button=>{const r=button.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2),rect=el=>{const r=el.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height}};return{button:rect(button),dock:rect(document.querySelector('.nmx-board-view-capsule')),form:rect(document.querySelector('.nmx-board-panel')),footer:rect(document.querySelector('.nmx-board-panel-row')),hit:hit?.className,hittable:button.contains(hit),beforeFooter:button.closest('.nmx-board-problems').nextElementSibling?.classList.contains('nmx-board-panel-row')};});
+const dir=base+'/.nextmux-run/canvas-generation-repair-hit';await mkdir(dir,{recursive:true});await writeFile(dir+'/geometry.json',JSON.stringify(geometry,null,2));await page.screenshot({path:dir+'/before-repair.png'});
+assert.equal(geometry.hittable,true,JSON.stringify(geometry));assert.equal(geometry.beforeFooter,true,'validation and repair precede the footer');assert.equal(await page.$eval('.nmx-board-generate',el=>el.disabled),true);
+const hits=await page.$$eval('.nmx-board-generation-actions select, .nmx-board-panel-row select, .nmx-board-panel-row > button, .nmx-board-panel-row input',els=>els.map(el=>{const r=el.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return{label:el.getAttribute('aria-label'),y:r.y,height:r.height,hittable:el.contains(hit),hit:hit?.className};}));assert.ok(hits.length>=6);assert.ok(hits.every(h=>h.hittable),JSON.stringify(hits));await writeFile(dir+'/geometry.json',JSON.stringify({...geometry,footerControls:hits},null,2));
+assert.equal(await page.evaluate(()=>window.review.owner.canvas.nodes[0].payload.mode),'imageToVideo','actual first-frame attachment switches the mode');
+assert.deepEqual(await page.evaluate(()=>window.review.owner.canvas.nodes[0].payload.parameters),{resolution:'768p',aspectRatio:'16:9',durationSeconds:15,generateAudio:true},'binding retains settings until the user requests repair');
+await page.click('.nmx-board-problems button');await page.waitForFunction(()=>!document.querySelector('.nmx-board-problems')&&!document.querySelector('.nmx-board-generate').disabled);
+assert.deepEqual(await page.evaluate(()=>window.review.owner.canvas.nodes[0].payload.parameters),{resolution:'768p',aspectRatio:'auto',durationSeconds:15,generateAudio:true});
+assert.equal(await page.evaluate(()=>window.review.owner.canvas.edges.length),1,'the first-frame binding is preserved');assert.deepEqual(errors,[]);await page.screenshot({path:dir+'/after-repair.png'});
+});

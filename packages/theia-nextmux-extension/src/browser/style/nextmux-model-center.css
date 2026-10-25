@@ -1,0 +1,238 @@
+/* Model Center is a directory, not a second composer. Keep this surface scoped. */
+.nmx-mc-directory {
+    --mc-surface: #252427;
+    --mc-text: #f0edf0;
+    --mc-muted: #b7b0bb;
+    --mc-line: #514b56;
+    --mc-accent: #ee7ea5;
+    color: var(--mc-text);
+    min-width: 0;
+    container-type: inline-size;
+}
+.nmx-shell.nmx-theme-light .nmx-mc-directory,
+.theia-light .nmx-mc-directory {
+    --mc-surface: #fff;
+    --mc-text: #302b32;
+    --mc-muted: #6b606f;
+    --mc-line: #d7cedb;
+    --mc-accent: #a73862;
+}
+.nmx-shell .nmx-mc-directory button,
+.nmx-mc-directory button {
+    width: auto;
+    min-width: 0;
+    height: 30px;
+    margin: 0;
+    padding: 0 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: inherit;
+    background: transparent;
+    border: 1px solid transparent;
+    border-color: transparent !important; /* Retire the older light-theme universal border on these controls. */
+    border-radius: 5px;
+    box-shadow: none;
+    font: inherit;
+    font-size: 12px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.nmx-shell .nmx-mc-directory button:hover { background: color-mix(in srgb, var(--mc-text) 8%, transparent); }
+.nmx-shell .nmx-mc-directory button:focus-visible,
+.nmx-mc-hint:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; }
+.nmx-mc-directory-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 0 0 12px; color: var(--mc-muted); font-size: 12px; }
+.nmx-mc-directory-count { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.nmx-shell .nmx-mc-directory button.nmx-mc-directory-refresh,
+.nmx-mc-directory button.nmx-mc-directory-refresh { width: 22px; height: 22px; padding: 0; background: transparent !important; border: 0 !important; box-shadow: none !important; color: var(--mc-muted); border-radius: 4px; }
+.nmx-shell .nmx-mc-directory button.nmx-mc-directory-refresh:hover:not(:disabled),
+.nmx-mc-directory button.nmx-mc-directory-refresh:hover:not(:disabled) { color: var(--mc-text); background: transparent !important; box-shadow: none !important; }
+.nmx-shell .nmx-mc-directory .nmx-mc-hint.is-disabled,
+.nmx-mc-directory .nmx-mc-hint.is-disabled { cursor: not-allowed; }
+.nmx-shell .nmx-mc-directory button.nmx-mc-directory-refresh:disabled,
+.nmx-mc-directory button.nmx-mc-directory-refresh:disabled { opacity: .45; cursor: not-allowed; pointer-events: none; background: transparent !important; box-shadow: none !important; }
+.nmx-mc-directory-controls { display: flex; align-items: center; gap: 6px; }
+.nmx-mc-sort { display: flex; align-items: center; gap: 2px; }
+.nmx-mc-view-switch { display: flex; align-items: center; gap: 2px; padding-inline-start: 6px; border-inline-start: 1px solid var(--mc-line); }
+.nmx-shell .nmx-mc-sort button,
+.nmx-shell .nmx-mc-view-switch button { width: 28px; flex: 0 0 28px; padding: 0; }
+.nmx-shell .nmx-mc-sort button[aria-pressed='true'],
+.nmx-shell .nmx-mc-view-switch button[aria-pressed='true'] { color: var(--mc-accent); background: color-mix(in srgb, var(--mc-accent) 12%, transparent); }
+.nmx-mc-merchants { display: grid; gap: 8px; align-items: stretch; }
+.nmx-mc-merchant { min-width: 0; padding: 12px 14px; display: grid; grid-template-columns: minmax(140px, 1fr) 304px auto; align-items: center; gap: 12px; border: 1px solid var(--mc-line); border-color: var(--mc-line) !important; border-radius: 9px; background: var(--mc-surface); }
+.nmx-mc-identity { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+/* Long merchant names fade out at the inline end; the full name stays in the hover hint. */
+.nmx-mc-identity > .nmx-mc-hint { width: 100%; max-width: 100%; }
+.nmx-mc-identity strong { min-width: 0; flex: 1 1 auto; max-width: 100%; font-size: 14px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: clip; -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }
+.nmx-mc-capabilities { gap: 5px; flex-wrap: wrap; }
+.nmx-mc-capabilities small { border: 0; background: color-mix(in srgb, var(--mc-text) 5%, transparent); padding: 1px 4px; border-radius: 3px; }
+.nmx-mc-identity > span { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.nmx-mc-identity code, .nmx-mc-identity small { color: var(--mc-muted); font-size: 10px; }
+.nmx-mc-identity code { min-width: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }
+.nmx-shell .nmx-mc-identity button { padding: 0; width: 20px; height: 18px; }
+.nmx-mc-identity .codicon { color: var(--mc-muted); font-size: 12px; }
+.nmx-mc-metrics { display: grid; grid-template-columns: 64px 64px 80px 60px; align-items: center; gap: 12px; font-variant-numeric: tabular-nums; }
+.nmx-mc-metrics > .nmx-mc-hint { gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nmx-mc-metrics strong { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+/* Nothing measured yet ("—"): reads as absent, not as a value beside the measured ones. */
+.nmx-mc-metrics strong[data-unmeasured] { color: var(--mc-muted); font-weight: 400; }
+.nmx-mc-metrics .codicon { color: var(--mc-muted); font-size: 12px; flex-shrink: 0; }
+.nmx-mc-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.nmx-shell .nmx-mc-actions button[aria-pressed='true'] { color: var(--mc-accent); }
+.nmx-shell .nmx-mc-actions button[data-model-center-favorite]:hover,
+.nmx-shell .nmx-mc-actions button[data-model-center-favorite][aria-pressed='true'] { color: #e55373; }
+.nmx-mc-hint { display: inline-flex; min-width: 0; align-items: center; }
+.nmx-mc-tooltip { position: fixed; z-index: 200000; width: max-content; max-width: min(280px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; box-sizing: border-box; padding: 9px 11px; border: 1px solid #655b69; border-radius: 6px; background: #29242d; color: #f0edf0; box-shadow: 0 5px 18px #0004; font: 12px/1.55 system-ui, sans-serif; white-space: pre-line; overflow-wrap: anywhere; }
+.nmx-mc-directory-status { min-height: 32px; padding: 10px; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; color: var(--mc-muted); font-size: 12px; }
+.nmx-mc-directory-status.is-initial { min-height: min(56vh, 420px); }
+/* A favorite whose relay left the public directory: greyed, labelled, removable (U072). */
+.nmx-mc-merchant.is-unavailable { grid-template-columns: minmax(0, 1fr) auto; border-style: dashed; }
+.nmx-mc-merchant.is-unavailable .nmx-mc-identity > strong { color: var(--mc-muted); }
+.nmx-mc-merchants--grid { grid-template-columns: repeat(3, minmax(0, 1fr)); display: grid; gap: 12px; align-items: stretch; }
+.nmx-mc-merchants--grid > .nmx-mc-merchant { height: 100%; box-sizing: border-box; display: grid; grid-row: span 3; grid-template-rows: subgrid; grid-template-columns: minmax(0, 1fr); row-gap: 12px; align-items: stretch; }
+.nmx-mc-merchants--grid .nmx-mc-identity { grid-row: 1; grid-column: 1; min-width: 0; align-self: start; }
+.nmx-mc-merchants--grid .nmx-mc-metrics { grid-row: 2; grid-column: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: center; min-height: 24px; font-variant-numeric: tabular-nums; }
+.nmx-mc-merchants--grid .nmx-mc-actions { grid-row: 3; grid-column: 1; align-self: end; margin: 0; border-top: 1px solid var(--mc-line); padding-top: 8px; justify-content: space-between; }
+.nmx-mc-delisted { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border: 1px solid var(--mc-line); border-radius: 999px; font-size: 10px; line-height: 1; }
+.nmx-shell .nmx-mc-merchant.is-unavailable .nmx-mc-actions button { display: inline-flex; align-items: center; gap: 5px; width: auto; padding: 0 8px; color: var(--mc-muted); }
+.nmx-shell .nmx-mc-merchant.is-unavailable .nmx-mc-actions button:hover { color: var(--mc-text); }
+.nmx-workspace-scroll.nmx-model-center { position: relative; }
+/* The drawer layer spans only the Model Center content area (below its header). */
+.nmx-mc-drawer-layer { position: absolute; inset-inline: 0; bottom: 0; z-index: 1200; container-type: normal; overflow: hidden; pointer-events: none; }
+.nmx-mc-drawer-layer > .nmx-mc-drawer-backdrop { pointer-events: auto; }
+.nmx-mc-drawer-backdrop { position: absolute; inset: 0; z-index: 1200; background: #0005; display: flex; justify-content: flex-end; overflow: hidden; }
+.nmx-mc-drawer { display: flex; flex-direction: column; min-width: 0; width: min(480px, 100%); height: 100%; max-height: 100dvh; box-sizing: border-box; background: var(--mc-surface); color: var(--mc-text); border-inline-start: 1px solid var(--mc-line); box-shadow: -12px 0 45px #0002; }
+/* Radix/shadcn Sheet timing: 200 ms in, 160 ms out; opacity/transform only. */
+@keyframes nmx-mc-fade-in { from { opacity: 0; } }
+@keyframes nmx-mc-fade-out { to { opacity: 0; } }
+@keyframes nmx-mc-sheet-in { from { transform: translateX(24px); opacity: .6; } }
+@keyframes nmx-mc-sheet-out { to { transform: translateX(24px); opacity: 0; } }
+.nmx-mc-drawer-backdrop { animation: nmx-mc-fade-in 200ms cubic-bezier(.16, 1, .3, 1); }
+.nmx-mc-drawer-backdrop > .nmx-mc-drawer { animation: nmx-mc-sheet-in 200ms cubic-bezier(.16, 1, .3, 1); }
+.nmx-mc-drawer-backdrop.is-closing { animation: nmx-mc-fade-out 160ms ease-in forwards; pointer-events: none; }
+.nmx-mc-drawer-backdrop.is-closing > .nmx-mc-drawer { animation: nmx-mc-sheet-out 160ms ease-in forwards; }
+[dir='rtl'] .nmx-mc-drawer-backdrop > .nmx-mc-drawer { animation-name: nmx-mc-sheet-in-rtl; }
+[dir='rtl'] .nmx-mc-drawer-backdrop.is-closing > .nmx-mc-drawer { animation-name: nmx-mc-sheet-out-rtl; }
+@keyframes nmx-mc-sheet-in-rtl { from { transform: translateX(-24px); opacity: .6; } }
+@keyframes nmx-mc-sheet-out-rtl { to { transform: translateX(-24px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+    .nmx-mc-drawer-backdrop, .nmx-mc-drawer-backdrop > .nmx-mc-drawer { animation: none !important; }
+}
+.nmx-mc-model-list[aria-busy='true']:not(:has(.nmx-mc-model)) { display: flex; align-items: center; justify-content: center; }
+.nmx-mc-drawer > header { padding: 20px; display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.nmx-mc-drawer > header > div { min-width: 0; }
+.nmx-mc-drawer h3 { margin: 0 0 6px; font-size: 17px; font-weight: 550; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.nmx-mc-drawer > header code { display: block; color: var(--mc-muted); font-size: 11px; }
+/* The merchant's own store profile: a fixed two-line box under the shop name
+ * in the list, the full text in the drawer. */
+.nmx-mc-identity > .nmx-mc-hint:has(> .nmx-mc-tagline) { display: flex; max-width: 100%; }
+.nmx-mc-tagline {
+    margin: 2px 0 0;
+    min-height: calc(2 * 1.45em);
+    height: calc(2 * 1.45em);
+    box-sizing: border-box;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    color: var(--mc-muted);
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+.nmx-mc-tagline.is-empty { opacity: 0.68; }
+.nmx-mc-store { margin: -4px 20px 14px; padding: 10px 12px; border-radius: 8px; background: color-mix(in srgb, var(--mc-text) 4%, transparent); display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.nmx-mc-store > p { margin: 0; overflow-wrap: anywhere; }
+.nmx-mc-store-tagline { font-size: 13px; font-weight: 550; line-height: 1.45; color: var(--mc-text); }
+.nmx-mc-store-description { font-size: 12px; line-height: 1.6; color: var(--mc-muted); white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.nmx-mc-store-description.is-expanded { display: block; -webkit-line-clamp: unset; max-height: 30vh; overflow-y: auto; }
+.nmx-mc-directory .nmx-mc-store .nmx-mc-store-toggle { align-self: flex-start; padding: 0; height: auto; min-height: 0; border: 0; background: none; color: var(--mc-accent); font-size: 12px; cursor: pointer; }
+.nmx-mc-directory .nmx-mc-store .nmx-mc-store-toggle:focus-visible { outline: 2px solid var(--mc-accent); outline-offset: 2px; border-radius: 3px; }
+.nmx-mc-model-summary { display: flex; gap: 7px; padding: 0 20px 14px; color: var(--mc-muted); font-size: 12px; flex-wrap: wrap; align-items: center; }
+.nmx-mc-model-search { display: flex; align-items: center; gap: 8px; margin: 0 20px 12px; padding: 0 10px; min-height: 32px; border: 1px solid var(--mc-line); border-radius: 7px; background: var(--mc-surface); color: var(--mc-muted); flex-shrink: 0; }
+.nmx-mc-model-search:focus-within { border-color: var(--mc-accent); outline: 1px solid var(--mc-accent); }
+.nmx-shell .nmx-mc-directory .nmx-mc-model-search input { flex: 1; min-width: 0; width: 100%; height: 30px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; outline: none; color: var(--mc-text); font: inherit; font-size: 12px; }
+.nmx-shell .nmx-mc-directory .nmx-mc-model-search input::placeholder { color: var(--mc-muted); }
+.nmx-mc-model-categories { display: flex; overflow-x: auto; gap: 5px; padding: 0 16px 12px; border-bottom: 1px solid var(--mc-line); flex-shrink: 0; }
+.nmx-shell .nmx-mc-model-categories button[aria-pressed='true'] { background: color-mix(in srgb, var(--mc-accent) 14%, transparent); color: var(--mc-accent); }
+.nmx-mc-model-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; flex: 1; padding: 0 20px; }
+.nmx-mc-model-list > [data-model-center-model-sentinel] { height: 1px; width: 1px; flex: 0 0 1px; pointer-events: none; }
+.nmx-mc-model { border-bottom: 1px solid var(--mc-line); }
+.nmx-mc-model > .nmx-mc-hint { width: 100%; }
+.nmx-mc-model-price-head, .nmx-shell .nmx-mc-directory .nmx-mc-model-row { display: grid; grid-template-columns: minmax(0, 1.15fr) repeat(2, minmax(0, 1fr)); gap: 10px; text-align: start; }
+.nmx-mc-model-price-head { padding: 10px 20px; font-size: 10px; color: var(--mc-muted); }
+.nmx-shell .nmx-mc-directory .nmx-mc-model-row { height: auto; min-height: 54px; width: 100%; white-space: normal; padding: 10px 0; }
+.nmx-mc-model-name { min-width: 0; }
+.nmx-mc-model-name strong { font-size: 12px; font-weight: 550; overflow-wrap: anywhere; }
+.nmx-mc-model-name small { display: block; color: var(--mc-muted); font-size: 10px; margin-top: 4px; }
+.nmx-mc-model-evidence { white-space: nowrap; }
+.nmx-mc-price-preview { font-size: 10px; line-height: 1.5; color: var(--mc-muted); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.nmx-mc-price-preview small { display: block; font-size: 9px; margin-top: 3px; }
+.nmx-mc-price-preview > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.nmx-mc-model-expanded { padding-bottom: 12px; }
+.nmx-mc-model-expanded > code { color: var(--mc-muted); display: block; overflow-wrap: anywhere; font-size: 10px; margin: 5px 0 12px; }
+.nmx-mc-model table { table-layout: fixed; width: 100%; border-collapse: collapse; font-size: 11px; }
+.nmx-mc-model th, .nmx-mc-model td { padding: 5px 0; text-align: end; vertical-align: top; overflow-wrap: anywhere; font-weight: 400; }
+.nmx-mc-model th:first-child { text-align: start; color: var(--mc-muted); }
+.nmx-mc-model thead th { font-size: 10px; color: var(--mc-muted); }
+.nmx-mc-model th small { display: block; font-size: 10px; }
+.nmx-mc-model td small { display: block; font-size: 9px; color: var(--mc-muted); }
+.nmx-mc-model td { font-variant-numeric: tabular-nums; }
+.nmx-mc-model > p { font-size: 12px; color: var(--mc-muted); margin: 0; }
+.nmx-mc-drawer > footer { padding: 14px 20px 20px; border-top: 1px solid var(--mc-line); flex-shrink: 0; }
+.nmx-mc-drawer > footer p { margin: 0 0 12px; font-size: 11px; line-height: 1.6; color: var(--mc-muted); }
+@container (max-width: 800px) {
+    .nmx-mc-merchant { grid-template-columns: minmax(0, 1fr) auto; gap: 10px 14px; }
+    .nmx-mc-metrics { grid-column: 1; grid-row: 2; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .nmx-mc-actions { grid-column: 2; grid-row: 1 / 3; }
+}
+@container (max-width: 680px) {
+    .nmx-mc-merchants--grid { gap: 8px; }
+}
+@container (max-width: 550px) {
+    .nmx-mc-merchant { display: flex; flex-direction: column; align-items: stretch; padding: 12px; gap: 12px; }
+    .nmx-mc-metrics { gap: 8px; }
+    .nmx-mc-actions { border-top: 1px solid var(--mc-line); padding-top: 8px; justify-content: space-between; }
+    .nmx-mc-directory-toolbar { flex-wrap: wrap; }
+}
+@container (max-width: 460px) {
+    .nmx-mc-merchants--grid { gap: 6px; }
+}
+@media (max-height: 480px) {
+    /* The drawer only spans the tab content area: keep the model list usable. */
+    .nmx-mc-drawer > header { padding: 10px 16px 6px; }
+    .nmx-mc-drawer h3 { -webkit-line-clamp: 1; font-size: 15px; margin-bottom: 2px; }
+    .nmx-mc-model-search { min-height: 28px; margin-bottom: 6px; }
+    .nmx-shell .nmx-mc-directory .nmx-mc-model-search input { height: 26px; }
+    .nmx-mc-model-summary { padding-bottom: 4px; }
+    .nmx-mc-model-categories { padding-bottom: 6px; }
+    .nmx-mc-model-price-head { padding-block: 4px; }
+    .nmx-mc-drawer > footer { display: none; }
+    .nmx-mc-store { margin-bottom: 6px; padding: 6px 10px; }
+    .nmx-mc-store-description { -webkit-line-clamp: 2; }
+}
+
+/* The drawer keeps three columns on narrow phones. Tighten the row rhythm so
+ * long model names do not turn the picker into a tall, scrolling card stack. */
+@media (max-width: 360px) {
+    .nmx-mc-model-price-head,
+    .nmx-shell .nmx-mc-directory .nmx-mc-model-row {
+        grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, .8fr));
+        gap: 6px;
+    }
+    .nmx-shell .nmx-mc-directory .nmx-mc-model-row {
+        min-height: 44px;
+        padding-block: 6px;
+        line-height: 1.25;
+    }
+    .nmx-mc-model-name small { margin-top: 2px; }
+    .nmx-mc-price-preview { line-height: 1.25; }
+}

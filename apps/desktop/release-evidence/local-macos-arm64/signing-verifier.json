@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "platform": "darwin",
+  "architecture": "arm64",
+  "releaseDirectory": "/Users/xuhao/Desktop/nm/33/apps/desktop/release",
+  "signedRequired": false,
+  "checks": [],
+  "status": "unsigned-qualification-build"
+}

@@ -1,0 +1,4 @@
+.nmx-board-dock .nmx-board-dock-reveal[hidden] { display: none; }
+.nmx-board-dock.is-auto-hidden > :not(.nmx-board-dock-reveal) { display: none; }
+.nmx-board-dock.is-auto-hidden { padding: 3px 16px; }
+.nmx-board-dock.is-auto-hidden .nmx-board-dock-reveal { min-width: 40px; }

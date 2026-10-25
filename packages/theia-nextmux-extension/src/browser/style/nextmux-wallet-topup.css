@@ -1,0 +1,126 @@
+/* USD top-up sheet (Whop checkout). Base sheet, field, presets and footer rules live in nextmux.css. */
+
+.nmx-topup-sheet .nmx-topup-limits {
+    margin: 8px 0 0;
+    color: var(--nmx-muted);
+    font-size: 13px;
+}
+
+.nmx-topup-summary {
+    display: grid;
+    gap: 8px;
+    margin: 16px 0 0;
+    padding: 12px 14px;
+    border: 1px solid var(--nmx-border);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--nmx-text) 3%, var(--nmx-panel));
+    font-size: 14px;
+    text-align: start;
+}
+
+.nmx-topup-summary > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.nmx-topup-summary dt {
+    color: var(--nmx-subtle);
+}
+
+.nmx-topup-summary dd {
+    margin: 0;
+    color: var(--nmx-text);
+    font-variant-numeric: tabular-nums;
+    transition: opacity 160ms ease;
+}
+
+.nmx-topup-summary > .is-total {
+    padding-top: 8px;
+    border-top: 1px solid var(--nmx-border);
+}
+
+.nmx-topup-summary > .is-total dt {
+    color: var(--nmx-text);
+    font-weight: 600;
+}
+
+.nmx-topup-summary > .is-total dd {
+    font-size: 17px;
+    font-weight: 650;
+}
+
+.nmx-topup-sheet .nmx-topup-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    margin: 12px 0 0;
+    color: var(--nmx-muted);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.nmx-topup-note .codicon {
+    margin-top: 2px;
+    font-size: 13px;
+}
+
+.nmx-topup-payment.nmx-topup-checkout {
+    background: var(--nmx-dialog-background);
+}
+
+.nmx-topup-checkout .nmx-topup-payment-copy {
+    align-items: stretch;
+    text-align: center;
+}
+
+.nmx-topup-checkout .nmx-topup-payment-copy > span {
+    color: var(--nmx-subtle);
+    line-height: 1.55;
+}
+
+.nmx-topup-checkout .nmx-topup-summary {
+    margin-top: 10px;
+}
+
+.nmx-topup-checkout .nmx-topup-waiting,
+.nmx-topup-checkout .nmx-topup-success {
+    align-self: center;
+}
+
+.nmx-topup-checkout-mark {
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    margin: 0 auto 14px;
+    border-radius: 16px;
+    color: var(--nmx-text);
+    background: color-mix(in srgb, var(--nmx-text) 7%, var(--nmx-panel));
+    animation: nmx-topup-mark-in 220ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.nmx-topup-checkout-mark .codicon {
+    font-size: 24px;
+}
+
+.nmx-topup-checkout.is-credited .nmx-topup-checkout-mark {
+    color: var(--nmx-success);
+    background: color-mix(in srgb, var(--nmx-success) 12%, var(--nmx-panel));
+}
+
+.nmx-topup-checkout footer {
+    flex-wrap: wrap;
+}
+
+@keyframes nmx-topup-mark-in {
+    from { opacity: 0; transform: scale(.9); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nmx-topup-checkout-mark {
+        animation: none;
+    }
+}

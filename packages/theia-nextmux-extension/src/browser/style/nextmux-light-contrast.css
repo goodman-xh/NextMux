@@ -1,0 +1,27 @@
+/*
+ * Light theme: hovering or pressing a button never hides its label.
+ *
+ * Many hover rules were written for the dark theme (light grey label on a dark
+ * fill). In the light theme the hover fill is light, so those labels vanished,
+ * and filled black/red buttons lost their fill to the generic light hover.
+ * Loaded after the component sheets: plain buttons keep a dark label on hover;
+ * filled buttons keep their fill and only brighten a little. The guard has
+ * almost no specificity (:where), so a component that deliberately paints its
+ * own hover with !important (a gradient with a white icon) still wins, while
+ * dark-theme hover colours without !important no longer reach the light theme.
+ */
+:where(:is(.nmx-shell, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light) :where(button, [role='button']):where(:not(:disabled, .nmx-primary-button, .is-primary, .is-danger, .nmx-send-button, .nmx-comic-editor-mic.is-active, .nmx-zoom-button, .nmx-board-chips button.is-active, .nmx-board-marks-group button.is-on, .nmx-canvas-tabs-dialog button:last-child, .nmx-camera-confirm, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate)):is(:hover, :active) {
+    color: var(--nmx-text, #2d292b) !important;
+}
+
+:where(:is(.nmx-shell, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light) :where(button, [role='button']):where(:not(:disabled, .nmx-primary-button, .is-primary, .is-danger, .nmx-send-button, .nmx-comic-editor-mic.is-active, .nmx-zoom-button, .nmx-board-chips button.is-active, .nmx-board-marks-group button.is-on, .nmx-canvas-tabs-dialog button:last-child, .nmx-camera-confirm, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate)):is(:hover, :active) :where(i.codicon, svg) {
+    color: inherit !important;
+}
+
+:is(.nmx-shell, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light :is(.nmx-primary-button, button.is-primary, .nmx-send-button, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate):not(:disabled):is(:hover, :active) {
+    filter: brightness(1.14) saturate(1.05);
+}
+
+:is(.nmx-shell, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light button.is-danger:not(:disabled):is(:hover, :active) {
+    filter: brightness(0.94);
+}

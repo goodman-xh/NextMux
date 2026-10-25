@@ -1,0 +1,47 @@
+{
+  "name": "@qwen-code/open-computer-use",
+  "version": "0.2.3",
+  "description": "Cross-platform Computer Use MCP server launcher. After install, configure open-computer-use mcp.",
+  "license": "MIT",
+  "homepage": "https://github.com/QwenLM/open-computer-use",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/QwenLM/open-computer-use.git"
+  },
+  "bugs": {
+    "url": "https://github.com/QwenLM/open-computer-use/issues"
+  },
+  "keywords": [
+    "computer-use",
+    "mcp",
+    "macos",
+    "linux",
+    "windows",
+    "automation"
+  ],
+  "preferGlobal": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "open-computer-use": "bin/open-computer-use",
+    "open-computer-use-mcp": "bin/open-computer-use-mcp"
+  },
+  "scripts": {
+    "postinstall": "node ./scripts/postinstall.mjs"
+  },
+  "files": [
+    ".agents/plugins/marketplace.json",
+    "bin/",
+    "dist/Open Computer Use.app/",
+    "dist/linux/",
+    "dist/windows/",
+    "scripts/install-claude-mcp.sh",
+    "scripts/install-gemini-mcp.sh",
+    "scripts/install-config-helper.mjs",
+    "scripts/install-opencode-mcp.sh",
+    "scripts/postinstall.mjs",
+    "README.md",
+    "LICENSE"
+  ]
+}

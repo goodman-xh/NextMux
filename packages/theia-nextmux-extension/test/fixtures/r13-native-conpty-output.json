@@ -1,0 +1,18 @@
+[
+  {
+    "shell": "powershell",
+    "receipt": "windows-r13-bundled-engine-native-result.json",
+    "receiptSha256": "cfdb3b7aa2e70f46e6e1e7b4a570557b8da0b4dfa55f6fbbee6aee3cf47d6269",
+    "marker": "f094bca4-c46a-49bb-8dab-e0800602a08a",
+    "wire": "\u001b]777;NextMuxStart;f094bca4-c46a-49bb-8dab-e0800602a08a\u0007\u001b[?7l\u001b[?7hNMX_R12_EXIT_7_SECOND\r\n\u001b]0;\u7ba1\u7406\u5458: C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\u001b\\\u001b]777;NextMux;f094bca4-c46a-49bb-8dab-e0800602a08a;7\u0007NMX_R12_READY> ",
+    "scope": "Actual bundled ConPTY stream slice; includes prompt after completion; only UUID is remapped during replay."
+  },
+  {
+    "shell": "cmd",
+    "receipt": "windows-r13-bundled-cmd-r2-native-result.json",
+    "receiptSha256": "398c67558225e34e1e86767552780197cae3a57e0c965cd72328cdde0482de93",
+    "marker": "afda65a1-8d4a-431d-89f9-8765b8dd8f91",
+    "wire": "\u001b]777;NextMuxStart;afda65a1-8d4a-431d-89f9-8765b8dd8f91\u0007\u001b]0;\u7ba1\u7406\u5458: C:\\Windows\\System32\\cmd.exe\u001b\\\u001b]0;\u7ba1\u7406\u5458: C:\\Windows\\System32\\cmd.exe - cd  \"C:\\Users\\49674\\NextMux-Test\\antigravity-20261016\\win32-x64\\test-tmp\\r13-theia-conpty-bundled-native-cmd-r2\\cmd\" \u001b\\\u001b]0;\u7ba1\u7406\u5458: C:\\Windows\\System32\\cmd.exe\u001b\\\u001b]0;\u7ba1\u7406\u5458: C:\\Windows\\System32\\cmd.exe - cmd  /C \"\"C:\\Program Files\\nodejs\\node.exe\" \"-e\" \"process.stdout.write('NMX_R12_EXIT_7_SECOND\\n');process.exitCode=7\"\" \u001b\\\u001b[?7l\u001b[?7hNMX_R12_EXIT_7_SECOND\r\n\u001b]0;\u7ba1\u7406\u5458: C:\\Windows\\System32\\cmd.exe\u001b\\\u001b]0;\u7ba1\u7406\u5458: C:\\Windows\\System32\\cmd.exe - set  \"__nextmux_exit=7\" \u001b\\\u001b]0;\u7ba1\u7406\u5458: C:\\Windows\\System32\\cmd.exe\u001b\\\u001b]0;\u7ba1\u7406\u5458: C:\\Windows\\System32\\cmd.exe - powershell.exe  -NoLogo -NoProfile -NonInteractive -Command \"[Console]::Write([char]27 + ']777;NextMux;afda65a1-8d4a-431d-89f9-8765b8dd8f91;' + $env:__nextmux_exit + [char]7)\"\u001b\\\u001b]777;NextMux;afda65a1-8d4a-431d-89f9-8765b8dd8f91;7\u0007\u001b]0;\u7ba1\u7406\u5458: C:\\Windows\\System32\\cmd.exe\u001b\\\r\nNMX_R12_READY> ",
+    "scope": "Actual bundled ConPTY stream slice; includes prompt after completion; only UUID is remapped during replay."
+  }
+]

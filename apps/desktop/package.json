@@ -1,0 +1,316 @@
+{
+  "name": "@nextmux/desktop",
+  "productName": "NextMux",
+  "version": "0.1.0-alpha.5",
+  "packageManager": "pnpm@11.19.0",
+  "private": true,
+  "description": "Open-source AI coding and comic-drama desktop workbench with official and relay model routing.",
+  "author": "NextMux contributors",
+  "main": "bootstrap.cjs",
+  "license": "Apache-2.0",
+  "theia": {
+    "target": "electron",
+    "frontend": {
+      "config": {
+        "applicationName": "NextMux",
+        "defaultLocale": "zh-cn",
+        "defaultTheme": "dark",
+        "preferences": {
+          "application.confirmExit": "never",
+          "window.title": "NextMux"
+        },
+        "reloadOnReconnect": true,
+        "electron": {
+          "appUserModelId": "io.nextmux.desktop",
+          "uriScheme": "theia",
+          "showWindowEarly": true,
+          "windowOptions": {
+            "minWidth": 360,
+            "minHeight": 420,
+            "titleBarStyle": "hiddenInset",
+            "trafficLightPosition": {
+              "x": 12,
+              "y": 11
+            },
+            "backgroundColor": "#181818",
+            "webPreferences": {
+              "contextIsolation": true,
+              "sandbox": false,
+              "nodeIntegration": false,
+              "nodeIntegrationInWorker": false,
+              "backgroundThrottling": false,
+              "enableDeprecatedPaste": true,
+              "webviewTag": true
+            }
+          }
+        }
+      }
+    },
+    "backend": {
+      "config": {
+        "singleInstance": true,
+        "frontendConnectionTimeout": -1,
+        "configureProxyFromPreferences": true
+      }
+    },
+    "generator": {
+      "config": {
+        "preloadTemplate": "<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#181818;color:#eee9eb;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}.theia-preload{position:fixed;inset:0;background:#181818}.nextmux-splash{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;background:#181818;transition:opacity .24s ease}.nextmux-splash.is-light{background:#f7f6f6}.nextmux-splash-canvas{display:block;width:min(340px,48vmin);height:min(340px,48vmin)}.nextmux-splash.is-leaving{opacity:0}@media (prefers-reduced-motion:reduce){.nextmux-splash{transition:none}}</style><div id=\"nextmux-splash\" class=\"nextmux-splash\"><canvas class=\"nextmux-splash-canvas\" width=\"600\" height=\"600\" role=\"img\" aria-label=\"NextMux\"></canvas></div><script src=\"./nextmux-splash/nextmux-splash.js\"></script>"
+      }
+    }
+  },
+  "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.77",
+    "@ffmpeg-installer/ffmpeg": "1.1.0",
+    "@nextmux/theia-extension": "workspace:*",
+    "@parcel/watcher": "2.6.0",
+    "@qwen-code/cua-sdk": "0.20.9",
+    "@theia/ai-core": "1.74.1",
+    "@theia/ai-mcp": "1.74.1",
+    "@theia/ai-mcp-ui": "1.74.1",
+    "@theia/bulk-edit": "1.74.1",
+    "@theia/callhierarchy": "1.74.1",
+    "@theia/console": "1.74.1",
+    "@theia/core": "1.74.1",
+    "@theia/debug": "1.74.1",
+    "@theia/editor": "1.74.1",
+    "@theia/editor-preview": "1.74.1",
+    "@theia/electron": "1.74.1",
+    "@theia/file-search": "1.74.1",
+    "@theia/filesystem": "1.74.1",
+    "@theia/keymaps": "1.74.1",
+    "@theia/markers": "1.74.1",
+    "@theia/messages": "1.74.1",
+    "@theia/monaco": "1.74.1",
+    "@theia/monaco-editor-core": "1.108.201",
+    "@theia/navigator": "1.74.1",
+    "@theia/notebook": "1.74.1",
+    "@theia/outline-view": "1.74.1",
+    "@theia/output": "1.74.1",
+    "@theia/plugin-ext": "1.74.1",
+    "@theia/plugin-ext-vscode": "1.74.1",
+    "@theia/preferences": "1.74.1",
+    "@theia/process": "1.74.1",
+    "@theia/scm": "1.74.1",
+    "@theia/scm-extra": "1.74.1",
+    "@theia/search-in-workspace": "1.74.1",
+    "@theia/task": "1.74.1",
+    "@theia/terminal": "1.74.1",
+    "@theia/test": "1.74.1",
+    "@theia/timeline": "1.74.1",
+    "@theia/typehierarchy": "1.74.1",
+    "@theia/userstorage": "1.74.1",
+    "@theia/variable-resolver": "1.74.1",
+    "@theia/vsx-registry": "1.74.1",
+    "@theia/workspace": "1.74.1",
+    "@vscode/ripgrep": "1.18.0",
+    "@vscode/tree-sitter-wasm": "0.3.1",
+    "electron-updater": "6.8.9",
+    "node-pty": "1.2.0-beta.14",
+    "onnxruntime-node": "1.22.0",
+    "puppeteer-core": "25.1.0",
+    "re2js": "2.8.6",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "reflect-metadata": "0.2.2",
+    "trash": "7.2.0",
+    "typescript": "6.0.3"
+  },
+  "optionalDependencies": {
+    "@parcel/watcher-darwin-arm64": "2.6.0",
+    "@parcel/watcher-darwin-x64": "2.6.0",
+    "@parcel/watcher-win32-arm64": "2.6.0",
+    "@parcel/watcher-win32-x64": "2.6.0",
+    "@vscode/ripgrep-darwin-arm64": "1.18.0",
+    "@vscode/ripgrep-darwin-x64": "1.18.0",
+    "@vscode/ripgrep-win32-arm64": "1.18.0",
+    "@vscode/ripgrep-win32-x64": "1.18.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "4.1.0",
+    "@theia/bundle-plugin": "1.74.1",
+    "@theia/cli": "1.74.1",
+    "electron": "42.3.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "0.28.2",
+    "esbuild-plugin-copy": "2.1.1",
+    "esbuild-plugins-node-modules-polyfill": "1.8.3",
+    "resolve-package-path": "4.0.3",
+    "yargs": "17.7.3"
+  },
+  "scripts": {
+    "build": "pnpm run build:dev",
+    "build:dev": "node ../../scripts/build-native-speech.mjs && node ../../scripts/build-native-display.mjs && pnpm run electron:download && pnpm run rebuild && theia build --mode development && node ../../scripts/copy-desktop-splash.mjs && node ../../scripts/apply-desktop-csp.mjs --pages-only",
+    "build:release": "node ../../scripts/build-native-speech.mjs && node ../../scripts/build-native-display.mjs && node ../../scripts/prepare-mcp-runtime.mjs --fetch && node ../../scripts/prepare-computer-runtime.mjs && node ../../scripts/prepare-git-runtime.mjs && pnpm run electron:download && pnpm run rebuild && theia build --mode production && node ../../scripts/copy-desktop-splash.mjs && node ../../scripts/apply-desktop-csp.mjs",
+    "clean": "theia clean",
+    "electron:download": "node ../../scripts/ensure-electron.mjs",
+    "icons": "python ../../scripts/generate-desktop-icons.py",
+    "pack": "pnpm run build:release && electron-builder --config electron-builder.config.cjs --dir --publish never",
+    "dist:win": "pnpm run dist:win:x64",
+    "dist:win:x64": "pnpm run build:release && pnpm run dist:win:x64:prepared && node ../../scripts/write-release-checksums.mjs windows-x64",
+    "dist:win:arm64": "pnpm run build:release && pnpm run dist:win:arm64:prepared && node ../../scripts/write-release-checksums.mjs windows-arm64",
+    "dist:win:x64:prepared": "electron-builder --config electron-builder.config.cjs --win nsis portable --x64 --publish never",
+    "dist:win:arm64:prepared": "electron-builder --config electron-builder.config.cjs --win nsis portable --arm64 --publish never",
+    "dist:mac": "pnpm run dist:mac:native",
+    "dist:mac:native": "pnpm run build:release && electron-builder --config electron-builder.config.cjs --mac dmg zip --publish never && node ../../scripts/write-release-checksums.mjs macos-native",
+    "dist:mac:x64": "pnpm run build:release && pnpm run dist:mac:x64:prepared && node ../../scripts/write-release-checksums.mjs macos-x64",
+    "dist:mac:arm64": "pnpm run build:release && pnpm run dist:mac:arm64:prepared && node ../../scripts/write-release-checksums.mjs macos-arm64",
+    "dist:mac:x64:prepared": "electron-builder --config electron-builder.config.cjs --mac dmg zip --x64 --publish never",
+    "dist:mac:arm64:prepared": "electron-builder --config electron-builder.config.cjs --mac dmg zip --arm64 --publish never",
+    "rebuild": "theia rebuild:electron --cacheRoot ../.. --modules=node-pty,keytar",
+    "start": "theia start ../.. --plugins=local-dir:../../plugins",
+    "start:debug": "theia start ../.. --plugins=local-dir:../../plugins --log-level=debug --remote-debugging-port=9222",
+    "typecheck": "node --check system-notifications.cjs && node --check system-permissions.cjs && node --check permission-helper-preload.cjs && node --check bootstrap.cjs && node --check deep-link.cjs && node --check desktop-runtime-config.cjs && node --check electron-builder.config.cjs && node --check updater.cjs && node --check nextmux-electron-preload.cjs && node --check browser-automation.cjs",
+    "test": "node --test test/*.test.mjs",
+    "test:e2e:desktop": "node ../../scripts/desktop-terminal-ci-e2e.mjs",
+    "test:e2e:terminal": "node ../../scripts/desktop-terminal-ci-e2e.mjs",
+    "test:e2e:device-link": "node ../../scripts/desktop-device-link-e2e.mjs"
+  },
+  "build": {
+    "appId": "io.nextmux.desktop",
+    "productName": "NextMux",
+    "electronDist": "node_modules/electron/dist",
+    "copyright": "Copyright © 2026 NextMux contributors",
+    "asar": true,
+    "npmRebuild": false,
+    "nodeGypRebuild": false,
+    "buildDependenciesFromSource": false,
+    "asarUnpack": [
+      "lib/backend/native/**/*",
+      "lib/backend/macos-trash",
+      "lib/backend/**/*.exe",
+      "lib/backend/**/*.dll",
+      "lib/prebuilds/**/*",
+      "node_modules/@parcel/watcher*/**/*",
+      "node_modules/@vscode/ripgrep*/**/*"
+    ],
+    "directories": {
+      "output": "release",
+      "buildResources": "build-resources"
+    },
+    "files": [
+      "bootstrap.cjs",
+      "desktop-runtime-config.cjs",
+      "deep-link.cjs",
+      "main-window-focus.cjs",
+      "updater.cjs",
+      "native-dictation.cjs",
+      "browser-automation.cjs",
+      "owned-browser-registry.cjs",
+      "owned-browser-ipc.cjs",
+      "computer-automation.cjs",
+      "computer-overlay.cjs",
+      "computer-window-view.cjs",
+      "incognito-native.cjs",
+      "computer-audio-windows.cs",
+      "computer-input-windows.cjs",
+      "computer-input-windows.cs",
+      "computer-services-windows.cjs",
+      "computer-services-windows.cs",
+      "computer-services-windows.ps1",
+      "windows-apps.cjs",
+      "windows-apps-native.cs",
+      "windows-apps.ps1",
+      "computer-tab-window.cjs",
+      "computer-tab-window-preload.cjs",
+      "computer-tab-window.html",
+      "computer-tab-window.js",
+      "app-plugin-core.cjs",
+      "app-plugin-zip.cjs",
+      "app-plugins.cjs",
+      "app-icon.cjs",
+      "app-describe.cjs",
+      "data-location.cjs",
+      "system-permissions.cjs",
+      "system-notifications.cjs",
+      "permission-helper-preload.cjs",
+      "install-computer-worker.ps1",
+      "build-resources/licenses/puppeteer/LICENSE",
+      "lib/**/*",
+      "package.json",
+      "!lib/**/*.map",
+      "!release/**/*",
+      "!**/.env",
+      "!**/.env.*",
+      "!**/.npmrc",
+      "!**/.dev.vars",
+      "!**/.dev.vars.*",
+      "!**/windows-codex-backup",
+      "!**/windows-codex-backup/**/*"
+    ],
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://nextmux.app/updates"
+      }
+    ],
+    "win": {
+      "icon": "build-resources/icon.ico",
+      "artifactName": "NextMux-${version}-${arch}-setup.${ext}",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NextMux",
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "NextMux-${version}-${arch}-portable.${ext}"
+    },
+    "mac": {
+      "icon": "build-resources/icon.icns",
+      "artifactName": "NextMux-${version}-${arch}.${ext}",
+      "category": "public.app-category.developer-tools",
+      "minimumSystemVersion": "12.0",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "NextMux uses the microphone only when you start voice input.",
+        "NSAppleEventsUsageDescription": "NextMux controls other apps only when you ask the AI to automate them.",
+        "NSDesktopFolderUsageDescription": "NextMux opens project files you choose on your Desktop.",
+        "NSDocumentsFolderUsageDescription": "NextMux opens project files you choose in Documents.",
+        "NSDownloadsFolderUsageDescription": "NextMux opens files you choose in Downloads.",
+        "NSLocalNetworkUsageDescription": "NextMux connects to devices on your local network only when you ask the AI to use them, such as a remote desktop or a local model server.",
+        "NSSpeechRecognitionUsageDescription": "NextMux converts speech to draft text using on-device recognition, without sending audio to a model account.",
+        "NSAudioCaptureUsageDescription": "NextMux keeps apps shown in a conversation tab muted until you turn their sound on. No audio is recorded or sent anywhere."
+      },
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "dmg": {
+      "writeUpdateInfo": false,
+      "title": "NextMux ${version}",
+      "window": {
+        "width": 560,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 170,
+          "y": 190,
+          "type": "file"
+        },
+        {
+          "x": 390,
+          "y": 190,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "protocols": [
+      {
+        "name": "NextMux Device Link",
+        "schemes": [
+          "nextmux"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@theia/ffmpeg",
+  "version": "1.74.1",
+  "private": true,
+  "description": "Portable NextMux build-time compatibility layer for Theia's Electron FFmpeg preparation.",
+  "license": "EPL-2.0 OR GPL-2.0-only WITH Classpath-exception-2.0",
+  "main": "index.js",
+  "dependencies": {
+    "@electron/get": "^2.0.3",
+    "unzipper": "^0.12.3"
+  }
+}

@@ -1,0 +1,2554 @@
+/*
+ * Composer attachments, drag-and-drop targets, the AI-instructions settings
+ * page and shared UI font aliases.
+ *
+ * Every colour comes from the theme tokens below, so the light and dark
+ * themes are designed together instead of patched separately.
+ */
+
+/* ---------------------------------------------------------------------------
+ * Legacy rounded font assets remain registered for compatibility. Production
+ * typography uses the shared Codex-style native UI stack with CJK fallbacks;
+ * code, terminals and editors keep their monospaced faces.
+ * ------------------------------------------------------------------------ */
+@font-face {
+    font-family: 'NextMux Rounded';
+    font-style: normal;
+    font-display: swap;
+    font-weight: 200 1000;
+    src: url('./fonts/nunito/nunito-cyrillic-ext-wght-normal.woff2') format('woff2-variations');
+    unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+@font-face {
+    font-family: 'NextMux Rounded';
+    font-style: normal;
+    font-display: swap;
+    font-weight: 200 1000;
+    src: url('./fonts/nunito/nunito-cyrillic-wght-normal.woff2') format('woff2-variations');
+    unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+}
+@font-face {
+    font-family: 'NextMux Rounded';
+    font-style: normal;
+    font-display: swap;
+    font-weight: 200 1000;
+    src: url('./fonts/nunito/nunito-vietnamese-wght-normal.woff2') format('woff2-variations');
+    unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+@font-face {
+    font-family: 'NextMux Rounded';
+    font-style: normal;
+    font-display: swap;
+    font-weight: 200 1000;
+    src: url('./fonts/nunito/nunito-latin-ext-wght-normal.woff2') format('woff2-variations');
+    unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+    font-family: 'NextMux Rounded';
+    font-style: normal;
+    font-display: swap;
+    font-weight: 200 1000;
+    src: url('./fonts/nunito/nunito-latin-wght-normal.woff2') format('woff2-variations');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+.nmx-desktop-widget,
+.nmx-desktop-widget .nmx-shell,
+.nmx-shell,
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) {
+    --nmx-ui-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+    --nmx-numeric-font: var(--nmx-ui-font) !important;
+    --theia-ui-font-family: var(--nmx-ui-font) !important;
+}
+
+body:is(.windows, :has(#window-controls)) :is(.nmx-desktop-widget, .nmx-desktop-widget .nmx-shell, .nmx-shell, .nmx-model-effort-portal) {
+    --nmx-ui-font: 'Segoe UI Variable Text', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui, sans-serif;
+    --nmx-numeric-font: var(--nmx-ui-font) !important;
+    --theia-ui-font-family: var(--nmx-ui-font) !important;
+}
+
+body.mac :is(.nmx-desktop-widget, .nmx-desktop-widget .nmx-shell, .nmx-shell, .nmx-model-effort-portal) {
+    --nmx-ui-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+    --nmx-numeric-font: var(--nmx-ui-font) !important;
+    --theia-ui-font-family: var(--nmx-ui-font) !important;
+}
+
+.nmx-desktop-widget,
+.nmx-desktop-widget .nmx-shell,
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)),
+.nmx-model-effort-portal,
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .lm-Menu) {
+    font-family: var(--nmx-ui-font) !important;
+    font-feature-settings: 'kern' 1, 'liga' 1;
+}
+
+.nmx-shell .nmx-task-turn time {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    font-family: var(--nmx-ui-font) !important;
+    font-size: 12px !important;
+    line-height: 16px !important;
+    font-weight: 400 !important;
+    letter-spacing: 0;
+    font-variant-numeric: lining-nums tabular-nums !important;
+    font-feature-settings: 'tnum' 1, 'lnum' 1 !important;
+    color: var(--nmx-muted) !important;
+    white-space: nowrap;
+    direction: ltr;
+    unicode-bidi: isolate;
+}
+
+/* ---------------------------------------------------------------------------
+ * Theme tokens
+ * ------------------------------------------------------------------------ */
+.nmx-shell,
+.nmx-model-effort-portal {
+    --nmx-att-bg: #2a282a;
+    --nmx-att-bg-hover: #323033;
+    --nmx-att-border: rgba(255, 255, 255, .09);
+    --nmx-att-border-hover: rgba(255, 255, 255, .18);
+    --nmx-att-text: #efedef;
+    --nmx-att-meta: #9b969b;
+    --nmx-att-thumb: #1e1d1e;
+    --nmx-att-shadow: 0 1px 2px rgba(0, 0, 0, .28);
+    --nmx-att-shadow-hover: 0 6px 18px rgba(0, 0, 0, .34);
+    --nmx-att-remove-bg: #58535a;
+    --nmx-att-remove-ring: #242224;
+    --nmx-file-page: #f5f3f5;
+    --nmx-file-fold: #d8d4d8;
+    --nmx-file-stroke: rgba(0, 0, 0, .22);
+    --nmx-file-lines: #c6c1c6;
+    --nmx-drop-accent: #ff6f97;
+    --nmx-drop-soft: rgba(255, 111, 151, .10);
+    --nmx-drop-ring: rgba(255, 111, 151, .28);
+    --nmx-drop-surface: rgba(30, 28, 30, .9);
+}
+
+.nmx-shell.nmx-theme-light,
+.nmx-theme-light .nmx-shell,
+.nmx-model-effort-portal.nmx-theme-light {
+    --nmx-att-bg: #ffffff;
+    --nmx-att-bg-hover: #faf8f9;
+    --nmx-att-border: rgba(36, 28, 33, .12);
+    --nmx-att-border-hover: rgba(36, 28, 33, .22);
+    --nmx-att-text: #231f22;
+    --nmx-att-meta: #7a7378;
+    --nmx-att-thumb: #f3f0f2;
+    --nmx-att-shadow: 0 1px 2px rgba(40, 24, 32, .06);
+    --nmx-att-shadow-hover: 0 6px 16px rgba(40, 24, 32, .10);
+    --nmx-att-remove-bg: #3a3538;
+    --nmx-att-remove-ring: #ffffff;
+    --nmx-file-page: #ffffff;
+    --nmx-file-fold: #ebe7ea;
+    --nmx-file-stroke: rgba(36, 28, 33, .20);
+    --nmx-file-lines: #d9d4d8;
+    --nmx-drop-accent: #c2345f;
+    --nmx-drop-soft: rgba(194, 52, 95, .07);
+    --nmx-drop-ring: rgba(194, 52, 95, .20);
+    --nmx-drop-surface: rgba(255, 255, 255, .92);
+}
+
+/* ---------------------------------------------------------------------------
+ * File-type icons
+ * ------------------------------------------------------------------------ */
+.nmx-file-type-icon { display: block; flex: none; overflow: visible; }
+.nmx-file-type-icon .nmx-file-page { fill: var(--nmx-file-page); stroke: var(--nmx-file-stroke); stroke-width: 1; }
+.nmx-file-type-icon .nmx-file-fold { fill: var(--nmx-file-fold); stroke: var(--nmx-file-stroke); stroke-width: 1; stroke-linejoin: round; }
+.nmx-file-type-icon .nmx-file-lines { fill: none; stroke: var(--nmx-file-lines); stroke-width: 1.4; stroke-linecap: round; }
+.nmx-file-type-icon text { pointer-events: none; user-select: none; }
+.nmx-file-type-icon.is-folder .nmx-folder-back { opacity: .62; }
+
+/* ---------------------------------------------------------------------------
+ * Composer chips
+ * ------------------------------------------------------------------------ */
+.nmx-shell .nmx-attachment-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 8px 8px;
+    padding-top: 7px; /* room for the remove badge */
+}
+
+.nmx-shell .nmx-composer-assets { align-items: flex-end; gap: 8px; }
+.nmx-shell .nmx-composer-assets .nmx-attachment-chips { flex: 1 1 260px; margin: 0; }
+
+.nmx-shell .nmx-attachment-chip {
+    position: relative;
+    min-width: 136px;
+    max-width: 224px;
+    height: 46px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 8px 0 6px;
+    border: 1px solid var(--nmx-att-border);
+    border-radius: 12px;
+    color: var(--nmx-att-text);
+    background: var(--nmx-att-bg);
+    box-shadow: var(--nmx-att-shadow);
+    transition: border-color 160ms ease, background-color 160ms ease, box-shadow 200ms ease, transform 200ms cubic-bezier(.2, .8, .2, 1);
+    animation: nmx-attachment-in 380ms cubic-bezier(.2, .9, .25, 1.15) both;
+}
+
+.nmx-shell .nmx-attachment-chip:hover,
+.nmx-shell .nmx-attachment-chip:focus-within {
+    border-color: var(--nmx-att-border-hover);
+    background: var(--nmx-att-bg-hover);
+    box-shadow: var(--nmx-att-shadow-hover);
+    transform: translateY(-1px);
+}
+
+/* Hover tint follows the card's own rounded shape; it must not swallow the remove button. */
+.nmx-shell .nmx-attachment-chip::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    background: rgba(15, 23, 42, 0.22);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms ease;
+}
+.nmx-shell .nmx-attachment-chip:hover::after,
+.nmx-shell .nmx-attachment-chip:focus-within::after { opacity: 1; }
+.nmx-shell.nmx-theme-light .nmx-attachment-chip::after,
+.nmx-theme-light .nmx-shell .nmx-attachment-chip::after { background: rgba(15, 23, 42, 0.08); }
+.nmx-shell .nmx-attachment-chip > .nmx-attachment-preview:hover { background: transparent; }
+
+.nmx-shell .nmx-attachment-chip.is-leaving {
+    pointer-events: none;
+    animation: nmx-attachment-out 150ms ease-in forwards;
+}
+
+.nmx-shell .nmx-attachment-chip > :is(.nmx-attachment-preview, .nmx-attachment-label) {
+    min-width: 0;
+    height: 100%;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 0;
+    border: 0;
+    border-radius: 10px;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    text-align: start;
+}
+
+.nmx-attachment-preview { cursor: zoom-in; }
+.nmx-shell .nmx-attachment-chip > .nmx-attachment-preview:focus-visible { outline: 2px solid var(--nmx-focus-ring); outline-offset: 2px; }
+
+.nmx-shell .nmx-attachment-thumb {
+    position: relative;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    display: grid;
+    place-items: center;
+    overflow: visible;
+    border-radius: 9px;
+    background: var(--nmx-att-thumb);
+}
+
+.nmx-shell .nmx-attachment-thumb > img {
+    width: 100%;
+    height: 100%;
+    border-radius: 9px;
+    object-fit: cover;
+    box-shadow: inset 0 0 0 1px var(--nmx-att-border);
+}
+
+.nmx-shell .nmx-attachment-thumb > svg { width: 28px; height: 28px; }
+.nmx-shell .nmx-attachment-thumb.is-folder { background: color-mix(in srgb, #4f8fe8 12%, var(--nmx-att-thumb)); }
+
+.nmx-shell .nmx-attachment-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    line-height: 1.25;
+}
+
+.nmx-shell .nmx-attachment-text > b {
+    overflow: hidden;
+    color: var(--nmx-att-text);
+    font-size: 13px;
+    font-weight: 650;
+    text-overflow: clip;
+    white-space: nowrap;
+    -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%);
+    mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%);
+}
+
+.nmx-shell .nmx-attachment-text > small {
+    overflow: hidden;
+    color: var(--nmx-att-meta);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: .01em;
+    text-overflow: clip;
+    white-space: nowrap;
+    -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%);
+    mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%);
+}
+
+.nmx-shell .nmx-attachment-chip > .nmx-attachment-remove {
+    position: absolute;
+    z-index: 2;
+    top: -7px;
+    inset-inline-end: -7px;
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 2px solid var(--nmx-att-remove-ring);
+    border-radius: 50%;
+    color: #fff;
+    background: var(--nmx-att-remove-bg);
+    opacity: 0;
+    transform: scale(.6);
+    transition: opacity 140ms ease, transform 180ms cubic-bezier(.2, .9, .3, 1.3), background-color 140ms ease;
+}
+
+.nmx-shell .nmx-attachment-chip > .nmx-attachment-remove > i { font-size: 11px; }
+.nmx-shell .nmx-attachment-chip:is(:hover, :focus-within) > .nmx-attachment-remove { opacity: 1; transform: scale(1); }
+.nmx-shell .nmx-attachment-chip > .nmx-attachment-remove:hover { background: var(--nmx-danger, #d9534f); }
+.nmx-shell .nmx-attachment-chip > .nmx-attachment-remove:focus-visible { opacity: 1; transform: scale(1); outline: 2px solid var(--nmx-focus-ring); outline-offset: 1px; }
+
+.nmx-shell .nmx-attachment-retry {
+    width: 26px;
+    height: 26px;
+    flex: none;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    color: var(--nmx-att-meta);
+    background: transparent;
+}
+.nmx-shell .nmx-attachment-retry:hover { color: var(--nmx-att-text); background: var(--nmx-control-hover); }
+
+.nmx-shell .nmx-attachment-chip.is-unsupported {
+    border-color: color-mix(in srgb, var(--nmx-danger, #e5484d) 55%, transparent);
+    background: color-mix(in srgb, var(--nmx-danger, #e5484d) 7%, var(--nmx-att-bg));
+}
+.nmx-shell .nmx-attachment-chip.is-unsupported .nmx-attachment-text > small,
+.nmx-shell .nmx-attachment-chip.is-failed .nmx-attachment-text > small { color: var(--nmx-danger, #e5484d); }
+.nmx-shell .nmx-attachment-chip.is-failed { border-style: dashed; }
+.nmx-shell .nmx-attachment-chip.is-pending .nmx-attachment-thumb > svg { opacity: .45; }
+
+.nmx-attachment-spinner {
+    position: absolute;
+    inset: 7px;
+    border: 2px solid color-mix(in srgb, var(--nmx-att-meta) 30%, transparent);
+    border-top-color: var(--nmx-att-text);
+    border-radius: 50%;
+    animation: nmx-attachment-spin 800ms linear infinite;
+}
+
+.nmx-shell .nmx-attachment-state {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    color: var(--nmx-danger, #e5484d);
+    font-size: 13px !important;
+    background: var(--nmx-att-bg);
+    border-radius: 50%;
+}
+
+.nmx-shell .nmx-attachment-anchor {
+    position: absolute;
+    right: -5px;
+    bottom: -5px;
+    width: 16px;
+    height: 16px;
+    display: grid;
+    place-items: center;
+    border: 2px solid var(--nmx-att-bg);
+    border-radius: 50%;
+    color: #fff;
+    background: var(--nmx-drop-accent);
+    font-size: 9px !important;
+}
+
+/* Pasted long text uses the same chip. */
+.nmx-shell .nmx-pasted-text-chips { min-width: 0; }
+
+/* ---------------------------------------------------------------------------
+ * Attachments on sent messages
+ * ------------------------------------------------------------------------ */
+.nmx-shell .nmx-turn-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.nmx-shell .nmx-turn-attachments > :is(small, button) {
+    max-width: 220px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 11px 0 6px;
+    border: 1px solid var(--nmx-att-border);
+    border-radius: 10px;
+    color: var(--nmx-att-text);
+    background: var(--nmx-att-bg);
+    box-shadow: var(--nmx-att-shadow);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.nmx-shell .nmx-turn-attachments > :is(small, button) > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-turn-attachments > button { cursor: zoom-in; }
+.nmx-shell .nmx-turn-attachments > button.nmx-turn-file { cursor: pointer; }
+.nmx-shell .nmx-turn-attachments > button:hover { border-color: var(--nmx-att-border-hover); background: var(--nmx-att-bg-hover); }
+/* A long attachment the AI reads in parts (Cherry Studio #12): the chip grows a second, quieter line under the name
+   instead of a badge, so the row of chips keeps one rhythm. */
+.nmx-shell .nmx-turn-attachments > button.nmx-turn-file.is-read-in-parts {
+    max-width: 260px;
+    height: auto;
+    min-height: 34px;
+    padding-block: 5px;
+}
+
+.nmx-shell .nmx-turn-attachments > button.is-read-in-parts > .nmx-turn-file-label {
+    display: grid;
+    gap: 1px;
+    text-align: start;
+}
+
+.nmx-shell .nmx-turn-attachments > button.is-read-in-parts > .nmx-turn-file-label > :is(span, small) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 15px;
+}
+
+.nmx-shell .nmx-turn-attachments > button.is-read-in-parts > .nmx-turn-file-label > small {
+    color: var(--nmx-att-meta);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 14px;
+    font-variant-numeric: tabular-nums;
+}
+
+.nmx-turn-image > img { width: 24px; height: 24px; flex: 0 0 24px; border-radius: 6px; object-fit: cover; }
+.nmx-turn-image > span { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------------------------------------------------------------------------
+ * Drag and drop
+ * ------------------------------------------------------------------------ */
+.nmx-desktop-widget .nmx-shell .nmx-composer { transition: border-color 180ms ease, box-shadow 220ms ease; }
+
+.nmx-desktop-widget .nmx-shell .nmx-composer:is(.is-drop-composer, .is-drop-text),
+.nmx-desktop-widget .nmx-shell .nmx-composer:is(.is-drop-composer, .is-drop-text):focus-within {
+    border-color: var(--nmx-drop-accent) !important;
+    box-shadow: 0 0 0 4px var(--nmx-drop-ring), 0 18px 46px rgba(0, 0, 0, .22) !important;
+}
+
+.nmx-desktop-widget .nmx-shell .nmx-composer.is-drop-received { animation: nmx-composer-drop-pulse 560ms ease-out; }
+
+.nmx-shell .nmx-composer-drop-overlay {
+    position: absolute;
+    z-index: 12;
+    inset: 4px;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    border: 1.5px dashed var(--nmx-drop-accent);
+    border-radius: 13px;
+    color: var(--nmx-att-text);
+    background: color-mix(in srgb, var(--nmx-drop-accent) 7%, var(--nmx-drop-surface));
+    backdrop-filter: blur(6px);
+    pointer-events: none;
+    animation: nmx-drop-overlay-in 200ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.nmx-shell .nmx-thread-drop-overlay {
+    position: absolute;
+    z-index: 30;
+    inset: 10px;
+    display: grid;
+    place-items: center;
+    border: 1.5px dashed var(--nmx-drop-accent);
+    border-radius: 18px;
+    background: var(--nmx-drop-soft);
+    backdrop-filter: blur(2px);
+    pointer-events: none;
+    animation: nmx-drop-overlay-in 220ms cubic-bezier(.2, .8, .2, 1) both, nmx-drop-border-breathe 1.6s ease-in-out 220ms infinite alternate;
+}
+
+.nmx-shell .nmx-thread-drop-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 22px 16px 18px;
+    border: 1px solid var(--nmx-att-border);
+    border-radius: 16px;
+    color: var(--nmx-att-text);
+    background: var(--nmx-drop-surface);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .22);
+    animation: nmx-drop-card-rise 320ms cubic-bezier(.2, .9, .25, 1.15) both;
+}
+
+.nmx-shell .nmx-drop-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nmx-shell .nmx-drop-copy > strong { font-size: 14.5px; font-weight: 700; }
+.nmx-shell .nmx-drop-copy > small { color: var(--nmx-att-meta); font-size: 12px; }
+
+.nmx-shell .nmx-drop-stack { position: relative; width: 68px; height: 46px; flex: none; }
+.nmx-shell .nmx-drop-card {
+    position: absolute;
+    top: 3px;
+    left: 18px;
+    width: 32px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--nmx-att-border);
+    border-radius: 8px;
+    background: var(--nmx-att-bg);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .18);
+}
+.nmx-shell .nmx-drop-card.is-back { transform: translateX(-16px) rotate(-14deg); animation: nmx-drop-fan-back 1.4s ease-in-out infinite alternate; }
+.nmx-shell .nmx-drop-card.is-mid { transform: translateX(16px) rotate(14deg); animation: nmx-drop-fan-mid 1.4s ease-in-out infinite alternate; }
+.nmx-shell .nmx-drop-card.is-front { z-index: 1; animation: nmx-drop-float 1.4s ease-in-out infinite alternate; }
+
+/* Insertion caret while dragging over the message text. */
+.nmx-shell .nmx-text-drop-indicator {
+    position: absolute;
+    z-index: 6;
+    width: 2px;
+    pointer-events: none;
+    transition: left 70ms linear, top 70ms linear;
+}
+.nmx-shell .nmx-text-drop-caret {
+    position: absolute;
+    inset: 0;
+    border-radius: 2px;
+    background: var(--nmx-drop-accent);
+    box-shadow: 0 0 0 3px var(--nmx-drop-ring);
+    animation: nmx-text-caret-pulse 900ms ease-in-out infinite;
+}
+.nmx-shell .nmx-text-drop-label {
+    position: absolute;
+    bottom: calc(100% + 7px);
+    inset-inline-start: -10px;
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    padding: 5px 9px;
+    border-radius: 9px;
+    color: #fff;
+    background: var(--nmx-drop-accent);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .22);
+    font-size: 12px;
+    white-space: nowrap;
+    animation: nmx-drop-label-in 160ms ease-out both;
+}
+.nmx-shell .nmx-text-drop-label::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    inset-inline-start: 9px;
+    border: 5px solid transparent;
+    border-top-color: var(--nmx-drop-accent);
+}
+.nmx-shell .nmx-text-drop-label > strong { font-weight: 700; }
+.nmx-shell .nmx-text-drop-label > small { font-size: 11px; opacity: .88; }
+
+/* Projects sidebar while a folder hovers over it. */
+.nmx-shell .nmx-coding-context .nmx-context-nav.is-project-dragging,
+.nmx-shell .nmx-context-actions.is-project-dragging {
+    border-radius: 12px;
+    background: var(--nmx-drop-soft) !important;
+    box-shadow: inset 0 0 0 1.5px var(--nmx-drop-accent) !important;
+    animation: nmx-project-drag-glow 1.2s ease-in-out infinite alternate;
+}
+.nmx-shell .nmx-projects-heading > span { color: var(--nmx-drop-accent); font-weight: 650; animation: nmx-drop-label-in 160ms ease-out both; }
+.nmx-shell .nmx-project-row.is-drop-highlight { animation: nmx-project-drop-highlight-v2 1600ms ease-out; }
+
+/* ---------------------------------------------------------------------------
+ * AI instructions (AGENTS.md) settings
+ * ------------------------------------------------------------------------ */
+.nmx-shell .nmx-agent-instructions { display: grid; gap: 14px; }
+.nmx-shell .nmx-agent-instructions-intro { margin: 0; color: var(--nmx-subtle); font-size: 13px; line-height: 1.6; }
+.nmx-shell .nmx-agent-instructions-editor > header small { display: block; margin-top: 2px; color: var(--nmx-muted); font-size: 12px; font-weight: 500; }
+.nmx-shell .nmx-agent-instructions-editor > :not(header) { margin-inline: 16px; }
+.nmx-shell .nmx-agent-instructions-project { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 13px; }
+.nmx-shell .nmx-agent-instructions-project > select { min-width: 220px; max-width: 100%; height: 32px; padding: 0 10px; border: 1px solid var(--nmx-border-strong); border-radius: 8px; color: var(--nmx-text); background: var(--nmx-control-background); font: inherit; }
+.nmx-shell .nmx-agent-instructions-path { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; font-size: 12px; color: var(--nmx-muted); }
+.nmx-shell .nmx-agent-instructions-path > code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--nmx-code-font, monospace); font-size: 11.5px; }
+.nmx-shell .nmx-agent-instructions-path > span { flex: none; }
+.nmx-shell .nmx-agent-instructions-path > span.is-exists { color: var(--nmx-subtle); }
+.nmx-shell .nmx-agent-instructions-editor textarea {
+    display: block;
+    width: calc(100% - 32px);
+    min-height: 190px;
+    margin-top: 8px;
+    padding: 12px 14px;
+    border: 1px solid var(--nmx-border-strong);
+    border-radius: 10px;
+    color: var(--nmx-text);
+    background: var(--nmx-control-background);
+    font: inherit;
+    font-size: 13.5px;
+    line-height: 1.65;
+    resize: vertical;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.nmx-shell .nmx-agent-instructions-editor textarea:focus { outline: none; border-color: var(--nmx-focus-ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--nmx-focus-ring) 22%, transparent); }
+.nmx-shell .nmx-agent-instructions-editor textarea::placeholder { color: var(--nmx-muted); opacity: .8; }
+.nmx-shell .nmx-agent-instructions-editor.is-dirty textarea { border-color: color-mix(in srgb, var(--nmx-accent) 55%, var(--nmx-border-strong)); }
+.nmx-shell .nmx-agent-instructions-editor > footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 10px 16px 16px; }
+.nmx-shell .nmx-agent-instructions-editor > footer > small { margin-inline-end: auto; color: var(--nmx-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.nmx-shell .nmx-agent-instructions-editor > footer > small.is-near-limit { color: var(--nmx-danger); }
+.nmx-shell .nmx-agent-instructions-editor > footer > button {
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 13px;
+    border: 1px solid var(--nmx-border-strong);
+    border-radius: 8px;
+    color: var(--nmx-text);
+    background: var(--nmx-control-background);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+}
+.nmx-shell .nmx-agent-instructions-editor > footer > button:hover:not(:disabled) { background: var(--nmx-control-hover); }
+.nmx-shell .nmx-agent-instructions-editor > footer > button.is-primary { border-color: transparent; color: var(--nmx-on-accent, #fff); background: var(--nmx-accent); }
+.nmx-shell .nmx-agent-instructions-editor > footer > button.is-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--nmx-accent) 88%, #000); }
+.nmx-shell .nmx-agent-instructions-editor > footer > button:disabled { opacity: .5; cursor: default; }
+.nmx-shell .nmx-agent-instructions-saved { display: inline-flex; align-items: center; gap: 4px; color: var(--nmx-success, #3fa46a); font-size: 12.5px; font-weight: 600; animation: nmx-drop-label-in 180ms ease-out both; }
+.nmx-shell .nmx-agent-instructions-note { margin: 10px 16px 0; font-size: 12.5px; color: var(--nmx-subtle); }
+.nmx-shell .nmx-agent-instructions-note.is-error { color: var(--nmx-danger); }
+.nmx-shell .nmx-agent-instructions-note.is-warning { color: #c98a1b; }
+.nmx-shell .nmx-agent-instructions-note > button { margin-inline-start: 6px; padding: 2px 8px; border: 1px solid currentColor; border-radius: 6px; color: inherit; background: transparent; font: inherit; cursor: pointer; transition: background-color .12s ease, opacity .12s ease; }
+.nmx-shell .nmx-agent-instructions-note > button:hover:not(:disabled) { background: color-mix(in srgb, currentColor 10%, transparent); }
+.nmx-shell .nmx-agent-instructions-note > button:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; }
+.nmx-shell .nmx-agent-instructions-note > button:disabled { opacity: .5; cursor: default; }
+
+/* ---------------------------------------------------------------------------
+ * Motion
+ * ------------------------------------------------------------------------ */
+@keyframes nmx-attachment-in {
+    0% { opacity: 0; transform: translateY(8px) scale(.9); }
+    60% { opacity: 1; }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes nmx-attachment-out { to { opacity: 0; transform: scale(.86); } }
+@keyframes nmx-attachment-spin { to { transform: rotate(360deg); } }
+@keyframes nmx-drop-overlay-in { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: scale(1); } }
+@keyframes nmx-drop-card-rise { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes nmx-drop-border-breathe { from { border-color: color-mix(in srgb, var(--nmx-drop-accent) 55%, transparent); } to { border-color: var(--nmx-drop-accent); } }
+@keyframes nmx-drop-float { from { transform: translateY(1px); } to { transform: translateY(-4px); } }
+@keyframes nmx-drop-fan-back { from { transform: translateX(-14px) rotate(-11deg); } to { transform: translateX(-18px) rotate(-16deg) translateY(-2px); } }
+@keyframes nmx-drop-fan-mid { from { transform: translateX(14px) rotate(11deg); } to { transform: translateX(18px) rotate(16deg) translateY(-2px); } }
+@keyframes nmx-text-caret-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@keyframes nmx-drop-label-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes nmx-composer-drop-pulse {
+    0% { box-shadow: 0 0 0 0 var(--nmx-drop-ring), 0 16px 44px rgba(0, 0, 0, .2); }
+    100% { box-shadow: 0 0 0 14px transparent, 0 16px 44px rgba(0, 0, 0, .2); }
+}
+@keyframes nmx-project-drag-glow { from { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--nmx-drop-accent) 55%, transparent); } to { box-shadow: inset 0 0 0 1.5px var(--nmx-drop-accent), 0 0 0 3px var(--nmx-drop-ring); } }
+@keyframes nmx-project-drop-highlight-v2 {
+    0%, 100% { background-color: transparent; box-shadow: inset 0 0 0 1px transparent; }
+    15%, 60% { background-color: var(--nmx-drop-soft); box-shadow: inset 0 0 0 1.5px var(--nmx-drop-accent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell :is(.nmx-attachment-chip, .nmx-attachment-chip.is-leaving, .nmx-composer-drop-overlay, .nmx-thread-drop-overlay, .nmx-thread-drop-card,
+        .nmx-drop-card, .nmx-text-drop-caret, .nmx-text-drop-label, .nmx-projects-heading > span, .nmx-agent-instructions-saved),
+    .nmx-desktop-widget .nmx-shell .nmx-composer.is-drop-received,
+    .nmx-shell .nmx-coding-context .nmx-context-nav.is-project-dragging { animation: none !important; }
+    .nmx-shell .nmx-attachment-chip, .nmx-shell .nmx-text-drop-indicator { transition: none !important; }
+}
+
+/* Delivered as extracted text (neutral) or as a description only (caution). */
+.nmx-shell .nmx-attachment-chip.is-converted .nmx-attachment-text > small { color: var(--nmx-att-meta); }
+.nmx-shell .nmx-attachment-chip.is-limited { border-color: color-mix(in srgb, #d9a13b 55%, var(--nmx-att-border)); }
+.nmx-shell .nmx-attachment-chip.is-limited .nmx-attachment-text > small { color: #c98a1b; }
+
+/* ---------------------------------------------------------------------------
+ * Theia's own dialogs (restart prompts, confirmations, input boxes) wear the
+ * NextMux dialog style while the NextMux surface is showing: the same
+ * full-window tint and blur as every NextMux modal, a rounded panel, a plain
+ * header instead of the status-bar blue strip, and rounded buttons. On macOS
+ * the native window buttons are hidden while any modal is open
+ * (nextmux-modal-chrome.ts).
+ * ------------------------------------------------------------------------ */
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay {
+    background: rgba(0, 0, 0, .52);
+    backdrop-filter: blur(3px);
+    -webkit-app-region: no-drag;
+    font-family: var(--nmx-ui-font);
+    animation: nmx-drop-overlay-in 160ms ease-out both;
+}
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogBlock {
+    min-width: min(400px, calc(100vw - 40px));
+    max-width: min(560px, calc(100vw - 40px));
+    padding: 6px 4px 2px;
+    color: #ddd9da;
+    background: #242123;
+    border: 1px solid #484345;
+    border-radius: 14px;
+    box-shadow: 0 26px 80px rgba(0, 0, 0, .58);
+}
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogTitle {
+    min-height: 40px;
+    padding: 4px 10px 0 18px;
+    color: #ebe8e9;
+    background: transparent;
+    font-size: 16px;
+    font-weight: 620;
+}
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogTitle i.closeButton {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    border-radius: 7px;
+    opacity: .7;
+}
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogTitle i.closeButton:hover { opacity: 1; background: rgba(255, 255, 255, .08); }
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogContent { padding: 6px 18px 10px; line-height: 1.6; font-size: 14px; }
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogControl { gap: 8px; padding: 8px 14px 14px; }
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogControl .theia-button {
+    min-width: 76px;
+    height: 32px;
+    margin: 0;
+    padding: 0 14px;
+    border: 1px solid #4a4547;
+    border-radius: 9px;
+    color: #ddd9da;
+    background: #2e2a2c;
+    font: inherit;
+    font-size: 14px;
+}
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogControl .theia-button.main {
+    border-color: #d7d4d5;
+    color: #242223;
+    background: #dedcdd;
+}
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogControl .theia-button:hover:not(:disabled) { filter: brightness(1.12); }
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogControl .theia-button:focus-visible { outline: 2px solid #d74470; outline-offset: 2px; }
+body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay { background: rgba(61, 55, 58, .24); }
+body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay .dialogBlock { color: #302b2e; background: #fff; border-color: #d8d3d6; box-shadow: 0 18px 48px rgba(53, 45, 49, .16); }
+body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay .dialogTitle { color: #242124; }
+body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay .dialogTitle i.closeButton:hover { background: rgba(0, 0, 0, .06); }
+body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay .dialogControl .theia-button { color: #393336; background: #f4f2f3; border-color: #d8d3d6; }
+body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay .dialogControl .theia-button.main { color: #fff; background: #2c282a; border-color: #2c282a; }
+@media (prefers-reduced-motion: reduce) {
+    body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay { animation: none; }
+}
+
+/* Theia's HTML window controls (Windows, and Linux with the custom title bar)
+ * sit on the NextMux title row: same height, no separate background block. */
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls {
+    height: 40px;
+    background: transparent;
+}
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .control-button { line-height: 40px; }
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .control-button:not(#close-button):hover { background: rgba(128, 128, 128, .18); }
+
+/* ---------------------------------------------------------------------------
+ * Local files and media referenced in conversation Markdown
+ * (nextmux-conversation-media.ts): file links are chips, images and videos
+ * open in the viewer, every one shows its full path on hover.
+ * ------------------------------------------------------------------------ */
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) a.nmx-file-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: min(100%, 56ch);
+    margin: 0 1px;
+    padding: 1px 2px;
+    border: 1px solid transparent;
+    border-color: transparent !important;
+    border-radius: 7px;
+    color: var(--nmx-text);
+    background: transparent !important;
+    box-shadow: none !important;
+    font-size: .92em;
+    line-height: 1.55;
+    text-decoration: none;
+    vertical-align: baseline;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 140ms ease, border-color 140ms ease;
+}
+/* Markdown's `:not(pre) > code` inline pill also matches the <code> nested in a
+   file-path chip. Reset it so it cannot add padding, a second background or a
+   line wrap inside the chip: the path must always stay on one line. */
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link) > code {
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    font-size: inherit !important;
+    line-height: inherit !important;
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) a.nmx-file-link:hover {
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-decoration: none;
+}
+.nmx-theme-light .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) a.nmx-file-link,
+.nmx-desktop-widget.nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) a.nmx-file-link,
+.nmx-desktop-widget .nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) a.nmx-file-link {
+    border-color: transparent !important;
+    color: #0f172a !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    cursor: pointer;
+}
+.nmx-theme-light .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) a.nmx-file-link:hover,
+.nmx-desktop-widget.nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) a.nmx-file-link:hover,
+.nmx-desktop-widget .nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) a.nmx-file-link:hover {
+    border-color: transparent !important;
+    color: #020617 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.nmx-desktop-widget a.nmx-file-link > .codicon { flex: none; font-size: 14px; opacity: .78; }
+.nmx-desktop-widget a.nmx-file-link.is-image > .codicon { color: #3f9f6b; opacity: 1; }
+.nmx-desktop-widget a.nmx-file-link.is-video > .codicon { color: #7a64d8; opacity: 1; }
+.nmx-desktop-widget a.nmx-file-link.is-audio > .codicon { color: #c2803a; opacity: 1; }
+
+/* Very long paths keep their tail (filename and last folders) and fade out on
+   the left instead of being cut on the right. The file decorator marks a long
+   rendered label (currently >30 characters) with `is-long-path`. The icon sits
+   outside <code>, so the mask below never touches it. */
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.is-long-path, a.nmx-local-file-link.is-long-path) > code {
+    display: inline-flex;
+    justify-content: flex-end;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+    -webkit-mask-image: linear-gradient(to right, transparent 0px, rgba(0, 0, 0, .35) 10px, #000 28px, #000 100%);
+    mask-image: linear-gradient(to right, transparent 0px, rgba(0, 0, 0, .35) 10px, #000 28px, #000 100%);
+}
+/* The bare `code.nmx-local-file-link` chip has no child <code> to mask. Apply
+   the same tail-first layout; the mask is only added when the chip has no
+   inline icon, so a leading file icon can never be faded out. */
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) code.nmx-local-file-link.is-long-path {
+    justify-content: flex-end;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) code.nmx-local-file-link.is-long-path:not(:has(> .codicon)) {
+    -webkit-mask-image: linear-gradient(to right, transparent 0px, rgba(0, 0, 0, .35) 10px, #000 28px, #000 100%);
+    mask-image: linear-gradient(to right, transparent 0px, rgba(0, 0, 0, .35) 10px, #000 28px, #000 100%);
+}
+
+/* Split file labels fade only the directory; the filename retains its own cap.
+   Keep the is-long-path rules above for historical, unsplit labels. */
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link) {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: min(100%, 56ch);
+    padding: 1px 2px;
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-overflow: clip;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix) {
+    display: inline-flex;
+    align-items: baseline;
+    max-width: min(100%, 56ch);
+    overflow: hidden;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix) > code,
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link) > code.has-dir-prefix,
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix, code.nmx-local-file-link.has-dir-prefix):not(:has(> code)) {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: flex-start;
+    gap: 0;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    -webkit-mask-image: none;
+    mask-image: none;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix) > code,
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link) > code.has-dir-prefix {
+    max-width: 100%;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix):not(:has(> code)) > .codicon {
+    margin-inline-end: 5px;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-dir {
+    display: inline-flex;
+    justify-content: flex-start;
+    flex: 1 1 3ch;
+    min-width: 2.5ch;
+    overflow: hidden;
+    direction: rtl;
+    unicode-bidi: plaintext;
+    text-overflow: clip;
+    white-space: nowrap;
+    opacity: 0.72;
+    -webkit-mask-image: linear-gradient(to right, transparent 0px, #000 24px, #000 100%);
+    mask-image: linear-gradient(to right, transparent 0px, #000 24px, #000 100%);
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-name {
+    display: inline-block;
+    flex: 0 0 auto;
+    min-width: 0;
+    max-width: min(38ch, 320px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+:is(.nmx-theme-light, [data-nextmux-theme='light'], body.theia-light, body.NextMux-light) .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link),
+.nmx-desktop-widget:is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link),
+.nmx-desktop-widget :is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link) {
+    color: #0f172a !important;
+}
+
+:is(.nmx-theme-light, [data-nextmux-theme='light'], body.theia-light, body.NextMux-light) .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link):hover,
+.nmx-desktop-widget:is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link):hover,
+.nmx-desktop-widget :is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link):hover {
+    color: #020617 !important;
+}
+
+:is(.nmx-theme-light, [data-nextmux-theme='light'], body.theia-light, body.NextMux-light) .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-dir,
+.nmx-desktop-widget:is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-dir,
+.nmx-desktop-widget :is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-dir {
+    color: #1e293b;
+    opacity: 0.9;
+}
+
+:is(.nmx-theme-light, [data-nextmux-theme='light'], body.theia-light, body.NextMux-light) .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-name,
+.nmx-desktop-widget:is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-name,
+.nmx-desktop-widget :is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-name {
+    color: #0f172a;
+    font-weight: 600;
+}
+
+
+
+/* Bare filenames and image chips emitted by the current Markdown pass
+   (`.nmx-local-file-link`, including the `code` variant). They remain clickable
+   with a transparent surface in both themes. */
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link) {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: min(100%, 56ch);
+    margin: 0 1px;
+    padding: 1px 2px;
+    overflow: hidden;
+    border: 1px solid transparent;
+    border-color: transparent !important;
+    border-radius: 7px;
+    color: var(--nmx-text);
+    background: transparent !important;
+    box-shadow: none !important;
+    font: inherit;
+    font-size: .92em;
+    line-height: 1.55;
+    text-decoration: none;
+    text-overflow: clip;
+    vertical-align: baseline;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link):hover {
+    border-color: transparent !important;
+    color: #bfdbfe;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-decoration: none;
+}
+.nmx-desktop-widget :is(a.nmx-local-file-link, code.nmx-local-file-link) > .codicon {
+    flex: none;
+    font-size: 14px;
+    opacity: .78;
+}
+.nmx-desktop-widget .nmx-local-file-link.is-image > .codicon { color: #3f9f6b; opacity: 1; }
+.nmx-desktop-widget .nmx-local-file-link.is-video > .codicon { color: #7a64d8; opacity: 1; }
+.nmx-desktop-widget .nmx-local-file-link.is-audio > .codicon { color: #c2803a; opacity: 1; }
+.nmx-theme-light .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link),
+.nmx-desktop-widget.nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link),
+.nmx-desktop-widget .nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link),
+[data-nextmux-theme='light'] .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link) {
+    border-color: transparent !important;
+    color: #0f172a !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.nmx-theme-light .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link):hover,
+.nmx-desktop-widget.nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link):hover,
+.nmx-desktop-widget .nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link):hover,
+[data-nextmux-theme='light'] .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link):hover {
+    border-color: transparent !important;
+    color: #020617 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) img.nmx-md-local-image,
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) img:not(.nmx-site-icon img) {
+    max-height: 420px;
+    cursor: zoom-in;
+    border: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+    transition: box-shadow 140ms ease, transform 140ms ease;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) img:not(.nmx-site-icon img):hover { box-shadow: 0 6px 22px rgba(0, 0, 0, .18); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) img.is-missing {
+    min-width: 120px;
+    min-height: 40px;
+    cursor: default;
+    background: color-mix(in srgb, currentColor 6%, transparent);
+}
+.nmx-attachment-lightbox .nmx-lightbox-title {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    pointer-events: auto;
+}
+.nmx-attachment-lightbox .nmx-lightbox-title small {
+    max-width: min(680px, calc(100vw - 120px));
+    overflow: hidden;
+    color: rgba(247, 247, 248, .7);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, .72);
+}
+.nmx-media-viewer .nmx-attachment-lightbox-stage > :is(video, audio) {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 10px;
+    background: #000;
+    box-shadow: 0 16px 64px rgba(0, 0, 0, .42);
+    pointer-events: auto;
+    cursor: default;
+}
+.nmx-media-viewer.is-audio .nmx-attachment-lightbox-stage > audio { width: min(520px, 100%); background: transparent; box-shadow: none; }
+
+/* ---------------------------------------------------------------------------
+ * Conversation tabs (nextmux-conversation-tabs*.ts): the conversation's own
+ * title first, then desktops the AI opened. Hover shows the full title and
+ * the close button.
+ * ------------------------------------------------------------------------ */
+.nmx-shell .nmx-conversation-tabs {
+    position: relative;
+    z-index: 6;
+    flex: none;
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    /* 5px under the top navigation and 5px below the tab; nothing taller. */
+    height: auto;
+    min-width: 0;
+    padding: 3px 14px 5px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    background: var(--nmx-bg);
+}
+/* Like a browser, tabs first share the width (down to a readable minimum); past that the strip scrolls. Its thin
+   bar is drawn by the app on macOS and Windows alike and shows only while the pointer is over the strip; its track
+   takes the place of the bottom padding so the strip keeps its height. */
+.nmx-shell .nmx-conversation-tabs { scrollbar-width: auto; scrollbar-color: auto; }
+.nmx-shell .nmx-conversation-tabs.is-overflowing { padding-bottom: 0; }
+.nmx-shell .nmx-conversation-tabs::-webkit-scrollbar { height: 5px; background: transparent; }
+.nmx-shell .nmx-conversation-tabs::-webkit-scrollbar-thumb { border-radius: 5px; background: transparent; }
+.nmx-shell .nmx-conversation-tabs:is(:hover, :focus-within)::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--nmx-text) 28%, transparent); }
+.nmx-shell .nmx-conversation-tabs::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--nmx-text) 42%, transparent); }
+/* The empty 24px coding toolbar spacer (its buttons sit in the titlebar) gives way to the tabs. */
+.nmx-shell:not(.is-detached-conversation) .nmx-workspace:has(> .nmx-conversation-tabs) > .nmx-coding-topbar:not(:has(.nmx-thread-find)) {
+    flex-basis: 0;
+    height: 0;
+    min-height: 0;
+}
+.nmx-shell .nmx-conversation-tab {
+    position: relative;
+    flex: 0 1 auto;
+    display: flex;
+    align-items: center;
+    width: auto;
+    min-width: 96px;
+    max-width: 220px;
+    height: 28px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: var(--nmx-muted);
+    transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.nmx-shell .nmx-conversation-tab.is-active { min-width: 108px; }
+.nmx-shell .nmx-conversation-tab:hover { color: var(--nmx-text); background: var(--nmx-hover, color-mix(in srgb, currentColor 7%, transparent)); }
+.nmx-shell .nmx-conversation-tab.is-active {
+    color: var(--nmx-text);
+    border-color: var(--nmx-border);
+    background: var(--nmx-panel);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .06);
+}
+.nmx-shell .nmx-conversation-tab > button[role='tab'] {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 100%;
+    padding-block: 0;
+    padding-inline: 10px 26px;
+    border: 0;
+    border-radius: inherit;
+    color: inherit;
+    background: transparent !important;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+.nmx-shell .nmx-conversation-tab > button[role='tab'] > .codicon { flex: none; font-size: 14px; opacity: .8; }
+.nmx-shell .nmx-conversation-tab > button[role='tab'] > span { min-width: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }
+.nmx-shell .nmx-conversation-tab > button[role='tab']:focus-visible { outline: 2px solid var(--nmx-focus-ring); outline-offset: -2px; }
+.nmx-shell .nmx-conversation-tab-status { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--nmx-muted); }
+.nmx-shell .nmx-conversation-tab.is-connected .nmx-conversation-tab-status { background: #3fa46a; }
+.nmx-shell .nmx-conversation-tab.is-connecting .nmx-conversation-tab-status { background: #d9a13b; animation: nmx-tab-pulse 1.2s ease-in-out infinite; }
+.nmx-shell .nmx-conversation-tab.is-error .nmx-conversation-tab-status { background: var(--nmx-danger, #c4314b); }
+.nmx-shell .nmx-conversation-tab-close {
+    position: absolute;
+    z-index: 5;
+    inset-inline-end: 4px;
+    top: 50%;
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    color: var(--nmx-muted);
+    background: transparent;
+    opacity: 0;
+    transform: translateY(-50%);
+    transition: opacity 120ms ease, background-color 120ms ease;
+    cursor: pointer;
+    pointer-events: auto;
+    -webkit-app-region: no-drag;
+}
+.nmx-shell.is-detached-conversation .nmx-conversation-tab-close { opacity: .78; }
+.nmx-shell .nmx-conversation-tab:is(:hover, .is-active, :focus-within) .nmx-conversation-tab-close,
+.nmx-shell.is-detached-conversation .nmx-conversation-tab-close:hover { opacity: 1; }
+.nmx-shell .nmx-conversation-tab-close:hover { color: var(--nmx-text); background: color-mix(in srgb, currentColor 14%, transparent); }
+.nmx-shell .nmx-conversation-tab-close > .codicon { font-size: 13px; }
+@keyframes nmx-tab-pulse { 50% { opacity: .35; } }
+
+.nmx-shell .nmx-visual-tab {
+    position: absolute;
+    z-index: 4;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 16px 16px;
+    background: var(--nmx-bg);
+    /* No entrance fade: during a tab switch the old opacity transition briefly
+       exposed the conversation text underneath the visual tab. */
+    animation: none;
+    opacity: 1;
+}
+/* The visual tab is an opaque overlay; hide the conversation layer while it is
+ * mounted so no frame can show through, even before the first paint. */
+.nmx-shell .nmx-coding-stage:has(> .nmx-visual-tab) > .nmx-task-view,
+.nmx-shell .nmx-coding-stage:has(> .nmx-visual-tab) > .nmx-empty-task {
+    visibility: hidden;
+    pointer-events: none;
+}
+@keyframes nmx-visual-tab-in { from { opacity: 0; } to { opacity: 1; } }
+/* One row on desktop: a notification or a window switcher must never push the
+ * tab header onto a second line. Overflow scrolls sideways instead, with the
+ * scrollbar hidden; tiny widths fall back to wrapping in the media query. */
+.nmx-shell .nmx-visual-tab > header { position: relative; display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; align-items: center; gap: 8px; min-width: 0; color: var(--nmx-muted); font-size: 13px; }
+.nmx-shell .nmx-visual-tab > header::-webkit-scrollbar { display: none; width: 0; height: 0; }
+/* The window switcher menu and the terminate bubble hang below the header, so
+ * the scroll container must step aside while they are open or they'd be cut. */
+.nmx-shell .nmx-visual-tab > header:has(.nmx-visual-tab-windows.is-open),
+.nmx-shell .nmx-visual-tab > header:has(.nmx-visual-tab-live-bubble) { overflow: visible; }
+.nmx-shell .nmx-visual-tab > header strong { color: var(--nmx-text); font-weight: 600; white-space: nowrap; }
+.nmx-shell .nmx-visual-tab > header span { min-width: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }
+.nmx-shell .nmx-visual-tab > header { min-height: 28px; }
+.nmx-shell .nmx-visual-tab > header em { margin-inline-end: auto; font-style: normal; font-size: 12px; }
+.nmx-shell .nmx-visual-tab > header em:has(+ .nmx-visual-tab-windows),
+.nmx-shell .nmx-visual-tab > header em:has(+ .nmx-visual-tab-live-bubble + .nmx-visual-tab-windows) { margin-inline-end: 0; }
+/* "已断开" keeps its left position and the plain-text "重新打开" link sits right
+ * beside it; the flexible gap moves to the reopen button (or disappears when a
+ * window switcher follows it). */
+.nmx-shell .nmx-visual-tab > header em:has(+ .nmx-visual-tab-reopen),
+.nmx-shell .nmx-visual-tab > header em:has(+ .nmx-visual-tab-live-bubble + .nmx-visual-tab-reopen) { margin-inline-end: 0; }
+.nmx-shell .nmx-visual-tab > header button.nmx-visual-tab-reopen {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+    min-height: 0;
+    margin: 0;
+    margin-inline-end: auto;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 0;
+    background: transparent !important;
+    box-shadow: none;
+    color: var(--nmx-link, #2f81f7);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 120ms ease, text-decoration-color 120ms ease;
+}
+.nmx-shell .nmx-visual-tab > header button.nmx-visual-tab-reopen:has(+ .nmx-visual-tab-windows) { margin-inline-end: 0; }
+.nmx-shell .nmx-visual-tab > header button.nmx-visual-tab-reopen:hover:not(:disabled) {
+    background: transparent !important;
+    color: color-mix(in srgb, var(--nmx-link, #2f81f7) 78%, #fff);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.nmx-shell .nmx-visual-tab > header button.nmx-visual-tab-reopen:focus-visible {
+    color: color-mix(in srgb, var(--nmx-link, #2f81f7) 86%, #fff);
+    outline: 1px solid color-mix(in srgb, var(--nmx-link, #2f81f7) 62%, transparent);
+    outline-color: color-mix(in srgb, var(--nmx-link, #2f81f7) 62%, transparent) !important;
+    outline-offset: 2px;
+    border-radius: 3px;
+}
+.nmx-shell .nmx-visual-tab > header button.nmx-visual-tab-reopen:disabled {
+    opacity: .55;
+    cursor: default;
+    text-decoration: none;
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab > header button.nmx-visual-tab-reopen {
+    color: var(--nmx-link, #0969da);
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab > header button.nmx-visual-tab-reopen:hover:not(:disabled) {
+    color: var(--nmx-link, #0550ae);
+    background: transparent !important;
+}
+.nmx-shell .nmx-visual-tab > header em.is-connected { color: #3fa46a; }
+.nmx-shell .nmx-visual-tab > header em.is-error { color: var(--nmx-danger, #c4314b); }
+.nmx-shell .nmx-visual-tab-windows { position: relative; margin-inline-end: auto; display: inline-flex; align-items: center; min-width: 0; max-width: 320px; }
+.nmx-shell .nmx-visual-tab-window-trigger {
+    display: inline-flex; align-items: center; gap: 5px; height: 24px; max-width: 100%; padding: 0 8px;
+    border: 1px solid var(--nmx-border); border-radius: 6px;
+    color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 3%, transparent);
+    font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; user-select: none;
+    transition: border-color 140ms ease, background-color 140ms ease;
+}
+.nmx-shell .nmx-visual-tab-window-trigger:hover,
+.nmx-shell .nmx-visual-tab-windows.is-open .nmx-visual-tab-window-trigger {
+    border-color: color-mix(in srgb, var(--nmx-text) 24%, var(--nmx-border));
+    background: color-mix(in srgb, var(--nmx-text) 7%, transparent);
+}
+.nmx-shell .nmx-visual-tab-window-trigger > .codicon { flex: none; font-size: 12px; color: var(--nmx-muted); }
+.nmx-shell .nmx-visual-tab-window-label { min-width: 0; max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.nmx-shell .nmx-visual-tab-window-count {
+    flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px; padding: 0 5px;
+    border-radius: 999px; font-size: 10.5px; font-weight: 600; line-height: 1;
+    color: var(--nmx-accent, #d14a79); background: color-mix(in srgb, var(--nmx-accent, #d14a79) 16%, transparent);
+}
+.nmx-shell .nmx-visual-tab-window-menu {
+    position: absolute; inset-block-start: calc(100% + 4px); inset-inline-start: 0; z-index: 40;
+    min-width: 220px; max-width: 340px; padding: 4px; display: grid; gap: 2px;
+    border: 1px solid var(--nmx-border); border-radius: 9px;
+    background: var(--nmx-menu-background, var(--nmx-panel, var(--nmx-bg)));
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .24);
+}
+.nmx-shell .nmx-visual-tab-window-option {
+    display: flex; align-items: center; gap: 7px; width: 100%; min-height: 28px; padding: 4px 8px;
+    border: 0; border-radius: 6px; color: var(--nmx-muted); background: transparent;
+    font: inherit; font-size: 12px; text-align: start; cursor: pointer;
+}
+.nmx-shell .nmx-visual-tab-window-option:hover { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 8%, transparent); }
+.nmx-shell .nmx-visual-tab-window-option.is-active { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-accent, #d14a79) 12%, transparent); font-weight: 600; }
+.nmx-shell .nmx-visual-tab-window-option > .codicon { flex: none; font-size: 13px; }
+.nmx-shell .nmx-visual-tab-window-option.is-active > .codicon { color: var(--nmx-accent, #d14a79); }
+.nmx-shell .nmx-visual-tab-window-option-title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-shell .nmx-visual-tab-screen {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid var(--nmx-border);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--nmx-text) 4%, var(--nmx-bg));
+}
+/* The picture is laid over the box (never in its flow), so a large window can't stretch the tab and a new frame
+   size can't shift anything: at most the box, centred, the whole picture visible. */
+.nmx-shell .nmx-visual-tab-screen > :is(img, video) { position: absolute; inset: 0; margin: auto; max-width: 100%; max-height: 100%; object-fit: contain; }
+.nmx-shell .nmx-visual-tab-empty { max-width: 360px; display: grid; justify-items: center; gap: 8px; padding: 24px; color: var(--nmx-muted); text-align: center; }
+.nmx-shell .nmx-visual-tab-empty > .codicon { font-size: 28px; opacity: .7; }
+.nmx-shell .nmx-visual-tab-empty strong { color: var(--nmx-text); font-weight: 600; }
+.nmx-shell .nmx-visual-tab-empty p { margin: 0; line-height: 1.6; font-size: 13px; }
+/* Live window: the app's own pixels, scaled down to fit, with a small "live" badge and the placement switch. */
+.nmx-shell .nmx-visual-tab-screen { position: relative; }
+.nmx-shell .nmx-visual-tab-screen > video { background: transparent; opacity: 0; pointer-events: none; transition: opacity 160ms ease-out; }
+.nmx-shell .nmx-visual-tab-screen > video.is-ready { opacity: 1; pointer-events: auto; }
+.nmx-shell .nmx-visual-tab > header em.nmx-visual-tab-live { display: inline-flex; align-items: center; gap: 6px; color: var(--nmx-text); font-weight: 600; }
+.nmx-shell .nmx-visual-tab > header em.nmx-visual-tab-live.is-interactive {
+    height: 24px; padding: 0 8px; margin-inline-start: -4px;
+    border: 1px solid transparent; border-radius: 6px;
+    cursor: pointer; user-select: none;
+    transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.nmx-shell .nmx-visual-tab > header em.nmx-visual-tab-live.is-interactive:hover {
+    border-color: color-mix(in srgb, #e5484d 38%, var(--nmx-border));
+    background: color-mix(in srgb, #e5484d 10%, transparent);
+}
+.nmx-shell .nmx-visual-tab > header em.nmx-visual-tab-live.is-interactive:focus-visible {
+    outline: 2px solid var(--nmx-focus, #6b8afd); outline-offset: 1px;
+}
+/* Static on purpose: an endless pulse kept the GPU redrawing the window (~10% GPU) for as long as a tab was open. */
+.nmx-shell .nmx-visual-tab-live > i { width: 7px; height: 7px; border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 3px color-mix(in srgb, #e5484d 22%, transparent); }
+@keyframes nmx-live-bubble-in {
+    from { opacity: 0; transform: translateY(-4px) scale(.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.nmx-shell .nmx-visual-tab > header span.nmx-visual-tab-live-bubble {
+    position: absolute; inset-block-start: calc(100% + 5px); inset-inline-start: 0; z-index: 35;
+    display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px;
+    overflow: visible; border-radius: 8px;
+    border: 1px solid color-mix(in srgb, #e5484d 40%, var(--nmx-border));
+    color: var(--nmx-text); background: var(--nmx-menu-background, var(--nmx-panel, var(--nmx-bg)));
+    box-shadow: 0 8px 22px rgba(0, 0, 0, .24);
+    font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer; user-select: none;
+    animation: nmx-live-bubble-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    transition: opacity 320ms ease, transform 320ms ease;
+}
+.nmx-shell .nmx-visual-tab > header span.nmx-visual-tab-live-bubble::before {
+    content: ''; position: absolute; inset-block-start: -5px; inset-inline-start: 14px;
+    width: 8px; height: 8px; background: inherit;
+    border-top: 1px solid color-mix(in srgb, #e5484d 40%, var(--nmx-border));
+    border-left: 1px solid color-mix(in srgb, #e5484d 40%, var(--nmx-border));
+    transform: rotate(45deg);
+}
+.nmx-shell .nmx-visual-tab > header span.nmx-visual-tab-live-bubble.is-fading-out {
+    opacity: 0; transform: translateY(-4px); pointer-events: none;
+}
+.nmx-shell .nmx-visual-tab-terminate-modal-backdrop {
+    position: absolute; inset: 0; z-index: 60;
+    display: grid; place-items: center; padding: 20px;
+    background: rgba(10, 10, 14, .48);
+    -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+    animation: nmx-visual-tab-in 150ms ease-out both;
+}
+.nmx-shell .nmx-visual-tab-terminate-modal {
+    width: min(380px, 100%); display: grid; gap: 16px; padding: 18px 20px 16px;
+    border: 1px solid var(--nmx-border-strong, var(--nmx-border)); border-radius: 14px;
+    color: var(--nmx-text); background: var(--nmx-menu-background, var(--nmx-panel, var(--nmx-bg)));
+    box-shadow: 0 22px 64px rgba(0, 0, 0, .38);
+    animation: nmx-drop-card-rise 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.nmx-shell .nmx-visual-tab-terminate-modal-head {
+    display: flex; align-items: flex-start; gap: 12px;
+}
+.nmx-shell .nmx-visual-tab-terminate-icon {
+    flex: none; width: 34px; height: 34px; display: grid; place-items: center;
+    border-radius: 10px; color: #e5484d;
+    background: color-mix(in srgb, #e5484d 14%, transparent);
+}
+.nmx-shell .nmx-visual-tab-terminate-icon > .codicon { font-size: 17px; }
+.nmx-shell .nmx-visual-tab-terminate-copy {
+    min-width: 0; display: grid; gap: 6px;
+}
+.nmx-shell .nmx-visual-tab-terminate-copy > strong {
+    font-size: 14.5px; font-weight: 600; line-height: 1.35; color: var(--nmx-text);
+}
+.nmx-shell .nmx-visual-tab-terminate-copy > p {
+    margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--nmx-muted);
+}
+.nmx-shell .nmx-visual-tab-terminate-actions {
+    display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+}
+.nmx-shell .nmx-visual-tab-terminate-actions > button {
+    height: 30px; padding: 0 13px; border-radius: 8px;
+    font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    transition: background-color 140ms ease, border-color 140ms ease, opacity 140ms ease;
+}
+.nmx-shell .nmx-visual-tab-terminate-actions > button:disabled { opacity: .55; cursor: default; }
+.nmx-shell .nmx-visual-tab-terminate-cancel {
+    border: 1px solid var(--nmx-border-strong, var(--nmx-border));
+    color: var(--nmx-text); background: var(--nmx-control-background, transparent);
+}
+.nmx-shell .nmx-visual-tab-terminate-cancel:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--nmx-text) 8%, transparent);
+}
+.nmx-shell .nmx-visual-tab-terminate-confirm {
+    border: 1px solid transparent; color: #fff; background: #e5484d;
+}
+.nmx-shell .nmx-visual-tab-terminate-confirm:hover:not(:disabled) {
+    background: color-mix(in srgb, #e5484d 86%, #000);
+}
+.nmx-shell .nmx-visual-tab-error { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--nmx-danger, #c4314b); font-size: 12px; }
+/* What the AI just did to the tab ("already open", "muted the sound" …), for a few seconds. */
+.nmx-shell .nmx-visual-tab-info { display: inline-flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; height: 24px; padding: 0 10px; border-radius: 999px;
+    color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-accent, #d14a79) 14%, transparent); font-size: 12px; animation: nmx-visual-tab-in 160ms ease-out both; }
+.nmx-shell .nmx-visual-tab-info > .codicon { flex: none; font-size: 12px; color: var(--nmx-accent, #d14a79); }
+
+/* ---------------------------------------------------------------------------
+ * Tab notification: a floating toast in the tab's top-right corner.
+ *
+ * The tab view mounts the notification inside `.nmx-visual-tab-screen`, so it
+ * overlays the live picture instead of joining the header row (which used to
+ * wrap). It fades in, the view fades it out after three seconds, and its close
+ * button dismisses it early. `pointer-events` stays on so both work.
+ * ------------------------------------------------------------------------ */
+@keyframes nmx-visual-tab-toast-in {
+    from { opacity: 0; transform: translate3d(0, -6px, 0) scale(0.98); }
+    to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+/* The exit mirrors the 260ms transition below. Chromium won't start a
+ * transition from a value held by the fade-in animation's `both` fill, so
+ * the fade-out is a second animation with the same duration. */
+@keyframes nmx-visual-tab-toast-out {
+    from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+    to { opacity: 0; transform: translate3d(0, -6px, 0) scale(0.98); }
+}
+.nmx-shell .nmx-visual-tab-screen > .nmx-visual-tab-toast,
+.nmx-shell .nmx-visual-tab-toast {
+    position: absolute;
+    inset-block-start: 12px;
+    inset-inline-end: 12px;
+    z-index: 30;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: min(420px, calc(100% - 24px));
+    min-height: 32px;
+    padding: 5px 8px 5px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--nmx-border-strong, var(--nmx-border));
+    color: var(--nmx-text);
+    background: color-mix(in srgb, var(--nmx-menu-background, var(--nmx-panel, var(--nmx-bg))) 92%, transparent);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+    font-size: 12px;
+    line-height: 1.4;
+    cursor: pointer;
+    user-select: none;
+    pointer-events: auto;
+    animation: nmx-visual-tab-toast-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    transition: opacity 260ms ease, transform 260ms ease;
+}
+/* Set by the tab view right before it unmounts the toast: fade up and out.
+ * The animation replaces the fade-in (whose `both` fill would otherwise
+ * outrank these declarations) and runs at the transition's 260ms pace. */
+.nmx-shell .nmx-visual-tab-toast.is-fading-out {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0) scale(0.98);
+    pointer-events: none;
+    animation: nmx-visual-tab-toast-out 260ms ease both;
+}
+.nmx-shell .nmx-visual-tab-toast.is-error {
+    border-color: color-mix(in srgb, var(--nmx-danger, #c4314b) 42%, var(--nmx-border));
+}
+/* The message reuses the old inline chips' classes; strip their pill chrome so
+ * they read as plain text inside the toast and ellipsize in one line. */
+.nmx-shell .nmx-visual-tab-toast .nmx-visual-tab-error,
+.nmx-shell .nmx-visual-tab-toast .nmx-visual-tab-info {
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    height: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    animation: none;
+}
+.nmx-shell .nmx-visual-tab-toast .nmx-visual-tab-error {
+    color: var(--nmx-danger, #e5484d);
+    font-weight: 500;
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab-toast .nmx-visual-tab-error,
+.nmx-theme-light .nmx-visual-tab-toast .nmx-visual-tab-error {
+    color: #c4314b;
+}
+.nmx-shell .nmx-visual-tab-toast .nmx-visual-tab-info {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--nmx-text);
+    font-weight: 500;
+}
+.nmx-shell .nmx-visual-tab-toast-close {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    display: inline-grid;
+    place-items: center;
+    color: var(--nmx-muted);
+    background: transparent;
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+.nmx-shell .nmx-visual-tab-toast-close:hover {
+    color: var(--nmx-text);
+    background: color-mix(in srgb, var(--nmx-text) 10%, transparent);
+}
+.nmx-shell .nmx-visual-tab-toast-close:focus-visible {
+    outline: 2px solid var(--nmx-focus, #6b8afd);
+    outline-offset: 1px;
+}
+.nmx-shell .nmx-visual-tab-toast-close > .codicon { font-size: 12px; }
+
+/* Mouse and sound switches: off by default, so a stray click never reaches the app and the app stays quiet. */
+.nmx-shell .nmx-visual-tab-switch {
+    flex: none; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 7px; border: 1px solid var(--nmx-border); border-radius: 7px;
+    color: var(--nmx-muted); background: color-mix(in srgb, var(--nmx-text) 2%, transparent); font-size: 12px; white-space: nowrap; cursor: pointer; user-select: none;
+    transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+.nmx-shell .nmx-visual-tab-switch:hover { border-color: color-mix(in srgb, var(--nmx-text) 24%, var(--nmx-border)); color: var(--nmx-text); }
+.nmx-shell .nmx-visual-tab-switch > input { width: 13px; height: 13px; margin: 0; accent-color: var(--nmx-accent, #d14a79); cursor: pointer; }
+.nmx-shell .nmx-visual-tab-switch:has(> input:checked),
+.nmx-shell .nmx-visual-tab-switch.is-on {
+    color: var(--nmx-text);
+    border-color: color-mix(in srgb, var(--nmx-accent, #d14a79) 42%, var(--nmx-border));
+    background: color-mix(in srgb, var(--nmx-accent, #d14a79) 10%, transparent);
+}
+.nmx-shell .nmx-visual-tab-switch.is-sound.is-off {
+    color: var(--nmx-text);
+    border-color: color-mix(in srgb, #d97706 38%, var(--nmx-border));
+    background: color-mix(in srgb, #d97706 8%, transparent);
+}
+.nmx-shell .nmx-visual-tab-switch.is-sound.is-off > .codicon { color: #d97706; }
+.nmx-shell .nmx-visual-tab-switch.is-on > .codicon { color: var(--nmx-accent, #d14a79); }
+.nmx-shell .nmx-visual-tab-switch[data-state]::after {
+    content: attr(data-state);
+    display: inline-flex; align-items: center; height: 17px; padding: 0 5px; margin-inline-start: 1px; border-radius: 999px;
+    font-size: 10.5px; font-weight: 600; line-height: 1; letter-spacing: 0.01em;
+    color: var(--nmx-muted); background: color-mix(in srgb, var(--nmx-text) 8%, transparent);
+}
+.nmx-shell .nmx-visual-tab-switch.is-sound.is-off[data-state]::after {
+    color: #b45309; background: color-mix(in srgb, #f59e0b 20%, transparent);
+}
+.nmx-theme-dark .nmx-visual-tab-switch.is-sound.is-off[data-state]::after,
+.nmx-shell.nmx-theme-dark .nmx-visual-tab-switch.is-sound.is-off[data-state]::after,
+[data-nmx-theme='dark'] .nmx-shell .nmx-visual-tab-switch.is-sound.is-off[data-state]::after,
+.nmx-shell[data-nmx-theme='dark'] .nmx-visual-tab-switch.is-sound.is-off[data-state]::after {
+    color: #fbbf24; background: color-mix(in srgb, #f59e0b 22%, transparent);
+}
+.nmx-shell .nmx-visual-tab-switch.is-on[data-state]::after {
+    color: var(--nmx-accent, #d14a79); background: color-mix(in srgb, var(--nmx-accent, #d14a79) 18%, transparent);
+}
+.nmx-shell .nmx-visual-tab-switch:has(> input:focus-visible) { outline: 2px solid var(--nmx-focus, #6b8afd); outline-offset: 1px; }
+.nmx-shell .nmx-visual-tab-switch .codicon { font-size: 13px; }
+.nmx-shell .nmx-visual-tab-screen > video { cursor: default; }
+/* The strip lights up while a torn-off tab is dragged back onto it. */
+.nmx-shell .nmx-conversation-tabs.is-drop-target { box-shadow: inset 0 -2px 0 var(--nmx-accent, #d14a79); background: color-mix(in srgb, var(--nmx-accent, #d14a79) 8%, transparent); }
+.nmx-shell .nmx-visual-tab.is-pointer .nmx-visual-tab-screen > video { cursor: pointer; }
+/* The hidden field that takes keys and input-method composition while 键鼠 is on. */
+.nmx-shell .nmx-visual-tab-keys { position: absolute; inset-inline-start: 12px; inset-block-end: 12px; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; resize: none; pointer-events: none; }
+.nmx-shell .nmx-visual-tab-place {
+    flex: none; display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--nmx-border); border-radius: 8px;
+    background: color-mix(in srgb, var(--nmx-text) 4%, var(--nmx-bg));
+}
+.nmx-shell .nmx-visual-tab-place > button, .nmx-shell .nmx-visual-tab-action {
+    display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border: 0; border-radius: 6px;
+    color: var(--nmx-muted); background: transparent; font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer;
+}
+.nmx-shell .nmx-visual-tab-place > button[aria-pressed='true'] { color: var(--nmx-text); background: var(--nmx-bg); box-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 0 0 1px var(--nmx-border); font-weight: 600; }
+.nmx-shell .nmx-visual-tab-place > button:not([aria-pressed='true']):hover, .nmx-shell .nmx-visual-tab-action:hover { color: var(--nmx-text); background: color-mix(in srgb, currentColor 10%, transparent); }
+.nmx-shell .nmx-visual-tab-place > button:disabled, .nmx-shell .nmx-visual-tab-action:disabled { opacity: .55; cursor: default; }
+.nmx-shell .nmx-visual-tab-action { flex: none; border: 1px solid var(--nmx-border); }
+.nmx-shell .nmx-visual-tab-place .codicon, .nmx-shell .nmx-visual-tab-action .codicon { font-size: 13px; }
+.nmx-shell .nmx-visual-tab-note {
+    /* At the top: the composer floats over the bottom of the tab. */
+    position: absolute; inset-block-start: 10px; inset-inline-start: 50%; transform: translateX(-50%); margin: 0;
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; white-space: nowrap;
+    color: #f5f5f7; background: rgba(24, 24, 28, .72); font-size: 12px; pointer-events: none; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+[dir='rtl'] .nmx-shell .nmx-visual-tab-note, .nmx-shell[dir='rtl'] .nmx-visual-tab-note { transform: translateX(50%); }
+@media (max-width: 560px) {
+    .nmx-shell .nmx-visual-tab > header { flex-wrap: wrap; }
+    .nmx-shell .nmx-visual-tab-note { white-space: normal; max-width: calc(100% - 24px); text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell .nmx-conversation-tab.is-connecting .nmx-conversation-tab-status, .nmx-shell .nmx-visual-tab { animation: none; }
+    .nmx-shell .nmx-visual-tab-screen > video { transition: none; }
+    .nmx-shell .nmx-visual-tab-toast,
+    .nmx-shell .nmx-visual-tab-toast.is-fading-out { animation: none; transition: none; }
+}
+.nmx-media-viewer-error { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-radius: 12px; color: #f7f7f8; background: rgba(27, 27, 29, .86); pointer-events: auto; }
+
+/* ---------------------------------------------------------------------------
+ * Light theme: a touch greyer so large surfaces are not glaring white, and
+ * the sent-prompt bubble sits visibly darker than the conversation page.
+ * ------------------------------------------------------------------------ */
+:is(.nmx-shell, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light {
+    --nmx-bg: #ecebe8;
+    --nmx-panel: #f4f3f0;
+    --nmx-panel-2: #e4e2de;
+    --nmx-border: #dcd8d4;
+    --nmx-hover: #e0ddd9;
+    --nmx-menu-background: #f4f3f0;
+    --nmx-dialog-background: #f4f3f0;
+    --nmx-control-background: #e8e5e2;
+    --nmx-composer-resting-border: #dcd8d4;
+    --nmx-user-bubble: #dfdcd8;
+    --nmx-user-bubble-border: #d0cbc7;
+}
+#theia-app-shell:has(.nmx-theme-light) :is(#theia-main-content-panel, #nextmux\.desktop\.widget) { background: #ecebe8 !important; }
+.nmx-shell.nmx-theme-light :is(.nmx-workspace, .nmx-workspace-scroll, .nmx-coding-stage, .nmx-task-thread, .nmx-work-context, .nmx-context-browser, .nmx-context-files, .nmx-context-file-list, .nmx-context-file-preview, .nmx-browser-view, .nmx-composer-dock, .nmx-workspace-topbar, .nmx-conversation-tabs) {
+    background-color: #ecebe8 !important;
+}
+.nmx-shell.nmx-theme-light .nmx-workspace-topbar.nmx-coding-topbar { background: #ecebe8 !important; }
+.nmx-shell.nmx-theme-light :is(.nmx-context-panel, .nmx-context-account-dock) { background: #e4e2de !important; }
+#theia-app-shell:has(.nmx-theme-light) #theia-top-panel { background: #e4e2de !important; }
+.nmx-shell.nmx-theme-light :is(.nmx-composer, .nmx-composer-popover, .nmx-header-popover, .nmx-account-menu, .nmx-session-menu, .nmx-model-picker, .nmx-model-effort-menu, .nmx-follow-up-menu, .nmx-settings-panel, .nmx-settings-group) {
+    background: #f4f3f0 !important;
+    border-color: #dcd8d4 !important;
+}
+.nmx-desktop-widget .nmx-shell.nmx-theme-light .nmx-task-turn .nmx-user-message,
+.nmx-desktop-widget .nmx-shell.nmx-theme-light .nmx-user-message {
+    color: #2b272a !important;
+    background-color: var(--nmx-user-bubble) !important;
+    border: 1px solid var(--nmx-user-bubble-border) !important;
+}
+.nmx-shell.nmx-theme-light .nmx-user-message .nmx-collapsible-message { --nmx-message-fade-bg: var(--nmx-user-bubble); }
+.nmx-shell.nmx-theme-light .nmx-md-code { background: #f3f2ef; border-color: #dcd8d4; }
+.nmx-shell.nmx-theme-light .nmx-conversation-tab.is-active { background: #f4f3f0; border-color: #d6d2ce; }
+:is(.nmx-shell, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light :is(input:not([type='range'], [type='checkbox'], [type='radio']), textarea, select):not(.nmx-composer textarea, :is(.nmx-comic-chat-chip, .nmx-board-field, .nmx-board-chip, .nmx-start-frame-param-field) select) { background: #f4f3f0 !important; }
+/* A field made of an icon and an input in one bordered box keeps a single surface: the input takes the box's background. */
+:is(.nmx-shell, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light label:has(> i.codicon) > input:not([type='range'], [type='checkbox'], [type='radio']),
+:is(.nmx-shell, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light.nmx-theme-light.nmx-theme-light :is(.nmx-comic-chat-chip, .nmx-board-field, .nmx-board-chip, .nmx-start-frame-param-field) select { background: transparent !important; background-color: transparent !important; border-color: transparent !important; }
+.nmx-shell .nmx-settings-page :is(.nmx-community-skills-toolbar, .nmx-skill-install-link) > label > input { width: 100%; }
+.nmx-shell.nmx-theme-light .nmx-composer textarea { background: transparent !important; }
+.nmx-shell.nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) a.nmx-file-link { background: transparent !important; border-color: transparent !important; box-shadow: none !important; color: #0f172a !important; }
+.nmx-shell.nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) a.nmx-file-link:hover { background: transparent !important; border-color: transparent !important; box-shadow: none !important; color: #020617 !important; }
+
+/* The base secondary button in nextmux.css is dark-only hex; light surfaces use the theme tokens. */
+:is(.nmx-shell, .nmx-model-effort-portal, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light .nmx-secondary-button { color: var(--nmx-text, #1e293b) !important; background: var(--nmx-panel-2, #f1f5f9) !important; border-color: var(--nmx-border-strong, var(--nmx-border, #cbd5e1)) !important; }
+:is(.nmx-shell, .nmx-model-effort-portal, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light .nmx-secondary-button:hover:not(:disabled) { color: var(--nmx-text, #0f172a) !important; background: var(--nmx-hover, #e2e8f0) !important; }
+
+/* Settings → System permissions */
+.nmx-shell .nmx-system-permissions { display: grid; gap: 14px; }
+.nmx-shell .nmx-system-permissions-system { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--nmx-muted); font-size: 13px; }
+.nmx-shell .nmx-system-permissions-system strong { color: var(--nmx-text); font-weight: 600; }
+.nmx-shell .nmx-system-permissions-system button { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: transparent; font: inherit; font-size: 12px; cursor: pointer; }
+.nmx-shell .nmx-system-permissions-note { margin: 0; padding: 10px 12px; border: 1px solid var(--nmx-border); border-radius: 10px; color: var(--nmx-subtle); font-size: 13px; line-height: 1.55; }
+.nmx-shell .nmx-system-permissions-note.is-warning { border-color: color-mix(in srgb, #d9a13b 55%, transparent); background: color-mix(in srgb, #d9a13b 9%, transparent); }
+.nmx-shell .nmx-system-permissions-note button { margin-inline-start: 8px; height: 26px; padding: 0 10px; border: 1px solid var(--nmx-border); border-radius: 7px; background: var(--nmx-panel); color: var(--nmx-text); font: inherit; font-size: 12px; cursor: pointer; }
+.nmx-shell .nmx-system-permissions-list { display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--nmx-border); border-radius: 12px; overflow: hidden; }
+.nmx-shell .nmx-system-permissions-list > li { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 10px 14px; }
+.nmx-shell .nmx-system-permissions-list > li + li { border-top: 1px solid var(--nmx-border); }
+.nmx-shell .nmx-system-permissions-list > li > .codicon { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; background: color-mix(in srgb, currentColor 8%, transparent); font-size: 16px; }
+.nmx-shell .nmx-system-permissions-list > li > div { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.nmx-shell .nmx-system-permissions-list > li strong { font-size: 14px; font-weight: 600; }
+.nmx-shell .nmx-system-permissions-list > li small { color: var(--nmx-muted); font-size: 12px; line-height: 1.45; }
+.nmx-shell .nmx-system-permissions-list > li > button { flex: none; height: 30px; padding: 0 12px; border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
+.nmx-shell .nmx-system-permission-status { flex: none; padding: 2px 8px; border-radius: 999px; font-size: 12px; color: var(--nmx-muted); background: color-mix(in srgb, currentColor 9%, transparent); }
+.nmx-shell .nmx-system-permission-status.is-granted { color: #2f8a57; background: color-mix(in srgb, #3fa46a 14%, transparent); }
+.nmx-shell .nmx-system-permission-status:is(.is-denied, .is-restricted) { color: #b4553b; background: color-mix(in srgb, #d9703b 13%, transparent); }
+/* Microphone: the same single row as Screen Recording and Accessibility, with the input picker inline before the
+   actions. Nothing wraps or grows taller; the hint and the device name give way with an ellipsis (full text on hover). */
+.nmx-shell .nmx-system-permissions { container-type: inline-size; }
+.nmx-shell .nmx-system-permissions-list > li > button { white-space: nowrap; }
+.nmx-shell .nmx-system-permissions-list > li.has-microphone-slot { flex-wrap: nowrap; }
+.nmx-shell .nmx-system-permissions-list > li.has-microphone-slot > div:first-of-type > small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-shell .nmx-system-permissions-list > li.has-microphone-slot > div:first-of-type > small.is-warning { color: var(--nmx-mic-warning, #e5a33d); }
+.nmx-shell.nmx-theme-light .nmx-system-permissions-list > li.has-microphone-slot > div:first-of-type > small.is-warning { --nmx-mic-warning: #8a5200; }
+.nmx-shell .nmx-system-permissions-list > li.has-microphone-slot > .nmx-system-permission-status { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-shell .nmx-system-permissions-list > li > .nmx-system-permission-slot { flex: 0 1 220px; display: flex; min-width: 112px; }
+.nmx-shell .nmx-system-permissions-list .nmx-system-permission-mic-select {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 240px;
+    height: 30px;
+    padding: 0 8px;
+    overflow: hidden;
+    border: 1px solid var(--nmx-border-strong, var(--nmx-border));
+    border-radius: 8px;
+    color: var(--nmx-text);
+    background-color: var(--nmx-control-background, var(--nmx-panel));
+    font: inherit;
+    font-size: 12.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: border-color 120ms ease;
+}
+.nmx-shell .nmx-system-permissions-list .nmx-system-permission-mic-select:hover { border-color: var(--nmx-focus-ring, var(--nmx-border-strong)); }
+.nmx-shell .nmx-system-permissions-list .nmx-system-permission-mic-select:focus-visible { border-color: var(--nmx-focus-ring, var(--nmx-border-strong)); outline: none; }
+/* A narrow settings column keeps the row on one line: tighter gaps, and the hint yields first. */
+@container (max-width: 560px) {
+    .nmx-shell .nmx-system-permissions-list > li.has-microphone-slot { gap: 8px; padding-inline: 12px; }
+    .nmx-shell .nmx-system-permissions-list > li.has-microphone-slot > .nmx-system-permission-slot { flex-basis: 150px; min-width: 96px; }
+    .nmx-shell .nmx-system-permissions-list > li.has-microphone-slot > div:first-of-type > small { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .nmx-shell .nmx-system-permissions-list .nmx-system-permission-mic-select { transition: none; } }
+
+/* Last message clearance follows the measured composer height (attachments,
+   pasted text, queued follow-ups, long drafts); see nextmux-composer-clearance. */
+.nmx-shell .nmx-task-view .nmx-task-turn.is-last {
+    padding-bottom: var(--nmx-dictation-composer-clearance, var(--nmx-composer-clearance, 190px)) !important;
+}
+.nmx-composer-clearance-anchor { display: none; }
+
+/* The drop mask sits exactly on the composer's own border box: generic
+   ".nmx-composer > div" sizing rules made it 5px short on the left and 3px
+   past the right edge. */
+.nmx-desktop-widget .nmx-shell .nmx-composer > .nmx-composer-drop-overlay {
+    inset: -1px !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    box-sizing: border-box;
+    border-radius: inherit;
+}
+
+/* No full-width band behind attachment chips: only the composer box itself
+   sits on a solid fill (fading in just above it), so chips float over the
+   transcript like the composer does. */
+.nmx-shell .nmx-composer-dock { --nmx-dock-fill: #181818; background: transparent !important; }
+/* A computer tool call waiting for a system permission (nextmux-computer-permission-wait.tsx). */
+.nmx-shell .nmx-permission-wait { position: absolute; bottom: calc(100% + 2px); left: 50%; box-sizing: border-box; width: min(760px, calc(100% - 32px)); transform: translateX(-50%); pointer-events: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 10px 12px; border: 1px solid color-mix(in srgb, #f59e0b 40%, var(--nmx-border)); border-radius: 12px; background: color-mix(in srgb, #f59e0b 9%, var(--nmx-panel)); color: var(--nmx-text); font-size: 12.5px; }
+.nmx-shell .nmx-permission-wait > .codicon { flex: none; color: #f59e0b; font-size: 16px; }
+.nmx-shell .nmx-permission-wait > div:first-of-type { display: grid; flex: 1 1 260px; gap: 2px; min-width: 0; }
+.nmx-shell .nmx-permission-wait strong { font-size: 13px; font-weight: 600; }
+.nmx-shell .nmx-permission-wait span { color: var(--nmx-muted); line-height: 1.45; }
+.nmx-shell .nmx-permission-wait small { color: var(--nmx-muted); font-size: 11.5px; line-height: 1.4; }
+.nmx-shell .nmx-permission-wait-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.nmx-shell .nmx-permission-wait-actions > button { height: 28px; padding: 0 10px; border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: var(--nmx-panel); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.nmx-shell .nmx-permission-wait-actions > button:hover { background: var(--nmx-panel-2); }
+.nmx-shell .nmx-permission-wait-actions > button.is-primary { border-color: transparent; color: #fff; background: #b45309; }
+.nmx-shell .nmx-permission-wait-actions > button.is-primary:hover { background: #92400e; }
+
+.nmx-shell.nmx-theme-light .nmx-composer-dock { --nmx-dock-fill: #ecebe8; }
+.nmx-shell .nmx-composer-dock::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    /* A soft fade over the attachment row instead of a hard-edged band. */
+    background: linear-gradient(to bottom, color-mix(in srgb, var(--nmx-dock-fill) 0%, transparent) 0, color-mix(in srgb, var(--nmx-dock-fill) 88%, transparent) calc(100% - var(--nmx-composer-box-height, 120px) - 20px), var(--nmx-dock-fill) calc(100% - var(--nmx-composer-box-height, 120px) - 4px));
+    pointer-events: none;
+}
+
+/* Rows stack upward from the composer: the row next to the input is always
+   full, and the newest attachments appear on the top row, so no half-empty
+   row sits between the chips and the message box. */
+.nmx-shell .nmx-composer-assets .nmx-attachment-chips { flex-wrap: wrap-reverse; align-content: flex-start; }
+
+.nmx-system-permissions .nmx-system-permissions-group { margin: 18px 0 8px; color: var(--nmx-muted); font-size: 11.5px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.nmx-system-permissions .nmx-system-permissions-list.is-optional > li { opacity: .92; }
+.nmx-system-notify-toggle { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 12px 14px; border: 1px solid var(--nmx-border); border-radius: 10px; cursor: pointer; }
+.nmx-system-notify-toggle input { margin-top: 3px; accent-color: var(--nmx-accent); }
+.nmx-system-notify-toggle > span { display: flex; flex-direction: column; gap: 3px; }
+.nmx-system-notify-toggle strong { font-size: 13px; font-weight: 600; }
+.nmx-system-notify-toggle small { color: var(--nmx-muted); font-size: 12px; line-height: 1.5; }
+
+/* ── First-run setup ─────────────────────────────────────────────────────── */
+.nmx-shell .nmx-onboarding-backdrop { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--nmx-bg, #181818) 82%, transparent); backdrop-filter: blur(14px); animation: nmx-onboarding-in 260ms ease-out both; }
+.nmx-shell .nmx-onboarding { position: relative; box-sizing: border-box; width: min(600px, 100%); max-height: calc(100vh - 48px); overflow: auto; padding: 32px 34px 26px; border: 1px solid var(--nmx-border-strong, var(--nmx-border)); border-radius: 18px; color: var(--nmx-text); background: var(--nmx-panel); box-shadow: 0 30px 90px rgba(0, 0, 0, .35); outline: none; }
+.nmx-shell .nmx-onboarding-step { color: var(--nmx-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.nmx-shell .nmx-onboarding h1 { margin: 8px 0 6px; font-size: 24px; font-weight: 650; letter-spacing: -.02em; }
+.nmx-shell .nmx-onboarding > p { margin: 0 0 22px; color: var(--nmx-muted); font-size: 13px; line-height: 1.65; }
+.nmx-shell .nmx-onboarding-field { margin: 0 0 20px; padding: 0; border: 0; }
+.nmx-shell .nmx-onboarding-field legend { margin-bottom: 8px; padding: 0; color: var(--nmx-muted); font-size: 12px; font-weight: 600; }
+.nmx-shell .nmx-onboarding-languages { display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 6px; }
+.nmx-shell .nmx-onboarding-languages button { min-height: 34px; padding: 0 12px; border: 1px solid var(--nmx-border); border-radius: 9px; color: var(--nmx-text); background: transparent; font-size: 13px; text-align: start; cursor: pointer; }
+.nmx-shell .nmx-onboarding :is(.nmx-onboarding-languages, .nmx-onboarding-themes) button:hover { border-color: color-mix(in srgb, var(--nmx-text) 30%, var(--nmx-border)); }
+.nmx-shell .nmx-onboarding :is(.nmx-onboarding-languages, .nmx-onboarding-themes) button.is-active { border-color: var(--nmx-accent); box-shadow: 0 0 0 1px var(--nmx-accent); }
+.nmx-shell .nmx-onboarding :is(.nmx-onboarding-languages, .nmx-onboarding-themes) button:focus-visible { outline: 2px solid var(--nmx-accent); outline-offset: 2px; }
+.nmx-shell .nmx-onboarding-themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.nmx-shell .nmx-onboarding-themes button { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px; border: 1px solid var(--nmx-border); border-radius: 12px; color: var(--nmx-text); background: transparent; font-size: 12.5px; cursor: pointer; }
+.nmx-shell .nmx-onboarding-swatch { display: flex; gap: 4px; height: 52px; padding: 8px; border-radius: 8px; background: #1b1b1d; }
+.nmx-shell .nmx-onboarding-swatch i { flex: 1; border-radius: 4px; background: #2c2c30; }
+.nmx-shell .nmx-onboarding-swatch i:first-child { flex: 0 0 28%; background: #242427; }
+.nmx-shell .nmx-onboarding-themes .is-light .nmx-onboarding-swatch { background: #ecebe8; }
+.nmx-shell .nmx-onboarding-themes .is-light .nmx-onboarding-swatch i { background: #f7f6f3; }
+.nmx-shell .nmx-onboarding-themes .is-light .nmx-onboarding-swatch i:first-child { background: #e2e0dc; }
+.nmx-shell .nmx-onboarding-themes .is-system .nmx-onboarding-swatch { background: linear-gradient(135deg, #1b1b1d 50%, #ecebe8 50%); }
+.nmx-shell .nmx-onboarding-themes .is-system .nmx-onboarding-swatch i { background: color-mix(in srgb, #888 40%, transparent); }
+.nmx-shell .nmx-onboarding footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.nmx-shell .nmx-onboarding footer button { min-height: 36px; padding: 0 18px; border-radius: 10px; }
+.nmx-shell .nmx-onboarding-permissions { margin-bottom: 14px; }
+.nmx-shell .nmx-onboarding-permissions .nmx-system-permissions-list { margin: 0; }
+.nmx-shell .nmx-onboarding-permissions .nmx-system-permissions-note.is-relaunch { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; border-color: color-mix(in srgb, var(--nmx-accent, #4f8cff) 45%, var(--nmx-border)); background: color-mix(in srgb, var(--nmx-accent, #4f8cff) 8%, transparent); color: var(--nmx-text); }
+.nmx-shell .nmx-onboarding-permissions .nmx-system-permissions-note.is-relaunch button { flex: none; height: 30px; margin: 0; padding: 0 14px; }
+@keyframes nmx-onboarding-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .nmx-shell .nmx-onboarding-backdrop { animation: none; } }
+
+/* ── Conversation floats: files, sticky notes, and project AGENTS.md ────────
+   Three separate floats on the right edge of the thread, each only a small icon until hovered or
+   focused: the project's files on top, the sticky notes in the middle, and the project's AGENTS.md
+   instructions below. The three icons form one group centred in the conversation body box
+   (--nmx-float-top to --nmx-float-bottom): each sits at top: 50%, pulled up by half its own height and
+   shifted by its slot (one icon plus an 8px gap). An open panel is centred the same way; while any panel
+   is open, all icons hide and return when it closes. */
+.nmx-shell .nmx-coding-stage { overflow: hidden; }
+.nmx-shell .nmx-coding-stage > :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float) { position: absolute; top: var(--nmx-float-top, 16px); right: 10px; bottom: var(--nmx-float-bottom, 16px); max-height: calc(100% - var(--nmx-float-top, 16px) - var(--nmx-float-bottom, 16px)); width: 36px; pointer-events: none; }
+/* Open, the float's whole column (panel width, full height) keeps it hovered, so the pointer can travel from the
+   icon to the centred panel without closing it. */
+.nmx-shell .nmx-coding-stage > :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float):is(:hover, :focus-within) { width: 224px; pointer-events: auto; }
+/* Z-index layering above the conversation body, below the right-hand drawer (35) and header popovers (40). */
+.nmx-shell .nmx-coding-stage > .nmx-thread-files { z-index: 34; }
+.nmx-shell .nmx-coding-stage > .nmx-thread-notes-float { z-index: 33; }
+.nmx-shell .nmx-coding-stage > .nmx-thread-agents-float { z-index: 32; }
+.nmx-shell .nmx-coding-stage > :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float):is(:hover, :focus-within) { z-index: 34; }
+.nmx-shell .nmx-coding-stage > .nmx-thread-files > .nmx-thread-float-tab { --nmx-float-slot: -44px; }
+.nmx-shell .nmx-coding-stage > .nmx-thread-notes-float > .nmx-thread-float-tab { --nmx-float-slot: 0px; }
+.nmx-shell .nmx-coding-stage > .nmx-thread-agents-float > .nmx-thread-float-tab { --nmx-float-slot: 44px; }
+.nmx-shell .nmx-coding-stage.is-drop-target > :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float) { visibility: hidden; }
+
+.nmx-shell .nmx-thread-float-tab { position: absolute; top: 50%; right: 0; translate: 0 calc(-50% + var(--nmx-float-slot, 0px)); box-sizing: border-box; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid rgba(255, 255, 255, .07); border-radius: 10px; color: #8d888a; background: rgba(30, 29, 29, .74); box-shadow: 0 4px 14px rgba(0, 0, 0, .14); backdrop-filter: blur(14px); pointer-events: auto; cursor: default; outline: none; transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease, opacity 120ms ease; }
+/* Open, a panel replaces the icons: its own icon and the other floats' icons hide until it closes. */
+.nmx-shell .nmx-coding-stage > :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float):is(:hover, :focus-within) > .nmx-thread-float-tab,
+.nmx-shell .nmx-coding-stage:has(> :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float):is(:hover, :focus-within)) > :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float) > .nmx-thread-float-tab { opacity: 0; pointer-events: none; }
+.nmx-shell .nmx-thread-float-tab > .codicon { font-size: 15px; }
+.nmx-shell .nmx-thread-float-tab > .codicon.has-notes { color: var(--nmx-accent); }
+.nmx-shell .nmx-thread-float-tab:hover { color: #d9d4d6; border-color: rgba(255, 255, 255, .12); }
+.nmx-shell :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float):is(:hover, :focus-within) > .nmx-thread-float-tab { color: #e6e1e3; border-color: #45403f; background: rgba(29, 28, 28, .98); }
+.nmx-shell .nmx-thread-float-tab:focus-visible { outline: 2px solid color-mix(in srgb, var(--nmx-accent) 60%, transparent); outline-offset: 1px; }
+.nmx-shell.nmx-theme-light .nmx-thread-float-tab { border-color: #ddd8d4; color: #6f696c; background: rgba(248, 247, 245, .97); box-shadow: 0 4px 14px rgba(66, 58, 62, .08); }
+.nmx-shell.nmx-theme-light .nmx-thread-float-tab:hover { color: #3a3437; border-color: #cbc5c1; }
+.nmx-shell.nmx-theme-light :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float):is(:hover, :focus-within) > .nmx-thread-float-tab { color: #262225; border-color: #cbc5c1; background: #fff; }
+
+/* File panel: the list card, shown only while the float is hovered or focused, vertically centred. */
+.nmx-shell .nmx-coding-stage > .nmx-thread-files:not(:hover):not(:focus-within) > div { display: none; }
+.nmx-shell .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) > div { top: 50%; translate: 0 -50%; right: 0; width: 224px; max-height: 100%; padding: 4px; border: 1px solid color-mix(in srgb, var(--nmx-border-strong, var(--nmx-border)) 88%, rgba(255, 255, 255, .08)); border-radius: 11px; background: color-mix(in srgb, var(--nmx-panel) 96%, #181718); backdrop-filter: blur(16px); box-shadow: 0 10px 26px rgba(0, 0, 0, .38), 0 1px 3px rgba(0, 0, 0, .24); animation: nmx-float-panel-in 140ms ease-out both; }
+.nmx-shell.nmx-theme-light .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) > div { border-color: #dcd6d2 !important; background: rgba(252, 251, 249, .98) !important; box-shadow: 0 8px 22px rgba(60, 50, 54, .12), 0 1px 2px rgba(60, 50, 54, .06); }
+.nmx-shell .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) header { grid-template-columns: 24px minmax(0, 1fr) 26px; gap: 4px; padding: 0 4px 2px; }
+.nmx-shell .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) header strong { width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.nmx-shell .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) .nmx-thread-file-row.is-file { grid-template-columns: 16px minmax(0, 1fr); gap: 6px; padding-right: 6px; padding-left: calc(7px + var(--nmx-thread-file-depth, 0) * 10px); }
+.nmx-shell .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) .nmx-thread-file-row.is-directory { grid-template-columns: 16px minmax(0, 1fr) 12px; gap: 6px; padding-right: 6px; padding-left: calc(7px + var(--nmx-thread-file-depth, 0) * 10px); }
+.nmx-shell .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) .nmx-thread-file-name { width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+
+/* Notes panel and AGENTS.md panel: always vertically centred in the conversation body box. */
+.nmx-shell .nmx-thread-notes,
+.nmx-shell .nmx-thread-agents { position: absolute; top: 50%; right: 0; translate: 0 -50%; display: none; flex-direction: column; align-items: stretch; box-sizing: border-box; width: 224px; max-height: 100%; min-height: 0; padding: 0 2px 4px; overflow: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--nmx-text) 18%, transparent) transparent; pointer-events: auto; }
+.nmx-shell .nmx-thread-notes-float:is(:hover, :focus-within) > .nmx-thread-notes { display: flex; animation: nmx-float-panel-in 140ms ease-out both; }
+.nmx-shell .nmx-thread-agents-float:is(:hover, :focus-within) > :is(.nmx-thread-notes, .nmx-thread-agents) { display: flex; animation: nmx-float-panel-in 140ms ease-out both; }
+.nmx-shell .nmx-thread-note-link { align-self: center; flex: 0 0 auto; width: 0; height: 12px; border-inline-start: 1.5px solid color-mix(in srgb, var(--nmx-text) 24%, transparent); }
+.nmx-shell .nmx-thread-note-link.is-dashed { border-inline-start-style: dashed; }
+.nmx-shell .nmx-thread-note { position: relative; flex: 0 1 auto; min-height: 84px; max-height: 100%; overflow: hidden; display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--nmx-border); border-radius: 8px; background: var(--nmx-panel); box-shadow: 0 3px 10px #0002; }
+.nmx-shell .nmx-thread-notes > .nmx-thread-note { max-height: calc((100% - 14px) / 2); }
+.nmx-shell .nmx-thread-agents > .nmx-thread-note { max-height: 100%; }
+.nmx-shell.nmx-theme-light .nmx-thread-note { box-shadow: 0 3px 10px #0000000d; }
+.nmx-shell .nmx-thread-note.is-global { border-style: dashed; }
+.nmx-shell .nmx-thread-note-title { display: flex; align-items: center; gap: 6px; min-width: 0; padding-bottom: 7px; border-bottom: 1px solid var(--nmx-border); color: var(--nmx-subtle, var(--nmx-muted)); font-size: 11.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
+.nmx-shell .nmx-thread-note-title .codicon { flex: 0 0 auto; font-size: 12.5px; color: var(--nmx-muted); }
+.nmx-shell .nmx-thread-note-hint { display: block; font-size: 11px; line-height: 1.4; color: var(--nmx-muted); margin-top: -1px; padding-bottom: 2px; overflow-wrap: anywhere; }
+.nmx-shell .nmx-thread-note textarea { box-sizing: border-box; flex: 0 1 auto; width: 100%; height: 80px; min-height: 44px; max-height: min(260px, 100%); overflow-y: auto; padding: 4px 0; border: 0 !important; border-radius: 0; color: var(--nmx-text); background: transparent !important; font-size: 12.5px; line-height: 1.6; resize: vertical; overflow-wrap: anywhere; white-space: pre-wrap; outline: none; box-shadow: none; scrollbar-width: thin; }
+.nmx-shell .nmx-thread-note textarea::placeholder { color: color-mix(in srgb, var(--nmx-muted) 85%, transparent); }
+.nmx-shell .nmx-thread-note textarea:disabled { color: var(--nmx-muted); cursor: not-allowed; }
+.nmx-shell .nmx-thread-note:focus-within { border-color: var(--nmx-subtle, var(--nmx-muted)); }
+.nmx-shell .nmx-thread-note-size { position: absolute; top: -9px; inset-inline-end: 8px; padding: 1px 7px; border-radius: 999px; color: var(--nmx-panel); background: var(--nmx-text); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+
+/* AGENTS.md: the literal file name, a badge with what it is, then one line on what it does. An accent edge and a
+   faint accent wash set it apart from the sticky notes; the meta row names the project it belongs to. */
+.nmx-shell .nmx-thread-note.is-agents-md { border-inline-start: 2.5px solid color-mix(in srgb, var(--nmx-accent, #4f8cff) 68%, var(--nmx-border)); background: color-mix(in srgb, var(--nmx-panel) 95%, var(--nmx-accent, #4f8cff) 5%); }
+.nmx-shell.nmx-theme-light .nmx-thread-note.is-agents-md { background: color-mix(in srgb, var(--nmx-panel, #fff) 97%, var(--nmx-accent, #4f8cff) 3%); }
+.nmx-shell .nmx-thread-note.is-agents-md .nmx-thread-note-title { gap: 6px; color: var(--nmx-text); }
+.nmx-shell .nmx-thread-note.is-agents-md .nmx-thread-note-title .codicon { color: color-mix(in srgb, var(--nmx-accent, #4f8cff) 80%, var(--nmx-muted)); }
+.nmx-shell .nmx-thread-agents-name { flex: 0 0 auto; font-family: var(--nmx-code-font, ui-monospace, "SF Mono", Menlo, Consolas, monospace); font-size: 11.5px; font-weight: 600; letter-spacing: 0; }
+.nmx-shell .nmx-thread-agents-badge { min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 1px 6px; border-radius: 999px; color: color-mix(in srgb, var(--nmx-accent, #4f8cff) 72%, var(--nmx-text)); background: color-mix(in srgb, var(--nmx-accent, #4f8cff) 14%, transparent); font-size: 10.5px; font-weight: 500; line-height: 16px; }
+.nmx-shell.nmx-theme-light .nmx-thread-agents-badge { color: color-mix(in srgb, var(--nmx-accent, #2f6fe0) 62%, #1f1b1d); background: color-mix(in srgb, var(--nmx-accent, #2f6fe0) 10%, transparent); }
+/* Written like a note (便签): the same face, size and line rhythm as the notes above it; only the default height differs. */
+.nmx-shell .nmx-thread-note.is-agents-md textarea { height: 112px; font-family: inherit; }
+.nmx-shell .nmx-thread-note-agents-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding-top: 5px; border-top: 1px solid color-mix(in srgb, var(--nmx-border) 72%, transparent); color: var(--nmx-muted); font-size: 10.5px; line-height: 1.25; }
+.nmx-shell .nmx-thread-note-agents-folder { display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
+.nmx-shell .nmx-thread-note-agents-folder .codicon { font-size: 11px; flex: 0 0 auto; }
+.nmx-shell .nmx-thread-note-agents-folder b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-shell .nmx-thread-note-agents-status { display: inline-flex; align-items: center; gap: 3px; flex: 0 1 auto; min-width: 0; padding: 1px 5px; border-radius: 4px; background: color-mix(in srgb, var(--nmx-text) 6%, transparent); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nmx-shell .nmx-thread-note-agents-status .codicon { flex: 0 0 auto; font-size: 10.5px; }
+.nmx-shell .nmx-thread-note-agents-status.is-saved { color: var(--nmx-accent, #4f8cff); }
+.nmx-shell .nmx-thread-note-agents-status.is-conflict { color: var(--nmx-warning, #e5a33d); background: color-mix(in srgb, var(--nmx-warning, #e5a33d) 14%, transparent); }
+.nmx-shell .nmx-thread-note-agents-status.is-error { color: var(--nmx-danger, #ef8989); background: color-mix(in srgb, var(--nmx-danger, #ef8989) 14%, transparent); }
+.nmx-shell.nmx-theme-light .nmx-thread-note-agents-status.is-conflict { color: #8a5200; background: #f6e7cc; }
+.nmx-shell.nmx-theme-light .nmx-thread-note-agents-status.is-error { color: #b42332; background: #f8dfe1; }
+.nmx-shell .nmx-thread-note-agents-open { flex: 0 0 auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; display: grid; place-items: center; color: var(--nmx-muted); background: transparent; cursor: pointer; }
+.nmx-shell .nmx-thread-note-agents-open:hover { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 8%, transparent); }
+.nmx-shell .nmx-thread-note-agents-open:focus-visible,
+.nmx-shell .nmx-thread-note-agents-actions button:focus-visible { outline: 2px solid color-mix(in srgb, var(--nmx-accent) 60%, transparent); outline-offset: 1px; }
+.nmx-shell .nmx-thread-note-agents-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.nmx-shell .nmx-thread-note-agents-actions button { height: 22px; padding: 0 8px; border: 1px solid var(--nmx-border-strong, var(--nmx-border)); border-radius: 6px; color: var(--nmx-text); background: transparent; font-size: 11px; line-height: 20px; cursor: pointer; }
+.nmx-shell .nmx-thread-note-agents-actions button:hover { background: color-mix(in srgb, var(--nmx-text) 7%, transparent); }
+.nmx-shell .nmx-thread-note-agents-actions button.is-primary { border-color: transparent; color: var(--nmx-on-accent, #fff); background: var(--nmx-accent, #4f8cff); }
+.nmx-shell .nmx-thread-note-agents-actions button.is-primary:hover { background: color-mix(in srgb, var(--nmx-accent, #4f8cff) 86%, #000); }
+
+/* Pasted images: a strip of square thumbnails that open full size; delete with the hover button or Delete. */
+.nmx-shell .nmx-thread-note-images { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; border-top: 1px dashed color-mix(in srgb, var(--nmx-border) 80%, transparent); }
+.nmx-shell .nmx-thread-note-thumb { position: relative; width: 44px; height: 44px; flex: 0 0 44px; border-radius: 6px; border: 1px solid var(--nmx-border); overflow: hidden; background: color-mix(in srgb, var(--nmx-text) 5%, transparent); transition: border-color 120ms ease; }
+.nmx-shell .nmx-thread-note-thumb:hover { border-color: var(--nmx-border-strong, var(--nmx-border)); }
+.nmx-shell .nmx-thread-note-thumb-open { display: block; width: 100%; height: 100%; padding: 0; border: 0; border-radius: inherit; background: transparent; cursor: zoom-in; }
+.nmx-shell .nmx-thread-note-thumb-open:focus-visible { outline: 2px solid color-mix(in srgb, var(--nmx-accent) 70%, transparent); outline-offset: -2px; }
+.nmx-shell .nmx-thread-note-thumb-open img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.nmx-shell .nmx-thread-note-thumb-remove { position: absolute; top: 2px; inset-inline-end: 2px; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 999px; display: grid; place-items: center; color: #fff; background: rgba(0, 0, 0, .68); opacity: 0; cursor: pointer; transition: opacity 120ms ease, background-color 120ms ease; }
+.nmx-shell .nmx-thread-note-thumb:is(:hover, :focus-within) .nmx-thread-note-thumb-remove { opacity: 1; }
+.nmx-shell .nmx-thread-note-thumb-remove:hover { background: rgba(215, 58, 73, .92); }
+.nmx-shell .nmx-thread-note-thumb-remove .codicon { font-size: 10px; }
+.nmx-shell .nmx-thread-note-notice { display: flex; align-items: flex-start; gap: 5px; color: var(--nmx-warning, #e5a33d); font-size: 10.5px; line-height: 1.35; overflow-wrap: anywhere; }
+.nmx-shell .nmx-thread-note-notice .codicon { flex: 0 0 auto; margin-top: 1px; font-size: 11px; }
+.nmx-shell.nmx-theme-light .nmx-thread-note-notice { color: #8a5200; }
+.nmx-shell .nmx-thread-note-readable { display: inline-flex; align-items: center; gap: 6px; padding-top: 5px; border-top: 1px solid color-mix(in srgb, var(--nmx-border) 72%, transparent); color: var(--nmx-subtle, var(--nmx-muted)); font-size: 11px; line-height: 1.3; user-select: none; cursor: pointer; }
+.nmx-shell .nmx-thread-note-readable input[type='checkbox'] { width: 13px; height: 13px; margin: 0; accent-color: var(--nmx-accent, #4f8cff); cursor: pointer; }
+.nmx-shell .nmx-thread-note-readable input[type='checkbox']:focus-visible { outline: 2px solid color-mix(in srgb, var(--nmx-accent) 60%, transparent); outline-offset: 2px; }
+.nmx-shell .nmx-thread-note-readable.is-disabled { color: color-mix(in srgb, var(--nmx-muted) 65%, transparent); cursor: help; }
+.nmx-shell .nmx-thread-note-readable.is-disabled input[type='checkbox'] { opacity: .45; cursor: help; pointer-events: none; }
+.nmx-shell .nmx-thread-note-lightbox { position: fixed; inset: 0; z-index: 2147483500; display: grid; place-items: center; padding: 24px; background: rgba(0, 0, 0, .72); backdrop-filter: blur(4px); cursor: zoom-out; outline: none; }
+.nmx-shell .nmx-thread-note-lightbox img { max-width: min(92vw, 1200px); max-height: 88vh; border-radius: 10px; box-shadow: 0 18px 48px rgba(0, 0, 0, .48); object-fit: contain; cursor: default; }
+@media (forced-colors: active) {
+    .nmx-shell .nmx-thread-float-tab, .nmx-shell .nmx-thread-note, .nmx-shell .nmx-thread-agents-badge, .nmx-shell .nmx-thread-note-thumb { border: 1px solid CanvasText; }
+    .nmx-shell .nmx-thread-note-agents-status:is(.is-conflict, .is-error), .nmx-shell .nmx-thread-note-notice { color: Mark; }
+}
+@keyframes nmx-float-panel-in { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .nmx-shell :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float) > :is(div, .nmx-thread-notes, .nmx-thread-agents) { animation: none !important; } }
+.nmx-shell .nmx-turn-review-file .nmx-review-file-root { margin-inline-end: 6px; padding: 0 5px; border-radius: 4px; color: var(--nmx-muted); background: color-mix(in srgb, var(--nmx-text) 7%, transparent); font-size: 10.5px; }
+
+/* Hover labels for icon buttons (nextmux-hover-tips.ts). */
+.nmx-hover-tip { position: fixed; z-index: 2147483000; max-width: 260px; padding: 4px 8px; border: 1px solid var(--nmx-border-strong, rgba(128, 128, 128, .3)); border-radius: 6px; color: var(--nmx-text, #eee); background: var(--nmx-panel, #252526); box-shadow: 0 6px 18px rgba(0, 0, 0, .25); font-size: 11.5px; line-height: 1.35; white-space: nowrap; pointer-events: none; -webkit-app-region: no-drag; animation: nmx-hover-tip-in 120ms ease-out both; }
+@keyframes nmx-hover-tip-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .nmx-hover-tip { animation: none; } }
+
+/* First launch is a page of its own, not a dialog over the workbench: the
+   mark continues the launch screen large in the centre, then settles at the
+   top and the setup fades in below it. The workbench stays hidden; the macOS
+   traffic lights are native and Theia's Windows controls sit above (10000). */
+.nmx-shell .nmx-onboarding-backdrop.is-page { z-index: 9000; place-items: start center; padding: 0 24px 24px; overflow: auto; background: var(--nmx-bg, #181818); backdrop-filter: none; animation: none; }
+.nmx-onboarding-drag { position: fixed; inset: 0 0 auto 0; height: 44px; -webkit-app-region: drag; }
+body:is(.windows, :has(#window-controls)) .nmx-onboarding-drag { right: 150px; }
+.nmx-onboarding-brand { position: fixed; z-index: 1; left: 50%; top: 50%; display: block;
+    /* Same size and place as the launch animation (apps/desktop/package.json preloadTemplate): its last frame hands over here. */
+    width: min(340px, 48vmin); height: min(340px, 48vmin); transform: translate(-50%, -50%); pointer-events: none;
+    transition: top 700ms cubic-bezier(.2, .8, .2, 1), width 700ms cubic-bezier(.2, .8, .2, 1), height 700ms cubic-bezier(.2, .8, .2, 1); }
+.nmx-onboarding-mark.nmx-brand-logo { background-image: url('./brand/nextmux-logo-frame.png'); }
+/* Then it draws back to the top, smaller, and the setup appears under it. */
+.is-settled > .nmx-onboarding-brand { top: 66px; width: 108px; height: 108px; }
+.nmx-shell .nmx-onboarding-backdrop.is-page .nmx-onboarding { margin-top: 128px; max-height: none; box-shadow: 0 18px 60px rgba(0, 0, 0, .18);
+    transition: opacity 360ms ease 160ms, transform 440ms cubic-bezier(.2, .8, .2, 1) 140ms, visibility 0s linear 0s; }
+.nmx-shell .nmx-onboarding-backdrop.is-page.is-intro .nmx-onboarding { opacity: 0; visibility: hidden; transform: translateY(18px); }
+@media (prefers-reduced-motion: reduce) {
+    .nmx-onboarding-brand, .nmx-shell .nmx-onboarding-backdrop.is-page .nmx-onboarding { animation: none; transition: none; }
+}
+/* Theia's launch layer goes at once under the setup (the launch animation above it hands over by itself). */
+body:has(.nmx-onboarding-backdrop) .theia-preload { display: none !important; }
+/* Short windows: the card scrolls under the settled mark, and its buttons stay reachable. */
+.nmx-shell .nmx-onboarding-backdrop.is-page { overflow: hidden; }
+.nmx-shell .nmx-onboarding-backdrop.is-page .nmx-onboarding { max-height: calc(100vh - 152px); overflow: auto; overscroll-behavior: contain; }
+.nmx-shell .nmx-onboarding-backdrop.is-page .nmx-onboarding > footer { position: sticky; bottom: -26px; z-index: 1; margin: 0 -34px -26px; padding: 14px 34px 26px; background: var(--nmx-panel); }
+/* Permissions: two columns of small cards on a wider sheet; one column when narrow. */
+.nmx-shell .nmx-onboarding.is-permissions { width: min(880px, 100%); }
+.nmx-shell .nmx-onboarding.is-permissions .nmx-system-permissions-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; border: 0; border-radius: 0; overflow: visible; }
+.nmx-shell .nmx-onboarding.is-permissions .nmx-system-permissions-list > li { border: 1px solid var(--nmx-border); border-radius: 12px; }
+.nmx-shell .nmx-onboarding.is-permissions .nmx-system-permissions-list > li + li { border-top: 1px solid var(--nmx-border); }
+@media (max-width: 760px) { .nmx-shell .nmx-onboarding.is-permissions .nmx-system-permissions-list { grid-template-columns: minmax(0, 1fr); } }
+/* In two columns each permission is a small card: icon + name + why on top, status and action underneath. */
+.nmx-shell .nmx-onboarding.is-permissions .nmx-system-permissions-list > li { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; grid-template-areas: 'icon text text' 'icon status action'; align-items: center; row-gap: 10px; column-gap: 12px; padding: 14px; }
+.nmx-shell .nmx-onboarding.is-permissions .nmx-system-permissions-list > li > .codicon { grid-area: icon; align-self: start; }
+.nmx-shell .nmx-onboarding.is-permissions .nmx-system-permissions-list > li > div { grid-area: text; }
+.nmx-shell .nmx-onboarding.is-permissions .nmx-system-permissions-list > li > .nmx-system-permission-status { grid-area: status; justify-self: start; }
+.nmx-shell .nmx-onboarding.is-permissions .nmx-system-permissions-list > li > button { grid-area: action; justify-self: end; }
+/* A sent image whose thumbnail is still loading, or whose file has moved. */
+.nmx-shell .nmx-turn-image > i { width: 24px; height: 24px; flex: 0 0 24px; display: grid; place-items: center; border-radius: 6px; background: color-mix(in srgb, currentColor 8%, transparent); font-size: 14px; }
+.nmx-shell .nmx-turn-image.is-missing > span { text-decoration: line-through; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+
+/* macOS 26, light theme, inactive window: gray discs under the translucent native window buttons
+   (nextmux-inactive-window-buttons.ts). Positions match the hiddenInset title bar. */
+.nmx-inactive-window-buttons { display: none; position: fixed; inset: 0 auto auto 0; width: 80px; height: 36px; pointer-events: none; z-index: 2147483000; }
+.nmx-inactive-window-buttons > i { position: absolute; top: 10.75px; width: 14.5px; height: 14.5px; border-radius: 50%; background: #bab5b2; }
+.nmx-inactive-window-buttons > i:nth-child(1) { left: 12.75px; }
+.nmx-inactive-window-buttons > i:nth-child(2) { left: 34.75px; }
+.nmx-inactive-window-buttons > i:nth-child(3) { left: 56.75px; }
+body.nmx-window-inactive:not(.nmx-window-fullscreen):not(.nmx-modal-open):has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-shell.nmx-theme-light) .nmx-inactive-window-buttons { display: block; }
+
+/* The file tab's right-click menu (nextmux-file-tab-menu.tsx), like a system context menu. */
+.nmx-shell .nmx-file-tab-menu-backdrop { position: fixed; inset: 0; z-index: 90; }
+.nmx-shell .nmx-file-tab-menu { position: fixed; z-index: 91; display: flex; flex-direction: column; min-width: 212px; padding: 5px; border: 1px solid var(--nmx-border); border-radius: 10px; background: var(--nmx-panel); box-shadow: 0 12px 32px rgba(0, 0, 0, .28); }
+.nmx-shell .nmx-file-tab-menu > button { display: flex; align-items: center; justify-content: space-between; gap: 18px; height: 28px; padding: 0 10px; border: 0; border-radius: 6px; color: var(--nmx-text); background: transparent; font: inherit; font-size: 12.5px; text-align: start; cursor: default; }
+.nmx-shell .nmx-file-tab-menu > button:is(:hover, :focus-visible) { outline: none; background: color-mix(in srgb, var(--nmx-accent) 16%, transparent); }
+.nmx-shell .nmx-file-tab-menu kbd { color: var(--nmx-muted); font: inherit; font-size: 11.5px; }
+.nmx-shell .nmx-file-tab-menu > hr { width: 100%; height: 1px; margin: 4px 0; border: 0; background: var(--nmx-border); }
+
+/* Conversation & project-sidebar scrollbars:
+   1. Reset standard scrollbar-width/scrollbar-color to auto so Chromium honors ::-webkit-scrollbar-track.
+   2. Stop .nmx-task-view's vertical scrollbar track above .nmx-composer-dock so it never runs behind the input box.
+   3. Dim both .nmx-context-nav and .nmx-task-view scrollbars when idle and brighten on hover/focus/active. */
+.nmx-shell {
+    --nmx-scroll-idle: rgba(255, 255, 255, 0.14);
+    --nmx-scroll-engaged: rgba(255, 255, 255, 0.38);
+    --nmx-scroll-active: rgba(255, 255, 255, 0.52);
+}
+.nmx-shell.nmx-theme-light {
+    --nmx-scroll-idle: rgba(0, 0, 0, 0.14);
+    --nmx-scroll-engaged: rgba(0, 0, 0, 0.42);
+    --nmx-scroll-active: rgba(0, 0, 0, 0.56);
+}
+.nmx-shell :is(.nmx-context-nav, .nmx-task-view) {
+    --nmx-scroll-current: var(--nmx-scroll-idle);
+    scrollbar-width: auto !important;
+    scrollbar-color: auto !important;
+}
+.nmx-shell :is(.nmx-context-nav, .nmx-task-view).is-scrolling {
+    --nmx-scroll-current: var(--nmx-scroll-engaged);
+}
+.nmx-shell :is(.nmx-context-nav, .nmx-task-view)::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background: transparent;
+}
+.nmx-shell :is(.nmx-context-nav, .nmx-task-view)::-webkit-scrollbar-track {
+    background: transparent;
+}
+.nmx-shell .nmx-task-view::-webkit-scrollbar-track:vertical {
+    margin-top: 6px;
+    margin-bottom: var(--nmx-dictation-composer-clearance, var(--nmx-composer-clearance, 180px));
+    background: transparent;
+}
+.nmx-shell :is(.nmx-context-nav, .nmx-task-view)::-webkit-scrollbar-thumb {
+    min-height: 28px;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    /* Keep the scoped idle state above the legacy light-theme thumb shorthand. */
+    background-color: var(--nmx-scroll-current) !important;
+    background-clip: padding-box;
+}
+.nmx-shell :is(.nmx-context-nav, .nmx-task-view)::-webkit-scrollbar-thumb:hover,
+.nmx-shell :is(.nmx-context-nav, .nmx-task-view)::-webkit-scrollbar-thumb:active {
+    background-color: var(--nmx-scroll-active) !important;
+}
+.nmx-shell :is(.nmx-context-nav, .nmx-task-view)::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+}
+.nmx-shell :is(.nmx-context-nav, .nmx-task-view)::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* Council: a compact assignment sheet, with one shared surface and aligned controls. */
+.nmx-shell .nmx-council-glyph { display: block; flex: none; }
+.nmx-shell .nmx-council-modal-backdrop,
+.nmx-shell .nmx-council-close-backdrop { backdrop-filter: blur(3px); }
+.nmx-shell .nmx-council-modal {
+    position: relative;
+    box-sizing: border-box;
+    width: min(640px, calc(100vw - 32px));
+    height: min(460px, calc(100dvh - 48px));
+    max-height: min(460px, calc(100dvh - 48px));
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    border: 1px solid var(--nmx-border);
+    border-radius: 12px;
+    background: var(--nmx-panel);
+    overflow: visible;
+    outline: none;
+}
+.nmx-shell .nmx-council-modal-header {
+    flex: none; display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 14px; padding: 14px 16px 12px;
+}
+.nmx-shell .nmx-council-modal-heading { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.nmx-shell .nmx-council-modal-badge { display: grid; place-items: center; width: 24px; height: 26px; color: var(--nmx-text); flex: none; }
+.nmx-shell .nmx-council-modal-titles { display: grid; gap: 5px; min-width: 0; }
+.nmx-shell .nmx-council-modal-header h2 { margin: 0; color: var(--nmx-text); font-size: 16px; line-height: 26px; font-weight: 600; }
+.nmx-shell .nmx-council-modal-header p { margin: 0; color: var(--nmx-muted); font-size: 12px; line-height: 1.6; }
+.nmx-shell .nmx-council-modal-close,
+.nmx-shell .nmx-council-slot-remove { display: grid; place-items: center; flex: none; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--nmx-muted); cursor: pointer; }
+.nmx-shell .nmx-council-modal-close:hover { background: var(--nmx-hover); color: var(--nmx-text); }
+.nmx-shell .nmx-council-modal-body { flex: 1 1 0; min-height: 0; height: 100%; overflow: hidden; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr) auto; gap: 0; padding: 0 16px 12px; }
+.nmx-shell .nmx-council-sources { box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; min-height: 0; height: 100%; min-width: 0; overflow: hidden; border-inline-end: 1px solid var(--nmx-border); padding-inline-end: 14px; }
+.nmx-shell .nmx-council-sources > .nmx-council-step-label { min-height: 28px; flex: none; }
+.nmx-shell .nmx-council-selected-relay-badge { margin-inline-start: auto; padding: 1px 6px; border-radius: 4px; background: var(--nmx-hover); color: var(--nmx-text); font-size: 11px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-shell .nmx-council-assignments { box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; min-height: 0; height: 100%; min-width: 0; overflow: hidden; padding-inline-start: 14px; }
+.nmx-shell .nmx-council-source-list { flex: 1 1 0; min-height: 0; height: 100%; overflow: hidden; display: flex; flex-direction: column; }
+.nmx-shell .nmx-council-source-list .nmx-relay-popover { position: static; flex: 1 1 0; width: 100%; height: 100%; max-height: 100%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 0; border: 0; background: transparent; box-shadow: none; overflow: hidden; }
+.nmx-shell .nmx-council-source-list .nmx-relay-popover > header { display: none; }
+.nmx-shell .nmx-council-source-list .nmx-relay-source-tabs { flex: none; display: flex; gap: 3px; padding: 0; border: 0; background: transparent; }
+.nmx-shell .nmx-council-source-list .nmx-relay-source-tabs button { flex: 1; height: 28px; min-height: 0; padding: 0 3px; border: 0; border-radius: 5px; font-size: 11px; background: transparent; color: var(--nmx-muted); }
+.nmx-shell .nmx-council-source-list .nmx-relay-source-tabs button[aria-selected='true'] { color: var(--nmx-text); background: var(--nmx-hover); }
+.nmx-shell .nmx-council-source-list .nmx-relay-source-search { display: flex; flex: none; gap: 7px; padding: 0 8px; height: 30px; border: 1px solid var(--nmx-border); border-radius: 6px; background: var(--nmx-panel-2); }
+.nmx-shell .nmx-council-source-list .nmx-relay-source-search input { width: 100%; min-width: 0; height: 28px; padding: 0; border: 0 !important; font-size: 11px; background: transparent; }
+.nmx-shell .nmx-council-source-list .nmx-relay-options { flex: 1 1 0; display: flex; flex-direction: column; gap: 5px; min-height: 0; height: 100%; max-height: 100%; overflow-y: auto !important; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 1px 3px 4px 1px; }
+.nmx-shell .nmx-council-source-list .nmx-relay-option-row { flex: 0 0 auto; }
+.nmx-shell .nmx-council-source-list .nmx-relay-option-select:is(:hover, .is-selected) { background: var(--nmx-hover); color: var(--nmx-text); }
+.nmx-shell .nmx-council-source-list .nmx-relay-directory-page { padding: 0; border: 0; }
+.nmx-shell .nmx-council-source-list .nmx-relay-directory-page:empty { display: none; }
+.nmx-shell .nmx-council-step { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.nmx-shell .nmx-council-step-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.nmx-shell .nmx-council-step-label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--nmx-subtle); font-size: 12px; line-height: 1.6; font-weight: 500; min-width: 0; }
+.nmx-shell .nmx-council-step-label small { color: var(--nmx-muted); font-size: 11px; font-weight: 400; }
+.nmx-shell .nmx-council-next-turn-tag { width: 100%; }
+.nmx-shell .nmx-council-add-slot { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 8px; border: 1px solid var(--nmx-border); border-radius: 6px; font-size: 12px; color: var(--nmx-text); background: transparent; }
+.nmx-shell .nmx-council-relay-picker-wrap { min-width: 0; }
+.nmx-shell .nmx-council-relay-trigger { width: 100%; max-width: none; min-height: 36px; justify-content: flex-start; gap: 10px; padding: 6px 10px; border: 1px solid var(--nmx-border); border-radius: 7px; background: var(--nmx-panel-2); font-size: 13px; }
+.nmx-shell .nmx-council-relay-trigger > span { flex: 1; min-width: 0; text-align: start; overflow: hidden; text-overflow: ellipsis; }
+.nmx-shell .nmx-council-generalist-note { display: flex; align-items: flex-start; gap: 7px; padding: 0; border: 0; background: transparent; color: var(--nmx-muted); font-size: 11.5px; line-height: 1.65; }
+.nmx-shell .nmx-council-generalist-note > .codicon { flex: none; font-size: 14px; margin-top: 2px; }
+.nmx-shell .nmx-council-generalist-note > span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.nmx-shell .nmx-council-generalist-note.is-warning > .codicon { color: var(--theia-notificationsWarningIcon-foreground, #d49e53); }
+.nmx-shell .nmx-council-slots-list { flex: 1 1 0; display: flex; flex-direction: column; border-top: 1px solid var(--nmx-border); min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; padding-inline-end: 3px; }
+.nmx-shell .nmx-council-slot-row { display: grid; flex: none; grid-template-columns: 16px minmax(0, 1fr) 22px; align-items: center; gap: 5px 6px; padding: 8px 0; border-bottom: 1px solid var(--nmx-border); min-width: 0; }
+.nmx-shell .nmx-council-slot-row .nmx-council-slot-model { grid-column: 2; grid-row: 1; }
+.nmx-shell .nmx-council-slot-row .nmx-council-slot-roles { grid-column: 2; grid-row: 2; }
+.nmx-shell .nmx-council-slot-row .nmx-council-slot-remove { grid-column: 3; grid-row: 1; }
+.nmx-shell .nmx-council-slot-row .nmx-council-roles-trigger { width: fit-content; max-width: 100%; gap: 12px; border-color: transparent; background: transparent; padding: 2px 0; min-height: 24px; }
+.nmx-shell .nmx-council-slot-row.is-picker-open { background: transparent; }
+.nmx-shell .nmx-council-slot-index { font-size: 11px; color: var(--nmx-muted); text-align: center; font-variant-numeric: tabular-nums; }
+.nmx-shell .nmx-council-slot-index.is-lead { color: var(--nmx-accent); font-weight: 600; }
+.nmx-shell .nmx-council-slot-model,
+.nmx-shell .nmx-council-slot-roles { min-width: 0; }
+.nmx-shell .nmx-council-model-trigger,
+.nmx-shell .nmx-council-roles-trigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 34px; padding: 6px 9px; box-sizing: border-box; border: 1px solid var(--nmx-border); border-radius: 6px; background: var(--nmx-panel-2); color: var(--nmx-text); font: inherit; font-size: 12px; line-height: 1.5; text-align: start; cursor: pointer; }
+.nmx-shell .nmx-council-model-trigger:hover:not(:disabled),
+.nmx-shell .nmx-council-roles-trigger:hover:not(:disabled),
+.nmx-shell .nmx-council-relay-trigger:hover:not(:disabled) { background: var(--nmx-hover); border-color: color-mix(in srgb, var(--nmx-text) 28%, var(--nmx-border)); }
+.nmx-shell .nmx-council-model-trigger.is-open,
+.nmx-shell .nmx-council-roles-trigger.is-open,
+.nmx-shell .nmx-council-relay-trigger.is-active { border-color: var(--nmx-border); background: var(--nmx-hover); }
+.nmx-shell .nmx-council-model-trigger-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.nmx-shell .nmx-council-model-price { flex: none; align-self: center; margin-inline-start: auto; padding: 0 5px; border-radius: 4px; background: var(--nmx-hover); white-space: nowrap; font-size: 11px; line-height: 16px; font-weight: 400; font-variant-numeric: tabular-nums; color: var(--nmx-muted); }
+.nmx-shell .nmx-council-model-trigger-label.is-placeholder,
+.nmx-shell .nmx-council-role-placeholder { color: var(--nmx-muted); }
+.nmx-shell .nmx-council-select-chevron { flex: none; font-size: 12px; color: var(--nmx-muted); }
+.nmx-shell .nmx-council-role-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-width: 0; flex: 1; }
+.nmx-shell .nmx-council-role-chip { display: inline-flex; align-items: center; padding: 0 5px; min-height: 20px; border-radius: 4px; font-size: 11px; font-weight: 400; line-height: 1.5; background: color-mix(in srgb, var(--nmx-text) 7%, transparent); color: var(--nmx-subtle); }
+.nmx-shell .nmx-council-role-chip.is-role-lead { color: var(--nmx-accent); background: color-mix(in srgb, var(--nmx-accent) 10%, transparent); }
+/* Portal is a direct child of the dialog: neither scroll clipping nor footer overlap. */
+.nmx-shell .nmx-council-popover { position: absolute; z-index: 100; box-sizing: border-box; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; padding: 5px; border: 1px solid var(--nmx-border); border-radius: 8px; background: var(--nmx-panel); box-shadow: 0 8px 24px #0004; }
+.nmx-shell .nmx-council-model-dropdown { display: flex; flex-direction: column; gap: 2px; }
+.nmx-shell .nmx-council-role-dropdown { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; }
+.nmx-shell .nmx-council-model-dropdown.is-drop-up,
+.nmx-shell .nmx-council-role-dropdown.is-drop-up { bottom: auto; }
+.nmx-shell .nmx-council-model-option { display: flex; flex: none; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; min-height: 32px; border: 0; border-radius: 4px; background: transparent; color: var(--nmx-text); font-size: 12px; line-height: 1.4; text-align: start; cursor: pointer; }
+.nmx-shell .nmx-council-model-option > .codicon { flex: none; width: 14px; margin-top: 0; align-self: center; }
+.nmx-shell .nmx-council-model-option-main { display: flex; flex-direction: row; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.nmx-shell .nmx-council-model-option-label { display: block; flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: clip; -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }
+.nmx-shell .nmx-council-model-option-detail { display: none; }
+.nmx-shell .nmx-council-model-price { flex: none; margin-inline-start: auto; align-self: center; }
+.nmx-shell .nmx-council-role-option { display: flex; align-items: center; gap: 7px; min-height: 34px; padding: 6px 8px; border: 0; border-radius: 4px; color: var(--nmx-text); background: transparent; font-size: 12px; line-height: 1.4; text-align: start; cursor: pointer; }
+.nmx-shell .nmx-council-role-option > .codicon { flex: none; width: 14px; }
+.nmx-shell .nmx-council-model-option:hover,
+.nmx-shell .nmx-council-role-option:hover { background: var(--nmx-hover); }
+.nmx-shell .nmx-council-model-option.is-selected,
+.nmx-shell .nmx-council-role-option.is-checked { background: color-mix(in srgb, var(--nmx-accent) 9%, transparent); }
+.nmx-shell .nmx-council-model-option.is-selected > .codicon,
+.nmx-shell .nmx-council-role-option.is-checked > .codicon { color: var(--nmx-accent); }
+.nmx-shell .nmx-council-slot-remove:hover:not(:disabled) { background: var(--nmx-hover); color: var(--nmx-danger, #dc6666); }
+.nmx-shell .nmx-council-modal :disabled { opacity: .4; cursor: not-allowed; }
+.nmx-shell .nmx-council-validation-error { display: flex; align-items: flex-start; gap: 7px; grid-column: 1 / -1; margin: 0; font-size: 12px; line-height: 1.6; color: var(--nmx-danger, #dc6666); }
+.nmx-shell .nmx-council-modal-footer { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0; padding: 10px 16px; border-top: 1px solid var(--nmx-border); }
+.nmx-shell .nmx-council-prevent-subagents { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--nmx-subtle); cursor: pointer; user-select: none; margin-inline-end: auto; }
+.nmx-shell .nmx-council-prevent-subagents input[type='checkbox'] { margin: 0; width: 14px; height: 14px; accent-color: var(--nmx-accent); cursor: pointer; }
+.nmx-shell .nmx-council-modal-footer-actions { display: inline-flex; align-items: center; gap: 8px; }
+.nmx-shell .nmx-council-modal-footer :is(> button, .nmx-council-modal-footer-actions > button) { min-height: 30px; padding: 5px 12px; border-radius: 6px; font-size: 12px; }
+.nmx-shell :is(.nmx-council-modal, .nmx-council-close-dialog) :is(button, input):focus { outline: none; box-shadow: none; }
+.nmx-shell :is(.nmx-council-modal, .nmx-council-close-dialog) button:focus-visible { outline: none; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nmx-text) 35%, transparent); }
+.nmx-shell .nmx-council-close-dialog { width: min(420px, calc(100vw - 32px)); box-sizing: border-box; padding: 22px; border-radius: 12px; outline: none; }
+.nmx-shell .nmx-council-close-dialog h2 { font-size: 16px; font-weight: 600; }
+.nmx-shell .nmx-council-close-dialog > p { margin: 12px 0 22px; font-size: 13px; line-height: 1.75; color: var(--nmx-subtle); }
+.nmx-shell .nmx-council-close-dialog > footer { gap: 8px; }
+.nmx-shell .nmx-council-close-dialog > footer button { min-height: 32px; padding: 6px 12px; font-size: 12px; }
+.nmx-shell :is(.nmx-composer-relay-button, .nmx-route-button).is-council-locked { opacity: .58; cursor: not-allowed; }
+.nmx-shell .nmx-composer .nmx-council-toggle.is-active { color: var(--nmx-accent) !important; background: color-mix(in srgb, var(--nmx-accent) 10%, transparent) !important; border: 1px solid transparent; }
+.nmx-shell .nmx-composer .nmx-council-toggle.is-active:hover { background: color-mix(in srgb, var(--nmx-accent) 18%, transparent) !important; }
+.nmx-shell .nmx-composer .nmx-council-toggle.is-active.is-pending { border-style: dashed; border-color: var(--nmx-accent); }
+/* Size, type and colours are shared with the route-price capsule in
+   nextmux-coding-workspace.css; only pin the notice to the trailing edge. */
+.nmx-shell .nmx-composer-below .nmx-council-below-notice { margin-inline-start: auto; }
+@media (max-width: 560px) {
+    .nmx-shell .nmx-council-modal { width: calc(100vw - 20px); height: min(640px, calc(100dvh - 24px)); max-height: calc(100dvh - 24px); }
+    .nmx-shell .nmx-council-modal-header { padding: 18px 16px 16px; }
+    .nmx-shell .nmx-council-modal-body { padding: 0 16px 18px; gap: 14px; grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto; }
+    .nmx-shell .nmx-council-sources { border-inline-end: 0; border-bottom: 1px solid var(--nmx-border); padding-inline-end: 0; padding-bottom: 14px; }
+    .nmx-shell .nmx-council-assignments { padding-inline-start: 0; }
+    .nmx-shell .nmx-council-step-header { align-items: flex-start; }
+    .nmx-shell .nmx-council-slot-row { grid-template-columns: 22px minmax(0, 1fr) 28px; gap: 8px; }
+    .nmx-shell .nmx-council-slot-model { grid-column: 2; }
+    .nmx-shell .nmx-council-slot-roles { grid-column: 2; grid-row: 2; }
+    .nmx-shell .nmx-council-slot-remove { grid-column: 3; grid-row: 1; }
+    .nmx-shell .nmx-council-modal-footer { padding: 12px 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell :is(.nmx-council-modal, .nmx-council-close-dialog, .nmx-sub-conversation-row) { animation: none; transition: none; }
+}
+
+/* Left sidebar role sub-conversations (`│ └ 「岗位」 title`). The list adds no indent or line of its own: each row
+   hangs from its parent conversation row and draws the single tree connector itself (nextmux-Variables.css). */
+.nmx-shell .nmx-sub-conversation-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+.nmx-shell .nmx-sub-conversation-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    min-height: 28px;
+    border-radius: 7px;
+    transition: opacity 220ms ease, transform 220ms ease;
+}
+.nmx-shell .nmx-sub-conversation-row.is-entering {
+    opacity: 0;
+    transform: translateY(-4px);
+}
+.nmx-shell .nmx-sub-conversation-row.is-exiting {
+    opacity: 0;
+    transform: translateX(-6px);
+    pointer-events: none;
+}
+.nmx-shell .nmx-sub-conversation-connector {
+    flex: none;
+    pointer-events: none;
+}
+/* Baseline for the role row's button. Inside the sidebar the generic `.nmx-coding-context .nmx-context-nav button`
+   grid outranks these, so nextmux-Variables.css restates the same layout with the widget id. */
+.nmx-shell .nmx-sub-conversation-open {
+    /* Static, so the stretched hit area below spans the row rather than the button. */
+    position: static;
+    flex: 1 1 0%;
+    align-self: stretch;
+    width: auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    min-height: 26px;
+    padding: 0;
+    padding-inline-end: 2px;
+    border: 0;
+    border-radius: 6px;
+    outline: none;
+    background: transparent;
+    color: var(--nmx-subtle, var(--nmx-muted));
+    font: inherit;
+    font-size: 12.5px;
+    text-align: start;
+    cursor: pointer;
+}
+/* The whole row opens the sub-conversation, tree gutter and role badge included; keyboard focus outlines the row. */
+.nmx-shell .nmx-sub-conversation-open::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 7px;
+}
+.nmx-shell .nmx-sub-conversation-open:focus-visible::after {
+    outline: 1px solid var(--nmx-focus-ring, #a9a2a7);
+    outline-offset: -1px;
+}
+.nmx-shell .nmx-sub-conversation-row:hover .nmx-sub-conversation-open {
+    color: var(--nmx-text);
+}
+.nmx-shell .nmx-sub-conversation-row.is-current .nmx-sub-conversation-open {
+    color: var(--nmx-text);
+    font-weight: 600;
+}
+.nmx-shell .nmx-sub-conversation-role-tag {
+    flex: none;
+    color: var(--nmx-accent, #d14a79);
+    font-weight: 600;
+}
+.nmx-shell .nmx-sub-conversation-title {
+    flex: 1 1 0%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.nmx-shell .nmx-sub-conversation-status {
+    flex: 0 0 auto;
+    font-size: 12px;
+    color: var(--nmx-muted);
+}
+/* A stop or pause stays muted; only a finished, waiting or failed role is coloured. */
+.nmx-shell .nmx-sub-conversation-status.is-completed {
+    color: var(--nmx-success, #61c990);
+}
+.nmx-shell .nmx-sub-conversation-status:is(.is-waiting_user, .is-limit_reached) {
+    color: #d8963a;
+}
+.nmx-shell .nmx-sub-conversation-status:is(.is-error, .is-tool_failed, .is-model_unavailable, .is-model_timeout, .is-rate_limited) {
+    color: var(--nmx-danger, #ef8989);
+}
+.nmx-shell.nmx-theme-light .nmx-sub-conversation-status.is-completed { color: #2f7d4f; }
+.nmx-shell.nmx-theme-light .nmx-sub-conversation-status:is(.is-waiting_user, .is-limit_reached) { color: #8a5a00; }
+.nmx-shell.nmx-theme-light .nmx-sub-conversation-status:is(.is-error, .is-tool_failed, .is-model_unavailable, .is-model_timeout, .is-rate_limited) { color: #b4323a; }
+
+/* Read-only role sub-conversation stage */
+.nmx-shell .nmx-role-conversation-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+.nmx-shell .nmx-team-identity-bar {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--nmx-border);
+    background: color-mix(in srgb, var(--nmx-panel) 88%, var(--nmx-bg));
+}
+.nmx-shell .nmx-team-identity-leading {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+}
+.nmx-shell .nmx-team-back-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--nmx-border);
+    border-radius: 7px;
+    background: var(--nmx-panel-2);
+    color: var(--nmx-text);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.nmx-shell .nmx-team-back-button:hover {
+    background: var(--nmx-hover);
+}
+.nmx-shell .nmx-team-identity-model {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--nmx-muted);
+}
+.nmx-shell .nmx-team-identity-status {
+    font-size: 12px;
+    color: var(--nmx-muted);
+}
+.nmx-shell .nmx-team-readonly-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    color: var(--nmx-muted);
+    background: color-mix(in srgb, var(--nmx-text) 7%, transparent);
+}
+.nmx-shell .nmx-role-conversation-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 18px 24px 180px;
+}
+.nmx-shell .nmx-role-dispatch-heading {
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: var(--nmx-accent, #d14a79);
+}
+.nmx-shell .nmx-role-acceptance-list {
+    margin: 8px 0 0;
+    padding-inline-start: 18px;
+    font-size: 12.5px;
+    color: var(--nmx-subtle, var(--nmx-muted));
+}
+
+/* Inline pasted-text chips in composer overlay & sent message bubbles */
+.nmx-shell .nmx-composer-inline-paste-chip {
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--nmx-accent, #d14a79) 16%, transparent);
+    color: var(--nmx-accent, #d14a79);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nmx-accent, #d14a79) 34%, transparent);
+    font-weight: 600;
+}
+
+.nmx-shell .nmx-pasted-text-chip {
+    max-width: 268px;
+}
+
+.nmx-shell .nmx-user-message-pasted-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.nmx-shell .nmx-message-pasted-chip {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--nmx-att-border);
+    border-radius: 11px;
+    background: var(--nmx-att-bg);
+    box-shadow: var(--nmx-att-shadow);
+    overflow: hidden;
+    max-width: 100%;
+}
+
+.nmx-shell .nmx-message-pasted-chip__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 11px;
+    border: 0;
+    background: transparent;
+    color: var(--nmx-att-text);
+    font: inherit;
+    font-size: 12.5px;
+    text-align: start;
+    cursor: pointer;
+    transition: background-color 140ms ease;
+}
+
+.nmx-shell .nmx-message-pasted-chip__header:hover {
+    background: var(--nmx-att-bg-hover);
+}
+
+.nmx-shell .nmx-message-pasted-chip__icon {
+    flex: none;
+    line-height: 1;
+    font-size: 14px;
+}
+
+.nmx-shell .nmx-message-pasted-chip__title {
+    font-weight: 650;
+    color: var(--nmx-att-text);
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-message-pasted-chip__meta {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--nmx-att-meta);
+    font-size: 11.5px;
+}
+
+.nmx-shell .nmx-message-pasted-chip__toggle {
+    margin-inline-start: auto;
+    flex: none;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--nmx-att-text) 8%, transparent);
+    color: var(--nmx-att-meta);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.nmx-shell .nmx-message-pasted-chip__preview {
+    border-top: 1px solid var(--nmx-att-border);
+    background: color-mix(in srgb, var(--nmx-att-thumb) 85%, transparent);
+    padding: 8px 11px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.nmx-shell .nmx-message-pasted-chip__preview-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--nmx-att-meta);
+}
+
+.nmx-shell .nmx-message-pasted-chip__preview-bar > code {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--nmx-mono-font, monospace);
+    font-size: 11px;
+}
+
+.nmx-shell .nmx-message-pasted-chip__preview-bar > button {
+    flex: none;
+    height: 24px;
+    padding: 0 9px;
+    border: 1px solid var(--nmx-att-border);
+    border-radius: 6px;
+    background: var(--nmx-att-bg);
+    color: var(--nmx-att-text);
+    font: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-message-pasted-chip__preview-bar > button:hover {
+    border-color: var(--nmx-att-border-hover);
+    background: var(--nmx-att-bg-hover);
+}
+
+.nmx-shell .nmx-message-pasted-chip__code {
+    margin: 0;
+    max-height: 240px;
+    overflow: auto;
+    padding: 8px 10px;
+    border-radius: 7px;
+    background: color-mix(in srgb, #000 18%, var(--nmx-att-thumb));
+    color: var(--nmx-att-text);
+    font-family: var(--nmx-mono-font, monospace);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.nmx-shell .nmx-follow-up-status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--nmx-accent, #d14a79) 14%, transparent);
+    color: var(--nmx-accent, #d14a79);
+    font-size: 11px;
+    font-weight: 600;
+}
