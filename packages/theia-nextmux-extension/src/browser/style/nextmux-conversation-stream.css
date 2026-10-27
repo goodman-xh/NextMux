@@ -1,0 +1,891 @@
+/*
+ * Conversation output stream (see nextmux-conversation-stream.tsx).
+ * Row anatomy and motion follow OpenCode's session UI (MIT):
+ * basic-tool-v2.css (13px title, muted subtitle, 16px chevron rotating 90deg
+ * in 150ms), collapsible.css (arrow fades in on hover) and text-shimmer.css
+ * (running title sweep). Codex desktop is the visual benchmark.
+ */
+
+.nmx-stream {
+    --nmx-stream-title: color-mix(in srgb, var(--nmx-subtle) 82%, var(--nmx-muted));
+    --nmx-stream-target: var(--nmx-muted);
+    --nmx-stream-add: #5bbf7f;
+    --nmx-stream-del: #ec7a7a;
+    --nmx-stream-surface: color-mix(in srgb, var(--nmx-text) 5%, transparent);
+    --nmx-stream-ease: cubic-bezier(0.2, 0, 0, 1);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    margin: 0 0 10px;
+}
+
+.nmx-theme-light .nmx-stream {
+    --nmx-stream-title: color-mix(in srgb, var(--nmx-subtle) 88%, var(--nmx-muted));
+    --nmx-stream-add: #1a7f37;
+    --nmx-stream-del: #c4314b;
+    --nmx-stream-surface: color-mix(in srgb, var(--nmx-text) 4.5%, transparent);
+}
+
+/* ---- Status row ------------------------------------------------------- */
+
+.nmx-stream-row {
+    min-width: 0;
+    max-width: 100%;
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--nmx-stream-title);
+}
+
+.nmx-stream.is-live > .nmx-stream-row,
+.nmx-stream.is-live > .nmx-stream-text {
+    animation: nmx-stream-fade-in 180ms var(--nmx-stream-ease) both;
+}
+
+.nmx-stream-line {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+}
+
+.nmx-stream-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 26px;
+    padding: 3px 6px 3px 0;
+    margin: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: default;
+}
+
+button.nmx-stream-trigger {
+    cursor: pointer;
+    transition: color 150ms ease;
+}
+
+button.nmx-stream-trigger:focus {
+    outline: none;
+}
+
+button.nmx-stream-trigger:focus-visible {
+    outline: 1px solid var(--nmx-focus-ring);
+    outline-offset: 1px;
+}
+
+.nmx-stream-icon.codicon {
+    flex: 0 0 14px;
+    width: 14px;
+    font-size: 14px;
+    line-height: 14px;
+    color: var(--nmx-muted);
+}
+
+.nmx-stream-label {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.nmx-stream-title {
+    flex: 0 0 auto;
+    color: var(--nmx-stream-title);
+}
+
+.nmx-stream-target {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--nmx-stream-target);
+    unicode-bidi: plaintext;
+}
+
+.nmx-stream-phrase {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-stream-phrase > .nmx-stream-target { color: var(--nmx-stream-target); }
+.nmx-stream-row.is-interactive:hover .nmx-stream-phrase > .nmx-stream-target { color: var(--nmx-subtle); }
+
+.nmx-stream-target.is-code,
+.nmx-stream-target.is-file {
+    font-family: var(--monaco-monospace-font, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-size: 12px;
+}
+
+.nmx-stream-target.is-file {
+    max-width: min(22ch, 172px);
+}
+
+.nmx-stream-meta,
+.nmx-stream-chip {
+    flex: 0 0 auto;
+    color: var(--nmx-muted);
+    font-size: 12px;
+}
+
+.nmx-stream-row.is-failed .nmx-stream-chip,
+.nmx-stream-row.is-failed .nmx-stream-icon.codicon {
+    color: var(--nmx-danger);
+}
+
+.nmx-stream-row.is-warning .nmx-stream-icon.codicon {
+    color: color-mix(in srgb, #e0a13b 80%, var(--nmx-muted));
+}
+
+.nmx-stream-diffstat {
+    flex: 0 0 auto;
+    display: inline-flex;
+    gap: 4px;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.nmx-stream-diffstat { direction: ltr; unicode-bidi: isolate; }
+.nmx-stream-meta { unicode-bidi: plaintext; }
+
+.nmx-stream-diffstat b { color: var(--nmx-stream-add); font-weight: 500; }
+.nmx-stream-diffstat em { color: var(--nmx-stream-del); font-style: normal; font-weight: 500; }
+
+.nmx-stream-chevron.codicon {
+    flex: 0 0 16px;
+    font-size: 14px;
+    color: var(--nmx-muted);
+    opacity: 0;
+    transition: opacity 150ms ease, transform 150ms ease-out;
+}
+
+.nmx-stream-row.is-interactive:hover .nmx-stream-title,
+.nmx-stream-row.is-interactive:hover .nmx-stream-target,
+.nmx-stream-row.is-expanded .nmx-stream-title {
+    color: var(--nmx-text);
+}
+
+.nmx-stream-row[data-activity-kind='reasoning'] .nmx-stream-chevron.codicon {
+    opacity: 0.72;
+}
+
+.nmx-stream-row.is-interactive:hover .nmx-stream-chevron,
+.nmx-stream-trigger:focus-visible .nmx-stream-chevron,
+.nmx-stream-row.is-expanded .nmx-stream-chevron {
+    opacity: 1;
+}
+
+.nmx-stream-row.is-expanded .nmx-stream-chevron { transform: rotate(90deg); }
+[dir='rtl'] .nmx-stream-chevron.codicon { transform: scaleX(-1); }
+[dir='rtl'] .nmx-stream-row.is-expanded .nmx-stream-chevron { transform: rotate(-90deg) scaleX(-1); }
+
+.nmx-stream-action {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--nmx-muted);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.nmx-stream-row:hover .nmx-stream-action,
+.nmx-stream-action:focus-visible,
+.nmx-stream-action.is-busy {
+    opacity: 1;
+}
+
+.nmx-stream-action:hover { color: var(--nmx-text); background: var(--nmx-hover); }
+.nmx-stream-action:focus { outline: none; }
+.nmx-stream-action:focus-visible { outline: 1px solid var(--nmx-focus-ring); }
+.nmx-stream-action:disabled { cursor: default; }
+.nmx-stream-row:hover .nmx-stream-action:disabled { opacity: .5; }
+.nmx-stream-action .codicon { font-size: 14px; }
+
+/* ---- Restored checkpoint: a quiet pill that reads as clickable undo ---- */
+
+.nmx-shell .nmx-stream-action.nmx-file-activity-restore.is-restored,
+.nmx-shell .nmx-stream-restore.is-restored {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: auto;
+    min-width: 0;
+    height: 22px;
+    /* The legacy restore action pins padding to 0 with !important. */
+    padding: 0 8px !important;
+    border: 1px solid color-mix(in srgb, var(--nmx-success, #61c990) 34%, transparent);
+    border-radius: 999px;
+    color: color-mix(in srgb, var(--nmx-success, #61c990) 72%, var(--nmx-text));
+    background: color-mix(in srgb, var(--nmx-success, #61c990) 10%, transparent);
+    opacity: 1;
+    cursor: pointer;
+    transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.nmx-shell .nmx-stream-action.nmx-file-activity-restore.is-restored .codicon,
+.nmx-shell .nmx-stream-restore.is-restored .codicon {
+    flex: none;
+    font-size: 12px;
+    color: currentColor;
+}
+
+.nmx-shell .nmx-stream-restore-label {
+    min-width: 0;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-stream-action.nmx-file-activity-restore.is-restored:hover:not(:disabled),
+.nmx-shell .nmx-stream-restore.is-restored:hover:not(:disabled) {
+    color: var(--nmx-text);
+    border-color: color-mix(in srgb, var(--nmx-success, #61c990) 56%, transparent);
+    background: color-mix(in srgb, var(--nmx-success, #61c990) 17%, transparent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.nmx-shell .nmx-stream-action.nmx-file-activity-restore.is-restored:focus-visible,
+.nmx-shell .nmx-stream-restore.is-restored:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--nmx-success, #61c990) 62%, var(--nmx-focus-ring));
+    outline-color: color-mix(in srgb, var(--nmx-success, #61c990) 62%, var(--nmx-focus-ring)) !important;
+    outline-offset: 1px;
+}
+
+.nmx-shell .nmx-stream-row:hover .nmx-stream-action.nmx-file-activity-restore.is-restored:disabled,
+.nmx-shell .nmx-stream-restore.is-restored:disabled {
+    opacity: .6;
+    cursor: default;
+}
+
+.nmx-theme-light .nmx-stream-action.nmx-file-activity-restore.is-restored,
+.nmx-theme-light .nmx-stream-restore.is-restored {
+    color: #1a7f37;
+    border-color: #b7d8bf;
+    background: #e8f3ea;
+}
+
+.nmx-theme-light .nmx-stream-action.nmx-file-activity-restore.is-restored:hover:not(:disabled),
+.nmx-theme-light .nmx-stream-restore.is-restored:hover:not(:disabled) {
+    color: #145c2c;
+    border-color: #8fc39d;
+    background: #dcecdf !important;
+}
+
+/* Running title: OpenCode TextShimmer sweep (background-position only). */
+.nmx-stream-shimmer {
+    background-image: linear-gradient(90deg, var(--nmx-stream-title) 0%, var(--nmx-stream-title) 38%,
+        var(--nmx-text) 50%, var(--nmx-stream-title) 62%, var(--nmx-stream-title) 100%);
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent !important;
+    animation: nmx-stream-shimmer 1.8s linear infinite;
+}
+
+/* ---- Details (collapsed body) ---------------------------------------- */
+
+.nmx-stream-collapse {
+    min-width: 0;
+    padding-inline-start: 22px;
+}
+
+.nmx-stream-details {
+    margin: 2px 0 8px;
+    min-width: 0;
+    color: var(--nmx-subtle);
+    font-size: 12.5px;
+    line-height: 1.55;
+}
+
+.nmx-stream-details.is-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 320px;
+    overflow: auto;
+}
+
+.nmx-stream-details.is-markdown.nmx-agent-thinking-content {
+    padding-inline-start: 10px;
+    border-inline-start: 2px solid color-mix(in srgb, var(--nmx-muted) 35%, transparent);
+    max-height: 360px;
+    overflow-y: auto;
+}
+
+.nmx-stream-details.is-markdown .nmx-assistant-markdown {
+    font-size: 13.5px;
+    color: var(--nmx-subtle);
+}
+
+.nmx-stream-details.is-diff {
+    max-height: 360px;
+    overflow: auto;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--nmx-stream-surface);
+    font-family: var(--monaco-monospace-font, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre;
+    color: var(--nmx-subtle);
+}
+
+.nmx-stream-details.is-diff > .is-add { color: var(--nmx-stream-add); }
+.nmx-stream-details.is-diff > .is-del { color: var(--nmx-stream-del); }
+.nmx-stream-details.is-diff > .is-hunk { color: var(--nmx-muted); }
+
+.nmx-stream-details.is-link {
+    display: grid;
+    gap: 2px;
+}
+
+.nmx-stream-details.is-link > strong { color: var(--nmx-subtle); font-weight: 500; }
+.nmx-stream-details.is-link > span { color: var(--nmx-muted); overflow-wrap: anywhere; }
+.nmx-stream-details.is-link > p { margin: 4px 0 0; white-space: pre-wrap; }
+
+/* ---- Listed files ("已浏览 <dir> <N> 项") ------------------------------
+ * A compact VS Code/Zed-style list: one 26 px row per entry, a quiet icon,
+ * a single-line path and an optional type badge. The container owns the
+ * rounded frame; rows only get a soft hover/focus wash. */
+.nmx-shell .nmx-stream-details.is-file-list,
+.nmx-shell .nmx-stream-file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    max-height: 320px;
+    margin: 4px 0 8px;
+    padding: 3px;
+    overflow: auto;
+    border-radius: 8px;
+    color: var(--nmx-subtle);
+    background: color-mix(in srgb, var(--nmx-text) 2.5%, transparent);
+    white-space: normal;
+}
+
+.nmx-shell .nmx-stream-file-entry {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: 100%;
+    min-width: 0;
+    min-height: 26px;
+    margin: 0;
+    padding: 3px 8px;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--nmx-subtle);
+    font: inherit;
+    font-size: 12.5px;
+    line-height: 18px;
+    text-align: start;
+    cursor: pointer;
+    appearance: none;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+
+.nmx-shell .nmx-stream-file-entry:hover {
+    color: var(--nmx-text);
+    background: color-mix(in srgb, var(--nmx-text) 7%, transparent);
+}
+
+.nmx-shell .nmx-stream-file-entry:focus { outline: none; }
+
+.nmx-shell .nmx-stream-file-entry:focus-visible {
+    color: var(--nmx-text);
+    outline: 1px solid var(--nmx-focus-ring);
+    outline-color: var(--nmx-focus-ring) !important;
+    outline-offset: -1px;
+    background: color-mix(in srgb, var(--nmx-text) 8%, transparent);
+}
+
+.nmx-shell .nmx-stream-file-entry-icon {
+    flex: none;
+    width: 15px;
+    font-size: 14px;
+    line-height: 1;
+    color: var(--nmx-file-icon, #86a9cc);
+}
+
+.nmx-shell .nmx-stream-file-entry.is-directory .nmx-stream-file-entry-icon {
+    color: var(--nmx-folder-icon, #d6a25e);
+}
+
+.nmx-shell .nmx-stream-file-entry-path {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: inherit;
+    unicode-bidi: plaintext;
+}
+
+/* The current row markup splits the path into a primary name and a muted
+ * parent directory. Both stay on one line; the parent absorbs the ellipsis. */
+.nmx-shell .nmx-stream-file-entry-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--nmx-text);
+    font-weight: 500;
+    unicode-bidi: plaintext;
+}
+
+.nmx-shell .nmx-stream-file-entry-parent {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-inline-start: 1px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--nmx-muted);
+    font-size: 11.5px;
+    unicode-bidi: plaintext;
+}
+
+.nmx-shell .nmx-stream-file-entry-parent::before {
+    content: '·';
+    margin-inline: 5px;
+    opacity: .7;
+}
+
+.nmx-shell .nmx-stream-file-entry-badge {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 6px;
+    border: 1px solid color-mix(in srgb, var(--nmx-text) 9%, transparent);
+    border-radius: 999px;
+    color: var(--nmx-muted);
+    background: color-mix(in srgb, var(--nmx-text) 4%, transparent);
+    font-size: 10.5px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-stream-file-entry.is-directory .nmx-stream-file-entry-badge {
+    color: color-mix(in srgb, #d6a25e 72%, var(--nmx-text));
+    border-color: color-mix(in srgb, #d6a25e 30%, transparent);
+    background: color-mix(in srgb, #d6a25e 10%, transparent);
+}
+
+.nmx-shell .nmx-stream-file-entry-open {
+    flex: none;
+    font-size: 12px;
+    color: var(--nmx-muted);
+    opacity: 0;
+    transform: translateX(-2px);
+    transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.nmx-shell .nmx-stream-file-entry:is(:hover, :focus-visible) .nmx-stream-file-entry-open {
+    opacity: .8;
+    transform: none;
+}
+
+.nmx-theme-light .nmx-stream-details.is-file-list,
+.nmx-theme-light .nmx-stream-file-list {
+    background: #f2f0f1;
+}
+
+.nmx-theme-light .nmx-stream-file-entry {
+    color: #4f484c;
+}
+
+.nmx-theme-light .nmx-stream-file-entry:hover {
+    color: #282527;
+    /* Override the broad light-theme button hover without turning white. */
+    background-color: #e9e5e7 !important;
+}
+
+.nmx-theme-light .nmx-stream-file-entry:focus-visible {
+    color: #282527;
+    background: #e6e2e4;
+}
+
+.nmx-theme-light .nmx-stream-file-entry-icon {
+    color: var(--nmx-file-icon, #5b7fa6);
+}
+
+.nmx-theme-light .nmx-stream-file-entry.is-directory .nmx-stream-file-entry-icon {
+    color: var(--nmx-folder-icon, #a8762a);
+}
+
+.nmx-theme-light .nmx-stream-file-entry-parent { color: #817a7e; }
+
+.nmx-theme-light .nmx-stream-file-entry-badge {
+    color: #6b6368;
+    border-color: #d8d1d4;
+    background: #efecee;
+}
+
+.nmx-theme-light .nmx-stream-file-entry.is-directory .nmx-stream-file-entry-badge {
+    color: #8a5c16;
+    border-color: #e2cda7;
+    background: #f6efe2;
+}
+
+.nmx-theme-light .nmx-stream-file-entry-open { color: #8a8287; }
+
+.nmx-stream-details.is-terminal { margin-top: 4px; }
+
+/* Command output keeps the maintained xterm host; the row supplies the frame. */
+.nmx-stream-details.is-terminal > .nmx-agent-command-terminal {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    position: relative;
+    overflow: hidden;
+    margin: 0 0 4px;
+    padding-inline: 10px 6px;
+    border: 0;
+    border-inline-start: 1px solid var(--nmx-border);
+    border-radius: 0;
+    color: var(--nmx-subtle);
+    background: transparent;
+    box-sizing: border-box;
+}
+
+.nmx-theme-light .nmx-stream-details.is-terminal > .nmx-agent-command-terminal { color: #2f2b2e; }
+
+.nmx-stream-details.is-terminal .nmx-agent-command-line {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    margin: 0;
+    padding: 2px 0;
+    color: var(--nmx-subtle);
+    background: transparent;
+    font: 12.5px/1.5 var(--theia-code-font-family, ui-monospace, SFMono-Regular, Consolas, monospace);
+    white-space: nowrap;
+}
+
+/* ---- Body text: always expanded, normal rhythm ----------------------- */
+
+.nmx-stream-text {
+    min-width: 0;
+    margin: 6px 0;
+    color: var(--nmx-text);
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.nmx-stream-text > .nmx-assistant-markdown + .nmx-assistant-markdown { margin-top: 8px; }
+/* Authored text keeps its own direction in either UI direction. */
+.nmx-stream-text :is(p, li, h1, h2, h3, h4, h5, h6, blockquote),
+.nmx-stream-notice-text { unicode-bidi: plaintext; }
+.nmx-stream-text .nmx-assistant-markdown { line-height: 1.6; }
+.nmx-stream-text.is-streaming > .nmx-assistant-markdown:last-of-type {
+    animation: nmx-stream-fade-in 160ms ease-out both;
+}
+
+.nmx-stream-row + .nmx-stream-text { margin-top: 8px; }
+.nmx-stream-text + .nmx-stream-row { margin-top: 4px; }
+
+.nmx-stream.nmx-stream-status { margin: 6px 0 4px; }
+
+/* ---- Cross-fade (status swap) and presence --------------------------- */
+
+.nmx-stream-swap {
+    display: inline-grid;
+    min-width: 0;
+}
+
+.nmx-stream-swap > span { grid-area: 1 / 1; }
+.nmx-stream-swap-in { animation: nmx-stream-fade-in 200ms ease-out both; }
+.nmx-stream-swap-out { animation: nmx-stream-fade-out 200ms ease-in both; pointer-events: none; }
+
+.nmx-presence-enter { animation: nmx-stream-pop-in 200ms var(--nmx-stream-ease, ease-out) both; }
+.nmx-presence-exit { animation: nmx-stream-pop-out 160ms ease-in both; pointer-events: none; }
+
+/* ---- Notices --------------------------------------------------------- */
+
+.nmx-stream-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: fit-content;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin: 6px 0 4px;
+    padding: 7px 10px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--nmx-danger) 10%, transparent);
+    color: var(--nmx-text);
+    font-size: 13.5px;
+    line-height: 20px;
+    animation: nmx-stream-fade-in 180ms ease-out both;
+}
+
+.nmx-stream-notice > .codicon { flex: 0 0 auto; margin-top: 3px; font-size: 14px; color: var(--nmx-danger); }
+.nmx-stream-notice.is-warning { background: color-mix(in srgb, #e0a13b 12%, transparent); }
+.nmx-stream-notice.is-warning > .codicon { color: #d8963a; }
+.nmx-stream-notice-text { min-width: 0; overflow-wrap: anywhere; }
+/* Diagnostic text wraps inside the notice: an error line is read, not scrolled. */
+.nmx-stream-notice-text pre { max-width: 100%; margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+
+/* The action sits on the first text line: a 26px button centred on the 20px line (−3px above and below), so it never
+   grows the notice and leaves the same 4px of tinted background above and below it. */
+.nmx-shell .nmx-stream-notice > .nmx-inline-action,
+.nmx-shell .nmx-agent-inline-error > .nmx-inline-action {
+    flex: 0 0 auto;
+    align-self: flex-start;
+    box-sizing: border-box;
+    height: 26px;
+    min-height: 26px;
+    margin: -3px -3px -3px 4px;
+    padding: 0 10px;
+    border-radius: 7px;
+    font-size: 13px;
+    line-height: 24px;
+    white-space: nowrap;
+}
+
+.nmx-stream-notice-dismiss {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 22px;
+    width: 22px;
+    height: 22px;
+    margin: -1px -4px -1px 2px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--nmx-muted);
+    cursor: pointer;
+    transition: background-color 150ms ease, color 150ms ease;
+}
+
+.nmx-stream-notice-dismiss:hover { background: var(--nmx-hover); color: var(--nmx-text); }
+.nmx-stream-notice-dismiss:focus { outline: none; }
+.nmx-stream-notice-dismiss:focus-visible { outline: 1px solid var(--nmx-focus-ring); }
+
+/* The composer balance notice is dismissible and keeps its recharge action. */
+.nmx-attachment-error.is-balance > span:first-child { flex: 1 1 auto; min-width: 0; }
+
+.nmx-attachment-error.is-balance .nmx-balance-dismiss {
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    opacity: .72;
+    cursor: pointer;
+    transition: opacity 150ms ease, background-color 150ms ease;
+}
+
+.nmx-attachment-error.is-balance .nmx-balance-dismiss:hover { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); }
+.nmx-attachment-error.is-balance .nmx-balance-dismiss:focus { outline: none; }
+.nmx-attachment-error.is-balance .nmx-balance-dismiss:focus-visible { outline: 1px solid var(--nmx-focus-ring); }
+
+/* ---- User message: width follows content, capped; Copy + Edit only --- */
+
+.nmx-task-turn .nmx-user-message:not(.is-editing) {
+    width: fit-content;
+    min-width: 0;
+    max-width: min(76%, 72ch);
+}
+
+@media (max-width: 720px) {
+    .nmx-task-turn .nmx-user-message:not(.is-editing) { max-width: 86%; }
+}
+
+/* ---- Branch confirmation (shadcn/Radix AlertDialog pattern) ---------- */
+
+.nmx-dialog-backdrop.nmx-branch-backdrop {
+    position: fixed;
+    inset: 0;
+    animation: nmx-stream-fade-in 180ms ease-out both;
+}
+
+.nmx-thread-dialog.nmx-branch-dialog {
+    width: min(460px, calc(100vw - 32px));
+    padding: 20px;
+    border-radius: 14px;
+    animation: nmx-dialog-in 200ms var(--nmx-stream-ease, ease-out) both;
+    transform-origin: 50% 50%;
+}
+
+.nmx-branch-dialog > header {
+    display: block;
+    margin: 0 0 6px;
+}
+
+.nmx-branch-dialog > header > h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.nmx-branch-dialog > p {
+    margin: 0 0 14px;
+    color: var(--nmx-subtle);
+    font-size: 13.5px;
+    line-height: 1.55;
+}
+
+.nmx-thread-dialog.nmx-branch-dialog > label.nmx-branch-restore {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 14px;
+    padding: 2px 4px 2px 0;
+    border-radius: 6px;
+    color: var(--nmx-text);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.nmx-thread-dialog.nmx-branch-dialog > label.nmx-branch-restore > input {
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    padding: 0;
+    accent-color: #7565d1;
+    cursor: pointer;
+}
+
+.nmx-thread-dialog.nmx-branch-dialog > label.nmx-branch-restore:has(input:focus-visible) {
+    outline: 1px solid var(--nmx-focus-ring);
+    outline-offset: 2px;
+}
+
+.nmx-branch-dialog .nmx-branch-status {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin: -6px 0 14px;
+    color: var(--nmx-muted);
+    font-size: 12.5px;
+    line-height: 1.5;
+}
+
+.nmx-branch-dialog .nmx-branch-status.is-error { color: var(--nmx-danger); }
+.nmx-branch-dialog .nmx-branch-status > .codicon { margin-top: 2px; font-size: 13px; }
+
+.nmx-branch-dialog .nmx-branch-changes {
+    display: grid;
+    gap: 2px;
+    max-height: 132px;
+    overflow: auto;
+    margin: -6px 0 14px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--nmx-text) 5%, transparent);
+    font-size: 12px;
+}
+
+.nmx-branch-dialog .nmx-branch-changes > div {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--nmx-subtle);
+}
+
+.nmx-branch-dialog .nmx-branch-changes > .is-warning { color: #d8963a; }
+.nmx-branch-dialog .nmx-branch-changes > .is-hint { display: block; margin-top: 4px; color: var(--nmx-muted); line-height: 1.45; }
+.nmx-branch-dialog .nmx-branch-changes code { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-branch-dialog .nmx-branch-changes b { color: #5bbf7f; font-weight: 500; }
+.nmx-branch-dialog .nmx-branch-changes em { color: #ec7a7a; font-style: normal; }
+
+.nmx-thread-dialog.nmx-branch-dialog > footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.nmx-thread-dialog.nmx-branch-dialog > footer > button {
+    min-width: 0;
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    white-space: nowrap;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+/* Create branch stays on the left; Cancel and Continue sit together on the right. */
+.nmx-thread-dialog.nmx-branch-dialog > footer > button.nmx-branch-create,
+.nmx-thread-dialog.nmx-branch-dialog > footer > button:first-child {
+    margin-inline-end: auto;
+}
+
+/* ---- Unread dot / hints ---------------------------------------------- */
+
+.nmx-session-terminal-dot { animation: nmx-stream-pop-in 200ms ease-out both; }
+.nmx-session-terminal-dot.nmx-presence-exit { animation: nmx-stream-pop-out 180ms ease-in both; }
+.nmx-thread-to-bottom.has-unseen > span { animation: nmx-stream-pop-in 200ms ease-out both; }
+.nmx-session-waiting-icon { animation: nmx-stream-fade-in 200ms ease-out both; }
+/* Completion hints (reply footer, route evidence) fade in when a turn settles. */
+.nmx-task-turn .nmx-turn-copy,
+.nmx-task-turn .nmx-turn-route-evidence { animation: nmx-stream-fade-in 200ms ease-out both; }
+
+/* ---- Keyframes -------------------------------------------------------- */
+
+@keyframes nmx-stream-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes nmx-stream-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes nmx-stream-pop-in { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: scale(1); } }
+@keyframes nmx-stream-pop-out { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(.6); } }
+@keyframes nmx-dialog-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes nmx-stream-shimmer { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .nmx-stream *,
+    .nmx-stream,
+    .nmx-branch-dialog,
+    .nmx-branch-backdrop,
+    .nmx-presence-enter,
+    .nmx-presence-exit,
+    .nmx-session-terminal-dot,
+    .nmx-session-waiting-icon,
+    .nmx-task-turn .nmx-turn-copy,
+    .nmx-task-turn .nmx-turn-route-evidence,
+    .nmx-stream-notice {
+        animation: none !important;
+        transition: none !important;
+    }
+    .nmx-stream-shimmer { color: var(--nmx-stream-title) !important; background: none; }
+}

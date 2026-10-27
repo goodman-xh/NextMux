@@ -1,0 +1,2777 @@
+/*
+ * Production-only visual contracts.
+ *
+ * This file intentionally loads after the historical desktop stylesheet. It
+ * owns cross-surface invariants (focus, viewport bounds, bidirectional text,
+ * and compact layouts) so future feature styles cannot silently regress them.
+ */
+
+.nmx-shell {
+    --nmx-composer-resting-border: #343434;
+    color-scheme: dark;
+}
+
+.nmx-shell.nmx-theme-light {
+    --nmx-composer-resting-border: #e4e0dd;
+    color-scheme: light;
+}
+
+.nmx-model-effort-portal {
+    --nmx-focus-ring: #a9a2a7;
+}
+
+.nmx-model-effort-portal.nmx-theme-light {
+    --nmx-focus-ring: #595257;
+}
+
+/* Desktop Codex typography: native UI faces lead, as in the local macOS
+   ChatGPT app; Windows UI and CJK fallbacks follow. `!important` keeps the
+   later platform font presets from replacing the
+   stack with a CJK-first list. */
+:root,
+body,
+.nmx-desktop-widget,
+.nmx-shell,
+.nmx-portal,
+.nmx-model-picker-portal,
+.nmx-model-effort-portal,
+.nmx-floating-file-window,
+.nmx-floating-note-window,
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) {
+    --nmx-ui-font: -apple-system-body, ui-sans-serif, -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important;
+    --nmx-font-sans: var(--nmx-ui-font) !important;
+    --nmx-numeric-font: var(--nmx-ui-font) !important;
+    --theia-ui-font-family: var(--nmx-ui-font) !important;
+    --nmx-code-font: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", "PingFang SC", "Microsoft YaHei UI", monospace !important;
+    --nmx-font-mono: var(--nmx-code-font) !important;
+    --nmx-mono-font: var(--nmx-code-font) !important;
+    --theia-code-font-family: var(--nmx-mono-font) !important;
+}
+
+/* Body-level Theia menus inherit the same product typography even though
+   Lumino renders them outside the widget subtree. */
+.nmx-desktop-widget,
+.nmx-desktop-widget .nmx-shell,
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)),
+.nmx-model-effort-portal,
+body,
+.nmx-shell,
+.nmx-portal,
+.nmx-model-picker-portal,
+.nmx-floating-file-window,
+.nmx-floating-note-window,
+:where(button, input, textarea, select, optgroup, option, label, time, [data-nmx-literal]):not(:where(
+    code, code *, pre, pre *, kbd, kbd *, samp, samp *,
+    .nmx-inline-code, .nmx-inline-code *, .nmx-md-code-block, .nmx-md-code-block *,
+    .monaco-editor, .monaco-editor *, .xterm, .xterm *,
+    .codicon, .fa, .fas, .far, .fab, [class^='fa-'], [class*=' fa-']
+)),
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .lm-Menu) {
+    font-family: var(--nmx-ui-font) !important;
+}
+
+.nmx-desktop-widget,
+.nmx-desktop-widget .nmx-shell {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Authored prose and GFM-style structures stay in the product UI face. Code,
+   keyboard tokens and terminal-shaped samples remain monospaced so columns,
+   glyph widths and caret positions cannot drift. */
+.nmx-desktop-widget .nmx-assistant-markdown,
+.nmx-desktop-widget .nmx-assistant-markdown :where(
+    p, h1, h2, h3, h4, h5, h6, ul, ol, li, blockquote,
+    table, thead, tbody, tfoot, tr, th, td, details, summary
+) {
+    font-family: var(--nmx-ui-font) !important;
+}
+
+.nmx-desktop-widget .nmx-user-markdown {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    line-height: 1.55;
+}
+.nmx-desktop-widget .nmx-user-markdown > :first-child { margin-top: 0; }
+.nmx-desktop-widget .nmx-user-markdown > :last-child { margin-bottom: 0; }
+.nmx-desktop-widget .nmx-user-markdown a { color: #8ab4f8; text-decoration: underline; text-underline-offset: 2px; }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) a > img[alt='🌐'] {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-inline-end: .32em;
+    vertical-align: -.14em;
+    object-fit: contain;
+    border: 0;
+}
+.nmx-desktop-widget .nmx-composer > .nmx-composer-input { display: block; position: relative; min-height: 64px; }
+.nmx-desktop-widget .nmx-composer-markdown-overlay { position: absolute; inset: 2px 4px 7px; z-index: 0; overflow: hidden; color: var(--nmx-text, #e8e6e6); white-space: pre-wrap; overflow-wrap: anywhere; pointer-events: none; }
+.nmx-desktop-widget .nmx-composer-inline-link { color: #8ab4f8; text-decoration: underline; text-underline-offset: 2px; }
+.nmx-desktop-widget .nmx-composer-input > textarea { position: relative; z-index: 1; }
+.nmx-desktop-widget .nmx-composer-input.has-markdown-links > textarea { color: transparent !important; -webkit-text-fill-color: transparent !important; caret-color: var(--nmx-text, #e8e6e6); }
+.nmx-desktop-widget .nmx-theme-light .nmx-composer-markdown-overlay { color: var(--nmx-text, #1f1f24); }
+.nmx-desktop-widget .nmx-theme-light .nmx-composer-input.has-markdown-links > textarea { caret-color: var(--nmx-text, #1f1f24); }
+.nmx-desktop-widget .nmx-theme-light :is(.nmx-assistant-markdown a, .nmx-user-markdown a, .nmx-composer-inline-link) { color: #0969da !important; }
+
+.nmx-desktop-widget .nmx-assistant-markdown :is(pre, code, kbd, samp) {
+    font-family: var(--nmx-code-font) !important;
+}
+
+/* Desktop Codex's light code surface is a crisp neutral #f9f9f9 with a barely
+   visible hairline border, not the warm gray of the old Primer palette. The
+   direct background/border declarations are important because a later
+   composer-attachment rule paints #f3f2ef over the token-driven surface, and
+   the global light-theme border guard would otherwise force #e4e0dd. */
+.nmx-shell.nmx-theme-light :is(.nmx-md-code, pre.nmx-md-plain-code) {
+    --md-code-bg: #f9f9f9;
+    --md-code-border: rgba(13, 13, 13, 0.08);
+    background: #f9f9f9 !important;
+    border-color: rgba(13, 13, 13, 0.08) !important;
+}
+
+/* Legacy feature rules deliberately neutralize browser focus outlines. Restore
+   one keyboard-only contract at the final cascade layer instead of fixing each
+   button, tab, drawer and settings page independently. */
+.nmx-desktop-widget .nmx-shell :is(
+    button,
+    input:is([type='checkbox'], [type='radio'], [type='range']),
+    [tabindex]:not([tabindex='-1']):not(input):not(textarea):not(select)
+):focus-visible {
+    outline: 2px solid var(--nmx-focus-ring) !important;
+    outline-offset: 2px;
+}
+
+.nmx-model-effort-portal :is(
+    button,
+    [tabindex]:not([tabindex='-1'])
+):focus-visible {
+    outline: 2px solid var(--nmx-focus-ring) !important;
+    outline-offset: 2px;
+}
+
+/* Text controls use only their caret instead of a white/grey focus frame or
+   a focus-only fill. Border and surface remain identical before/after focus.
+   Validation remains semantic and uses one stable error colour rather than a
+   second focus-only frame. */
+.nmx-desktop-widget .nmx-shell :is(
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='button']):not([type='submit']):not([type='reset']),
+    textarea,
+    select
+) {
+    border-color: var(--nmx-border) !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+}
+
+.nmx-desktop-widget .nmx-shell :is(
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='button']):not([type='submit']):not([type='reset']),
+    textarea,
+    select
+):is(:focus, :focus-visible) {
+    border-color: var(--nmx-border) !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+}
+
+.nmx-desktop-widget .nmx-shell :is(input, textarea, select)[aria-invalid='true'],
+.nmx-desktop-widget .nmx-shell :is(input, textarea, select)[aria-invalid='true']:is(:focus, :focus-visible) {
+    border-color: var(--nmx-danger) !important;
+}
+
+.nmx-desktop-widget .nmx-shell label:has(> :is(input, textarea, select):focus-visible) > span {
+    color: var(--nmx-text) !important;
+}
+
+.nmx-desktop-widget .nmx-shell .nmx-composer,
+.nmx-desktop-widget .nmx-shell .nmx-composer:focus-within,
+.nmx-desktop-widget .nmx-shell .nmx-composer:has(textarea:focus-visible) {
+    border-color: var(--nmx-composer-resting-border) !important;
+    outline: 0 !important;
+}
+
+.nmx-desktop-widget .nmx-shell .nmx-composer:has(textarea:focus-visible) {
+    box-shadow: none !important;
+}
+
+.nmx-desktop-widget .nmx-shell .nmx-composer textarea:is(:focus, :focus-visible),
+.nmx-desktop-widget .nmx-shell .nmx-model-picker-search input:is(:focus, :focus-visible),
+.nmx-desktop-widget .nmx-shell .nmx-topup-amount-field input:is(:focus, :focus-visible) {
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+
+.nmx-desktop-widget .nmx-shell .nmx-model-picker-search:has(input:focus-visible) {
+    border-color: var(--nmx-border) !important;
+    box-shadow: none !important;
+}
+
+.nmx-desktop-widget .nmx-shell .nmx-topup-amount-field {
+    border-color: var(--nmx-border) !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+}
+
+.nmx-desktop-widget .nmx-shell .nmx-topup-amount-field:focus-within {
+    border-color: var(--nmx-border) !important;
+    outline: 0 !important;
+    box-shadow: none !important;
+}
+
+.nmx-desktop-widget .nmx-shell .nmx-turn-edit-restore > input:focus-visible {
+    outline: 0 !important;
+    box-shadow: none !important;
+}
+
+.nmx-shell [role='separator']:focus-visible {
+    outline: 2px solid var(--nmx-focus-ring) !important;
+    outline-offset: -2px;
+}
+
+.nmx-shell :where(
+    .nmx-context-nav,
+    .nmx-workspace-scroll,
+    .nmx-task-view,
+    .nmx-model-picker-list,
+    .nmx-settings-page,
+    .nmx-terminal-list
+) {
+    scroll-padding-block: 10px;
+}
+
+.nmx-shell :where(button, input, textarea, select, [tabindex]) {
+    scroll-margin-block: 8px;
+}
+
+/* Native widgets and body-level Lumino menus follow the resolved desktop
+   theme, not a stale OS or Theia preference. */
+.nmx-shell.nmx-theme-light :where(input, textarea, select) {
+    color-scheme: light;
+}
+
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu {
+    color-scheme: dark;
+}
+
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Menu {
+    color-scheme: light;
+}
+
+/* Popovers and drawers may contain their own scrollers. Stop wheel/touch
+   chaining at the floating surface rather than letting the conversation jump. */
+.nmx-shell :where(
+    .nmx-header-popover,
+    .nmx-composer-popover,
+    .nmx-session-menu,
+    .nmx-message-menu,
+    .nmx-follow-up-menu,
+    .nmx-model-picker-popover
+) {
+    max-width: calc(100dvw - 16px);
+    max-height: calc(100dvh - 16px);
+    overscroll-behavior: contain;
+}
+
+.nmx-model-effort-portal .nmx-model-effort-menu {
+    max-width: calc(100dvw - 16px);
+    max-height: calc(100dvh - 16px);
+    overscroll-behavior: contain;
+}
+
+.nmx-shell :where(.nmx-work-context, .nmx-terminal-drawer) {
+    max-width: 100dvw;
+    overscroll-behavior: contain;
+}
+
+.nmx-dialog-backdrop:not(:has(> :is(
+    .nmx-comic-create-sheet,
+    .nmx-comic-character-sheet,
+    .nmx-comic-export-sheet
+))) {
+    overflow: auto;
+    overscroll-behavior: contain;
+    box-sizing: border-box;
+}
+
+/* Comic sheets intentionally retain their specialist canvas/timeline layout.
+   The generic desktop dialogs share this safe viewport contract. */
+.nmx-dialog-backdrop > :where(
+    .nmx-thread-dialog,
+    .nmx-schedule-dialog,
+    .nmx-topup-sheet,
+    .nmx-permission-sheet:not(.nmx-comic-create-sheet):not(.nmx-comic-character-sheet)
+) {
+    max-width: calc(100dvw - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    box-sizing: border-box;
+}
+
+.nmx-sheet-backdrop:not(.nmx-dialog-backdrop) > :where(
+    .nmx-diff-sheet,
+    .nmx-purchase-sheet
+) {
+    max-width: 100dvw;
+    max-height: 100dvh;
+    overflow: auto;
+    overscroll-behavior: contain;
+    box-sizing: border-box;
+}
+
+/* Single-scroll-owner discipline (Radix Dialog / OpenCode modal pattern):
+   When a dialog, drawer sheet, or popover owns a dedicated inner scroll body,
+   the backdrop and outer frame stay overflow-hidden so only one right-hand
+   scrollbar is ever visible. */
+.nmx-shell :is(.nmx-dialog-backdrop, .nmx-sheet-backdrop) {
+    overflow: hidden;
+    scrollbar-width: none;
+}
+
+.nmx-dialog-backdrop > :where(
+    .nmx-thread-dialog,
+    .nmx-schedule-dialog,
+    .nmx-topup-sheet,
+    .nmx-permission-sheet:not(.nmx-comic-create-sheet):not(.nmx-comic-character-sheet),
+    .nmx-my-apis,
+    .nmx-official-sheet,
+    .nmx-own-models-drawer,
+    .nmx-cast-library
+):has(:is(
+    .nmx-plugin-dialog-body,
+    .nmx-installed-skills-list,
+    .nmx-conversation-search-results,
+    .nmx-run-history-list,
+    .nmx-branch-changes,
+    .nmx-council-slots-list,
+    .nmx-my-apis-list,
+    .nmx-official-sheet-body,
+    .nmx-own-models-drawer-body,
+    .nmx-cast-grid,
+    .nmx-project-memory-body
+)),
+.nmx-sheet-backdrop > :where(
+    .nmx-diff-sheet,
+    .nmx-purchase-sheet,
+    .nmx-my-apis,
+    .nmx-official-sheet,
+    .nmx-own-models-drawer,
+    .nmx-mc-drawer
+):has(:is(
+    .nmx-diff-sheet-body,
+    .nmx-own-models-drawer-body,
+    .nmx-official-sheet-body,
+    .nmx-my-apis-list,
+    .nmx-mc-drawer-body
+)) {
+    overflow: hidden !important;
+}
+
+.nmx-shell :is(.nmx-my-apis, .nmx-official-sheet, .nmx-own-models-drawer, .nmx-installed-skills-sheet) :is(
+    .nmx-my-apis-models .nmx-own-model-list,
+    .nmx-own-model-list,
+    .nmx-own-model-list ul,
+    .nmx-saved-connections,
+    .nmx-official-catalog-only ul,
+    .nmx-community-skill-details[open],
+    .nmx-community-skill-review
+),
+.nmx-shell .nmx-settings-page :is(
+    .nmx-mcp-access fieldset,
+    .nmx-mcp-access .nmx-mcp-credential-editor
+) {
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+.nmx-shell :is(
+    .nmx-model-picker-popover,
+    .nmx-model-picker-popover > footer:has(.nmx-model-switch-panel),
+    .nmx-model-switch-body
+) {
+    overflow: hidden !important;
+}
+
+/* The right file/browser drawer stops above the live terminal instead of
+   covering it. Both panels remain independently dismissible at every size. */
+.nmx-shell:has(.nmx-terminal-drawer.is-open) .nmx-work-context {
+    bottom: 0;
+}
+
+/* The direct-API/hosted-line sheet is a right drawer, not a dark-mode island.
+   Keep every control readable on the warm light surface and preserve semantic
+   success/error colours without using pure white or heavy black borders. */
+.nmx-shell.nmx-theme-light .nmx-sheet-backdrop {
+    background: rgba(61, 55, 58, .24) !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-purchase-sheet {
+    color: var(--nmx-text) !important;
+    border-color: var(--nmx-border) !important;
+    background: var(--nmx-dialog-background) !important;
+    box-shadow: -18px 0 46px rgba(64, 56, 60, .14) !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-purchase-sheet :is(h2, h3, strong, label) {
+    color: var(--nmx-text) !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-purchase-sheet :is(p, small, em, header > div > span) {
+    color: var(--nmx-subtle) !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-official-sheet :is(
+    header > button,
+    .nmx-connection-actions button,
+    .nmx-official-form-actions button
+) {
+    color: var(--nmx-text) !important;
+    border-color: var(--nmx-border) !important;
+    background: var(--nmx-control-background) !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-official-sheet :is(
+    header > button,
+    .nmx-connection-actions button,
+    .nmx-official-form-actions button
+):hover:not(:disabled) {
+    color: var(--nmx-text) !important;
+    background: var(--nmx-control-hover) !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-official-sheet :is(input, select) {
+    color: var(--nmx-text) !important;
+    border-color: var(--nmx-border) !important;
+    background: #f2efec !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-official-sheet :is(input, select):disabled {
+    color: var(--nmx-muted) !important;
+    background: #e8e4e1 !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-official-sheet .nmx-official-form-actions button.nmx-primary-button {
+    color: #fff !important;
+    border-color: #2c282b !important;
+    background: #2c282b !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-official-sheet .nmx-official-form-actions button.nmx-primary-button:hover:not(:disabled) {
+    color: #fff !important;
+    background: #413b3f !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-official-sheet .nmx-connection-message {
+    color: #2e6650 !important;
+    border-color: #b8d5c8 !important;
+    background: #e7f2ed !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-official-sheet .nmx-purchase-error,
+.nmx-shell.nmx-theme-light .nmx-official-sheet button.is-danger {
+    color: #963942 !important;
+    border-color: #dfb9bd !important;
+    background: #f8e9ea !important;
+}
+
+/* UI language controls chrome direction, while authored user/assistant text
+   keeps its own first-strong direction and is never translated in place. */
+.nmx-desktop-widget [data-nmx-literal] {
+    unicode-bidi: plaintext;
+}
+
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)[dir='rtl']) :where(
+    .nmx-model-effort-menu,
+    .lm-Menu-content
+) {
+    direction: rtl;
+}
+
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)[dir='rtl']) :where(
+    .nmx-model-effort-menu strong,
+    .lm-Menu-itemLabel,
+    .lm-Menu-itemShortcut
+) {
+    unicode-bidi: plaintext;
+}
+
+.nmx-user-message {
+    margin-left: 0;
+    margin-inline-start: auto;
+}
+
+.nmx-steering-messages,
+.nmx-turn-copy {
+    margin-left: 0;
+    margin-inline-start: auto;
+}
+
+.nmx-user-message-actions {
+    right: auto;
+    left: auto;
+    inset-inline-end: 0;
+}
+
+.nmx-user-message-actions > .nmx-user-message-menu {
+    right: auto;
+    left: auto;
+    inset-inline-end: 0;
+}
+
+.nmx-turn-copy > section {
+    right: auto;
+    left: auto;
+    inset-inline-end: 0;
+}
+
+.nmx-model-option > button,
+.nmx-model-effort-menu button {
+    text-align: start;
+}
+
+/* Arbitrary repository paths, URLs and mixed-script prose must wrap inside the
+   conversation column. The fade is paint-only so it cannot swallow selection
+   or the expand control. */
+.nmx-desktop-widget :where(
+    .nmx-literal-content,
+    .nmx-gateway-content,
+    .nmx-assistant-markdown,
+    .nmx-agent-narration
+) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+/* Ordered text/media stays in one bounded flow. A completed automatic switch
+   leaves one quiet receipt under the answer instead of an ephemeral toast or
+   a full accounting card. */
+.nmx-desktop-widget .nmx-assistant-output {
+    container-name: nmx-assistant-output-width;
+    container-type: inline-size;
+}
+
+.nmx-desktop-widget .nmx-turn-route-evidence {
+    min-width: 0;
+    max-width: 100%;
+    display: inline-grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: center;
+    gap: 6px;
+    margin-block: 9px 2px;
+    padding: 4px 7px;
+    border: 1px solid color-mix(in srgb, var(--nmx-warning) 34%, var(--nmx-border));
+    border-radius: 7px;
+    color: var(--nmx-subtle);
+    background: color-mix(in srgb, var(--nmx-warning) 7%, transparent);
+    box-sizing: border-box;
+}
+
+.nmx-desktop-widget .nmx-turn-route-evidence > i {
+    color: var(--nmx-warning);
+}
+
+.nmx-desktop-widget .nmx-turn-route-evidence > span {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.nmx-desktop-widget .nmx-turn-route-evidence :is(strong, small) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-desktop-widget .nmx-turn-route-evidence strong {
+    flex: 0 0 auto;
+    color: var(--nmx-text);
+    font-size: 12px !important;
+    font-weight: 550;
+}
+
+.nmx-desktop-widget .nmx-turn-route-evidence small {
+    color: var(--nmx-muted);
+    font-size: 12px !important;
+}
+
+/* A question is a temporary answer surface, not a second message queue. Keep
+   it internally scrollable and compact even in a short BrowserWindow. */
+.nmx-shell {
+    --nmx-question-max-height: min(28dvh, 220px);
+}
+
+.nmx-composer-wrap > .nmx-user-question {
+    container-name: nmx-agent-question-width;
+    container-type: inline-size;
+    box-shadow: 0 14px 38px rgba(0, 0, 0, .28);
+}
+
+.nmx-user-question-body,
+.nmx-user-question-options,
+.nmx-user-question-options > label,
+.nmx-user-question-options > label > span {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.nmx-user-question-options :is(strong, small),
+.nmx-user-question-body > p {
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+.nmx-user-question > footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    flex-wrap: nowrap;
+}
+
+.nmx-user-question > footer > small {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    overflow: hidden;
+    margin-inline-end: 0;
+    white-space: nowrap;
+}
+
+.nmx-user-question > footer > small > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nmx-user-question > footer > small > b {
+    flex: 0 0 auto;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+
+.nmx-user-question > footer > button {
+    white-space: nowrap;
+}
+
+.nmx-message-fade {
+    pointer-events: none;
+    background: linear-gradient(180deg, transparent, var(--nmx-message-fade-bg));
+}
+
+.nmx-workspace-controls :where(button) {
+    flex: 0 0 auto;
+}
+
+.nmx-shell :where(.nmx-work-context, .nmx-terminal-drawer) > header :where(button) {
+    flex: 0 0 auto;
+}
+
+@media (max-width: 760px) {
+    /* Long translated File/Edit/View/Help labels stay reachable by horizontal
+       scrolling rather than being clipped underneath the centered switcher. */
+    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar > .lm-MenuBar-content {
+        max-width: 100%;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        overscroll-behavior-inline: contain;
+        scrollbar-width: none;
+    }
+
+    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar > .lm-MenuBar-content::-webkit-scrollbar {
+        display: none;
+    }
+
+    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar .lm-MenuBar-item {
+        flex: 0 0 auto;
+    }
+
+    .nmx-settings-page {
+        padding-inline: 16px;
+    }
+
+    .nmx-settings-page label {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 6px;
+    }
+
+    .nmx-settings-panel .nmx-setting-row {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .nmx-settings-panel .nmx-setting-row > :where(span, label, div) {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .nmx-official-sheet .nmx-saved-connections article {
+        grid-template-columns: 8px minmax(0, 1fr);
+        align-items: start;
+        padding-block: 10px;
+    }
+
+    .nmx-official-sheet .nmx-connection-actions {
+        grid-column: 2;
+        flex-wrap: wrap;
+    }
+
+    .nmx-official-sheet .nmx-connection-actions button {
+        flex: 1 1 auto;
+    }
+
+
+    .nmx-official-sheet .nmx-official-form > label {
+        grid-template-columns: minmax(0, 1fr);
+        align-items: stretch;
+        gap: 7px;
+        padding-block: 9px;
+    }
+
+    .nmx-official-sheet .nmx-official-form-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .nmx-official-sheet .nmx-official-form-actions > div {
+        flex-wrap: wrap;
+    }
+
+    .nmx-official-sheet .nmx-official-form-actions button {
+        flex: 1 1 auto;
+    }
+
+    .nmx-work-context {
+        right: 4px;
+        min-width: 0;
+        width: calc(100% - 8px);
+        max-width: calc(100% - 8px);
+    }
+
+    .nmx-terminal-drawer > header {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .nmx-terminal-layout {
+        grid-template-columns: minmax(0, 1fr) 6px clamp(120px, 28vw, 176px);
+    }
+
+    .nmx-terminal-list {
+        min-width: 0;
+    }
+
+    .nmx-workspace-controls {
+        min-width: max-content;
+        flex: 0 0 auto;
+    }
+}
+
+@media (max-height: 560px) {
+    .nmx-shell {
+        --nmx-question-max-height: min(34dvh, 220px);
+    }
+}
+
+@container nmx-assistant-output-width (max-width: 440px) {
+    .nmx-assistant-media figcaption {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 2px;
+    }
+}
+
+@container nmx-agent-question-width (max-width: 360px) {
+    .nmx-user-question > footer {
+        gap: 5px;
+        padding-inline: 7px;
+    }
+
+    .nmx-user-question > footer > small > span {
+        display: none;
+    }
+
+    .nmx-user-question > footer > button {
+        padding-inline: 7px;
+    }
+}
+
+@media (max-width: 560px) {
+    .nmx-desktop-widget .nmx-turn-route-evidence > span {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 2px;
+    }
+}
+
+/* Cross-link the two work-context surfaces without turning the tab strip into
+   a second navigation system. These actions stay compact and remain usable in
+   a narrow drawer or a light theme. */
+.nmx-shell .nmx-context-panel-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--nmx-border);
+    background: var(--nmx-panel);
+}
+
+.nmx-shell .nmx-context-panel-actions button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    max-width: 100%;
+    padding: 4px 7px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--nmx-subtle);
+    background: transparent;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-context-panel-actions button:hover,
+.nmx-shell .nmx-context-panel-actions button:focus-visible {
+    color: var(--nmx-text);
+    border-color: var(--nmx-border);
+    background: var(--nmx-hover);
+}
+
+.nmx-shell .nmx-context-panel-actions button span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-context-panel-actions button em {
+    flex: 0 0 auto;
+    color: var(--nmx-muted);
+    font-size: .78em;
+    font-style: normal;
+}
+
+.nmx-shell .nmx-agent-context-actions {
+    justify-content: flex-start;
+    border-top: 0;
+}
+
+.nmx-shell.nmx-theme-light .nmx-context-panel-actions {
+    border-color: #ddd8d4;
+    background: #f3f0ed;
+}
+
+.nmx-shell.nmx-theme-light .nmx-context-panel-actions button {
+    color: #625b60;
+}
+
+.nmx-shell.nmx-theme-light .nmx-context-panel-actions button:hover,
+.nmx-shell.nmx-theme-light .nmx-context-panel-actions button:focus-visible {
+    color: #292629;
+    border-color: #d6cfca;
+    background: #e9e4e1;
+}
+
+/* Keep floating sheets inside the actual desktop viewport during compact
+   BrowserWindow/Lumino resizes. */
+.nmx-shell .nmx-sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100dvw;
+    height: 100dvh;
+    max-width: 100dvw;
+    max-height: 100dvh;
+    overflow: hidden;
+}
+
+.nmx-shell .nmx-official-sheet {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: min(640px, 100dvw);
+    max-height: 100dvh;
+}
+
+@media (max-width: 760px) {
+    .nmx-shell .nmx-official-sheet {
+        width: min(520px, 100dvw);
+        max-width: 100dvw;
+        padding-inline: 14px;
+    }
+}
+
+/* Unified right-side work context: browser, files and child agents share one
+   bounded surface.  Child tabs are intentionally independent from the parent
+   conversation so closing/switching a tab never discards its journal. */
+/* Drawer controls share the native title row without shifting the centered
+   primary navigation. Keep them outside the drawer's containment/animation. */
+.nmx-shell .nmx-titlebar-context {
+    --nmx-caption-width: 0px;
+    position: fixed;
+    z-index: 1300;
+    top: 4px;
+    right: calc(8px + var(--nmx-caption-width));
+    width: min(var(--nmx-work-context-width, 358px), calc(50vw - 176px - var(--nmx-caption-width)));
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    container: nmx-titlebar-context / inline-size;
+}
+
+body:is(.windows, :has(#window-controls)) .nmx-shell .nmx-titlebar-context {
+    --nmx-caption-width: 138px;
+    min-width: 0;
+}
+
+.nmx-titlebar-context {
+    -webkit-app-region: drag !important;
+}
+
+.nmx-titlebar-context :is(.nmx-context-entry-tabs, button),
+.nmx-titlebar-context :is(.nmx-context-entry-tabs, button) * {
+    -webkit-app-region: no-drag !important;
+}
+
+.nmx-shell .nmx-titlebar-context .nmx-context-entry-tabs {
+    flex: 0 1 auto;
+    max-width: calc(100% - 84px);
+    justify-content: flex-end;
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow: hidden;
+}
+
+.nmx-shell .nmx-titlebar-context .nmx-context-entry-tab {
+    flex: 0 1 auto;
+    min-width: 28px;
+    height: 28px;
+    justify-content: center;
+    padding: 0 6px;
+    font-size: 13px;
+}
+
+.nmx-titlebar-context-close {
+    margin-left: 0;
+    flex-shrink: 0;
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    color: var(--nmx-subtle);
+    background: transparent;
+    cursor: pointer;
+}
+
+.nmx-titlebar-context-close:hover {
+    background: var(--nmx-hover);
+}
+
+@container nmx-titlebar-context (max-width: 310px) {
+    .nmx-context-entry-tab > span,
+    .nmx-context-entry-tab > em {
+        display: none;
+    }
+}
+
+@media (max-width: 1120px) {
+    .nmx-shell .nmx-titlebar-context {
+        width: min(var(--nmx-work-context-width, 358px), calc(50vw - 72px - var(--nmx-caption-width)));
+    }
+}
+
+.nmx-shell .nmx-context-entry-tabs {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--nmx-border);
+    background: var(--nmx-panel);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    overscroll-behavior-inline: contain;
+}
+
+.nmx-shell .nmx-context-entry-tabs::-webkit-scrollbar,
+.nmx-shell .nmx-agent-child-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+/* Keep inactive Electron webviews laid out for owned background automation.
+   display:none stops Chromium's element stability checks and pointer input. */
+.nmx-shell .nmx-browser-view.is-inactive {
+    position: fixed;
+    left: -10000px;
+    top: 0;
+    width: 1024px;
+    height: 768px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.nmx-shell .nmx-context-entry-tab {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 10rem;
+    padding: 5px 9px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    color: var(--nmx-subtle);
+    background: transparent;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-context-entry-tab:hover,
+.nmx-shell .nmx-context-entry-tab.is-active {
+    color: var(--nmx-text);
+    background: var(--nmx-hover);
+}
+
+.nmx-shell .nmx-context-entry-tab.is-active {
+    border-color: var(--nmx-border);
+}
+
+.nmx-shell .nmx-context-entry-tab span,
+.nmx-shell .nmx-context-entry-tab em {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-context-entry-tab em {
+    font-size: .78em;
+    font-style: normal;
+    color: var(--nmx-muted);
+}
+
+.nmx-shell .nmx-context-agent {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--nmx-bg);
+}
+
+.nmx-shell .nmx-agent-child-tabs {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 6px;
+    min-width: 0;
+    max-width: 100%;
+    padding: 8px 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    border-bottom: 1px solid var(--nmx-border);
+    background: color-mix(in srgb, var(--nmx-panel) 60%, var(--nmx-bg));
+}
+
+.nmx-shell .nmx-agent-child-tab {
+    display: inline-flex;
+    flex: 0 1 13rem;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 13rem;
+    padding: 6px 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--nmx-subtle);
+    background: transparent;
+    transition: background-color .14s ease, border-color .14s ease, color .14s ease;
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-agent-child-tab:hover,
+.nmx-shell .nmx-agent-child-tab.is-active {
+    color: var(--nmx-text);
+    background: var(--nmx-hover);
+}
+
+.nmx-shell .nmx-agent-child-tab.is-active {
+    border-color: var(--nmx-border);
+    background: var(--nmx-panel);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+}
+
+.nmx-shell .nmx-agent-child-tab span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-agent-child-detail {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    min-height: 0;
+    padding: 14px 16px 16px;
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+.nmx-shell .nmx-agent-child-detail > header {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    min-width: 0;
+    margin-bottom: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.nmx-shell .nmx-agent-child-detail > header > div {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    min-width: 0;
+    width: 100%;
+    gap: 6px;
+}
+
+.nmx-shell .nmx-agent-child-detail > header strong {
+    display: block;
+    max-width: min(86%, 52ch);
+    min-width: 0;
+    margin-inline-start: auto;
+    padding: 10px 13px;
+    border: 0;
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.56;
+    color: #e5e6e8;
+    background: #282a2f;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.nmx-shell .nmx-agent-child-detail > header strong :is(.nmx-user-markdown, .nmx-user-markdown > p) {
+    margin: 0;
+}
+
+.nmx-shell.nmx-theme-light .nmx-agent-child-detail > header strong {
+    border: 1px solid #dbd5d0;
+    color: #252225;
+    background: #e8e4e0;
+}
+
+.nmx-shell .nmx-agent-child-detail > header small,
+.nmx-shell .nmx-agent-child-detail > header code {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-agent-child-detail > header small {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--nmx-subtle);
+}
+
+.nmx-shell .nmx-agent-child-detail > header code {
+    display: none;
+}
+
+.nmx-shell .nmx-agent-child-context {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    margin: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--nmx-border);
+    border-radius: 10px;
+    background: var(--nmx-panel);
+}
+
+.nmx-shell .nmx-agent-child-context > div {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.nmx-shell .nmx-agent-child-context dt {
+    flex: 0 0 auto;
+    color: var(--nmx-muted);
+    font-size: .78em;
+}
+
+.nmx-shell .nmx-agent-child-context dd {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--nmx-subtle);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: .82em;
+}
+
+.nmx-shell .nmx-agent-child-events {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding-inline: 2px;
+}
+
+.nmx-shell .nmx-agent-child-new-events {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: inline-flex;
+    align-self: flex-start;
+    align-items: center;
+    gap: 5px;
+    max-width: 100%;
+    margin: 0;
+    padding: 5px 10px;
+    overflow: hidden;
+    border: 1px solid var(--nmx-border);
+    border-radius: 999px;
+    color: var(--nmx-text);
+    background: var(--nmx-panel);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-agent-child-new-events span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-agent-child-new-events:hover {
+    background: var(--nmx-hover);
+}
+
+.nmx-shell.nmx-theme-light .nmx-agent-child-new-events {
+    border-color: #d7d2cf;
+    color: #353134;
+    background: #eae6e2;
+    box-shadow: 0 2px 8px rgb(53 49 52 / 10%);
+}
+
+.nmx-shell .nmx-agent-child-result {
+    min-width: 0;
+    margin-top: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--nmx-text);
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.nmx-shell .nmx-agent-child-receipt {
+    min-width: 0;
+    margin: 0;
+    padding: 10px 12px;
+    overflow: hidden;
+    border: 1px solid var(--nmx-border);
+    border-radius: 10px;
+    color: var(--nmx-subtle);
+    background: var(--nmx-panel);
+}
+
+.nmx-shell .nmx-agent-child-receipt-heading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.nmx-shell .nmx-agent-child-receipt-heading strong,
+.nmx-shell .nmx-agent-child-receipt-heading span,
+.nmx-shell .nmx-agent-child-receipt small,
+.nmx-shell .nmx-agent-child-receipt code {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-agent-child-receipt-heading strong {
+    flex: 0 0 auto;
+    color: var(--nmx-text);
+}
+
+.nmx-shell .nmx-agent-child-receipt-heading span {
+    flex: 1 1 auto;
+}
+
+.nmx-shell .nmx-agent-child-receipt small {
+    display: block;
+    margin-top: 4px;
+    color: var(--nmx-muted);
+}
+
+.nmx-shell .nmx-agent-child-receipt code {
+    display: block;
+    margin-top: 4px;
+    color: var(--nmx-danger);
+    font-size: .76em;
+}
+
+.nmx-shell .nmx-agent-child-receipt.is-completed .nmx-agent-child-receipt-heading i {
+    color: var(--nmx-success);
+}
+
+.nmx-shell .nmx-agent-child-receipt.is-partial .nmx-agent-child-receipt-heading i,
+.nmx-shell .nmx-agent-child-receipt.is-unknown .nmx-agent-child-receipt-heading i,
+.nmx-shell .nmx-agent-child-receipt.is-failed .nmx-agent-child-receipt-heading i {
+    color: var(--nmx-danger);
+}
+
+.nmx-shell .nmx-agent-child-error {
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, var(--nmx-danger) 40%, var(--nmx-border));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--nmx-danger) 10%, transparent);
+    color: var(--nmx-danger);
+}
+
+.nmx-shell .nmx-agent-child-no-checkpoint {
+    margin: auto 0 0;
+    padding-top: 4px;
+    color: var(--nmx-muted);
+    font-size: .82em;
+}
+
+.nmx-shell .nmx-agent-child-composer {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    min-width: 0;
+    margin-top: auto;
+    padding: 9px 10px;
+    border: 1px solid var(--nmx-border);
+    border-radius: 12px;
+    background: var(--nmx-panel);
+    box-shadow: 0 -4px 16px rgb(0 0 0 / 12%);
+}
+
+.nmx-shell .nmx-agent-child-composer textarea {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 2.4rem;
+    max-height: 9rem;
+    resize: vertical;
+    padding: 6px 7px;
+    border: 0;
+    outline: 0;
+    color: var(--nmx-text);
+    background: transparent;
+    font: inherit;
+    line-height: 1.45;
+}
+
+.nmx-shell .nmx-agent-child-composer textarea:focus {
+    border: 0;
+    outline: 0;
+    box-shadow: none;
+}
+
+.nmx-shell .nmx-agent-child-send {
+    display: inline-grid;
+    flex: 0 0 30px;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: var(--nmx-button-text, #fff);
+    background: var(--nmx-accent, #242124);
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-agent-child-send:disabled {
+    opacity: .45;
+    cursor: default;
+}
+
+.nmx-shell .nmx-agent-child-send.is-stop {
+    background: var(--nmx-danger, #b54848);
+}
+
+.nmx-shell.nmx-theme-light :is(.nmx-context-agent, .nmx-agent-child-detail, .nmx-role-conversation-view, .nmx-role-conversation-scroll) {
+    background: #f1efed !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-agent-child-detail > header {
+    border-color: transparent;
+    background: transparent !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-agent-child-result {
+    border-color: transparent;
+    background: transparent !important;
+}
+
+.nmx-shell.nmx-theme-light :is(.nmx-agent-child-context, .nmx-agent-child-receipt) {
+    border-color: #dcd6d2;
+    background: #ebe7e3 !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-agent-child-composer {
+    border-color: #d7d2cf;
+    background: #ebe7e3 !important;
+    box-shadow: 0 -4px 14px rgb(53 49 52 / 6%);
+}
+
+.nmx-shell.nmx-theme-light .nmx-agent-child-composer textarea {
+    background: transparent !important;
+    border: 0 !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-agent-child-send {
+    color: #fff;
+    background: #353134;
+}
+
+.nmx-shell .nmx-agent-child-empty {
+    display: grid;
+    flex: 1 1 auto;
+    place-content: center;
+    justify-items: center;
+    gap: 10px;
+    min-height: 0;
+    padding: 28px 24px;
+    color: var(--nmx-subtle);
+    text-align: center;
+}
+
+.nmx-shell .nmx-agent-child-empty i {
+    font-size: 22px;
+    color: var(--nmx-muted);
+}
+
+.nmx-shell .nmx-agent-child-links {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+    margin: 5px 0 8px;
+}
+
+.nmx-shell .nmx-agent-child-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    max-width: 100%;
+    justify-self: start;
+    padding: 3px 0;
+    border: 0;
+    border-radius: 4px;
+    color: var(--nmx-subtle);
+    font-size: 14px;
+    line-height: 20px;
+    background: transparent;
+    text-align: start;
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-agent-child-link:hover {
+    color: var(--nmx-text);
+    border-color: var(--nmx-border);
+    background: var(--nmx-hover);
+}
+
+.nmx-shell .nmx-agent-child-link > span {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: baseline;
+    min-width: 0;
+    gap: 8px;
+}
+
+.nmx-shell .nmx-agent-child-link > i { width: 20px; flex: 0 0 20px; font-size: 15px; }
+.nmx-shell .nmx-agent-child-link strong { font-size: 14px; font-weight: 400; }
+
+.nmx-shell .nmx-agent-child-link strong,
+.nmx-shell .nmx-agent-child-link small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-agent-child-link small {
+    flex: 0 0 auto;
+    color: var(--nmx-subtle);
+    font-size: 12px;
+}
+
+.nmx-shell .nmx-agent-child-link > b {
+    flex: 0 0 auto;
+    color: var(--nmx-muted);
+    font-weight: 400;
+}
+
+.nmx-shell.nmx-theme-light :is(.nmx-context-entry-tabs, .nmx-agent-child-tabs) {
+    background: #eae6e3;
+    border-color: #dcd6d2;
+}
+
+.nmx-shell.nmx-theme-light :is(.nmx-context-entry-tab, .nmx-agent-child-tab, .nmx-agent-child-link) {
+    color: #625b60;
+}
+
+.nmx-shell.nmx-theme-light :is(.nmx-context-entry-tab:hover, .nmx-context-entry-tab.is-active,
+    .nmx-agent-child-tab:hover, .nmx-agent-child-tab.is-active, .nmx-agent-child-link:hover) {
+    color: #292629;
+    background: #e1dcd8;
+    border-color: #d2cbc5;
+}
+
+@media (max-width: 760px) {
+    .nmx-shell .nmx-context-entry-tab {
+        max-width: 7rem;
+        padding-inline: 7px;
+    }
+
+    .nmx-shell .nmx-agent-child-tab {
+        flex-basis: 9rem;
+        max-width: 9rem;
+    }
+
+    .nmx-shell .nmx-agent-child-detail {
+        padding: 9px;
+    }
+}
+.nmx-conversation-archive { min-width: 0; padding: 14px; border: 1px solid var(--theia-panel-border); border-radius: 12px; margin-bottom: 16px; }
+.nmx-conversation-archive h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.nmx-conversation-archive p { margin: 8px 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.nmx-conversation-archive .nmx-settings-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.nmx-archive-privacy { color: var(--theia-descriptionForeground); }
+.nmx-archive-privacy .codicon { margin-inline-end: 6px; }
+.nmx-archive-preview { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--theia-panel-border); }
+.nmx-archive-conversations { max-height: 180px; overflow: auto; list-style: none; padding: 0; margin: 8px 0; }
+.nmx-archive-conversations li { display: flex; flex-wrap: wrap; gap: 8px; padding: 5px 0; }
+.nmx-archive-conversations li span { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.nmx-archive-conversations small { color: var(--theia-descriptionForeground); }
+.nmx-archive-preview details { font-size: 12px; margin-block: 10px; overflow-wrap: anywhere; }
+.nmx-archive-preview details ul { padding-inline-start: 20px; }
+.nmx-archive-policy { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 12px; font-size: 12px; }
+.nmx-archive-policy select { min-width: 0; max-width: 100%; color: var(--theia-foreground); background: var(--theia-input-background); border: 1px solid var(--theia-panel-border); border-radius: 6px; padding: 6px; }
+.nmx-conversation-archive button { appearance: none; font: inherit; min-height: 30px; max-width: 100%; min-width: 0; padding: 6px 10px; border: 1px solid var(--theia-widget-border); border-radius: 6px; color: var(--theia-foreground); background: var(--theia-editorWidget-background, transparent); white-space: normal; overflow-wrap: anywhere; cursor: pointer; }
+.nmx-conversation-archive button.is-primary { color: var(--theia-button-foreground); background: var(--theia-button-background); }
+.nmx-conversation-archive button:disabled { opacity: .5; cursor: default; }
+.nmx-conversation-archive button:focus-visible, .nmx-archive-project-label input:focus-visible { outline: 2px solid var(--theia-focusBorder); outline-offset: 2px; }
+.nmx-archive-export-projects { margin-block: 10px; }
+.nmx-archive-opt-in { display: flex; align-items: flex-start; gap: 8px; margin-block: 10px; }
+.nmx-archive-opt-in input { flex: 0 0 auto; }
+.nmx-archive-project-list { display: grid; gap: 12px; max-height: min(300px, 40vh); overflow: auto; margin-block: 10px; min-width: 0; }
+.nmx-archive-project-label, .nmx-archive-bindings article { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 10px; border: 1px solid var(--theia-widget-border); border-radius: 8px; min-width: 0; overflow-wrap: anywhere; }
+.nmx-archive-project-label input { font: inherit; padding: 6px; box-sizing: border-box; width: 100%; min-width: 0; color: var(--theia-input-foreground); background: var(--theia-input-background); border: 1px solid var(--theia-input-border); border-radius: 6px; }
+.nmx-archive-project-label small, .nmx-archive-bindings small { color: var(--theia-descriptionForeground); }
+/* MCP: one compact list, following OpenCode's status rows and Cline's
+   create/edit form hierarchy. All surfaces follow the active Theia theme. */
+.nmx-mcp-access { display: flex; flex-direction: column; gap: 14px; min-width: 0; color: var(--theia-foreground); container-type: inline-size; }
+.nmx-mcp-access h3, .nmx-mcp-access p { margin: 0; }
+.nmx-mcp-heading, .nmx-mcp-server-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.nmx-mcp-heading .nmx-settings-note { margin-top: 5px; line-height: 1.5; color: var(--theia-descriptionForeground); }
+.nmx-mcp-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; width: 100%; min-width: 0; }
+.nmx-mcp-access .nmx-mcp-toolbar > input.nmx-mcp-search { flex: 1 1 180px; width: auto !important; min-width: 0; height: 34px !important; min-height: 34px !important; padding: 0 10px !important; margin: 0 !important; box-sizing: border-box; background: var(--theia-input-background); color: var(--theia-input-foreground); border: 1px solid var(--theia-input-border, var(--theia-widget-border)); border-radius: 6px; font: inherit; }
+.nmx-mcp-access .nmx-mcp-toolbar > button { flex: 0 0 auto; height: 34px !important; min-height: 34px !important; padding: 0 12px !important; display: inline-flex; align-items: center; justify-content: center; margin: 0 !important; box-sizing: border-box; white-space: nowrap; }
+.nmx-mcp-access button { appearance: none; font: inherit; min-height: 30px; min-width: 0; max-width: 100%; padding: 5px 10px; border: 1px solid var(--theia-widget-border); border-radius: 6px; color: var(--theia-foreground); background: var(--theia-editorWidget-background); cursor: pointer; overflow-wrap: anywhere; }
+.nmx-mcp-access button:hover:not(:disabled) { background: var(--theia-list-hoverBackground); }
+.nmx-mcp-access button[type='submit'] { color: var(--theia-button-foreground); background: var(--theia-button-background); }
+.nmx-mcp-access button:disabled { cursor: default; opacity: .5; }
+.nmx-mcp-access :is(button, input, textarea, select, summary):focus-visible { outline: 1px solid var(--theia-foreground); outline-offset: 2px; }
+.nmx-mcp-access :is(form input, textarea, select) { width: 100%; min-width: 0; box-sizing: border-box; background: var(--theia-input-background); color: var(--theia-input-foreground); border: 1px solid var(--theia-input-border, var(--theia-widget-border)); padding: 8px 10px; border-radius: 6px; font: inherit; }
+.nmx-mcp-access [role='alert'] { color: var(--theia-errorForeground); font-size: 12px; }
+.nmx-mcp-server-list { border: 1px solid var(--theia-widget-border); border-radius: 9px; overflow: hidden; min-width: 0; background: var(--theia-editor-background); container-type: inline-size; }
+.nmx-mcp-server-list:empty { display: none; }
+.nmx-mcp-server { padding: 0; min-width: 0; }
+.nmx-mcp-server + .nmx-mcp-server { border-top: 1px solid var(--theia-widget-border); }
+.nmx-mcp-server-heading { display: grid; grid-template-columns: minmax(0,1fr) auto auto; align-items: center; gap: 12px; padding: 10px 12px; }
+.nmx-mcp-access .nmx-mcp-server-toggle { display: flex; align-items: center; gap: 7px; border: 0; padding: 4px 0; background: transparent; text-align: start; min-width: 0; }
+.nmx-mcp-server-toggle > i { flex: 0 0 auto; font-size: 13px; color: var(--theia-descriptionForeground); }
+.nmx-mcp-server-toggle > strong { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.nmx-mcp-access .nmx-mcp-server-action { font-size: 12px; max-width: 150px; }
+.nmx-mcp-server-body { display: grid; gap: 10px; padding: 0 14px 14px 32px; min-width: 0; }
+.nmx-mcp-server-body[hidden] { display: none; }
+.nmx-mcp-guidance { font-size: 12px; color: var(--theia-descriptionForeground); line-height: 1.5; }
+.nmx-mcp-status { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; line-height: 1.5; min-width: 0; max-width: 180px; }
+.nmx-mcp-status > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-mcp-status > i { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.nmx-mcp-status-ready { color: var(--theia-charts-green, #16834b); }
+.nmx-mcp-status-working { color: var(--theia-descriptionForeground); }
+.nmx-mcp-status-idle { color: var(--theia-descriptionForeground); }
+.nmx-mcp-status-error { color: var(--theia-errorForeground); }
+.nmx-mcp-connection, .nmx-mcp-tools, .nmx-mcp-diagnostic { min-width: 0; font-size: 12px; }
+.nmx-mcp-connection > summary, .nmx-mcp-tools > summary, .nmx-mcp-diagnostic > summary { cursor: pointer; user-select: none; color: var(--theia-descriptionForeground); padding-block: 3px; }
+.nmx-mcp-tools > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.nmx-mcp-tools > summary::before { content: '›'; margin-inline-end: 3px; }
+.nmx-mcp-tools[open] > summary::before { transform: rotate(90deg); }
+.nmx-mcp-tools > summary > span { flex: 1; }
+.nmx-mcp-connection-info { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 12px; padding-top: 7px; min-width: 0; }
+.nmx-mcp-connection-info > span { overflow-wrap: anywhere; }
+.nmx-mcp-diagnostic dl { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 5px 12px; margin: 9px 0; }
+.nmx-mcp-diagnostic dt { color: var(--theia-descriptionForeground); }
+.nmx-mcp-diagnostic dd { margin: 0; overflow-wrap: anywhere; }
+.nmx-mcp-diagnostic pre { margin: 8px 0 0; padding: 9px 11px; border-radius: 6px; background: var(--theia-textCodeBlock-background, var(--theia-editorWidget-background)); color: var(--theia-foreground); font: 11px/1.6 var(--theia-code-font-family, monospace); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; overflow-y: auto; }
+.nmx-mcp-access small { color: var(--theia-descriptionForeground); overflow-wrap: anywhere; }
+.nmx-mcp-access fieldset { border: 0; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; max-height: min(420px, 45vh); overflow-y: auto; }
+.nmx-mcp-tools > fieldset > label { display: flex; align-items: flex-start; gap: 8px; padding: 5px 0; min-width: 0; }
+.nmx-mcp-tools > fieldset > label > span { display: grid; min-width: 0; gap: 3px; }
+.nmx-mcp-tools > fieldset > label small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-mcp-access input[type='checkbox'] { flex: 0 0 auto; margin: 2px 0 0; }
+.nmx-mcp-access form { display: grid; grid-template-columns: minmax(130px,.7fr) minmax(180px,1.3fr); gap: 12px; border: 1px solid var(--theia-widget-border); background: var(--theia-editor-background); border-radius: 9px; padding: 15px; min-width: 0; }
+.nmx-mcp-form-title, .nmx-mcp-form > .nmx-settings-note, .nmx-mcp-form > .nmx-mcp-long-field, .nmx-mcp-form > .nmx-mcp-form-extra,
+.nmx-mcp-form > .nmx-mcp-smart-bar, .nmx-mcp-form > .nmx-mcp-option-pills, .nmx-mcp-form .nmx-settings-actions { grid-column: 1 / -1; }
+/* ---- MCP add/edit form ----
+   The smart bar comes first: one paste fills everything under it. Directory fields, environment rows and the optional
+   key below the basic fields share one rhythm (12px labels, 32px controls) and the same colours in both themes. */
+.nmx-mcp-access .nmx-mcp-form {
+    --nmx-mcp-ok: #61c990;
+    --nmx-mcp-warn: #e5a33d;
+    --nmx-mcp-bad: #ef8989;
+}
+.nmx-theme-light .nmx-mcp-access .nmx-mcp-form {
+    --nmx-mcp-ok: #167544;
+    --nmx-mcp-warn: #8a5200;
+    /* ≥4.5:1 on the field cards' tinted badge (#b42332 measured 4.19). */
+    --nmx-mcp-bad: #a11f2c;
+}
+.nmx-mcp-smart-bar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 2px 8px;
+    min-width: 0;
+    padding: 3px 3px 3px 12px;
+    border: 1px dashed color-mix(in srgb, var(--nmx-accent, #ca3b68) 48%, var(--nmx-border-strong, #413d40));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--nmx-accent, #ca3b68) 6%, var(--nmx-control-background, transparent));
+    transition: border-color 140ms ease, background-color 140ms ease;
+}
+.nmx-mcp-smart-bar:focus-within { border-style: solid; border-color: color-mix(in srgb, var(--nmx-accent, #ca3b68) 72%, transparent); }
+.nmx-mcp-smart-bar.is-recognized { border-style: solid; border-color: color-mix(in srgb, var(--nmx-mcp-ok) 55%, transparent); }
+.nmx-mcp-smart-bar.is-unrecognized { border-style: solid; border-color: color-mix(in srgb, var(--nmx-mcp-warn) 60%, transparent); }
+.nmx-mcp-smart-bar > .codicon { color: var(--nmx-accent, #ca3b68); font-size: 14px; }
+/* Beats the settings page's boxed-input rule: the bar itself is the field. */
+.nmx-shell .nmx-mcp-access form.nmx-mcp-form .nmx-mcp-smart-bar > input {
+    height: 30px;
+    min-width: 0;
+    padding: 0 2px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: 12.5px;
+}
+.nmx-mcp-access .nmx-mcp-form .nmx-mcp-smart-bar > button {
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 7px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+.nmx-mcp-smart-bar > small {
+    grid-column: 2 / -1;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding-bottom: 4px;
+    font-size: 11.5px;
+    line-height: 1.4;
+}
+.nmx-mcp-smart-bar > small > .codicon { font-size: 12px; }
+.nmx-mcp-access .nmx-mcp-smart-bar.is-recognized > small { color: var(--nmx-mcp-ok); }
+.nmx-mcp-access .nmx-mcp-smart-bar.is-unrecognized > small { color: var(--nmx-mcp-warn); }
+/* Install method and key type: one segmented track each. */
+.nmx-mcp-option-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; font-size: 12px; }
+.nmx-mcp-option-pills > span { color: var(--nmx-subtle, var(--theia-descriptionForeground)); }
+.nmx-mcp-option-pills > div,
+.nmx-mcp-inline-auth-head > .nmx-mcp-option-pills {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--nmx-border, var(--theia-widget-border));
+    border-radius: 999px;
+    background: var(--nmx-control-background, transparent);
+}
+.nmx-mcp-access .nmx-mcp-form .nmx-mcp-option-pills button {
+    height: 24px;
+    padding: 0 11px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--nmx-subtle, var(--theia-descriptionForeground));
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    transition: color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+}
+.nmx-mcp-access .nmx-mcp-form .nmx-mcp-option-pills button:hover:not(:disabled):not(.is-active) { color: var(--nmx-text); background: var(--nmx-hover); }
+.nmx-mcp-access .nmx-mcp-form .nmx-mcp-option-pills button.is-active {
+    color: var(--nmx-text);
+    background: var(--nmx-panel);
+    box-shadow: 0 0 0 1px var(--nmx-border-strong), 0 1px 2px rgba(0, 0, 0, .16);
+    font-weight: 600;
+}
+/* Everything a server needs beyond its address, set apart by one hairline. */
+.nmx-mcp-form-extra {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--nmx-border, var(--theia-widget-border));
+    font-size: 12px;
+}
+.nmx-mcp-access .nmx-mcp-form .nmx-mcp-form-extra input { width: 100%; height: 32px; box-sizing: border-box; min-width: 0; font-size: 12.5px; }
+.nmx-mcp-dynamic-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; min-width: 0; }
+.nmx-mcp-dynamic-field {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+    min-width: 0;
+    padding: 10px 11px 11px;
+    border: 1px solid var(--nmx-border, var(--theia-widget-border));
+    border-radius: 9px;
+    background: var(--nmx-panel-2, transparent);
+}
+.nmx-mcp-access .nmx-mcp-form .nmx-mcp-dynamic-field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; margin: 0; }
+.nmx-mcp-dynamic-field-head > strong { min-width: 0; overflow: hidden; color: var(--nmx-text); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-mcp-access .nmx-mcp-dynamic-field-head > small {
+    flex: none;
+    padding: 1px 7px;
+    border-radius: 999px;
+    color: var(--nmx-subtle, var(--theia-descriptionForeground));
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 1.5;
+}
+.nmx-mcp-access .nmx-mcp-dynamic-field-head > small.is-required { color: var(--nmx-mcp-bad); }
+.nmx-mcp-dynamic-field > small { font-size: 11.5px; line-height: 1.45; }
+.nmx-mcp-env-field, .nmx-mcp-inline-auth { display: grid; gap: 6px; min-width: 0; }
+.nmx-mcp-env-field > span, .nmx-mcp-inline-auth-head > span { color: var(--nmx-subtle, var(--theia-descriptionForeground)); font-size: 12px; }
+.nmx-mcp-env-row { display: grid; grid-template-columns: minmax(96px, .75fr) minmax(0, 1.5fr) 28px; align-items: center; gap: 6px; min-width: 0; }
+.nmx-mcp-access .nmx-mcp-form .nmx-mcp-env-row > input:first-child { font-family: var(--theia-code-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); font-size: 12px; }
+.nmx-mcp-access .nmx-mcp-form :is(.nmx-mcp-env-row, .nmx-mcp-dynamic-field) > input[aria-invalid='true'] { border-color: color-mix(in srgb, var(--nmx-mcp-bad) 70%, transparent); }
+.nmx-mcp-access .nmx-mcp-form .nmx-mcp-env-remove {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    color: var(--nmx-muted, var(--theia-descriptionForeground));
+    background: transparent;
+}
+.nmx-mcp-access .nmx-mcp-form .nmx-mcp-env-remove:hover:not(:disabled) { color: var(--nmx-text); background: var(--nmx-hover); }
+.nmx-mcp-access .nmx-mcp-form .nmx-mcp-env-add {
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px dashed var(--nmx-border-strong, var(--theia-widget-border));
+    border-radius: 7px;
+    color: var(--nmx-subtle, var(--theia-descriptionForeground));
+    background: transparent;
+    font-size: 12px;
+}
+.nmx-mcp-access .nmx-mcp-form .nmx-mcp-env-add:hover:not(:disabled) { border-style: solid; color: var(--nmx-text); background: var(--nmx-hover); }
+.nmx-mcp-access .nmx-mcp-env-field > small.is-invalid { color: var(--nmx-mcp-bad); font-size: 11.5px; }
+.nmx-mcp-inline-auth-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; min-width: 0; }
+@container (max-width: 430px) {
+    .nmx-mcp-env-row { grid-template-columns: minmax(0, 1fr) 28px; }
+    .nmx-mcp-env-row > input:nth-child(2) { grid-row: 2; }
+    .nmx-mcp-env-row > .nmx-mcp-env-remove { grid-row: 1; grid-column: 2; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .nmx-mcp-smart-bar, .nmx-mcp-access .nmx-mcp-form .nmx-mcp-option-pills button { transition: none; }
+}
+.nmx-mcp-access .nmx-mcp-form > label, .nmx-mcp-access .nmx-mcp-credential-editor > label { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; align-items: start; gap: 6px; margin: 0; min-width: 0; font-size: 12px; }
+.nmx-mcp-form textarea { min-height: 70px; resize: vertical; font-family: var(--theia-code-font-family, monospace); }
+.nmx-mcp-access .nmx-settings-actions, .nmx-mcp-auth-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.nmx-mcp-auth-summary { margin-block-start: 10px; justify-content: space-between; }
+.nmx-mcp-auth-summary > span { overflow-wrap: anywhere; min-width: 0; }
+.nmx-mcp-access .nmx-mcp-credential-editor { margin-block-start: 10px; max-height: min(380px, 52vh); overflow: auto; grid-template-columns: 1fr; }
+.nmx-mcp-credential-editor .nmx-settings-note { white-space: normal; overflow-wrap: anywhere; }
+.nmx-mcp-presets { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--theia-widget-border); border-radius: 9px; }
+.nmx-mcp-presets > header { display: grid; gap: 3px; }
+.nmx-mcp-presets > header small, .nmx-mcp-preset-grid small { color: var(--theia-descriptionForeground); }
+.nmx-mcp-preset-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
+.nmx-mcp-preset-grid article { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px; border: 1px solid var(--theia-widget-border); border-radius: 8px; }
+.nmx-mcp-preset-grid article > div { display: grid; gap: 3px; min-width: 0; }
+.nmx-mcp-preset-grid a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--theia-textLink-foreground); font-size: 11px; }
+@media (max-width: 640px) {
+    .nmx-mcp-heading { align-items: flex-start; flex-direction: column; }
+    .nmx-mcp-access form { grid-template-columns: 1fr; }
+}
+@container (max-width: 430px) {
+    .nmx-mcp-access .nmx-mcp-form { grid-template-columns: minmax(0, 1fr); }
+    .nmx-mcp-server-heading { grid-template-columns: minmax(0,1fr) auto; gap: 3px 10px; }
+    .nmx-mcp-server-heading > .nmx-mcp-status { grid-column: 1; grid-row: 2; margin-inline-start: 20px; max-width: 100%; }
+    .nmx-mcp-access .nmx-mcp-server-action { grid-column: 2; grid-row: 1 / 3; max-width: 125px; }
+    .nmx-mcp-server-body { padding-inline: 12px; }
+}
+.nmx-billing-receipts { min-width: 0; padding: 12px; border: 1px solid var(--theia-widget-border); border-radius: 10px; }
+.nmx-billing-receipts summary { cursor: pointer; font-weight: 600; }
+.nmx-billing-receipts p { color: var(--theia-descriptionForeground); line-height: 1.5; }
+.nmx-billing-receipts form, .nmx-billing-receipts li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.nmx-billing-receipts input { flex: 1 1 180px; min-width: 0; padding: 8px; color: var(--theia-input-foreground); background: var(--theia-input-background); border: 1px solid var(--theia-input-border); border-radius: 6px; }
+.nmx-billing-receipts ul { display: grid; gap: 10px; padding: 0; list-style: none; max-height: 220px; overflow: auto; }
+.nmx-billing-receipts li > span { display: grid; gap: 4px; flex: 1; min-width: 0; }
+.nmx-billing-receipts code { overflow-wrap: anywhere; font-size: 11px; opacity: .7; }
+.nmx-billing-receipts pre { max-height: 280px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; }
+.nmx-billing-receipts [role='alert'] { color: var(--theia-errorForeground); }
+
+/* Update preparation never replaces the account/settings entry or grows the dock. */
+.nmx-context-account-dock.has-update { grid-template-columns: minmax(0, 1fr) minmax(54px, max-content); }
+.nmx-context-account-dock.has-update .nmx-account-trigger { grid-template-columns: 28px minmax(0, 1fr); min-width: 0; }
+.nmx-context-account-dock .nmx-account-update {
+    appearance: none; min-width: 54px; max-width: 100px; height: 32px; padding: 0 9px;
+    display: grid; place-items: center; border: 1px solid transparent; border-radius: 7px;
+    background: #1263db !important; color: #fff !important; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.nmx-account-update > span { min-width: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nmx-context-account-dock .nmx-account-update:hover:not(:disabled) { background: #0d52ba !important; color: #fff !important; }
+.nmx-context-account-dock .nmx-account-update.is-warning { background: #c25e00 !important; color: #fff !important; }
+.nmx-context-account-dock .nmx-account-update.is-warning:hover:not(:disabled) { background: #a84f00 !important; color: #fff !important; }
+.nmx-context-account-dock .nmx-account-update:disabled { cursor: default; opacity: 1; }
+.nmx-context-account-dock .nmx-account-update:focus-visible { outline: 2px solid var(--theia-focusBorder); outline-offset: 2px; }
+
+/* The action buttons already occupy the fixed titlebar. The empty coding
+   toolbar only needs half its former 48px spacer; a visible find control keeps
+   the full row so its input remains usable. */
+.nmx-shell:not(.is-detached-conversation) .nmx-coding-topbar:not(:has(.nmx-thread-find)) {
+    flex: 0 0 24px;
+    height: 24px;
+    min-height: 24px;
+    padding-block: 0;
+}
+
+/* The conversation bounds, including the open drawer, own navigation centering. */
+.nmx-shell .nmx-coding-topbar .nmx-workspace-controls {
+    position: fixed;
+    top: 4px;
+    right: 8px;
+    height: 34px;
+    z-index: 1300;
+    -webkit-app-region: no-drag;
+}
+body:is(.windows, :has(#window-controls)) .nmx-shell .nmx-coding-topbar .nmx-workspace-controls { right: 146px; }
+.nmx-shell.is-work-context-open .nmx-coding-topbar .nmx-workspace-controls { display: none; }
+.nmx-shell .nmx-titlebar-context { width: calc(var(--nmx-work-context-width, 358px) - 16px - var(--nmx-caption-width)); }
+
+.nmx-conversation-window-control { position: relative; display: flex; align-items: center; }
+.nmx-conversation-window-menu {
+    position: absolute; top: calc(100% + 6px); inset-inline-start: 0; z-index: 1400;
+    padding: 5px; width: max-content; max-width: min(320px, 70vw);
+    border: 1px solid var(--nmx-border); border-radius: 8px;
+    background: var(--nmx-panel); box-shadow: 0 6px 22px #0003;
+}
+.nmx-titlebar-actions .nmx-conversation-window-menu button {
+    display: flex; align-items: center; gap: 8px; width: 100%; height: auto;
+    min-height: 32px; padding: 7px 10px; color: var(--nmx-text); font: inherit; font-size: 13px;
+    text-align: start; white-space: normal;
+}
+.nmx-conversation-window-flight {
+    position: fixed; top: 0; left: 0; z-index: 1500; width: 32px; height: 32px;
+    display: grid; place-items: center; font-size: 23px; color: var(--theia-foreground);
+    pointer-events: none; -webkit-app-region: no-drag;
+}
+@media (prefers-reduced-motion: no-preference) {
+    .nmx-conversation-window-menu { animation: nmx-window-menu-enter 160ms ease-out; }
+    @keyframes nmx-window-menu-enter { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+    .nmx-shell.is-detached-conversation { transition: opacity 220ms ease, transform 220ms cubic-bezier(.2,.8,.2,1); }
+    .nmx-conversation-reclaiming .nmx-shell.is-detached-conversation { opacity: 0; transform: scale(.94); }
+}
+
+/* Detached native windows use the same thread and composer, without surrounding tools. The thread's own timeline
+   and floats follow the width of its stage, as in the main window (the nmx-coding-stage container below). */
+.nmx-shell.is-detached-conversation { grid-template-columns: minmax(0, 1fr) !important; }
+.nmx-shell.is-detached-conversation :is(.nmx-context-panel, .nmx-context-panel-resize, .nmx-titlebar-actions, .nmx-titlebar-primary-nav, .nmx-titlebar-context, .nmx-work-context, .nmx-terminal-drawer, .nmx-workspace-controls) { display: none !important; }
+.nmx-shell.is-detached-conversation .nmx-workspace { margin-right: 0 !important; }
+.nmx-shell.is-detached-conversation .nmx-composer-wrap { max-width: 100%; }
+.nmx-detached-conversation-placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--nmx-muted); }
+.nmx-detached-conversation-placeholder button { border: 1px solid var(--nmx-border); background: var(--nmx-hover); color: var(--nmx-text); border-radius: 7px; padding: 8px 14px; cursor: pointer; }
+.nmx-conversation-highlight,
+.nmx-shell.is-detached-conversation.is-window-highlighted {
+    animation: nmx-conversation-highlight 1100ms cubic-bezier(.16, 1, .3, 1);
+}
+@keyframes nmx-conversation-highlight {
+    0% { box-shadow: inset 0 0 0 3px var(--nmx-accent, #5b8def), inset 0 0 28px color-mix(in srgb, var(--nmx-accent, #5b8def) 28%, transparent); }
+    45% { box-shadow: inset 0 0 0 2.5px var(--nmx-accent, #5b8def), inset 0 0 18px color-mix(in srgb, var(--nmx-accent, #5b8def) 18%, transparent); }
+    100% { box-shadow: inset 0 0 0 0 transparent; }
+}
+.nmx-shell .nmx-titlebar-primary-nav {
+    left: calc(50vw + (var(--nmx-titlebar-left, 0px) * 0.25) - (var(--nmx-titlebar-right, 0px) * 0.5));
+    right: auto;
+    margin-inline: 0;
+    transform: translateX(-50%);
+}
+
+/* A full-workspace drawer has no remaining conversation column to center on.
+   Keep the global navigation at the window center and reserve its right half
+   for the drawer tabs/close control instead of overlapping the two toolbars. */
+.nmx-shell:has(.nmx-work-context.is-editor-maximized) .nmx-titlebar-primary-nav {
+    left: 50vw;
+    max-width: 320px;
+}
+.nmx-shell:has(.nmx-work-context.is-editor-maximized) .nmx-titlebar-context {
+    min-width: 0;
+    width: min(var(--nmx-work-context-width, 358px), calc(50vw - 176px - var(--nmx-caption-width)));
+}
+@media (max-width: 1120px) {
+    .nmx-shell:has(.nmx-work-context.is-editor-maximized) .nmx-titlebar-primary-nav {
+        max-width: 132px;
+    }
+    .nmx-shell:has(.nmx-work-context.is-editor-maximized) .nmx-titlebar-context {
+        width: min(var(--nmx-work-context-width, 358px), calc(50vw - 72px - var(--nmx-caption-width)));
+    }
+}
+
+
+/* Bounded navigation labels keep icons/counts/close controls visible in every locale. */
+.nmx-shell .nmx-titlebar-primary-nav {
+    box-sizing: border-box;
+    max-width: max(132px, min(420px, calc(100vw - var(--nmx-titlebar-left, 0px) - var(--nmx-titlebar-right, 0px) - 48px)));
+}
+.nmx-shell .nmx-titlebar-primary-nav > button {
+    flex: 0 1 auto; min-width: 28px; padding-inline: 8px; overflow: hidden;
+}
+.nmx-shell .nmx-titlebar-primary-nav > button > i,
+.nmx-shell .nmx-titlebar-context .nmx-context-entry-tab > i,
+.nmx-shell .nmx-titlebar-context .nmx-context-entry-tab > em { flex-shrink: 0; }
+.nmx-shell .nmx-titlebar-primary-nav > button > span,
+.nmx-shell .nmx-titlebar-context .nmx-context-entry-tab > span {
+    min-width: 0; flex: 0 1 auto; overflow: hidden; white-space: nowrap; text-overflow: clip;
+}
+.nmx-shell .nmx-titlebar-primary-nav > button > span[data-nmx-nav-overflow],
+.nmx-shell .nmx-titlebar-context .nmx-context-entry-tab > span[data-nmx-nav-overflow] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 10px), transparent);
+}
+.nmx-shell:dir(rtl) .nmx-titlebar-primary-nav > button > span[data-nmx-nav-overflow],
+.nmx-shell:dir(rtl) .nmx-titlebar-context .nmx-context-entry-tab > span[data-nmx-nav-overflow] {
+    mask-image: linear-gradient(to left, #000 calc(100% - 10px), transparent);
+}
+.nmx-context-file-row { box-sizing: border-box; }
+.nmx-context-file-row.is-selected { outline: 1px solid var(--nmx-border-strong); outline-offset: -1px; }
+.nmx-context-file-row:focus-visible { outline: 1px solid var(--nmx-text); outline-offset: -1px; }
+.nmx-context-file-row.is-renaming { min-width: 0; height: auto; min-height: 27px; }
+.nmx-context-file-inline-rename { min-width: 0; display: flex; flex-direction: column; padding-block: 2px; }
+.nmx-context-file-inline-rename input { width: 100%; min-width: 0; box-sizing: border-box; color: inherit; background: var(--nmx-panel); border: 1px solid var(--nmx-border-strong); border-radius: 3px; font: inherit; padding: 1px 4px; }
+.nmx-context-file-inline-rename input[aria-invalid='true'] { border-color: #cf6f79; }
+.nmx-context-file-inline-rename small { font-size: 11px; color: #cf6f79; white-space: normal; overflow-wrap: anywhere; }
+
+/* Both centers use the same easing, so navigation stays above the moving thread. */
+@media (prefers-reduced-motion: no-preference) {
+    html:not(.nmx-pane-resizing-x):not(.nmx-pane-resizing-y) .nmx-shell .nmx-titlebar-primary-nav {
+        transition: left 180ms cubic-bezier(.2, .8, .2, 1);
+    }
+    html:not(.nmx-pane-resizing-x):not(.nmx-pane-resizing-y) .nmx-shell .nmx-workspace {
+        transition: margin-right 180ms cubic-bezier(.2, .8, .2, 1);
+    }
+    .nmx-titlebar-context { animation: nmx-titlebar-context-enter 180ms cubic-bezier(.2, .8, .2, 1); }
+    @keyframes nmx-titlebar-context-enter { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+}
+.nmx-shell .nmx-work-context { transition: transform 180ms cubic-bezier(.2, .8, .2, 1), opacity 180ms ease; }
+.nmx-shell .nmx-work-context.is-closing { transform: translateX(18px); opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .nmx-shell .nmx-work-context { transition: none; } }
+
+/* Keep the welcome state close to the title row so the composer gets the
+   same useful vertical space as a conversation with messages. */
+.nmx-shell .nmx-coding-stage > .nmx-empty-task { margin-top: clamp(36px, 6.5vh, 60px); }
+
+.nmx-shell.is-detached-conversation .nmx-composer-wrap { width: min(730px, calc(100% - 24px)) !important; }
+.nmx-shell.is-detached-conversation .nmx-permission-button > span { display: none; }
+.nmx-shell.is-detached-conversation .nmx-composer-relay-button { max-width: 105px; min-width: 0; }
+.nmx-shell.is-detached-conversation .nmx-route-button { max-width: 112px; min-width: 0; }
+.nmx-shell.is-detached-conversation .nmx-composer > div:last-child { gap: 4px; }
+.nmx-shell.is-detached-conversation .nmx-composer-spacer { min-width: 0; }
+.nmx-shell.is-detached-conversation .nmx-coding-topbar { height: 0; min-height: 0; padding-block: 0; }
+@media (prefers-reduced-motion: reduce) { .nmx-conversation-highlight { animation: none; outline: 2px solid #8b8782; outline-offset: -2px; } }
+
+/* A detached conversation window has one 34px top row: its tab strip is the title bar, beside the macOS traffic
+   lights or the Windows minimize/maximize/close buttons. The empty rest of the row after the last tab
+   (.nmx-conversation-tabs-drag-spacer) moves the window; every tab, close button, right-click target and the
+   strip's scrollbar stay clickable. The room the native buttons need is a margin, not padding, so scrolled tabs
+   never slide under them and no draggable area overlaps them. */
+.nmx-shell.is-detached-conversation .nmx-workspace {
+    padding-top: 0 !important;
+    height: 100dvh !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+.nmx-shell.is-detached-conversation .nmx-workspace > .nmx-coding-topbar:not(:has(.nmx-thread-find)) { flex: 0 0 0 !important; height: 0; min-height: 0; overflow: hidden; }
+/* order: the strip keeps the top row while the find bar opens below it. */
+.nmx-shell.is-detached-conversation .nmx-conversation-tabs {
+    order: -1;
+    box-sizing: border-box;
+    height: 34px;
+    min-height: 34px !important;
+    padding-block: 3px !important;
+    padding-inline: 8px 0 !important;
+    align-items: center;
+    scroll-padding-inline-end: 24px;
+    -webkit-app-region: no-drag !important;
+    pointer-events: auto !important;
+}
+/* Overflowing, the bottom padding becomes a 3px scrollbar track, so the row stays 34px either way. */
+.nmx-shell.is-detached-conversation .nmx-conversation-tabs.is-overflowing { padding-bottom: 0 !important; }
+.nmx-shell.is-detached-conversation .nmx-conversation-tabs::-webkit-scrollbar { height: 3px; }
+.nmx-shell.is-detached-conversation .nmx-conversation-tab,
+.nmx-shell.is-detached-conversation .nmx-conversation-tab > button[role='tab'] {
+    position: relative;
+    z-index: 2;
+}
+.nmx-shell.is-detached-conversation .nmx-conversation-tab,
+.nmx-shell.is-detached-conversation .nmx-conversation-tab > button[role='tab'],
+.nmx-shell.is-detached-conversation .nmx-conversation-tab-close,
+.nmx-shell.is-detached-conversation .nmx-conversation-window-bar-actions {
+    -webkit-app-region: no-drag !important;
+    pointer-events: auto !important;
+}
+
+/* The empty rest of a strip. The main window's strip sits below its title bar: there it only fills the row
+   (the negative margin takes back the flex gap, so it never makes the strip scroll). */
+.nmx-conversation-tabs > .nmx-conversation-tabs-drag-spacer {
+    flex: 1 1 0;
+    min-width: 0;
+    margin-inline-start: -4px;
+    align-self: stretch;
+    pointer-events: none;
+}
+/* In a detached window it is the drag handle, reaching the row's top edge. Sticky at the row's end, it stays in
+   view (painted over the tabs scrolling beneath it) while the tabs overflow, so the window can always be moved
+   and its draggable area never leaves the strip. */
+.nmx-shell.is-detached-conversation .nmx-conversation-tabs > .nmx-conversation-tabs-drag-spacer {
+    position: sticky;
+    inset-inline-end: 0;
+    z-index: 3;
+    flex: 1 1 24px;
+    min-width: 24px;
+    min-height: 28px;
+    margin-block: -3px;
+    align-self: stretch;
+    background-color: inherit;
+    -webkit-app-region: drag !important;
+    pointer-events: auto !important;
+}
+.nmx-shell.is-detached-conversation .nmx-conversation-tabs.is-overflowing > .nmx-conversation-tabs-drag-spacer { margin-bottom: 0; }
+
+/* macOS: the traffic lights take the first 78px of the row, which drag the window too. */
+body.mac .nmx-shell.is-detached-conversation .nmx-titlebar-drag-region {
+    display: block !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: auto;
+    width: 78px;
+    height: 34px;
+    z-index: 25;
+    -webkit-app-region: drag;
+}
+body.mac .nmx-shell.is-detached-conversation .nmx-conversation-tabs {
+    margin-left: 78px;
+    padding-left: 0 !important;
+}
+/* Full screen hides the traffic lights (macOS 26 reports it, nextmux-inactive-window-buttons.ts). */
+body.mac.nmx-window-fullscreen .nmx-shell.is-detached-conversation .nmx-titlebar-drag-region { display: none !important; }
+body.mac.nmx-window-fullscreen .nmx-shell.is-detached-conversation .nmx-conversation-tabs {
+    margin-left: 0;
+    padding-left: 8px !important;
+}
+
+/* Windows (and a custom Linux title bar): Theia's caption buttons (#window-controls, 3 × 48px) end the row on the
+   right. Theia's transparent title panel lies over the whole row: it lets the pointer through to the tabs, and is
+   only as tall as the row, so its drag panel leaves no draggable band below the strip. */
+body:is(.windows, :has(#window-controls)) .nmx-shell.is-detached-conversation .nmx-titlebar-drag-region {
+    display: none !important;
+}
+body:is(.windows, :has(#window-controls)):has(.nmx-shell.is-detached-conversation) #theia-top-panel {
+    height: 34px !important;
+    min-height: 34px !important;
+    pointer-events: none;
+}
+body:is(.windows, :has(#window-controls)):has(.nmx-shell.is-detached-conversation) #window-controls {
+    height: 34px;
+    z-index: 30;
+    pointer-events: auto;
+    -webkit-app-region: no-drag;
+}
+body:is(.windows, :has(#window-controls)):has(.nmx-shell.is-detached-conversation) #window-controls .control-button {
+    height: 34px;
+    line-height: 34px;
+}
+body:is(.windows, :has(#window-controls)) .nmx-shell.is-detached-conversation .nmx-conversation-tabs {
+    margin-right: 144px;
+}
+.nmx-shell.is-detached-conversation .nmx-coding-stage {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+.nmx-shell.is-detached-conversation .nmx-task-view {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    scrollbar-gutter: stable;
+}
+.nmx-shell.is-detached-conversation .nmx-task-view::-webkit-scrollbar-corner {
+    background: transparent;
+}
+.nmx-shell.is-detached-conversation .nmx-composer-dock { padding-bottom: 4px !important; }
+.nmx-shell.is-detached-conversation .nmx-composer-below { padding-top: 3px; min-height: 26px; }
+.nmx-shell.is-detached-conversation .nmx-composer-input:has(textarea:placeholder-shown) { min-height: 28px !important; height: auto; }
+.nmx-shell.is-detached-conversation .nmx-composer textarea:placeholder-shown { min-height: 26px !important; height: 26px; }
+
+/* The turn timeline (left) and the file, note and agent floats (right) follow the width of the conversation stage,
+   in the main window and in a detached one alike. A narrow stage (a 380px tiled window, or a main window squeezed
+   by its drawer) hides them, so they never crowd the turns. A wide one shows them and keeps the turns and the
+   composer out of their bands: the timeline spans 10-44px from the stage's left edge and the float icons the same
+   band on the right (inset 10px, 36px wide), so 58px gutters leave each turn at least 12px clear of them, and the
+   composer keeps the main window's 48px gutters. `width > 680px` is the exact complement of the narrow query, so a
+   fractional stage width (Windows display scaling) never shows the rails without that clearance. */
+.nmx-shell .nmx-coding-stage { container: nmx-coding-stage / inline-size; }
+@container nmx-coding-stage (max-width: 680px) {
+    .nmx-shell .nmx-coding-stage > :is(.nmx-thread-timeline, .nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float) {
+        display: none !important;
+    }
+}
+@container nmx-coding-stage (width > 680px) {
+    .nmx-shell .nmx-coding-stage:has(> :is(.nmx-thread-timeline, .nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float)) .nmx-task-turn {
+        width: min(760px, calc(100% - 116px));
+    }
+    /* !important: otherwise a detached window keeps its compact composer, 12px from each edge. */
+    .nmx-shell .nmx-coding-stage:has(> :is(.nmx-thread-timeline, .nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float)) .nmx-composer-dock > .nmx-composer-wrap {
+        width: min(730px, calc(100% - 96px)) !important;
+    }
+}
+/* On the light stage the timeline's marks keep the dark theme's order of emphasis (quiet, hovered, current turn);
+   its dark-theme greys would leave the current turn's mark the faintest of all (1.5:1 on #ecebe8). */
+.nmx-shell.nmx-theme-light .nmx-thread-timeline button > span { background: #938d90; }
+.nmx-shell.nmx-theme-light .nmx-thread-timeline button:hover > span { background: #5d575a; }
+.nmx-shell.nmx-theme-light .nmx-thread-timeline button.is-active > span { background: #282527; }
+.nmx-shell.nmx-theme-light .nmx-thread-timeline button.is-error > span { background: #b0434f; }
+
+/* Seamless top titlebar: remove the legacy 4px dark-red strip and opaque top-panel band
+   so the sidebar and workspace surfaces extend cleanly to the top window edge on Windows and macOS. */
+.nmx-shell::after,
+#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-top-panel::before {
+    display: none !important;
+    content: none !important;
+}
+#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-top-panel,
+#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)):has(.nmx-theme-light) #theia-top-panel,
+#theia-app-shell:has(.nmx-shell.is-context-collapsed) #theia-top-panel {
+    background: transparent !important;
+    border-bottom: 0 !important;
+    box-shadow: none !important;
+}
+.nmx-shell .nmx-context-panel {
+    height: 100% !important;
+    margin-top: 0 !important;
+    border-top: 0 !important;
+    border-top-left-radius: 0 !important;
+}
+
+/* Hide the top menu bar (“文件、编辑、视图、窗口、帮助”) and lock navigation arrows
+   and primary workbench switcher (“模型中心、编程、漫剧”) to the exact same horizontal centerline (y = 20px). */
+.nmx-shell .nmx-titlebar-actions,
+.nmx-shell .nmx-titlebar-primary-nav,
+.nmx-shell .nmx-titlebar-context,
+.nmx-shell .nmx-coding-topbar .nmx-workspace-controls {
+    top: 3px !important;
+    height: 34px !important;
+}
+#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar {
+    display: none !important;
+}
+
+/* Two-stage responsive titlebar:
+   Stage 1 (.is-titlebar-compact): hide labels inside .nmx-titlebar-primary-nav and show icon-only buttons when the full text bar gets within 12px of left/right controls.
+   Stage 2 (.is-titlebar-crowded): hide both .nmx-titlebar-primary-nav and .nmx-workspace-controls when even the compact icon bar gets within 10px of left/right controls. */
+.nmx-shell:not(.is-titlebar-compact):not(.is-titlebar-crowded) .nmx-titlebar-primary-nav > button {
+    width: auto !important;
+    min-width: 32px !important;
+    gap: 6px !important;
+    padding-inline: 8px !important;
+}
+.nmx-shell:not(.is-titlebar-compact):not(.is-titlebar-crowded) .nmx-titlebar-primary-nav > button > span {
+    display: inline !important;
+}
+.nmx-shell.is-titlebar-compact .nmx-titlebar-primary-nav > button {
+    width: 32px !important;
+    min-width: 32px !important;
+    padding-inline: 0 !important;
+    gap: 0 !important;
+    justify-content: center !important;
+}
+.nmx-shell.is-titlebar-compact .nmx-titlebar-primary-nav > button > span {
+    display: none !important;
+}
+.nmx-shell.is-titlebar-crowded :is(.nmx-titlebar-primary-nav, .nmx-coding-topbar .nmx-workspace-controls) {
+    display: none !important;
+}
+.nmx-shell.is-titlebar-context-close-only .nmx-titlebar-context {
+    width: auto !important;
+    min-width: 28px !important;
+    justify-content: flex-end !important;
+}
+.nmx-shell.is-titlebar-context-close-only .nmx-titlebar-context :is(.nmx-context-entry-tabs, .nmx-incognito-badge) {
+    display: none !important;
+}
+@media (max-width: 560px) {
+    .nmx-shell .nmx-task-turn {
+        width: min(710px, calc(100% - 28px));
+    }
+    .nmx-shell .nmx-composer-wrap,
+    .nmx-shell.is-work-context-open .nmx-composer-wrap {
+        width: min(730px, calc(100% - 24px));
+    }
+}
+
+/* Keep the normal 264px width, while allowing the placement calculation to
+   shrink the picker beside its details in narrow windows. */
+.nmx-shell .nmx-model-picker-popover {
+    box-sizing: border-box;
+    width: 264px;
+    min-width: 0;
+    max-width: calc(100vw - 16px);
+}
+.nmx-route-popover > .nmx-model-picker-search,
+.nmx-model-picker-search,
+.nmx-model-picker-search > input {
+    overflow: hidden !important;
+    padding-top: 0 !important;
+    scrollbar-width: none !important;
+}
+.nmx-model-picker-search::-webkit-scrollbar,
+.nmx-model-picker-search > input::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+.nmx-model-option > button {
+    grid-template-columns: minmax(0, 1fr) 16px !important;
+    gap: 4px !important;
+    padding-inline: 8px 6px !important;
+}
+.nmx-model-option > button > span:has(> .nmx-model-price-variant) {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 6px !important;
+    width: 100% !important;
+}
+.nmx-model-option .nmx-model-price-variant {
+    justify-self: end;
+    margin-inline-start: auto !important;
+    margin-inline-end: 0 !important;
+    font-variant-numeric: tabular-nums;
+}
+.nmx-model-effort-menu .nmx-model-top-multiplier {
+    margin: 2px 7px 6px;
+    padding: 4px 0 6px;
+    border-top: 0;
+    border-bottom: 1px solid var(--nmx-border, rgba(255, 255, 255, .1));
+}
+.nmx-offering-price-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 5px 8px;
+    border: 1px solid var(--nmx-border, rgba(255, 255, 255, .1));
+    border-radius: 6px;
+    background: var(--nmx-control-background, transparent);
+    color: var(--nmx-subtle, #a9a2a5);
+    font: inherit;
+    font-size: 11px;
+    line-height: 18px;
+    cursor: pointer;
+}
+.nmx-offering-price-toggle:hover {
+    color: var(--nmx-text, #eeecee);
+    background: var(--nmx-hover, rgba(255, 255, 255, .06));
+}
+
+/* Conversation tab context menu & search keyword highlights in dark and light themes. */
+.nmx-session-menu.is-tab-context-menu {
+    right: auto !important;
+    bottom: auto !important;
+}
+.nmx-task-turn mark,
+[data-thread-search-field] mark,
+.nmx-search-highlight {
+    padding: 0 1px;
+    border-radius: 2px;
+    color: #fff4cd;
+    background: #635025;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+.nmx-task-turn mark.is-active,
+[data-thread-search-field] mark.is-active {
+    color: #211a08;
+    background: #e3bd56;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+.nmx-shell.nmx-theme-light :is(.nmx-task-turn mark, [data-thread-search-field] mark, .nmx-search-highlight) {
+    color: #3b2b08;
+    background: #f7e5a2;
+}
+.nmx-shell.nmx-theme-light :is(.nmx-task-turn mark.is-active, [data-thread-search-field] mark.is-active) {
+    color: #211a08;
+    background: #ecc04f;
+}
+
+
+
+
+
+/* -------------------------------------------------------------------------
+ * Turn operation menu stacking
+ *
+ * The 【…】 menu opens downward from a turn. Promote the owning Virtuoso item
+ * so it paints above every later turn; the menu itself gets the top of the
+ * practical z-index range. `overflow: visible` lets it cover the next prompt.
+ * ---------------------------------------------------------------------- */
+.nmx-desktop-widget .nmx-task-view [data-item-index]:has(.nmx-message-menu),
+.nmx-desktop-widget .nmx-task-turn:has(.nmx-message-menu),
+.nmx-desktop-widget .nmx-turn-copy:has(.nmx-message-menu) {
+    position: relative;
+    z-index: 140 !important;
+    overflow: visible !important;
+}
+
+.nmx-desktop-widget .nmx-turn-copy-menu {
+    z-index: 2147483640 !important;
+}
+
+/* Split file labels fade only the directory; the filename retains its own cap.
+   Keep the is-long-path rules above for historical, unsplit labels. */
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link) {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: min(100%, 56ch);
+    padding: 1px 2px;
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-overflow: clip;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix) {
+    display: inline-flex;
+    align-items: baseline;
+    max-width: min(100%, 56ch);
+    overflow: hidden;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix) > code,
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link) > code.has-dir-prefix,
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix, code.nmx-local-file-link.has-dir-prefix):not(:has(> code)) {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: flex-start;
+    gap: 0;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    -webkit-mask-image: none;
+    mask-image: none;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix) > code,
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link) > code.has-dir-prefix {
+    max-width: 100%;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix):not(:has(> code)) > .codicon {
+    margin-inline-end: 5px;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-dir {
+    display: inline-flex;
+    justify-content: flex-start;
+    flex: 1 1 3ch;
+    min-width: 2.5ch;
+    overflow: hidden;
+    direction: rtl;
+    unicode-bidi: plaintext;
+    text-overflow: clip;
+    white-space: nowrap;
+    opacity: 0.72;
+    -webkit-mask-image: linear-gradient(to right, transparent 0px, #000 24px, #000 100%);
+    mask-image: linear-gradient(to right, transparent 0px, #000 24px, #000 100%);
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-name {
+    display: inline-block;
+    flex: 0 0 auto;
+    min-width: 0;
+    max-width: min(38ch, 320px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+:is(.nmx-theme-light, [data-nextmux-theme='light'], body.theia-light, body.NextMux-light) .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link),
+.nmx-desktop-widget:is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link),
+.nmx-desktop-widget :is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link) {
+    color: #0f172a !important;
+}
+
+:is(.nmx-theme-light, [data-nextmux-theme='light'], body.theia-light, body.NextMux-light) .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link):hover,
+.nmx-desktop-widget:is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link):hover,
+.nmx-desktop-widget :is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link):hover {
+    color: #020617 !important;
+}
+
+:is(.nmx-theme-light, [data-nextmux-theme='light'], body.theia-light, body.NextMux-light) .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-dir,
+.nmx-desktop-widget:is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-dir,
+.nmx-desktop-widget :is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-dir {
+    color: #1e293b;
+    opacity: 0.9;
+}
+
+:is(.nmx-theme-light, [data-nextmux-theme='light'], body.theia-light, body.NextMux-light) .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-name,
+.nmx-desktop-widget:is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-name,
+.nmx-desktop-widget :is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-name {
+    color: #0f172a;
+    font-weight: 600;
+}
+
+
+/* File drawer: the row/tab owns the only background layer. */
+.nmx-work-context > header.is-file .nmx-file-editor-tabs {
+    gap: 4px;
+    padding: 3px 6px;
+    align-items: center;
+    background: transparent !important;
+}
+
+.nmx-work-context > header.is-file .nmx-file-editor-tabs > .nmx-file-editor-tab {
+    box-sizing: border-box;
+    align-self: center !important;
+    height: 28px;
+    min-height: 28px;
+    padding: 0 6px 0 10px;
+    border: 1px solid transparent !important;
+    border-right: 1px solid transparent !important;
+    border-radius: 8px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.nmx-work-context > header.is-file .nmx-file-editor-tabs > .nmx-file-editor-tab > button:first-child,
+.nmx-work-context > header.is-file .nmx-file-editor-tabs > .nmx-file-editor-tab > button:first-child:is(:hover, :focus, :active, .is-active) {
+    height: 100%;
+    padding: 0 2px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    color: inherit !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.nmx-work-context > header.is-file .nmx-file-editor-tabs > .nmx-file-editor-tab > .nmx-file-editor-tab-close {
+    flex: 0 0 20px;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0 !important;
+    border-radius: 6px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.nmx-context-file-row {
+    box-sizing: border-box;
+    width: calc(100% - 12px);
+    height: auto;
+    min-height: 28px;
+    margin: 1px 6px;
+    padding-block: 4px;
+    border: 1px solid transparent;
+    border-radius: 8px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.nmx-context-file-row *,
+.nmx-work-context > header.is-file .nmx-file-editor-tab :is(strong, i, span) {
+    background: transparent !important;
+}
+
+.nmx-context-file-row > strong,
+.nmx-file-editor-tab strong {
+    color: inherit !important;
+    font-weight: 450 !important;
+}
+
+.nmx-context-file-row,
+.nmx-work-context > header.is-file .nmx-file-editor-tab {
+    color: #a8a6aa;
+}
+
+.nmx-context-file-row:hover:not(:is(.is-active, .is-selected, [aria-selected='true'])),
+.nmx-work-context > header.is-file .nmx-file-editor-tabs > .nmx-file-editor-tab:hover:not(.is-active) {
+    background: rgba(255, 255, 255, 0.045) !important;
+}
+
+.nmx-context-file-row:is(.is-active, .is-selected, [aria-selected='true']),
+.nmx-work-context > header.is-file .nmx-file-editor-tabs > .nmx-file-editor-tab.is-active {
+    color: #f3f3f3 !important;
+    background: rgba(255, 255, 255, 0.085) !important;
+    border-color: rgba(255, 255, 255, 0.09) !important;
+    box-shadow: none !important;
+}
+
+.nmx-context-file-row:is(.is-active, .is-selected, [aria-selected='true']):not(:focus-visible) {
+    outline: none;
+}
+
+.nmx-theme-light .nmx-context-file-row,
+.nmx-theme-light .nmx-work-context > header.is-file .nmx-file-editor-tab {
+    color: #5c575a;
+}
+
+.nmx-theme-light .nmx-context-file-row:hover:not(:is(.is-active, .is-selected, [aria-selected='true'])),
+.nmx-theme-light .nmx-work-context > header.is-file .nmx-file-editor-tabs > .nmx-file-editor-tab:hover:not(.is-active) {
+    background: rgba(15, 23, 42, 0.045) !important;
+}
+
+.nmx-theme-light .nmx-context-file-row:is(.is-active, .is-selected, [aria-selected='true']),
+.nmx-theme-light .nmx-work-context > header.is-file .nmx-file-editor-tabs > .nmx-file-editor-tab.is-active {
+    color: #171717 !important;
+    background: rgba(15, 23, 42, 0.065) !important;
+    border-color: rgba(15, 23, 42, 0.09) !important;
+}
+
+/* -------------------------------------------------------------------------
+ * Rendering performance
+ *
+ * Keep the work-context drawer and its file tree as independent layout roots
+ * so row/header changes never force Monaco or Virtuoso to re-layout the
+ * conversation. No paint containment: the drawer's own menus must stay visible.
+ *
+ * Layout containment makes the element the containing block for fixed-position
+ * descendants. The drawer hosts the viewport-positioned file context menu, so
+ * drop containment while that menu (or its dismiss backdrop) is mounted;
+ * otherwise the menu is shifted by the drawer's offset.
+ * ---------------------------------------------------------------------- */
+.nmx-shell .nmx-context-file-list {
+    contain: layout style;
+}
+
+.nmx-shell .nmx-work-context:not(:has(.nmx-file-tab-menu, .nmx-file-tab-menu-backdrop)) {
+    contain: layout style;
+}
+
+/* The Monaco host keeps viewport-positioned overflow widgets; strip animation
+   and blur work instead of adding containment to the editor itself. */
+.nmx-shell .nmx-file-editor-body,
+.nmx-shell .nmx-monaco-file-editor {
+    transition: none !important;
+    backdrop-filter: none !important;
+}
+
+/* -------------------------------------------------------------------------
+ * Visual tab: single-row header + top-right floating toast
+ *
+ * The notification used to sit inline in `.nmx-visual-tab > header` and made
+ * the header wrap. It is now a floating, closable toast pinned to the tab's
+ * top-right corner: it fades in, fades out after three seconds (the timer is
+ * owned by the tab view), and never takes part in the header layout.
+ *
+ * This production block restates the composer rule set with !important so a
+ * later theme or vendor stylesheet cannot bring the wrapping chip back. Keep
+ * the two files in sync when either changes.
+ * ---------------------------------------------------------------------- */
+@keyframes nmx-visual-tab-toast-in {
+    from { opacity: 0; transform: translate3d(0, -6px, 0) scale(0.98); }
+    to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes nmx-visual-tab-toast-out {
+    from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+    to { opacity: 0; transform: translate3d(0, -6px, 0) scale(0.98); }
+}
+
+/* Desktop header: never wrap, scroll sideways if the row gets too wide. Scoped
+ * to >560px so the tiny-width media query in the composer stylesheet can still
+ * fall back to wrapping. */
+@media (min-width: 561px) {
+    .nmx-shell .nmx-visual-tab > header {
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        scrollbar-width: none !important;
+    }
+
+    /* Let the window switcher menu and the terminate bubble escape the header. */
+    .nmx-shell .nmx-visual-tab > header:has(.nmx-visual-tab-windows.is-open),
+    .nmx-shell .nmx-visual-tab > header:has(.nmx-visual-tab-live-bubble) {
+        overflow: visible !important;
+    }
+}
+
+.nmx-shell .nmx-visual-tab-screen > .nmx-visual-tab-toast,
+.nmx-shell .nmx-visual-tab-toast {
+    position: absolute !important;
+    inset-block-start: 12px !important;
+    inset-inline-end: 12px !important;
+    z-index: 30 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    max-width: min(420px, calc(100% - 24px)) !important;
+    min-height: 32px !important;
+    padding: 5px 8px 5px 12px !important;
+    border-radius: 10px !important;
+    border: 1px solid var(--nmx-border-strong, var(--nmx-border)) !important;
+    color: var(--nmx-text) !important;
+    background: color-mix(in srgb, var(--nmx-menu-background, var(--nmx-panel, var(--nmx-bg))) 92%, transparent) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    backdrop-filter: blur(10px) !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28) !important;
+    font-size: 12px !important;
+    line-height: 1.4 !important;
+    cursor: pointer !important;
+    user-select: none !important;
+    pointer-events: auto !important;
+    animation: nmx-visual-tab-toast-in 200ms cubic-bezier(0.16, 1, 0.3, 1) both !important;
+    transition: opacity 260ms ease, transform 260ms ease !important;
+}
+
+.nmx-shell .nmx-visual-tab-toast.is-fading-out {
+    /* Not !important: important declarations outrank animations, which would
+       make the 260ms exit animation snap to transparent in its first frame. */
+    opacity: 0;
+    transform: translate3d(0, -6px, 0) scale(0.98);
+    pointer-events: none !important;
+    animation: nmx-visual-tab-toast-out 260ms ease both !important;
+}
+
+.nmx-shell .nmx-visual-tab-toast.is-error {
+    border-color: color-mix(in srgb, var(--nmx-danger, #c4314b) 42%, var(--nmx-border)) !important;
+}
+
+.nmx-shell .nmx-visual-tab-toast .nmx-visual-tab-error,
+.nmx-shell .nmx-visual-tab-toast .nmx-visual-tab-info {
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    height: auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    animation: none !important;
+}
+
+.nmx-shell .nmx-visual-tab-toast .nmx-visual-tab-error {
+    color: var(--nmx-danger, #e5484d) !important;
+    font-weight: 500 !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-visual-tab-toast .nmx-visual-tab-error,
+.nmx-theme-light .nmx-visual-tab-toast .nmx-visual-tab-error {
+    color: #c4314b !important;
+}
+
+.nmx-shell .nmx-visual-tab-toast .nmx-visual-tab-info {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    color: var(--nmx-text) !important;
+    font-weight: 500 !important;
+}
+
+.nmx-shell .nmx-visual-tab-toast-close {
+    flex: 0 0 auto !important;
+    width: 20px !important;
+    height: 20px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 5px !important;
+    display: inline-grid !important;
+    place-items: center !important;
+    color: var(--nmx-muted) !important;
+    background: transparent !important;
+    cursor: pointer !important;
+    transition: background-color 120ms ease, color 120ms ease !important;
+}
+
+.nmx-shell .nmx-visual-tab-toast-close:hover {
+    color: var(--nmx-text) !important;
+    background: color-mix(in srgb, var(--nmx-text) 10%, transparent) !important;
+}
+
+.nmx-shell .nmx-visual-tab-toast-close > .codicon {
+    font-size: 12px !important;
+}
+
+/* The !important animation above would otherwise defeat reduced motion. The
+ * compound selector outranks the toast's own exit animation. */
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell .nmx-visual-tab-toast,
+    .nmx-shell .nmx-visual-tab-toast.is-fading-out {
+        animation: none !important;
+        transition: none !important;
+    }
+}
+
+.nmx-composer-below .nmx-project-path-button.is-missing {
+    color: var(--nmx-warning, #d99b26) !important;
+    opacity: 0.92;
+}
+.nmx-composer-below .nmx-project-path-button.is-missing:hover {
+    color: var(--nmx-warning, #d99b26) !important;
+    background: color-mix(in srgb, var(--nmx-warning, #d99b26) 12%, transparent) !important;
+}

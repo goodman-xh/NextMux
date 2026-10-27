@@ -1,0 +1,12 @@
+/* The input form stays in its owner's node panel and inherits that panel's theme. */
+.nmx-canvas-floating-host { position:relative; box-sizing:border-box; }
+/* This theme-bearing wrapper must let the camera and settings popovers escape desktop widget clipping. */
+.nmx-canvas-floating-host.nmx-desktop-widget {
+    overflow:visible !important;
+    /* The typography wrapper must not reset the owning canvas to the desktop's dark tokens. */
+    --nmx-bg:inherit; --nmx-panel:inherit; --nmx-panel-2:inherit; --nmx-text:inherit; --nmx-muted:inherit;
+    --nmx-border:inherit; --nmx-border-strong:inherit; --nmx-hover:inherit; --nmx-accent:inherit;
+    --nmx-danger:inherit; --nmx-warning:inherit; --nmx-success:inherit;
+}
+.nmx-canvas-floating-form { position:relative; box-sizing:border-box; color:var(--nmx-text); }
+.nmx-canvas-floating-form :is(button,input,textarea,select):focus-visible { outline:2px solid var(--nmx-accent,#8e4ec6); outline-offset:2px; }

@@ -1,0 +1,10 @@
+NextMux
+Copyright 2026 NextMux contributors
+
+This product includes software developed by third parties. Their licences and
+notices remain applicable to their respective components.
+
+Plugin title and OCR matching uses RE2JS 2.8.6, copyright (c) 2023
+Oleksii Vasyliev, under the MIT License:
+https://github.com/le0pard/re2js
+The full license is distributed with the re2js dependency (LICENSE).

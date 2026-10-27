@@ -1,0 +1,104 @@
+.nmx-turn-change-review { margin: 10px 0; color: var(--theia-descriptionForeground, #999); font-size: 12px; }
+.nmx-turn-change-review > summary { display: flex; align-items: center; gap: 7px; width: fit-content; max-width: 100%; cursor: pointer; list-style: none; }
+.nmx-turn-change-review > summary::-webkit-details-marker { display: none; }
+.nmx-turn-change-review > summary:focus-visible { outline: 1px solid var(--theia-focusBorder); outline-offset: 3px; }
+.nmx-turn-change-review[open] .nmx-review-chevron { transform: rotate(90deg); }
+.nmx-turn-change-review .nmx-review-chevron { transition: transform 120ms ease; }
+.nmx-turn-review-content { margin-top: 6px; padding-inline-start: 20px; }
+.nmx-turn-review-content > header { display: flex; justify-content: flex-end; }
+.nmx-turn-review-content .nmx-review-warning { font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; color: var(--theia-editorWarning-foreground, #b78b52); }
+.nmx-turn-review-content button { padding: 3px 5px; border: 0; border-radius: 4px; background: transparent; color: inherit; cursor: pointer; font: inherit; }
+.nmx-turn-review-content button:hover:not(:disabled) { background: var(--theia-toolbar-hoverBackground, #8882); color: var(--theia-foreground, #ccc); }
+.nmx-turn-review-content button:disabled { opacity: .45; cursor: default; }
+.nmx-turn-review-file, .nmx-turn-review-item, .nmx-turn-review-check { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+/* Restoring is reversible: keep the row readable and only mute the path and
+ * diff counters, never the clickable "已恢复" action. */
+.nmx-turn-review-file.is-restored, .nmx-turn-review-item.is-restored { opacity: 1; }
+.nmx-turn-review-file.is-restored > :is(.nmx-review-file-path, span),
+.nmx-turn-review-item.is-restored > :is(.nmx-review-file-path, span) { opacity: .62; }
+.nmx-turn-review-file .nmx-review-file-path, .nmx-turn-review-check code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: start; }
+.nmx-turn-review-file b, .nmx-verification-status.is-passed { color: var(--theia-gitDecoration-addedResourceForeground, #65a774); font-weight: normal; }
+.nmx-turn-review-file em, .nmx-verification-status.is-failed { color: var(--theia-errorForeground, #d37676); font-style: normal; }
+
+/* Restore / restored action. "已恢复" is a real button now: same capsule
+ * geometry as "恢复", but with a soft success tint and an undo affordance. */
+.nmx-shell .nmx-turn-review-restore,
+.nmx-shell .nmx-turn-review-restored,
+.nmx-shell .nmx-review-restore-toggle {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 22px;
+    min-height: 22px;
+    margin: 0;
+    padding: 0 9px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--nmx-muted);
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.nmx-shell .nmx-turn-review-restore:hover:not(:disabled) {
+    color: var(--nmx-text);
+    border-color: var(--nmx-border-strong, #413d40);
+    background: color-mix(in srgb, var(--nmx-text) 7%, transparent);
+}
+
+.nmx-shell .nmx-turn-review-restored,
+.nmx-shell .nmx-review-restore-toggle.is-restored {
+    color: color-mix(in srgb, var(--nmx-success, #61c990) 72%, var(--nmx-text));
+    border-color: color-mix(in srgb, var(--nmx-success, #61c990) 34%, transparent);
+    background: color-mix(in srgb, var(--nmx-success, #61c990) 10%, transparent);
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-turn-review-restored:hover:not(:disabled),
+.nmx-shell .nmx-review-restore-toggle.is-restored:hover:not(:disabled) {
+    color: var(--nmx-text);
+    border-color: color-mix(in srgb, var(--nmx-success, #61c990) 56%, transparent);
+    background: color-mix(in srgb, var(--nmx-success, #61c990) 17%, transparent);
+}
+
+.nmx-shell .nmx-turn-review-restore:focus-visible,
+.nmx-shell .nmx-turn-review-restored:focus-visible,
+.nmx-shell .nmx-review-restore-toggle:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--nmx-success, #61c990) 58%, var(--nmx-focus-ring));
+    outline-color: color-mix(in srgb, var(--nmx-success, #61c990) 58%, var(--nmx-focus-ring)) !important;
+    outline-offset: 1px;
+}
+
+.nmx-shell .nmx-turn-review-restore:disabled,
+.nmx-shell .nmx-turn-review-restored:disabled,
+.nmx-shell .nmx-review-restore-toggle:disabled {
+    opacity: .55;
+    cursor: default;
+}
+
+.nmx-shell.nmx-theme-light .nmx-turn-review-restored,
+.nmx-shell.nmx-theme-light .nmx-review-restore-toggle.is-restored {
+    color: #1a7f37;
+    border-color: #b7d8bf;
+    background: #e8f3ea;
+}
+
+.nmx-shell.nmx-theme-light .nmx-turn-review-restored:hover:not(:disabled),
+.nmx-shell.nmx-theme-light .nmx-review-restore-toggle.is-restored:hover:not(:disabled) {
+    color: #145c2c;
+    border-color: #8fc39d;
+    background: #dcecdf !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nmx-turn-change-review .nmx-review-chevron,
+    .nmx-shell .nmx-turn-review-restore,
+    .nmx-shell .nmx-turn-review-restored,
+    .nmx-shell .nmx-review-restore-toggle { transition: none; }
+}

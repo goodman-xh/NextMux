@@ -1,0 +1,3563 @@
+/*
+ * nextmux-Variables.css: NextMux desktop design tokens and the final visual layer.
+ *
+ * Imported by nextmux-frontend-module.ts after every component sheet and right
+ * before nextmux-motion.css (motion presets stay last by contract), so it is the
+ * single source of truth for typography, code colours and the surfaces that were
+ * redesigned in the 2026-10 workbench pass. Rules that must beat older component
+ * sheets are prefixed with the widget id (#nextmux.desktop.widget); new
+ * components use their own class names and need no prefix.
+ *
+ * Typography and code colours follow the locally installed Codex desktop app
+ * (/Applications/ChatGPT.app → Contents/Resources/app.asar → webview/assets):
+ *   - UI stack `--font-sans-default`: -apple-system-body, ui-sans-serif,
+ *     -apple-system, system-ui, "Segoe UI", Helvetica, "Apple Color Emoji", Arial,
+ *     sans-serif, "Segoe UI Emoji", "Segoe UI Symbol". NextMux inserts its CJK
+ *     faces right before the generic family so Windows never falls back to SimSun.
+ *   - Code stack `--font-code-family`: ui-monospace, "SFMono-Regular", "SF Mono",
+ *     Menlo, Consolas, "Liberation Mono", monospace.
+ *   - Electron window scale: body 14px (`--text-base`), code 13px (`--text-sm`),
+ *     metadata and timestamps 12px (`--text-xs`), UI weight 430.
+ *   - Syntax colours: the bundled Shiki themes "Codex Light" / "Codex Dark"
+ *     (codex-light-*.js / codex-dark-*.js). The Monaco file drawer uses the same
+ *     palette (NextMuxFileEditor.registerThemes).
+ */
+
+/* ===========================================================================
+ * 1. Typography tokens
+ * ======================================================================== */
+.nmx-desktop-widget,
+.nmx-shell,
+.nmx-portal,
+.nmx-model-picker-portal,
+.nmx-model-effort-portal,
+.nmx-floating-file-window,
+.nmx-floating-note-window,
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) {
+    --nmxv-font-ui: -apple-system-body, ui-sans-serif, -apple-system, system-ui, "Segoe UI", "Helvetica", "Apple Color Emoji", "Arial", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+    --nmxv-font-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", "PingFang SC", "Microsoft YaHei UI", monospace;
+    --nmxv-text-base: 14px;
+    --nmxv-text-sm: 13px;
+    --nmxv-text-xs: 12px;
+    --nmxv-leading-base: 21px;
+    --nmxv-leading-sm: 18px;
+    --nmxv-leading-code: 20px;
+    --nmxv-weight-ui: 430;
+    /* Every older alias resolves to the same two stacks. */
+    --nmx-ui-font: var(--nmxv-font-ui) !important;
+    --nmx-font-sans: var(--nmxv-font-ui) !important;
+    --nmx-numeric-font: var(--nmxv-font-ui) !important;
+    --theia-ui-font-family: var(--nmxv-font-ui) !important;
+    --nmx-code-font: var(--nmxv-font-mono) !important;
+    --nmx-font-mono: var(--nmxv-font-mono) !important;
+    --nmx-mono-font: var(--nmxv-font-mono) !important;
+    --nmx-mono: var(--nmxv-font-mono) !important;
+    --theia-code-font-family: var(--nmxv-font-mono) !important;
+    --monaco-monospace-font: var(--nmxv-font-mono) !important;
+}
+
+/* ===========================================================================
+ * 2. Colour tokens (dark is the default, light overrides)
+ * ======================================================================== */
+.nmx-shell,
+.nmx-portal,
+.nmx-model-picker-portal,
+.nmx-model-effort-portal,
+.nmx-floating-file-window,
+.nmx-floating-note-window,
+.nmx-floating-toast,
+.nmx-offering-price-pop,
+.nmx-image-lightbox {
+    --nmxv-fg: var(--nmx-text, #ececec);
+    --nmxv-fg-2: color-mix(in srgb, var(--nmxv-fg) 72%, transparent);
+    --nmxv-fg-3: color-mix(in srgb, var(--nmxv-fg) 50%, transparent);
+    --nmxv-line: color-mix(in srgb, var(--nmxv-fg) 10%, transparent);
+    --nmxv-line-2: color-mix(in srgb, var(--nmxv-fg) 16%, transparent);
+    --nmxv-hover: color-mix(in srgb, var(--nmxv-fg) 6%, transparent);
+    --nmxv-press: color-mix(in srgb, var(--nmxv-fg) 10%, transparent);
+    --nmxv-selected: color-mix(in srgb, var(--nmxv-fg) 9%, transparent);
+    --nmxv-surface: #1d1d1e;
+    --nmxv-surface-2: #242425;
+    --nmxv-surface-3: #2c2c2e;
+    --nmxv-field: #19191a;
+    --nmxv-backdrop: rgba(0, 0, 0, .46);
+    --nmxv-shadow-pop: 0 12px 32px rgba(0, 0, 0, .42), 0 1px 3px rgba(0, 0, 0, .32);
+    --nmxv-shadow-sheet: 0 28px 72px rgba(0, 0, 0, .55), 0 2px 10px rgba(0, 0, 0, .35);
+    --nmxv-primary-bg: #ececec;
+    --nmxv-primary-fg: #141414;
+    --nmxv-primary-hover: #ffffff;
+    --nmxv-link: #7db8ff;
+    --nmxv-link-hover: #a8cfff;
+    --nmxv-danger: #ff7b72;
+    --nmxv-danger-bg: rgba(255, 123, 114, .12);
+    /* Solid fill for white-text danger buttons in both themes: 4.85:1 against white text (5.91:1 on hover), 3.29:1 against the dark dialog. */
+    --nmxv-danger-fill: #c64541;
+    --nmxv-danger-fill-hover: #b23a36;
+    --nmxv-success: #6fd394;
+    --nmxv-warning: #f2c46d;
+    --nmxv-focus: rgba(125, 184, 255, .55);
+    --nmxv-row-active: rgba(125, 184, 255, .13);
+    --nmxv-row-active-fg: #dcebff;
+    --nmxv-scroll-idle: rgba(255, 255, 255, .08);
+    --nmxv-scroll: rgba(255, 255, 255, .22);
+    --nmxv-scroll-active: rgba(255, 255, 255, .34);
+    --nmxv-path-bg: rgba(125, 184, 255, .11);
+    --nmxv-path-bg-hover: rgba(125, 184, 255, .2);
+    --nmxv-path-fg: #94c6ff;
+    --nmxv-path-dir: #6f9fd2;
+    --nmxv-mark-bg: rgba(242, 196, 109, .3);
+    --nmxv-mark-current: rgba(242, 166, 64, .62);
+    --nmxv-tree: color-mix(in srgb, var(--nmxv-fg) 22%, transparent);
+    --nmxv-tab-underline: var(--nmx-picker-accent, var(--nmx-accent, #e06c88));
+    --nmx-tab-active-underline: var(--nmxv-tab-underline);
+}
+
+.nmx-shell.nmx-theme-light,
+.nmx-theme-light :is(.nmx-portal, .nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-floating-file-window, .nmx-floating-note-window, .nmx-floating-toast),
+:is(.nmx-portal, .nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-floating-file-window, .nmx-floating-note-window, .nmx-floating-toast, .nmx-offering-price-pop).nmx-theme-light {
+    --nmxv-fg: var(--nmx-text, #1f1d1e);
+    --nmxv-tab-underline: var(--nmx-picker-accent, var(--nmx-accent, #c94067));
+    --nmx-tab-active-underline: var(--nmxv-tab-underline);
+    --nmxv-surface: #ffffff;
+    --nmxv-surface-2: #f7f6f5;
+    --nmxv-surface-3: #efedeb;
+    --nmxv-field: #ffffff;
+    --nmxv-backdrop: rgba(30, 26, 28, .22);
+    --nmxv-shadow-pop: 0 12px 32px rgba(32, 26, 30, .12), 0 1px 3px rgba(32, 26, 30, .08);
+    --nmxv-shadow-sheet: 0 28px 72px rgba(32, 26, 30, .18), 0 2px 10px rgba(32, 26, 30, .08);
+    --nmxv-primary-bg: #222022;
+    --nmxv-primary-fg: #ffffff;
+    --nmxv-primary-hover: #000000;
+    --nmxv-link: #0b63c5;
+    --nmxv-link-hover: #084f9e;
+    --nmxv-danger: #c4342d;
+    --nmxv-danger-bg: rgba(196, 52, 45, .08);
+    --nmxv-success: #1c8a4a;
+    --nmxv-warning: #9a6400;
+    --nmxv-focus: rgba(11, 99, 197, .42);
+    --nmxv-row-active: rgba(11, 99, 197, .08);
+    --nmxv-row-active-fg: #0f3f73;
+    --nmxv-scroll-idle: rgba(0, 0, 0, .07);
+    --nmxv-scroll: rgba(0, 0, 0, .2);
+    --nmxv-scroll-active: rgba(0, 0, 0, .32);
+    --nmxv-path-bg: rgba(11, 99, 197, .075);
+    --nmxv-path-bg-hover: rgba(11, 99, 197, .14);
+    --nmxv-path-fg: #0b5fb8;
+    --nmxv-path-dir: #5a83ad;
+    --nmxv-mark-bg: rgba(255, 196, 0, .32);
+    --nmxv-mark-current: rgba(255, 150, 0, .5);
+}
+
+/* ===========================================================================
+ * 3. Typography applied to every surface
+ * ======================================================================== */
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-composer textarea, .nmx-composer-markdown-overlay, .nmx-comic-chat-dock textarea) {
+    /* The textarea and its Markdown overlay must stay metrically identical. */
+    font-family: var(--nmxv-font-ui) !important;
+    font-size: var(--nmxv-text-base) !important;
+    line-height: var(--nmxv-leading-base) !important;
+    font-weight: var(--nmxv-weight-ui) !important;
+    letter-spacing: 0 !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-assistant-markdown, .nmx-user-markdown) {
+    font-size: var(--nmxv-text-base);
+    line-height: 1.6;
+    font-weight: var(--nmxv-weight-ui);
+}
+
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-md-code, .nmx-md-code-block) :is(pre, code),
+#nextmux\.desktop\.widget .nmx-shell pre.nmx-md-plain-code {
+    font-family: var(--nmxv-font-mono) !important;
+    font-size: var(--nmxv-text-sm) !important;
+    line-height: var(--nmxv-leading-code) !important;
+    font-weight: 400 !important;
+    font-variant-ligatures: none;
+}
+
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-assistant-markdown, .nmx-user-markdown) :not(pre) > code {
+    font-size: .9em;
+}
+
+/* Pickers and drawers opened from the composer. */
+.nmx-model-picker-portal,
+.nmx-model-effort-portal,
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-relay-popover, .nmx-relay-picker-popover, .nmx-composer-relay-button, .nmx-route-button) {
+    font-family: var(--nmxv-font-ui) !important;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Settings tabs and pages. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-settings-nav button {
+    font-family: var(--nmxv-font-ui) !important;
+    font-size: var(--nmxv-text-sm) !important;
+    line-height: var(--nmxv-leading-sm) !important;
+}
+
+/* Right file drawer: tree rows and file tabs use the UI face, code uses mono. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-context-file-row {
+    font-family: var(--nmxv-font-ui) !important;
+    font-size: var(--nmxv-text-sm) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-file-editor-tab {
+    font-family: var(--nmxv-font-ui) !important;
+    font-size: var(--nmxv-text-xs) !important;
+}
+
+/* Assistant-turn footer timestamp (for example `09/01 03:18`) and metadata. */
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-turn-copy time, .nmx-task-turn time, .nmx-turn-meta time) {
+    font-family: var(--nmxv-font-ui) !important;
+    font-size: var(--nmxv-text-xs) !important;
+    line-height: 16px !important;
+    font-weight: 400 !important;
+    letter-spacing: 0 !important;
+    font-variant-numeric: lining-nums tabular-nums !important;
+    font-feature-settings: 'tnum' 1, 'lnum' 1 !important;
+    color: var(--nmxv-fg-3) !important;
+}
+
+/* ===========================================================================
+ * 4. Syntax colours (Codex Light / Codex Dark)
+ * ======================================================================== */
+.nmx-md-code,
+.nmx-shell .nmx-md-code {
+    --md-tok-comment: #999999 !important;
+    --md-tok-keyword: #f67576 !important;
+    --md-tok-string: #85df7b !important;
+    --md-tok-escape: #3d8dff !important;
+    --md-tok-number: #6dcbf4 !important;
+    --md-tok-type: #b06dff !important;
+    --md-tok-meta: #b06dff !important;
+    --md-tok-property: #fa994c !important;
+    --md-tok-tag: #f67576 !important;
+    --md-tok-function: #b06dff !important;
+    --md-tok-inserted: #85df7b !important;
+    --md-tok-inserted-bg: rgba(0, 162, 64, .14) !important;
+    --md-tok-deleted: #f67576 !important;
+    --md-tok-deleted-bg: rgba(224, 46, 42, .14) !important;
+}
+
+.nmx-theme-light .nmx-md-code,
+.nmx-shell.nmx-theme-light .nmx-md-code {
+    --md-tok-comment: #666666 !important;
+    --md-tok-keyword: #d53538 !important;
+    --md-tok-string: #008809 !important;
+    --md-tok-escape: #001bcb !important;
+    --md-tok-number: #0071ea !important;
+    --md-tok-type: #751ed9 !important;
+    --md-tok-meta: #751ed9 !important;
+    --md-tok-property: #bd5800 !important;
+    --md-tok-tag: #d53538 !important;
+    --md-tok-function: #751ed9 !important;
+    --md-tok-inserted: #00701a !important;
+    --md-tok-inserted-bg: rgba(0, 162, 64, .09) !important;
+    --md-tok-deleted: #b42420 !important;
+    --md-tok-deleted-bg: rgba(224, 46, 42, .08) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-md-code .nmx-tok-comment { font-style: normal; }
+
+/* ===========================================================================
+ * 5. Title bar: logo, centered switcher, drawer tabs, no top seam
+ * ======================================================================== */
+#nextmux\.desktop\.widget .nmx-context-product,
+#nextmux\.desktop\.widget .nmx-context-product:is(:hover, :active, :focus, :focus-visible, .is-active) {
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+
+#nextmux\.desktop\.widget .nmx-context-product:not(:focus-visible) {
+    outline: none !important;
+}
+
+#nextmux\.desktop\.widget .nmx-context-product:focus-visible {
+    outline: 2px solid var(--nmxv-focus) !important;
+    outline-offset: 2px;
+    border-radius: 7px;
+}
+
+/* Labels collapse into icons with a fade instead of a jump. The button keeps
+   8px padding, so with a zero-width label it is exactly the old 32px square. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-titlebar-primary-nav > button {
+    transition: gap .22s cubic-bezier(.2, .7, .2, 1), padding .22s cubic-bezier(.2, .7, .2, 1), background-color .12s ease, color .12s ease;
+}
+
+#nextmux\.desktop\.widget .nmx-shell.is-titlebar-compact .nmx-titlebar-primary-nav > button {
+    width: auto !important;
+    min-width: 32px !important;
+    padding-inline: 8px !important;
+    gap: 0 !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-titlebar-primary-nav > button > span {
+    display: inline-block !important;
+    max-width: 10em;
+    overflow: hidden;
+    white-space: nowrap;
+    opacity: 1;
+    transition: max-width .22s cubic-bezier(.2, .7, .2, 1), opacity .14s ease;
+}
+
+#nextmux\.desktop\.widget .nmx-shell.is-titlebar-compact .nmx-titlebar-primary-nav > button > span {
+    max-width: 0 !important;
+    opacity: 0 !important;
+}
+
+/* Right drawer tabs (Browser / Files / Subagents) pack against the close button. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-titlebar-context {
+    display: flex !important;
+    align-items: center;
+    justify-content: flex-end !important;
+    gap: 2px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-titlebar-context .nmx-context-entry-tabs {
+    display: flex;
+    justify-content: flex-end;
+    gap: 2px;
+    margin-inline-start: auto;
+}
+
+/* No 1px band above the window content (Windows caption area included). */
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #theia-top-panel, #theia-main-content-panel, #theia-left-right-split-panel) {
+    border-top: 0 !important;
+    box-shadow: none !important;
+}
+
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #nextmux\.desktop\.widget, .nmx-shell) {
+    min-width: 0 !important;
+}
+
+#nextmux\.desktop\.widget,
+#nextmux\.desktop\.widget > .nmx-shell {
+    border-top: 0 !important;
+}
+
+/* ===========================================================================
+ * 6. Scrollbars: thin, dimmed while idle, clearer on hover
+ * ======================================================================== */
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-context-nav, .nmx-task-view, .nmx-context-file-list, .nmx-settings-page, .nmx-agent-child-events) {
+    /* Standard properties would disable the WebKit pseudo-elements below. */
+    scrollbar-width: auto !important;
+    scrollbar-color: auto !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-context-nav, .nmx-task-view, .nmx-context-file-list, .nmx-settings-page, .nmx-agent-child-events)::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+    background: transparent;
+}
+
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-context-nav, .nmx-task-view, .nmx-context-file-list, .nmx-settings-page, .nmx-agent-child-events)::-webkit-scrollbar-track,
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-context-nav, .nmx-task-view, .nmx-context-file-list, .nmx-settings-page, .nmx-agent-child-events)::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-context-nav, .nmx-task-view, .nmx-context-file-list, .nmx-settings-page, .nmx-agent-child-events)::-webkit-scrollbar-thumb {
+    min-height: 32px;
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-color: var(--nmxv-scroll-idle);
+    background-clip: padding-box;
+}
+
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-context-nav, .nmx-task-view, .nmx-context-file-list, .nmx-settings-page, .nmx-agent-child-events):hover::-webkit-scrollbar-thumb {
+    background-color: var(--nmxv-scroll);
+}
+
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-context-nav, .nmx-task-view, .nmx-context-file-list, .nmx-settings-page, .nmx-agent-child-events)::-webkit-scrollbar-thumb:active {
+    background-color: var(--nmxv-scroll-active);
+}
+
+/* ===========================================================================
+ * 7. Left sidebar: one scroll container, blocked delete, Council tree
+ * ======================================================================== */
+#nextmux\.desktop\.widget .nmx-shell .nmx-context-panel .nmx-context-nav {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+}
+
+/* Sub-lists never scroll on their own; the nav is the only scroller. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-context-nav :is(.nmx-session-virtual-list, .nmx-recent-conversations, .nmx-project-sessions, .nmx-project-conversations) {
+    overflow: visible !important;
+    max-height: none !important;
+}
+
+/* Delete is unavailable while the conversation runs ("请先停止当前对话"). */
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-session-menu, .nmx-chat-context-menu) > button:is([aria-disabled='true'], .is-blocked),
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row :is(button, [role='button']).is-blocked {
+    opacity: .42 !important;
+    cursor: not-allowed !important;
+    background: transparent !important;
+}
+
+/* Council role sub-conversations hang under their parent conversation row (`│ └ 「岗位」 title`). Each row keeps the
+   parent row's own inset (25px inside a project tree), sets the tree, one role badge, the title and the status on a
+   single line, and draws the only tree connector: the sub-conversation list adds no indent or line of its own. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child {
+    position: relative;
+    isolation: isolate;
+    display: flex !important;
+    align-items: center !important;
+    min-height: 28px !important;
+    margin-block: 0;
+    padding-block: 0 !important;
+    padding-inline: 28px 6px !important;
+    /* The session-row fills (light theme's !important one included) would also paint the tree gutter. */
+    background: transparent !important;
+    transition: opacity 220ms ease, transform 220ms ease;
+}
+
+/* Hover and selection fill the content once, from the badge to the status, leaving the tree lines on the sidebar. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset-block: 1px;
+    inset-inline: 24px 2px;
+    border-radius: 6px;
+    background: transparent;
+    transition: background-color 120ms ease;
+    pointer-events: none;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child:hover::before {
+    background: rgba(255, 255, 255, .035);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child.is-current::before {
+    background: rgba(113, 91, 100, .2);
+}
+
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-session-row.is-council-child:is(:hover, .is-current)::before {
+    background: #e6e2e4;
+}
+
+/* The sidebar's generic `.nmx-coding-context .nmx-context-nav button` (0,2,1) is a 100%-wide, 34px grid with a 19px icon
+   column and 14px spans. On a role row it put the title into the icon column (梳理… → 梳..), stretched an empty middle
+   column before the status, and squeezed the role badge; the row takes the button, title and status back here. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child > .nmx-sub-conversation-open {
+    position: static !important;
+    display: flex !important;
+    grid-template-columns: none !important;
+    flex: 1 1 0% !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 6px !important;
+    width: auto !important;
+    min-width: 0 !important;
+    min-height: 26px !important;
+    padding: 0 !important;
+    padding-inline-end: 2px !important;
+    border-radius: 6px !important;
+    outline: none !important;
+    background: transparent !important;
+    color: var(--nmx-subtle, #b1adb1) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child:is(:hover, .is-current) > .nmx-sub-conversation-open {
+    color: var(--nmx-text, #eeecee) !important;
+}
+
+/* The light theme forces every sidebar button to #302c2f; the role title keeps a quieter rest colour under its parent. */
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-session-row.is-council-child > .nmx-sub-conversation-open {
+    color: #5c565a !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-session-row.is-council-child:is(:hover, .is-current) > .nmx-sub-conversation-open {
+    color: #302c2f !important;
+}
+
+/* `button > span` would also pin the title to 14px and #c3bfc2 — unreadable on the light sidebar and deaf to hover. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child > .nmx-sub-conversation-open > .nmx-sub-conversation-title {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: 12.5px !important;
+    color: inherit !important;
+}
+
+/* `button > i` would pin the status to 14px and #898489, and the light theme's hover guard (nextmux-light-contrast.css)
+   sets a hovered button's `i.codicon` to `color: inherit !important`; finished, waiting and failed roles keep their colour. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child > .nmx-sub-conversation-open > .nmx-sub-conversation-status {
+    flex: 0 0 auto !important;
+    font-size: 12px !important;
+    color: var(--nmx-muted, #7b777c) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child > .nmx-sub-conversation-open > .nmx-sub-conversation-status.is-completed {
+    color: var(--nmx-success, #61c990) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child > .nmx-sub-conversation-open > .nmx-sub-conversation-status:is(.is-waiting_user, .is-limit_reached) {
+    color: #d8963a !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child > .nmx-sub-conversation-open > .nmx-sub-conversation-status:is(.is-error, .is-tool_failed, .is-model_unavailable, .is-model_timeout, .is-rate_limited) {
+    color: var(--nmx-danger, #ef8989) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-session-row.is-council-child > .nmx-sub-conversation-open > .nmx-sub-conversation-status {
+    color: #7a7377 !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-session-row.is-council-child > .nmx-sub-conversation-open > .nmx-sub-conversation-status.is-completed {
+    color: #2f7d4f !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-session-row.is-council-child > .nmx-sub-conversation-open > .nmx-sub-conversation-status:is(.is-waiting_user, .is-limit_reached) {
+    color: #8a5a00 !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-session-row.is-council-child > .nmx-sub-conversation-open > .nmx-sub-conversation-status:is(.is-error, .is-tool_failed, .is-model_unavailable, .is-model_timeout, .is-rate_limited) {
+    color: #b4323a !important;
+}
+
+/* A configured role the lead has not dispatched yet: its row is there from the run's first second, with a quiet
+   breathing clock instead of the running spinner and a slightly softer title until the role's real task arrives. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child > .nmx-sub-conversation-open > .nmx-sub-conversation-status.is-pending {
+    animation: nmxv-council-await 1.8s ease-in-out infinite;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child.is-council-pending > .nmx-sub-conversation-open > .nmx-sub-conversation-title {
+    opacity: .82;
+    transition: opacity 160ms ease;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child.is-council-pending:is(:hover, .is-current) > .nmx-sub-conversation-open > .nmx-sub-conversation-title {
+    opacity: 1;
+}
+
+/* The role view opened before its dispatch says it is waiting, in place of an empty "running" transcript. */
+.nmx-shell .nmx-role-awaiting {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin: 2px 0 0;
+    color: var(--nmx-subtle, var(--nmx-muted, #b1adb1));
+    font-size: 13px;
+    line-height: 20px;
+}
+
+.nmx-shell .nmx-role-awaiting > .codicon {
+    flex: none;
+    font-size: 13px;
+    color: var(--nmx-muted, #8f8a8f);
+    animation: nmxv-council-await 1.8s ease-in-out infinite;
+}
+
+@keyframes nmxv-council-await {
+    0%, 100% { opacity: .45; }
+    50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child > .nmx-sub-conversation-open > .nmx-sub-conversation-status.is-pending,
+    .nmx-shell .nmx-role-awaiting > .codicon {
+        animation: none;
+    }
+}
+
+/* The connector strokes abut instead of overlapping, so the translucent --nmxv-tree line never doubles into darker
+   joints: one trunk │ per row, a ├ arm beside it on a middle row, a rounded └ elbow that ends it on the last row. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child > .nmx-council-tree {
+    position: absolute;
+    inset-inline-start: 13px;
+    inset-block: 0;
+    width: 10px;
+    opacity: 1;
+    pointer-events: none;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child > .nmx-council-tree::before {
+    content: '';
+    position: absolute;
+    inset-inline-start: 0;
+    top: 0;
+    bottom: 0;
+    border-inline-start: 1px solid var(--nmxv-tree);
+}
+
+/* The first child's trunk starts just under the parent row's title. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-sub-conversation-list > .nmx-session-row.is-council-child:first-child > .nmx-council-tree::before {
+    top: -4px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child.is-council-last > .nmx-council-tree::before {
+    bottom: calc(50% + 6px);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child > .nmx-council-tree::after {
+    content: '';
+    position: absolute;
+    box-sizing: border-box;
+    inset-inline-start: 1px;
+    top: 50%;
+    width: 8px;
+    height: 1px;
+    background: var(--nmxv-tree);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child.is-council-last > .nmx-council-tree::after {
+    inset-inline-start: 0;
+    top: calc(50% - 6px);
+    width: 9px;
+    height: 7px;
+    background: none;
+    border-inline-start: 1px solid var(--nmxv-tree);
+    border-bottom: 1px solid var(--nmxv-tree);
+    border-end-start-radius: 6px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child.is-council-fading {
+    opacity: 0 !important;
+    transform: translateX(-6px);
+    pointer-events: none;
+    transition-duration: 800ms;
+}
+
+/* The dispatched role keeps its whole name and the title yields the space: every built-in label up to eight CJK
+   characters (方案与调研, 前端与设计, 后端与数据, 测试与验证, 程式碼與安全審查) fits in 104px. Only an unusually long custom or
+   Latin label ellipsizes, and the row's tooltip still names it. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child > .nmx-council-role-badges {
+    flex: 0 0 auto;
+    min-width: 0;
+}
+
+/* Several badges (a caller's own rolesForChild) share at most 60% of the row rather than pushing the title out. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child > .nmx-council-role-badges:has(> .nmx-council-role-badge + .nmx-council-role-badge) {
+    flex-shrink: 1;
+    max-width: 60%;
+    overflow: hidden;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-session-row.is-council-child .nmx-council-role-badge {
+    display: inline-block;
+    min-width: 0;
+    max-width: 104px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-council-role-badges {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 3px;
+    margin-inline-end: 6px;
+    vertical-align: middle;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-council-role-badge {
+    --nmxv-tone-bg: rgba(160, 174, 192, .16);
+    --nmxv-tone-fg: #c5cfdb;
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--nmxv-tone-bg);
+    color: var(--nmxv-tone-fg);
+    font-size: 11px;
+    line-height: 18px;
+    font-weight: 560;
+    letter-spacing: .01em;
+    white-space: nowrap;
+}
+
+.nmx-council-role-badge[data-council-tone='1'] { --nmxv-tone-bg: rgba(99, 155, 255, .17); --nmxv-tone-fg: #a9c8ff; }
+.nmx-council-role-badge[data-council-tone='2'] { --nmxv-tone-bg: rgba(74, 201, 128, .15); --nmxv-tone-fg: #9be0b4; }
+.nmx-council-role-badge[data-council-tone='3'] { --nmxv-tone-bg: rgba(242, 180, 64, .16); --nmxv-tone-fg: #f2cd85; }
+.nmx-council-role-badge[data-council-tone='4'] { --nmxv-tone-bg: rgba(255, 111, 151, .16); --nmxv-tone-fg: #ffb0c4; }
+.nmx-council-role-badge[data-council-tone='5'] { --nmxv-tone-bg: rgba(170, 132, 255, .17); --nmxv-tone-fg: #cdb8ff; }
+.nmx-council-role-badge[data-council-tone='6'] { --nmxv-tone-bg: rgba(64, 196, 200, .16); --nmxv-tone-fg: #92dfe1; }
+.nmx-council-role-badge[data-council-tone='7'] { --nmxv-tone-bg: rgba(255, 146, 84, .16); --nmxv-tone-fg: #ffbe95; }
+.nmx-council-role-badge[data-council-tone='8'] { --nmxv-tone-bg: rgba(160, 174, 192, .17); --nmxv-tone-fg: #c5cfdb; }
+.nmx-theme-light .nmx-council-role-badge[data-council-tone='1'] { --nmxv-tone-bg: #e3eefe; --nmxv-tone-fg: #1d4f91; }
+.nmx-theme-light .nmx-council-role-badge[data-council-tone='2'] { --nmxv-tone-bg: #e2f5e9; --nmxv-tone-fg: #1f6b3a; }
+.nmx-theme-light .nmx-council-role-badge[data-council-tone='3'] { --nmxv-tone-bg: #fdf0d8; --nmxv-tone-fg: #845600; }
+.nmx-theme-light .nmx-council-role-badge[data-council-tone='4'] { --nmxv-tone-bg: #fde4ea; --nmxv-tone-fg: #9b2c4a; }
+.nmx-theme-light .nmx-council-role-badge[data-council-tone='5'] { --nmxv-tone-bg: #efe6fd; --nmxv-tone-fg: #5b3aa0; }
+.nmx-theme-light .nmx-council-role-badge[data-council-tone='6'] { --nmxv-tone-bg: #dcf3f3; --nmxv-tone-fg: #17656a; }
+.nmx-theme-light .nmx-council-role-badge[data-council-tone='7'] { --nmxv-tone-bg: #fde9dc; --nmxv-tone-fg: #94420f; }
+.nmx-theme-light .nmx-council-role-badge[data-council-tone='8'] { --nmxv-tone-bg: #e9edf2; --nmxv-tone-fg: #3d4b5c; }
+
+/* ===========================================================================
+ * 8. File path pills: one compact line, the directory cut to …/parent/, the name intact
+ *    Markup: .nmx-file-path-pill > .nmx-file-path-dir > span + .nmx-file-path-name > span
+ *    compactDirectoryPrefix() writes the short directory; title and data-path keep the full path.
+ * ======================================================================== */
+.nmx-shell .nmx-file-path-pill {
+    display: inline-flex;
+    align-items: baseline;
+    min-width: 0;
+    max-width: min(100%, 24ch);
+    margin: 0 .08em;
+    padding: 0 .45em;
+    border-radius: 6px;
+    background: var(--nmxv-path-bg);
+    color: var(--nmxv-path-fg);
+    font-family: var(--nmxv-font-mono);
+    font-size: .88em;
+    font-weight: 450;
+    line-height: 1.65;
+    white-space: nowrap;
+    vertical-align: baseline;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color .12s ease, color .12s ease;
+}
+
+.nmx-shell .nmx-file-path-pill:hover {
+    background: var(--nmxv-path-bg-hover);
+}
+
+.nmx-shell .nmx-file-path-pill:focus-visible {
+    outline: 2px solid var(--nmxv-focus);
+    outline-offset: 1px;
+}
+
+/* Directory and name are RTL boxes holding an isolated LTR run, so an
+   overflow is cut at the start of the text and the end stays visible. */
+.nmx-shell .nmx-file-path-dir,
+.nmx-shell .nmx-file-path-name {
+    display: inline-block;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: clip;
+    direction: rtl;
+    vertical-align: bottom;
+}
+
+.nmx-shell .nmx-file-path-dir {
+    /* The directory yields first; in this RTL box its ellipsis lands at the start (…bin/). */
+    flex: 0 1 auto;
+    max-width: 9ch;
+    color: var(--nmxv-path-dir);
+    text-overflow: ellipsis;
+}
+
+.nmx-shell .nmx-file-path-name {
+    /* The name never yields to the directory; extreme names get a wide cap. */
+    flex: 0 0 auto;
+    max-width: min(46ch, 100%);
+}
+
+/* In a file list the path is the row's own label: the row bounds it, not 24ch. */
+.nmx-shell :is(.nmx-stream-file-entry-name, .nmx-review-file-path) .nmx-file-path-pill {
+    max-width: 100%;
+}
+
+.nmx-shell :is(.nmx-stream-file-entry-name, .nmx-review-file-path) .nmx-file-path-dir {
+    max-width: none;
+}
+
+.nmx-shell :is(.nmx-file-path-dir, .nmx-file-path-name) > span {
+    direction: ltr;
+    unicode-bidi: isolate;
+}
+
+@supports (animation-timeline: scroll(self inline)) {
+    /* The fade exists only while the name really overflows (scroll timeline active); the directory has its ellipsis. */
+    .nmx-shell .nmx-file-path-name {
+        animation: nmxv-path-fade linear both;
+        animation-timeline: scroll(self inline);
+    }
+}
+
+@keyframes nmxv-path-fade {
+    from, to {
+        -webkit-mask-image: linear-gradient(to right, transparent 0, #000 1.7em);
+        mask-image: linear-gradient(to right, transparent 0, #000 1.7em);
+    }
+}
+
+/* Search hits (Ctrl/Cmd+F and global search). */
+.nmx-shell mark.nmx-search-hit {
+    padding: 0 1px;
+    border-radius: 3px;
+    background: var(--nmxv-mark-bg);
+    color: inherit;
+}
+
+.nmx-shell mark.nmx-search-hit.is-current {
+    background: var(--nmxv-mark-current);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--nmxv-mark-current) 70%, transparent);
+}
+
+/* ===========================================================================
+ * 9. Goal banner docked on the composer, elapsed time, editor drawer, close dialog
+ * ======================================================================== */
+#nextmux\.desktop\.widget .nmx-shell :has(> .nmx-coding-goal + .nmx-composer) {
+    row-gap: 0 !important;
+}
+
+/* Composer notices now sit in the row under the composer (nextmux-coding-workspace.css), so only the attachments
+   strip can precede the goal banner. */
+#nextmux\.desktop\.widget .nmx-shell :has(> .nmx-coding-goal + .nmx-composer) > .nmx-composer-assets:has(+ .nmx-coding-goal) {
+    margin-bottom: 8px !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal {
+    position: relative;
+    z-index: 1;
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    margin: 0 14px -1px !important;
+    padding: 0 5px 0 11px !important;
+    border: 1px solid var(--nmx-composer-resting-border, var(--nmxv-line-2)) !important;
+    border-bottom: 0 !important;
+    border-radius: 12px 12px 0 0 !important;
+    background: var(--nmxv-surface-2) !important;
+    box-shadow: none !important;
+    color: var(--nmxv-fg-2);
+    font-size: var(--nmxv-text-sm);
+    line-height: var(--nmxv-leading-sm);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal + .nmx-composer {
+    margin-top: 0 !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal-icon {
+    flex: 0 0 auto;
+    font-size: 14px;
+    color: var(--nmxv-fg-3);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal.is-active.is-running .nmx-coding-goal-icon,
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal.is-completed .nmx-coding-goal-icon {
+    color: var(--nmxv-success);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal.is-paused .nmx-coding-goal-icon {
+    color: var(--nmxv-warning);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal-copy {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: baseline;
+    gap: 7px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal-label {
+    flex: 0 0 auto;
+    color: var(--nmxv-fg);
+    font-size: var(--nmxv-text-xs);
+    font-weight: 600;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--nmxv-fg-2);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-goal-elapsed {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--nmxv-hover);
+    color: var(--nmxv-fg-2);
+    font-size: var(--nmxv-text-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-goal-elapsed > .codicon {
+    font-size: 12px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal.is-running .nmx-goal-elapsed {
+    color: var(--nmxv-fg);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal.is-running .nmx-goal-elapsed > .codicon {
+    color: var(--nmxv-success);
+    animation: nmxv-pulse 1.8s ease-in-out infinite;
+}
+
+/* The goal's spend against its limit: the elapsed pill's twin, amber from 80% and at the limit (the goal pauses there). */
+#nextmux\.desktop\.widget .nmx-shell .nmx-goal-spend {
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 999px;
+    background: var(--nmxv-hover);
+    color: var(--nmxv-fg-2);
+    font-size: var(--nmxv-text-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    transition: background-color .16s ease, color .16s ease;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-goal-spend > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-goal-spend > .codicon {
+    flex: 0 0 auto;
+    font-size: 12px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-goal-spend:is(.is-near, .is-exhausted) {
+    background: color-mix(in srgb, var(--nmxv-warning) 12%, transparent);
+    color: var(--nmxv-warning);
+}
+
+/* Light amber on its own tint falls under 4.5:1; a warm ink mix keeps it above 5:1. */
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-goal-spend:is(.is-near, .is-exhausted) {
+    color: color-mix(in srgb, var(--nmxv-warning) 82%, #1f1b1d);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-goal-spend.is-exhausted {
+    font-weight: 600;
+}
+
+@media (forced-colors: active) {
+    #nextmux\.desktop\.widget .nmx-shell .nmx-goal-spend { border: 1px solid CanvasText; }
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 2px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal :is(.nmx-goal-action, .nmx-coding-goal-actions > button, > button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 24px;
+    min-width: 24px;
+    padding: 0 6px;
+    border: 0 !important;
+    border-radius: 7px;
+    background: transparent !important;
+    color: var(--nmxv-fg-2);
+    font-size: var(--nmxv-text-xs);
+    cursor: pointer;
+    transition: background-color .12s ease, color .12s ease;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal :is(.nmx-goal-action, .nmx-coding-goal-actions > button, > button):hover {
+    background: var(--nmxv-hover) !important;
+    color: var(--nmxv-fg);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal .nmx-goal-action.is-close:hover {
+    background: var(--nmxv-danger-bg) !important;
+    color: var(--nmxv-danger);
+}
+
+/* Right-side goal editor */
+.nmx-goal-drawer-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 2400;
+    background: var(--nmxv-backdrop, rgba(0, 0, 0, .4));
+    animation: nmxv-fade-in .18s ease both;
+}
+
+.nmx-goal-drawer {
+    position: fixed;
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+    z-index: 2401;
+    display: flex;
+    flex-direction: column;
+    width: min(440px, calc(100vw - 16px));
+    overflow: hidden;
+    border: 1px solid var(--nmxv-line-2, rgba(255, 255, 255, .14));
+    border-radius: 14px;
+    background: var(--nmxv-surface, #1d1d1e);
+    color: var(--nmxv-fg, #ececec);
+    box-shadow: var(--nmxv-shadow-sheet, 0 28px 72px rgba(0, 0, 0, .5));
+    font-family: var(--nmxv-font-ui);
+    animation: nmxv-drawer-in .26s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.nmx-goal-drawer-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 12px 12px 16px;
+    border-bottom: 1px solid var(--nmxv-line);
+}
+
+.nmx-goal-drawer-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: var(--nmxv-hover);
+    color: var(--nmxv-fg-2);
+}
+
+.nmx-goal-drawer-titles {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.nmx-goal-drawer-titles h2 {
+    margin: 0;
+    color: var(--nmxv-fg);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+}
+
+.nmx-goal-drawer-titles p {
+    margin: 2px 0 0;
+    overflow: hidden;
+    color: var(--nmxv-fg-3);
+    font-size: var(--nmxv-text-xs);
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.nmx-goal-drawer-close,
+.nmx-goal-confirm-cancel,
+.nmx-goal-drawer-cancel {
+    cursor: pointer;
+}
+
+.nmx-goal-drawer-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--nmxv-fg-2);
+}
+
+.nmx-goal-drawer-close:hover {
+    background: var(--nmxv-hover);
+    color: var(--nmxv-fg);
+}
+
+.nmx-goal-drawer-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    padding: 14px 16px 12px;
+}
+
+.nmx-shell .nmx-goal-drawer .nmx-goal-drawer-input {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 220px;
+    margin: 0;
+    padding: 12px 14px;
+    resize: none;
+    border: 1px solid var(--nmxv-line-2) !important;
+    border-radius: 10px;
+    background: var(--nmxv-field) !important;
+    color: var(--nmxv-fg) !important;
+    font-family: var(--nmxv-font-ui) !important;
+    font-size: var(--nmxv-text-base) !important;
+    line-height: 22px !important;
+    font-weight: var(--nmxv-weight-ui);
+}
+
+.nmx-goal-drawer-meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--nmxv-fg-3);
+    font-size: var(--nmxv-text-xs);
+    line-height: 16px;
+}
+
+.nmx-goal-drawer-meta > span:first-child {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.nmx-goal-drawer-meta > span:last-child {
+    text-align: end;
+}
+
+.nmx-goal-drawer-error {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--nmxv-danger-bg);
+    color: var(--nmxv-danger);
+    font-size: var(--nmxv-text-xs);
+    line-height: 17px;
+}
+
+.nmx-goal-drawer-footer,
+.nmx-goal-confirm-actions,
+.nmx-plugin-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.nmx-goal-drawer-footer {
+    padding: 12px 16px 14px;
+    border-top: 1px solid var(--nmxv-line);
+    background: color-mix(in srgb, var(--nmxv-surface-2) 60%, transparent);
+}
+
+/* Shared modal buttons: ghost secondary, inverted primary, danger. */
+.nmx-shell :is(.nmx-goal-drawer-cancel, .nmx-goal-confirm-cancel),
+.nmx-shell :is(.nmx-goal-drawer-save, .nmx-goal-confirm-close) {
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 9px;
+    font-family: var(--nmxv-font-ui);
+    font-size: var(--nmxv-text-sm);
+    font-weight: 550;
+    transition: background-color .12s ease, color .12s ease, opacity .12s ease;
+}
+
+.nmx-shell :is(.nmx-goal-drawer-cancel, .nmx-goal-confirm-cancel) {
+    border: 1px solid var(--nmxv-line-2) !important;
+    background: transparent !important;
+    color: var(--nmxv-fg) !important;
+}
+
+.nmx-shell :is(.nmx-goal-drawer-cancel, .nmx-goal-confirm-cancel):hover {
+    background: var(--nmxv-hover) !important;
+}
+
+.nmx-shell .nmx-goal-drawer-save {
+    border: 1px solid var(--nmxv-primary-bg) !important;
+    background: var(--nmxv-primary-bg) !important;
+    color: var(--nmxv-primary-fg) !important;
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-goal-drawer-save:hover:not(:disabled) {
+    background: var(--nmxv-primary-hover) !important;
+}
+
+.nmx-shell .nmx-goal-drawer-save:disabled {
+    opacity: .4;
+    cursor: default;
+}
+
+.nmx-shell .nmx-goal-confirm-close {
+    border: 1px solid transparent !important;
+    background: var(--nmxv-danger) !important;
+    color: #ffffff !important;
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-goal-confirm-close:hover {
+    filter: brightness(1.06);
+}
+
+.nmx-goal-confirm-backdrop,
+.nmx-plugin-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 2500;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: var(--nmxv-backdrop, rgba(0, 0, 0, .45));
+    animation: nmxv-fade-in .16s ease both;
+}
+
+.nmx-goal-confirm {
+    width: min(380px, 100%);
+    padding: 18px 18px 16px;
+    border: 1px solid var(--nmxv-line-2);
+    border-radius: 14px;
+    background: var(--nmxv-surface);
+    color: var(--nmxv-fg);
+    box-shadow: var(--nmxv-shadow-sheet);
+    animation: nmxv-dialog-in .2s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.nmx-goal-confirm > header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nmx-goal-confirm > header > .codicon {
+    color: var(--nmxv-fg-3);
+}
+
+.nmx-goal-confirm-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 21px;
+}
+
+.nmx-goal-confirm-desc {
+    margin: 8px 0 16px;
+    color: var(--nmxv-fg-2);
+    font-size: var(--nmxv-text-sm);
+    line-height: 19px;
+}
+
+/* ===========================================================================
+ * 10. Council mode modal: fade in / fade out
+ * ======================================================================== */
+.nmx-council-modal-backdrop {
+    animation: nmxv-fade-in .16s ease both;
+}
+
+.nmx-council-modal-backdrop .nmx-council-modal {
+    animation: nmxv-dialog-in .2s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.nmx-council-modal-backdrop.is-closing {
+    pointer-events: none;
+    animation: nmxv-fade-out .16s ease both;
+}
+
+.nmx-council-modal-backdrop.is-closing .nmx-council-modal {
+    animation: nmxv-dialog-out .16s ease both;
+}
+
+/* ===========================================================================
+ * 11. Native desktop app tab
+ * ======================================================================== */
+#nextmux\.desktop\.widget .nmx-shell .nmx-visual-tab-reopen-link {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 2px !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--nmxv-link) !important;
+    font-size: var(--nmxv-text-xs);
+    font-weight: 550;
+    cursor: pointer;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-visual-tab-reopen-link:hover {
+    color: var(--nmxv-link-hover) !important;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+/* The live/status badge is a real button (terminate on click): keep the badge look,
+   not the UA button chrome, and never dim the non-interactive states. */
+#nextmux\.desktop\.widget .nmx-shell :is(button.nmx-visual-tab-live, .nmx-visual-tab button[class^='is-']) {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+    font: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+}
+
+#nextmux\.desktop\.widget .nmx-shell :is(button.nmx-visual-tab-live, .nmx-visual-tab button[class^='is-']):disabled {
+    opacity: 1;
+    cursor: default;
+}
+
+#nextmux\.desktop\.widget .nmx-shell button.nmx-visual-tab-live.is-interactive {
+    cursor: pointer;
+}
+
+#nextmux\.desktop\.widget .nmx-shell button.nmx-visual-tab-live.is-interactive:focus-visible {
+    outline: 2px solid var(--nmxv-focus);
+    outline-offset: 2px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-visual-tab-toast {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 30;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    max-width: min(360px, calc(100% - 20px));
+    padding: 8px 8px 8px 12px;
+    border: 1px solid var(--nmxv-line-2);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--nmxv-surface) 94%, transparent);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    box-shadow: var(--nmxv-shadow-pop);
+    color: var(--nmxv-fg);
+    font-size: var(--nmxv-text-xs);
+    line-height: 17px;
+    white-space: normal;
+    animation: nmxv-toast-in .2s ease both;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-visual-tab-toast.is-leaving {
+    animation: nmxv-fade-out .3s ease both;
+}
+
+/* Clicking into the controlled app shows no focus ring (Esc exits control). */
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-visual-tab, .nmx-visual-tab-screen, .nmx-visual-tab-overlay):is(:focus, :focus-visible, :focus-within) {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-visual-tab-screen {
+    border-color: transparent !important;
+}
+
+/* ===========================================================================
+ * 12. Skill plugins: compact cards, option/detail modals, format list
+ * ======================================================================== */
+#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-card :is(.nmx-plugin-description, .nmx-plugin-card-text > p) {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+}
+
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-plugin-card-options, .nmx-plugin-card-details) {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    padding: 0 9px;
+    border: 1px solid var(--nmxv-line-2) !important;
+    border-radius: 8px;
+    background: transparent !important;
+    color: var(--nmxv-fg) !important;
+    font-size: var(--nmxv-text-xs);
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-plugin-card-options, .nmx-plugin-card-details):hover {
+    background: var(--nmxv-hover) !important;
+}
+
+.nmx-plugin-modal {
+    display: flex;
+    flex-direction: column;
+    width: min(560px, 100%);
+    max-height: min(720px, calc(100vh - 48px));
+    overflow: hidden;
+    border: 1px solid var(--nmxv-line-2, rgba(255, 255, 255, .14));
+    border-radius: 16px;
+    background: var(--nmxv-surface, #1d1d1e);
+    color: var(--nmxv-fg, #ececec);
+    box-shadow: var(--nmxv-shadow-sheet, 0 28px 72px rgba(0, 0, 0, .5));
+    animation: nmxv-dialog-in .2s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.nmx-plugin-modal.is-details {
+    width: min(640px, 100%);
+}
+
+.nmx-plugin-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 14px 14px 18px;
+    border-bottom: 1px solid var(--nmxv-line);
+}
+
+.nmx-plugin-modal-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    overflow: hidden;
+    border-radius: 10px;
+    background: var(--nmxv-hover);
+}
+
+.nmx-plugin-modal-icon > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.nmx-plugin-modal-titles {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.nmx-plugin-modal-titles h2 {
+    margin: 0;
+    overflow: hidden;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 20px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-plugin-modal-titles p {
+    margin: 2px 0 0;
+    color: var(--nmxv-fg-3);
+    font-size: var(--nmxv-text-xs);
+    line-height: 16px;
+}
+
+.nmx-plugin-modal-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--nmxv-fg-2);
+    cursor: pointer;
+}
+
+.nmx-plugin-modal-close:hover {
+    background: var(--nmxv-hover);
+    color: var(--nmxv-fg);
+}
+
+.nmx-plugin-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 16px 18px;
+    font-size: var(--nmxv-text-sm);
+    line-height: 19px;
+}
+
+.nmx-plugin-modal-footer {
+    padding: 12px 18px 14px;
+    border-top: 1px solid var(--nmxv-line);
+}
+
+.nmx-plugin-modal-footer:empty {
+    display: none;
+}
+
+.nmx-shell .nmx-plugin-formats {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.nmx-shell .nmx-plugin-formats > li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    color: var(--nmxv-fg-2);
+    font-size: var(--nmxv-text-xs);
+    line-height: 18px;
+}
+
+.nmx-shell .nmx-plugin-formats code {
+    padding: 1px 6px;
+    border-radius: 5px;
+    background: var(--nmxv-hover);
+    color: var(--nmxv-fg);
+    font-family: var(--nmxv-font-mono);
+    font-size: 11.5px;
+}
+
+/* Plugin folder parameter ('path'): read-only path pill + native folder picker. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-path-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-path-control > .nmx-plugin-path-value {
+    flex: 0 1 auto;
+    min-width: 0;
+    cursor: default;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-path-empty {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--nmxv-fg-3);
+    font-size: var(--nmxv-text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-path-pick {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--nmxv-line-2) !important;
+    border-radius: 8px;
+    background: transparent !important;
+    color: var(--nmxv-fg) !important;
+    font-size: var(--nmxv-text-xs);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-path-pick:hover:not(:disabled) {
+    background: var(--nmxv-hover) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-path-pick:disabled {
+    opacity: .45;
+    cursor: default;
+}
+
+/* ===========================================================================
+ * 12b. Skill plugin controls: Jev model bar, parameters, goals, dialog body
+ *      One look for a tab's plugin bar, the plugin market and the Options /
+ *      Details dialog: small labels over quiet fields, chips for presets.
+ * ======================================================================== */
+.nmx-shell :is(.nmx-plugin-inline-model-bar, .nmx-plugin-params-bar, .nmx-plugin-goal-form) .nmx-plugin-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    margin: 0;
+}
+
+.nmx-shell :is(.nmx-plugin-inline-model-bar, .nmx-plugin-params-bar, .nmx-plugin-goal-form) .nmx-plugin-field > span {
+    overflow: hidden;
+    color: var(--nmxv-fg-3);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 14px;
+    letter-spacing: .01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-shell :is(.nmx-plugin-inline-model-bar, .nmx-plugin-params-bar, .nmx-plugin-goal-form) :is(input:not([type='checkbox']), select) {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--nmxv-line-2) !important;
+    border-radius: 8px;
+    background: var(--nmxv-field) !important;
+    color: var(--nmxv-fg) !important;
+    font: inherit;
+    font-size: 12.5px;
+}
+
+.nmx-shell :is(.nmx-plugin-inline-model-bar, .nmx-plugin-params-bar, .nmx-plugin-goal-form) select {
+    padding-inline-end: 26px;
+    text-overflow: ellipsis;
+}
+
+.nmx-shell :is(.nmx-plugin-inline-model-bar, .nmx-plugin-params-bar, .nmx-plugin-goal-form) :is(input, select):focus-visible {
+    border-color: transparent !important;
+    outline: 2px solid var(--nmxv-focus);
+    outline-offset: 0;
+}
+
+.nmx-shell :is(.nmx-plugin-inline-model-bar, .nmx-plugin-params-bar, .nmx-plugin-goal-controls) :is(input, select, button):disabled {
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+/* Secondary buttons of these controls share one quiet outline. */
+.nmx-shell :is(.nmx-plugin-inline-model-bar > button, .nmx-plugin-param-item .nmx-plugin-inline > button:not(.is-link), .nmx-plugin-modal-body .nmx-plugin-model > button,
+    .nmx-plugin-modal-body .nmx-plugin-details > button, .nmx-plugin-modal-footer > button) {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 0;
+    height: 30px;
+    padding: 0 12px;
+    border: 1px solid var(--nmxv-line-2);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--nmxv-fg);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.nmx-shell :is(.nmx-plugin-inline-model-bar > button, .nmx-plugin-param-item .nmx-plugin-inline > button:not(.is-link), .nmx-plugin-modal-body .nmx-plugin-model > button,
+    .nmx-plugin-modal-body .nmx-plugin-details > button, .nmx-plugin-modal-footer > button):hover:not(:disabled) {
+    background: var(--nmxv-hover);
+}
+
+.nmx-shell :is(.nmx-plugin-inline-model-bar, .nmx-plugin-params-bar, .nmx-plugin-goal-controls, .nmx-plugin-modal) button:focus-visible {
+    outline: 2px solid var(--nmxv-focus);
+    outline-offset: 1px;
+}
+
+/* Jev model bar: a titled strip with source, model and the way to the full settings. */
+.nmx-shell .nmx-plugin-inline-model-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+    align-items: end;
+    gap: 8px 10px;
+    min-width: 0;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--nmxv-line);
+    border-radius: 10px;
+    background: var(--nmxv-surface-2);
+}
+
+.nmx-shell .nmx-plugin-inline-model-title {
+    display: inline-flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    color: var(--nmxv-fg-2);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.nmx-shell .nmx-plugin-inline-model-title > .codicon {
+    color: var(--nmxv-fg-3);
+    font-size: 13px;
+}
+
+.nmx-shell .nmx-plugin-inline-model-bar > small {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: var(--nmxv-fg-3);
+    font-size: 11.5px;
+    line-height: 16px;
+}
+
+/* Parameters: a grid of fields that reflows with the width; files and folders take a whole row. */
+.nmx-shell .nmx-plugin-params-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    align-items: end;
+    gap: 10px 12px;
+    min-width: 0;
+}
+
+.nmx-shell .nmx-plugin-params-bar > :is(.is-file, .is-path) {
+    grid-column: 1 / -1;
+}
+
+.nmx-shell .nmx-plugin-params-bar > .nmx-plugin-check {
+    align-items: center !important;
+    gap: 8px;
+    min-height: 30px;
+    margin: 0;
+    color: var(--nmxv-fg);
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-plugin-params-bar > .nmx-plugin-check > input {
+    flex: 0 0 auto;
+    margin: 0;
+    accent-color: var(--nmxv-link);
+}
+
+.nmx-shell .nmx-plugin-param-item .nmx-plugin-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.nmx-shell .nmx-plugin-param-item .nmx-plugin-inline > button:not(.is-link) {
+    flex: 0 1 auto;
+    justify-content: flex-start;
+    max-width: 100%;
+    border-style: dashed;
+    color: var(--nmxv-fg-2);
+}
+
+.nmx-shell .nmx-plugin-param-item .nmx-plugin-inline > button.has-file {
+    border-style: solid;
+    background: var(--nmxv-hover);
+    color: var(--nmxv-fg);
+}
+
+.nmx-shell .nmx-plugin-param-item .nmx-plugin-inline > button > b {
+    min-width: 0;
+    overflow: hidden;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-shell :is(.nmx-plugin-params-bar, .nmx-plugin-path-control) button.is-link {
+    flex: 0 0 auto;
+    height: 30px;
+    padding: 0 4px;
+    border: 0;
+    background: none;
+    color: var(--nmxv-link);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.nmx-shell :is(.nmx-plugin-params-bar, .nmx-plugin-path-control) button.is-link:hover:not(:disabled) {
+    color: var(--nmxv-link-hover);
+    text-decoration: underline;
+}
+
+/* Goals: preset chips over the goal field and its send button. */
+.nmx-shell .nmx-plugin-goal-controls {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+}
+
+.nmx-shell .nmx-plugin-goal-form {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    min-width: 0;
+}
+
+.nmx-shell .nmx-plugin-goal-form > .nmx-plugin-field {
+    flex: 1 1 auto;
+}
+
+.nmx-shell .nmx-plugin-goal-form > button {
+    flex: 0 0 auto;
+    height: 30px;
+    padding: 0 14px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: var(--nmxv-primary-bg);
+    color: var(--nmxv-primary-fg);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-plugin-goal-form > button:hover:not(:disabled) {
+    background: var(--nmxv-primary-hover);
+}
+
+/* 插件市场: while the plugin runs with its goal unchanged, the same button reads 停止 in the run bar's red. */
+.nmx-shell .nmx-plugin-goal-form > button.is-danger {
+    background: var(--nmxv-danger-fill);
+    color: #ffffff;
+}
+
+.nmx-shell .nmx-plugin-goal-form > button.is-danger:hover:not(:disabled) {
+    background: var(--nmxv-danger-fill-hover);
+}
+
+/* 停止 and 发送目标 stacked in one cell: the button keeps the longer label's width, so the field never jumps while typing. */
+.nmx-shell .nmx-plugin-goal-label {
+    display: inline-grid;
+}
+
+.nmx-shell .nmx-plugin-goal-label > span {
+    grid-area: 1 / 1;
+}
+
+.nmx-shell .nmx-plugin-goal-label > span[aria-hidden='true'] {
+    visibility: hidden;
+}
+
+.nmx-shell .nmx-plugin-preset-goals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+}
+
+.nmx-shell .nmx-plugin-preset-goals > button {
+    display: inline-block;
+    max-width: 100%;
+    height: 26px;
+    padding: 0 11px;
+    overflow: hidden;
+    border: 1px solid var(--nmxv-line-2);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--nmxv-fg-2);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 24px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-plugin-preset-goals > button:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--nmxv-fg) 26%, transparent);
+    background: var(--nmxv-hover);
+    color: var(--nmxv-fg);
+}
+
+/* In the Options dialog the presets are a read-only list of what each one asks for. */
+.nmx-shell .nmx-plugin-preset-goals:has(> p) {
+    flex-direction: column;
+    gap: 6px;
+}
+
+.nmx-shell .nmx-plugin-preset-goals > p {
+    margin: 0;
+    color: var(--nmxv-fg-2);
+    font-size: 12.5px;
+    line-height: 18px;
+}
+
+.nmx-shell .nmx-plugin-preset-goals > p > strong {
+    margin-inline-end: 6px;
+    color: var(--nmxv-fg);
+    font-weight: 600;
+}
+
+/* A tab's plugin bar: each control takes a whole row under the status line. */
+.nmx-shell .nmx-plugin-runbar > :is(.nmx-plugin-inline-model-bar, .nmx-plugin-params-bar, .nmx-plugin-goal-controls, .nmx-plugin-muted.is-error) {
+    flex: 1 1 100%;
+}
+
+.nmx-shell .nmx-plugin-runbar > .nmx-plugin-inline-model-bar {
+    padding: 8px 10px 10px;
+    background: transparent;
+}
+
+/* Plugin market rows: the controls sit under the plugin's name. */
+.nmx-shell .nmx-plugin-hub-list > li:has(.nmx-plugin-goal-controls) {
+    align-items: flex-start;
+}
+
+.nmx-shell .nmx-plugin-hub-text > :is(.nmx-plugin-inline-model-bar, .nmx-plugin-params-bar, .nmx-plugin-goal-controls) {
+    margin-top: 8px;
+}
+
+/* Options / Details dialog body. */
+.nmx-shell .nmx-plugin-modal-body {
+    display: grid;
+    align-content: start;
+    gap: 14px;
+}
+
+/* Options dialog: one card per concern (decision model, parameters, preset goals), each under a small titled header,
+   so the controls of a plugin with many parameters line up instead of running together. */
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-options-section {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+    margin: 0;
+    padding: 12px 14px 14px;
+    border: 1px solid var(--nmxv-line);
+    border-radius: 12px;
+    background: var(--nmxv-surface-2);
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-options-section > h4 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    color: var(--nmxv-fg-2);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    letter-spacing: .01em;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-options-section > h4 > .codicon {
+    color: var(--nmxv-fg-3);
+    font-size: 13px;
+}
+
+/* The decision model is one row inside its card: the model, then the way to change it. */
+.nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-options-section > .nmx-plugin-model {
+    gap: 12px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-options-section > .nmx-plugin-model > b {
+    font-size: 13px;
+}
+
+.nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-options-section > .nmx-plugin-model > b.is-empty {
+    color: var(--nmxv-fg-3);
+    font-weight: 500;
+}
+
+/* Parameters reflow with the dialog; labels sit over 30px controls and checkboxes line up with those controls. */
+.nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-params-bar {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    align-items: end;
+    gap: 12px 14px;
+}
+
+/* Presets: one quiet list of what each preset asks the plugin to do. */
+.nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-preset-goals:has(> p) {
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--nmxv-line);
+    border-radius: 10px;
+    background: var(--nmxv-field);
+}
+
+.nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-preset-goals > p {
+    display: grid;
+    grid-template-columns: minmax(84px, max-content) minmax(0, 1fr);
+    align-items: baseline;
+    gap: 2px 12px;
+    padding: 8px 12px;
+    font-size: 12.5px;
+    line-height: 18px;
+}
+
+.nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-preset-goals > p + p {
+    border-top: 1px solid var(--nmxv-line);
+}
+
+.nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-preset-goals > p > strong {
+    margin: 0;
+    color: var(--nmxv-fg);
+    font-weight: 600;
+}
+
+@media (max-width: 520px) {
+    .nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-preset-goals > p {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.nmx-shell .nmx-plugin-modal-body :is(h3, h4) {
+    margin: 2px 0 0;
+    color: var(--nmxv-fg-2);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.nmx-shell .nmx-plugin-modal-body p {
+    margin: 0;
+    color: var(--nmxv-fg-2);
+    line-height: 19px;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-model {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--nmxv-line);
+    border-radius: 10px;
+    background: var(--nmxv-surface-2);
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-model > span {
+    flex: 0 0 auto;
+    color: var(--nmxv-fg-3);
+    font-size: 12px;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-model > b {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--nmxv-fg);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-details {
+    display: grid;
+    gap: 12px;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-details > button {
+    justify-self: start;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-facts {
+    font-size: 12.5px;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-facts dt {
+    color: var(--nmxv-fg-3);
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-manifest > summary {
+    width: max-content;
+    color: var(--nmxv-fg-2);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-manifest[open] > summary {
+    margin-bottom: 8px;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-readme {
+    max-height: 260px;
+    margin: 0;
+    padding: 10px 12px;
+    overflow: auto;
+    border: 1px solid var(--nmxv-line);
+    border-radius: 8px;
+    background: var(--nmxv-field);
+    color: var(--nmxv-fg-2);
+    font-family: var(--nmxv-font-mono);
+    font-size: 11.5px;
+    line-height: 17px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-folder {
+    color: var(--nmxv-fg-3);
+    font-family: var(--nmxv-font-mono);
+    font-size: 11.5px;
+}
+
+.nmx-shell .nmx-plugin-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+@media (max-width: 560px) {
+    .nmx-shell .nmx-plugin-inline-model-bar {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .nmx-shell .nmx-plugin-inline-model-bar > button {
+        justify-self: start;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nmx-plugin-modal {
+        animation: none;
+    }
+}
+
+/* ===========================================================================
+ * 13. Model Center, pickers, My API
+ * ======================================================================== */
+#nextmux\.desktop\.widget .nmx-shell .nmx-mc-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+}
+
+@media (max-width: 760px) {
+    #nextmux\.desktop\.widget .nmx-shell .nmx-mc-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-mc-refresh {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin-inline-start: 4px;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 6px;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--nmxv-fg-3) !important;
+    vertical-align: middle;
+    cursor: pointer;
+    transition: color .12s ease, opacity .12s ease;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-mc-refresh:hover {
+    color: var(--nmxv-fg) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-mc-refresh:is(.is-cooling, [aria-disabled='true']) {
+    opacity: .45;
+    cursor: default;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-mc-refresh.is-spinning > .codicon {
+    animation: nmxv-spin .9s linear infinite;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-mc-merchant-bio {
+    /* Two lines reserved so 1- and 2-line bios give identical card heights. */
+    display: -webkit-box;
+    min-height: 36px;
+    margin: 0;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    color: var(--nmxv-fg-2);
+    font-size: 12.5px;
+    line-height: 18px;
+}
+
+/* Price quotes (官方报价 | 中转商报价): two quiet cards side by side. The model drawer (a body portal, so it is
+   listed here with the hover popover) makes each heading a toggle: a tinted badge, the title and a chevron pill.
+   Either toggle opens both quotes, so hovering one lights both. Layout and rows: nextmux-shell-polish.css. */
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-offering-price {
+    --nmxv-price-official: var(--nmxv-link, #7db8ff);
+    --nmxv-price-relay: var(--nmx-picker-accent, #ee7ea5);
+}
+
+.nmx-theme-light :is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell) .nmx-offering-price,
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop).nmx-theme-light .nmx-offering-price {
+    --nmxv-price-relay: var(--nmx-picker-accent, #ad3561);
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-price-section {
+    min-width: 0;
+    padding: 5px 6px;
+    border: 1px solid var(--nmx-border, rgba(255, 255, 255, .09));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--nmx-text, #eeecee) 3%, transparent);
+    transition: background-color .16s ease, border-color .16s ease;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-offering-price-columns:has(.nmx-price-section-toggle:hover) .nmx-price-section {
+    border-color: color-mix(in srgb, var(--nmx-text, #eeecee) 18%, transparent);
+    background: color-mix(in srgb, var(--nmx-text, #eeecee) 5%, transparent);
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) :is(.nmx-price-section-toggle, .nmx-price-section-heading) {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 2px 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--nmx-text, #eeecee);
+    font-family: inherit;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 18px;
+    letter-spacing: 0;
+    text-align: start;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-price-section-toggle {
+    cursor: pointer;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-price-section-toggle:focus-visible {
+    outline: 2px solid var(--nmx-focus-ring, var(--nmxv-focus));
+    outline-offset: 2px;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) :is(.nmx-price-section-badge, .nmx-price-section-chevron) {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 5px;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) :is(.nmx-price-section-badge, .nmx-price-section-chevron) > .codicon {
+    font-size: 12px;
+    line-height: 1;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-price-section-badge {
+    color: var(--nmxv-price-official);
+    background: color-mix(in srgb, var(--nmxv-price-official) 15%, transparent);
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-price-section[data-price-audience='user'] .nmx-price-section-badge {
+    color: var(--nmxv-price-relay);
+    background: color-mix(in srgb, var(--nmxv-price-relay) 15%, transparent);
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-price-section-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-price-section-chevron {
+    color: var(--nmx-muted, #9a959a);
+    background: color-mix(in srgb, var(--nmx-text, #eeecee) 7%, transparent);
+    transition: transform .2s cubic-bezier(.2, 0, 0, 1), background-color .16s ease, color .16s ease;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-offering-price-columns:has(.nmx-price-section-toggle:hover) .nmx-price-section-chevron {
+    color: var(--nmx-text, #eeecee);
+    background: color-mix(in srgb, var(--nmx-text, #eeecee) 12%, transparent);
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-price-section-toggle[aria-expanded='true'] .nmx-price-section-chevron {
+    transform: rotate(180deg);
+}
+
+/* The opened rows sit under a dashed rule; figures stay in tabular columns. */
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-price-section-body {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--nmx-border, rgba(255, 255, 255, .1));
+    font-variant-numeric: tabular-nums;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-offering-price.is-collapsible .nmx-price-section-body {
+    animation: nmxv-price-reveal .18s cubic-bezier(.2, 0, 0, 1) both;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-price-section-body dd {
+    color: var(--nmx-text, #eeecee);
+}
+
+@keyframes nmxv-price-reveal {
+    from { opacity: 0; transform: translateY(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    :is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) :is(.nmx-price-section, .nmx-price-section-chevron) {
+        transition: none;
+    }
+
+    :is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-price-section-body {
+        animation: none !important;
+    }
+}
+
+/* My API cards: stable surface on hover, aligned actions. */
+/* API cards (li) keep their resting surface on hover; only a highlighted (just added) card is tinted. */
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-my-apis-list, .nmx-my-apis-page-list) > li:not(.is-highlighted):hover {
+    background: var(--nmx-panel) !important;
+    border-color: var(--nmx-border) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-my-apis-actions {
+    display: grid !important;
+    flex: 0 0 auto;
+    grid-auto-columns: max-content;
+    grid-auto-flow: column;
+    align-items: center;
+    justify-content: end;
+    gap: 4px;
+    margin-inline-start: auto;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-my-apis-model-count {
+    font-variant-numeric: tabular-nums;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-my-apis-model-count > [data-nmx-literal] {
+    display: inline-block;
+    min-width: 3ch;
+    text-align: end;
+}
+
+/* Bottom-right toast (connection errors and other transient notices). */
+.nmx-floating-toast {
+    position: fixed;
+    right: 20px;
+    bottom: 24px;
+    z-index: 2600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: min(380px, calc(100vw - 40px));
+    padding: 9px 8px 9px 12px;
+    border: 1px solid var(--nmxv-line-2);
+    border-radius: 11px;
+    background: var(--nmxv-surface);
+    box-shadow: var(--nmxv-shadow-pop);
+    color: var(--nmxv-fg);
+    font-family: var(--nmxv-font-ui);
+    font-size: var(--nmxv-text-sm);
+    line-height: 18px;
+    animation: nmxv-toast-in .22s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+.nmx-floating-toast.is-error > .codicon {
+    color: var(--nmxv-danger);
+}
+
+.nmx-floating-toast.is-leaving {
+    animation: nmxv-toast-out .2s ease both;
+}
+
+.nmx-floating-toast-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.nmx-floating-toast-close {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--nmxv-fg-3);
+    cursor: pointer;
+}
+
+.nmx-floating-toast-close:hover {
+    background: var(--nmxv-hover);
+    color: var(--nmxv-fg);
+}
+
+/* Add-API drawer: one collapsible advanced section. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet {
+    font-size: var(--nmxv-text-sm);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet :is(label, .nmx-official-form > label) > span {
+    overflow: visible;
+    font-size: var(--nmxv-text-xs);
+    white-space: normal;
+}
+
+#nextmux\.desktop\.widget .nmx-shell details.nmx-official-advanced {
+    margin-top: 6px;
+    border-top: 1px solid var(--nmxv-line);
+}
+
+#nextmux\.desktop\.widget .nmx-shell details.nmx-official-advanced > summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 0;
+    color: var(--nmxv-fg-2);
+    font-size: var(--nmxv-text-xs);
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+}
+
+#nextmux\.desktop\.widget .nmx-shell details.nmx-official-advanced > summary::-webkit-details-marker {
+    display: none;
+}
+
+#nextmux\.desktop\.widget .nmx-shell details.nmx-official-advanced > summary::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform .16s ease;
+}
+
+#nextmux\.desktop\.widget .nmx-shell details.nmx-official-advanced[open] > summary::before {
+    transform: rotate(45deg);
+}
+
+/* ===========================================================================
+ * 13b. Model Center → My API → Add / Edit API drawer
+ *      Import banner, remark (display) name, address, key, model and actions
+ *      read as one form in both themes.
+ * ======================================================================== */
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form {
+    display: grid;
+    gap: 14px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form > .nmx-subsection-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form > .nmx-subsection-heading > strong {
+    color: var(--nmxv-fg);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form > .nmx-subsection-heading > span {
+    color: var(--nmxv-fg-3);
+    font-size: var(--nmxv-text-xs);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form > label {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 6px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form > label > span {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+    color: var(--nmxv-fg) !important;
+    font-size: 12.5px !important;
+    font-weight: 550;
+    line-height: 17px;
+    white-space: normal;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form > label > span > small {
+    min-width: 0;
+    color: var(--nmxv-fg-3) !important;
+    font-size: 11.5px !important;
+    font-weight: 400;
+    text-align: end;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form > label :is(input, select) {
+    width: 100%;
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--nmxv-line-2) !important;
+    border-radius: 9px !important;
+    background: var(--nmxv-field) !important;
+    color: var(--nmxv-fg) !important;
+    font-family: var(--nmxv-font-ui) !important;
+    font-size: var(--nmxv-text-sm) !important;
+}
+
+/* Address and key are machine values: monospace keeps them scannable. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form > label:not([data-official-field='label']):not([data-official-field='model']) input {
+    font-family: var(--nmxv-font-mono) !important;
+    font-size: 12.5px !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form > label :is(input, select):disabled {
+    opacity: .6;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form > label[data-api-remark-field] input::placeholder {
+    color: var(--nmxv-fg-3);
+}
+
+/* Where chat requests really go, under the address field (Cherry Studio #10). The URL wraps rather than truncates:
+   its tail (/v1/chat/completions) is the part people check. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form > label > .nmx-endpoint-preview {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 6px;
+    min-width: 0;
+    margin: -1px 2px 0;
+    color: var(--nmxv-fg-3);
+    font-size: 11.5px;
+    font-weight: 400;
+    line-height: 16px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form > label > .nmx-endpoint-preview > code {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--nmxv-fg-2);
+    font-family: var(--nmxv-font-mono);
+    font-size: 11.5px;
+    overflow-wrap: anywhere;
+    unicode-bidi: isolate;
+    user-select: text;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form > label > .nmx-endpoint-preview > em {
+    flex-basis: 100%;
+    color: var(--nmxv-fg-3);
+    font-style: normal;
+}
+
+/* "Imported from <source>" banner from a relay website's Import button. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-import-source {
+    display: grid;
+    gap: 4px;
+    margin: 0;
+    padding: 11px 14px 12px;
+    border: 1px solid color-mix(in srgb, var(--nmxv-link) 26%, transparent) !important;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--nmxv-link) 8%, transparent) !important;
+    color: var(--nmxv-fg-2);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-import-source > strong {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--nmxv-fg);
+    font-size: var(--nmxv-text-sm);
+    font-weight: 600;
+    line-height: 18px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-import-source > strong > .codicon {
+    flex: 0 0 auto;
+    color: var(--nmxv-link);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-import-source > strong > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The host the key goes to, beside the name the link gives itself. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-import-source > strong > .nmx-import-host {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 55%;
+    overflow: hidden;
+    padding: 1px 7px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--nmxv-link) 12%, transparent) !important;
+    color: var(--nmxv-fg-2);
+    font-family: var(--nmxv-font-mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 17px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-import-source > p {
+    margin: 0;
+    color: var(--nmxv-fg-2);
+    font-size: var(--nmxv-text-xs);
+    line-height: 18px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-import-source > p.is-trust {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+    color: var(--nmxv-fg-3);
+    font-size: 11.5px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 2px;
+    padding-top: 12px;
+    border-top: 1px solid var(--nmxv-line) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form-actions > button {
+    height: 34px;
+    padding: 0 14px;
+    border-radius: 9px !important;
+    font-size: var(--nmxv-text-sm);
+    font-weight: 550;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form-actions > button:not(.nmx-primary-button) {
+    border: 1px solid var(--nmxv-line-2) !important;
+    background: transparent !important;
+    color: var(--nmxv-fg) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form-actions > button:not(.nmx-primary-button):hover:not(:disabled) {
+    background: var(--nmxv-hover) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form-actions > .nmx-primary-button {
+    border: 1px solid var(--nmxv-primary-bg) !important;
+    background: var(--nmxv-primary-bg) !important;
+    color: var(--nmxv-primary-fg) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form-actions > .nmx-primary-button:hover:not(:disabled) {
+    background: var(--nmxv-primary-hover) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-official-sheet .nmx-official-form-actions > button:disabled {
+    opacity: .45;
+    cursor: default;
+}
+
+/* ===========================================================================
+ * 14. Settings: billing tables in light mode, controls contrast in both themes
+ * ======================================================================== */
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light :is(.nmx-billing-table tr, .nmx-billing-table [role='row'], .nmx-billing-table > div, .nmx-billing-table > li, .nmx-billing-table > article) {
+    background: transparent !important;
+    color: #2a2628 !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light :is(.nmx-billing-table tbody tr, .nmx-billing-table [role='row']):nth-child(even) {
+    background: rgba(40, 30, 36, .022) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light :is(.nmx-billing-table tbody tr, .nmx-billing-table [role='row']):hover {
+    background: rgba(40, 30, 36, .045) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-billing-table :is(th, [role='columnheader']) {
+    background: #f5f3f1 !important;
+    color: #5c5658 !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-billing-table :is(td, th, [role='cell'], [role='columnheader']) {
+    border-color: #ece8e5 !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-billing-table :is(td, th) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Native selects follow the theme so the dropdown list is always legible. */
+#nextmux\.desktop\.widget .nmx-shell select,
+.nmx-portal select {
+    color-scheme: dark;
+    color: var(--nmxv-fg) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light select,
+.nmx-theme-light .nmx-portal select,
+.nmx-portal.nmx-theme-light select {
+    color-scheme: light;
+}
+
+#nextmux\.desktop\.widget .nmx-shell select option {
+    background-color: var(--nmxv-surface);
+    color: var(--nmxv-fg);
+}
+
+#nextmux\.desktop\.widget .nmx-shell select:disabled {
+    opacity: .55;
+}
+
+/* Secondary buttons never disappear on light surfaces. */
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light :is(.nmx-secondary-button, .nmx-start-frame-cancel) {
+    border: 1px solid #d8d2cd !important;
+    background: #f4f1ee !important;
+    color: #3d383b !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light :is(.nmx-secondary-button, .nmx-start-frame-cancel):hover:not(:disabled) {
+    background: #e9e5e1 !important;
+    color: #252225 !important;
+}
+
+/* ===========================================================================
+ * 15. Comic: first-frame modal, asset library, home cards and creation sheets
+ * ======================================================================== */
+#nextmux\.desktop\.widget .nmx-shell .nmx-start-frame-panel select {
+    border: 1px solid var(--nmxv-line-2) !important;
+    background-color: var(--nmxv-field) !important;
+    color: var(--nmxv-fg) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-start-frame-footer-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-unified-asset-library {
+    border: 1px solid var(--nmxv-line-2);
+    border-radius: 16px;
+    background: var(--nmxv-surface);
+    color: var(--nmxv-fg);
+    box-shadow: var(--nmxv-shadow-sheet);
+    animation: nmxv-dialog-in .2s cubic-bezier(.2, .8, .2, 1) both;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-library-backdrop {
+    background: var(--nmxv-backdrop) !important;
+    animation: nmxv-fade-in .16s ease both;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-library-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-library-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+    gap: 12px !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-library-grid > * {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--nmxv-line);
+    border-radius: 12px;
+    background: var(--nmxv-surface-2);
+    transition: border-color .14s ease, transform .14s ease, box-shadow .14s ease;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-library-grid > :hover {
+    border-color: var(--nmxv-line-2);
+    box-shadow: var(--nmxv-shadow-pop);
+    transform: translateY(-1px);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-library-preview {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    background: var(--nmxv-surface-3);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-library-card-meta {
+    padding: 8px 10px 9px;
+    overflow: hidden;
+    font-size: var(--nmxv-text-xs);
+    line-height: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-library-card-actions {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity .14s ease;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-library-grid > :is(:hover, :focus-within) .nmx-library-card-actions {
+    opacity: 1;
+}
+
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-library-card-actions, .nmx-library-header-actions) button,
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-library-icon-btn, .nmx-library-reclassify-btn, .nmx-library-use-btn) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 8px;
+    border: 1px solid var(--nmxv-line-2) !important;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--nmxv-surface) 88%, transparent) !important;
+    color: var(--nmxv-fg) !important;
+    font-size: var(--nmxv-text-xs);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-library-type-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, .55);
+    color: #ffffff;
+    font-size: 11px;
+    line-height: 17px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-library-empty-state {
+    padding: 48px 16px;
+    color: var(--nmxv-fg-3);
+    text-align: center;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-comic-home-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)) !important;
+    gap: 14px !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-comic-home-card {
+    overflow: hidden;
+    border: 1px solid var(--nmxv-line);
+    border-radius: 14px;
+    background: var(--nmxv-surface-2);
+    transition: border-color .14s ease, box-shadow .14s ease, transform .14s ease;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-comic-home-card:hover {
+    border-color: var(--nmxv-line-2);
+    box-shadow: var(--nmxv-shadow-pop);
+    transform: translateY(-1px);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-comic-home-cover {
+    aspect-ratio: 16 / 10;
+    background: var(--nmxv-surface-3);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-comic-home-card-copy {
+    padding: 10px 12px 12px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-comic-create-sheet, .nmx-comic-kind-sheet) {
+    border: 1px solid var(--nmxv-line-2);
+    border-radius: 16px;
+    background: var(--nmxv-surface);
+    color: var(--nmxv-fg);
+    box-shadow: var(--nmxv-shadow-sheet);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-comic-create-source-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-comic-create-source-actions > button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border: 1px dashed var(--nmxv-line-2) !important;
+    border-radius: 9px;
+    background: transparent !important;
+    color: var(--nmxv-fg) !important;
+    font-size: var(--nmxv-text-sm);
+    cursor: pointer;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-comic-create-source-actions > button:hover {
+    border-style: solid !important;
+    background: var(--nmxv-hover) !important;
+}
+
+/* “从素材库挑选” stays pressed while its picker is open. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-comic-create-source-actions > button.is-active {
+    border-style: solid !important;
+    border-color: var(--nmxv-fg-3) !important;
+    background: var(--nmxv-selected) !important;
+}
+
+/* ===========================================================================
+ * 16. Right file drawer, subagent drawer, floating file/notes windows
+ * ======================================================================== */
+#nextmux\.desktop\.widget .nmx-shell .nmx-context-file-row:is(.is-active, .is-selected, [aria-selected='true'], [aria-current='true'], [aria-current='page']) {
+    background: var(--nmxv-row-active) !important;
+    color: var(--nmxv-row-active-fg) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-file-editor-tabs {
+    display: flex;
+    gap: 3px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    overscroll-behavior-inline: contain;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-file-editor-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-file-editor-tab {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+    max-width: 220px;
+    padding: 0 4px 0 10px;
+    border: 1px solid transparent !important;
+    border-radius: 8px !important;
+    background: transparent !important;
+    color: var(--nmxv-fg-2) !important;
+    transition: background-color .12s ease, color .12s ease;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-file-editor-tab:hover {
+    background: var(--nmxv-hover) !important;
+    color: var(--nmxv-fg) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-file-editor-tab:is(.is-active, [aria-selected='true'], [aria-current='true'], [aria-current='page']) {
+    border-color: var(--nmxv-line) !important;
+    background: var(--nmxv-selected) !important;
+    color: var(--nmxv-fg) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-file-editor-tab-close {
+    opacity: 0;
+    transition: opacity .12s ease;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-file-editor-tab:is(:hover, :focus-within, .is-active, [aria-selected='true']) .nmx-file-editor-tab-close {
+    opacity: 1;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-context-file-editor .monaco-editor .margin-view-overlays .line-numbers {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Subagent drawer: same surfaces as the main stream in both themes. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-work-context :is(.nmx-agent-child-detail, .nmx-agent-child-events) {
+    background: transparent;
+    color: var(--nmxv-fg);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-agent-child-tab {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Floating file and notes windows: names keep their width before any fade,
+   and standalone floating containers share identical chrome tokens. */
+.nmx-floating-file-window :is(li, button, a) {
+    min-width: 0;
+}
+
+.nmx-floating-file-window,
+.nmx-floating-note-window {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--nmxv-line-2);
+    border-radius: 12px;
+    background: var(--nmxv-surface);
+    color: var(--nmxv-fg);
+    box-shadow: var(--nmxv-shadow-sheet);
+}
+
+.nmx-floating-file-window > header,
+.nmx-floating-note-window > header,
+:is(.nmx-floating-file-window, .nmx-floating-note-window) .nmx-floating-window-header {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0 8px 0 12px;
+    border-bottom: 1px solid var(--nmxv-line);
+    background: var(--nmxv-surface-2);
+    color: var(--nmxv-fg);
+    user-select: none;
+}
+
+.nmx-floating-file-window > header :is(strong, .nmx-floating-window-title),
+.nmx-floating-note-window > header :is(strong, .nmx-floating-window-title) {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--nmxv-fg);
+    font-size: var(--nmxv-text-sm);
+    font-weight: 560;
+}
+
+.nmx-floating-file-window > header button,
+.nmx-floating-note-window > header button,
+:is(.nmx-floating-file-window, .nmx-floating-note-window) .nmx-floating-window-header button {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 26px;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--nmxv-fg-2);
+    cursor: pointer;
+    transition: background-color .12s ease, color .12s ease;
+}
+
+.nmx-floating-file-window > header button:hover:not(:disabled),
+.nmx-floating-note-window > header button:hover:not(:disabled),
+:is(.nmx-floating-file-window, .nmx-floating-note-window) .nmx-floating-window-header button:hover:not(:disabled) {
+    background: var(--nmxv-hover);
+    color: var(--nmxv-fg);
+}
+
+:is(.nmx-floating-file-window, .nmx-floating-note-window) :is(.nmx-floating-resize, [data-resize-handle]) {
+    z-index: 5;
+}
+
+/* ===========================================================================
+ * 16b. Active tab indicators survive focus, hover and press
+ *      Every tab strip keeps its own indicator design (underline, pill or
+ *      background). Pointer focus no longer clears it: see the selected-state
+ *      exemption in the pointer-focus reset (nextmux.css).
+ * ======================================================================== */
+/* The light theme's universal border reset must neither paint an underline on
+   inactive model-category tabs nor erase the active tab's border indicator. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-model-visibility-column nav button:not(:is(.is-active, .is-selected, [aria-selected='true'], [aria-pressed='true'])) {
+    border-bottom-color: transparent !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-model-visibility-column nav button:is(.is-active, .is-selected, [aria-selected='true'], [aria-pressed='true']) {
+    border-bottom-color: var(--nmx-tab-active-underline, var(--nmx-focus-ring, #d74470)) !important;
+}
+
+/* Nor may it outline inactive canvas tabs (their border stays transparent until selected), recolour the selected
+   tab's border, or repaint the tab dialog's focus ring and its filled primary button. */
+.nmx-theme-light .nmx-canvas-tab:not(:has([aria-selected='true'])),
+.nmx-theme-light .nmx-canvas-tabs-dialog button:last-child {
+    border-color: transparent !important;
+}
+
+.nmx-theme-light .nmx-canvas-tab:has([aria-selected='true']) {
+    border-color: var(--nmx-border) !important;
+}
+
+.nmx-theme-light .nmx-canvas-tabs-dialog input:focus {
+    border-color: var(--cv-ring) !important;
+}
+
+/* A press never shifts a tab (and with it its indicator) mid-click. */
+#nextmux\.desktop\.widget .nmx-shell :is([role='tab'], .nmx-relay-source-tabs > button, .nmx-plugins-tabs > button, .nmx-coding-plugins-tabs > button, .nmx-model-usage-source-tabs > button, .nmx-model-visibility-column nav button):active {
+    transform: none !important;
+}
+
+/* ===========================================================================
+ * 16c. Floating file and notes windows on the conversation's right edge
+ *      One card language for both. An open card is centred in the edge column
+ *      at any row count; names use the full width before ending.
+ * ======================================================================== */
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-stage > :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float):is(:hover, :focus-within) {
+    width: 224px;
+}
+
+/* Centred like the notes card: top 50%, pulled up by half its own height, never taller than the column (the
+   list inside scrolls). This is the only centring. Inset centring (top/bottom 0 with auto margins) combined
+   with that pull-up lifted a long list by half its height, under the conversation tabs (seen on Windows). */
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) > div {
+    top: 50% !important;
+    bottom: auto !important;
+    translate: 0 -50% !important;
+    margin-block: 0 !important;
+    max-height: 100% !important;
+    width: 224px !important;
+    padding: 6px !important;
+    border: 1px solid var(--nmxv-line-2) !important;
+    border-radius: 12px !important;
+    background: color-mix(in srgb, var(--nmxv-surface) 97%, transparent) !important;
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: var(--nmxv-shadow-pop) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) header {
+    padding: 2px 4px 6px !important;
+    border-bottom: 1px solid var(--nmxv-line) !important;
+    margin-bottom: 4px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) header strong {
+    color: var(--nmxv-fg);
+    font-size: var(--nmxv-text-sm) !important;
+    font-weight: 600;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-stage > .nmx-thread-files .nmx-thread-file-row {
+    min-height: 28px;
+    border-radius: 7px;
+    color: var(--nmxv-fg-2);
+    font-size: var(--nmxv-text-xs);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-stage > .nmx-thread-files .nmx-thread-file-row:hover {
+    background: var(--nmxv-hover);
+    color: var(--nmxv-fg);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-stage > .nmx-thread-files .nmx-thread-file-row.is-active {
+    background: var(--nmxv-row-active);
+    color: var(--nmxv-row-active-fg);
+}
+
+/* Names take the whole row and end with an ellipsis; no early fade mask. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-coding-stage > .nmx-thread-files .nmx-thread-file-name {
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+    font-size: 12.5px !important;
+}
+
+/* Notes: no empty band above the first card; the cards match the file card. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-thread-notes {
+    width: 224px !important;
+    padding-top: 0 !important;
+    gap: 0;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-thread-note {
+    padding: 10px 12px !important;
+    border: 1px solid var(--nmxv-line-2) !important;
+    border-radius: 12px !important;
+    background: color-mix(in srgb, var(--nmxv-surface) 97%, transparent) !important;
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: var(--nmxv-shadow-pop) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-thread-note.is-global {
+    border-style: dashed !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-thread-note:focus-within {
+    border-color: color-mix(in srgb, var(--nmxv-fg) 30%, transparent) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-thread-note-title {
+    color: var(--nmxv-fg-2) !important;
+    border-bottom-color: var(--nmxv-line) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-thread-float-tab {
+    border-color: var(--nmxv-line-2) !important;
+    background: color-mix(in srgb, var(--nmxv-surface) 96%, transparent) !important;
+    color: var(--nmxv-fg-3) !important;
+}
+
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float):is(:hover, :focus-within) > .nmx-thread-float-tab {
+    color: var(--nmxv-fg) !important;
+}
+
+/* ===========================================================================
+ * 16d. Multi-tier image / video prices in price cards (price.mediaTiers). The composer model drawer
+ * (.nmx-model-effort-portal) and the comic hover card (.nmx-offering-price-pop) are portals on <body> with their own
+ * theme class, so they are listed here as well.
+ * ======================================================================== */
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tiers h4 {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    margin: 0 0 6px;
+    color: var(--nmxv-fg-2);
+    font-size: var(--nmxv-text-xs);
+    font-weight: 600;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tiers h4 > small {
+    color: var(--nmxv-fg-3);
+    font-weight: 400;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--nmxv-text-xs);
+    font-variant-numeric: tabular-nums;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-table :is(th, td) {
+    padding: 4px 0;
+    border-bottom: 1px solid var(--nmxv-line);
+    text-align: end;
+    white-space: nowrap;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-table :is(th, td) + :is(th, td) {
+    padding-inline-start: 10px;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-table thead th {
+    color: var(--nmxv-fg-3);
+    font-weight: 500;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-table :is(thead th:first-child, tbody th) {
+    text-align: start;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-table tbody th {
+    color: var(--nmxv-fg-2);
+    font-weight: 400;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-table tbody td {
+    color: var(--nmxv-fg);
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-table tbody tr:last-child :is(th, td) {
+    border-bottom: 0;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-table tr.is-default :is(th, td) {
+    color: var(--nmxv-fg);
+    font-weight: 600;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-table tr.is-default th > em {
+    margin-inline-start: 6px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--nmxv-hover);
+    color: var(--nmxv-fg-2);
+    font-size: 10.5px;
+    font-style: normal;
+    font-weight: 500;
+}
+
+/* A video API format that sends no resolution: every request is made and billed at the marked tier. */
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-note {
+    margin: 6px 0 0;
+    color: var(--nmxv-fg-3);
+    font-size: 11px;
+    line-height: 1.45;
+    text-wrap: pretty;
+}
+
+/* Additive token fees under a tier table (prompt, cached prompt, text/thinking output): one quiet line, figures in the text colour. */
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-addon {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 6px;
+    margin: 6px 0 0;
+    padding-top: 6px;
+    border-top: 1px dashed var(--nmxv-line-2);
+    color: var(--nmxv-fg-3);
+    font-size: var(--nmxv-text-xs);
+    line-height: 17px;
+    font-variant-numeric: tabular-nums;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-addon b {
+    color: var(--nmxv-fg);
+    font-weight: 600;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-addon > small,
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-addon > em > small {
+    color: var(--nmxv-fg-3);
+    font-size: 11px;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-addon > em {
+    font-style: normal;
+}
+
+:is(.nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-shell, .nmx-offering-price-pop) .nmx-media-tier-addon > em::before {
+    content: '·';
+    margin-inline-end: 6px;
+    color: var(--nmxv-fg-3);
+}
+
+/* Canvas generate button: the price (and its prompt add-on) stays on one line. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-board-generate-price {
+    min-width: 0;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ===========================================================================
+ * 16e. Esc ended the AI's desktop control for this turn (note above the composer)
+ *      A neutral note, not an error: the turn goes on another way, and 恢复控制
+ *      gives the AI its windows back before the next prompt does.
+ * ======================================================================== */
+#nextmux\.desktop\.widget .nmx-shell .nmx-attachment-error.is-desktop-control {
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 4px 4px 4px 10px;
+    border-color: var(--nmxv-line-2);
+    color: var(--nmxv-fg-2);
+    background: color-mix(in srgb, var(--nmxv-fg) 4%, var(--nmx-panel, transparent));
+    font-size: var(--nmxv-text-xs);
+    line-height: 17px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-attachment-error.is-desktop-control > .codicon {
+    flex: 0 0 auto;
+    color: var(--nmxv-fg-3);
+    font-size: 14px;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-attachment-error.is-desktop-control > span {
+    flex: 1 1 auto;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-attachment-error.is-desktop-control > .nmx-desktop-control-resume {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: max-content;
+    height: 24px;
+    padding: 0 10px;
+    border: 1px solid var(--nmxv-line-2);
+    border-radius: 6px;
+    color: var(--nmxv-fg);
+    background: transparent;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color .12s ease;
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-attachment-error.is-desktop-control > .nmx-desktop-control-resume:hover {
+    background: var(--nmxv-hover);
+}
+
+#nextmux\.desktop\.widget .nmx-shell .nmx-attachment-error.is-desktop-control > .nmx-desktop-control-resume:focus-visible {
+    outline: 2px solid var(--nmx-focus-ring, var(--nmxv-tab-underline));
+    outline-offset: 1px;
+}
+
+/* ===========================================================================
+ * 16f. Ollama model download on a failed reply (LobeChat #13): the action's
+ *      icon, and while it runs a status chip with a thin progress line
+ * ======================================================================== */
+.nmx-shell .nmx-inline-action:has(> .codicon-cloud-download, > .codicon-check) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.nmx-shell .nmx-inline-action > :is(.codicon-cloud-download, .codicon-check) {
+    font-size: 14px;
+}
+
+.nmx-shell .nmx-ollama-pull {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    max-width: 100%;
+    min-height: 27px;
+    margin: 0 0 13px;
+    padding: 0 10px 2px;
+    overflow: hidden;
+    border: 1px solid var(--nmxv-line-2);
+    border-radius: 6px;
+    background: var(--nmxv-surface-2);
+    color: var(--nmxv-fg-2);
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+    line-height: 18px;
+}
+
+.nmx-shell .nmx-ollama-pull > span:first-of-type {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-ollama-pull > .codicon {
+    flex: 0 0 auto;
+    font-size: 13px;
+}
+
+.nmx-shell .nmx-ollama-pull-bar {
+    position: absolute;
+    inset: auto 0 0;
+    height: 2px;
+    background: var(--nmxv-line);
+}
+
+.nmx-shell .nmx-ollama-pull-bar > span {
+    display: block;
+    width: var(--nmx-ollama-pull, 0%);
+    height: 100%;
+    background: var(--nmxv-link);
+    transition: width .3s ease-out;
+}
+
+/* Before Ollama knows the size (pulling the manifest), the line sweeps instead of standing at zero. */
+.nmx-shell .nmx-ollama-pull-bar.is-indeterminate > span {
+    width: 32%;
+    animation: nmxv-ollama-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes nmxv-ollama-sweep {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(320%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell .nmx-ollama-pull-bar > span { transition: none; }
+    .nmx-shell .nmx-ollama-pull-bar.is-indeterminate > span { width: 100%; animation: none; opacity: .45; }
+}
+
+/* ===========================================================================
+ * 17. Fullscreen image preview
+ * ======================================================================== */
+.nmx-image-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    background: rgba(8, 8, 9, .9);
+    animation: nmxv-fade-in .16s ease both;
+}
+
+.nmx-image-lightbox-stage {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    cursor: zoom-in;
+    touch-action: none;
+}
+
+.nmx-image-lightbox-stage.is-zoomed {
+    cursor: grab;
+}
+
+.nmx-image-lightbox-stage.is-panning {
+    cursor: grabbing;
+}
+
+.nmx-image-lightbox-img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    max-width: none;
+    transform-origin: 0 0;
+    user-select: none;
+    -webkit-user-drag: none;
+    will-change: transform;
+}
+
+.nmx-image-lightbox-toolbar {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px;
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 11px;
+    background: rgba(28, 28, 30, .78);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    color: #f2f2f2;
+}
+
+.nmx-image-lightbox-zoom {
+    min-width: 46px;
+    padding: 0 6px;
+    font-family: var(--nmxv-font-ui, system-ui);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+.nmx-image-lightbox-toolbar button,
+.nmx-image-lightbox-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.nmx-image-lightbox-toolbar button:hover,
+.nmx-image-lightbox-close:hover {
+    background: rgba(255, 255, 255, .12);
+}
+
+/* ===========================================================================
+ * 18. Motion
+ * ======================================================================== */
+@keyframes nmxv-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes nmxv-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes nmxv-dialog-in { from { opacity: 0; transform: translateY(6px) scale(.975); } to { opacity: 1; transform: none; } }
+@keyframes nmxv-dialog-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(4px) scale(.98); } }
+@keyframes nmxv-drawer-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes nmxv-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes nmxv-toast-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px); } }
+@keyframes nmxv-spin { to { transform: rotate(360deg); } }
+@keyframes nmxv-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .nmx-goal-drawer,
+    .nmx-goal-drawer-scrim,
+    .nmx-goal-confirm,
+    .nmx-goal-confirm-backdrop,
+    .nmx-plugin-modal,
+    .nmx-plugin-modal-backdrop,
+    .nmx-floating-toast,
+    .nmx-image-lightbox,
+    .nmx-council-modal-backdrop,
+    .nmx-council-modal-backdrop .nmx-council-modal,
+    #nextmux\.desktop\.widget .nmx-shell .nmx-visual-tab-toast,
+    #nextmux\.desktop\.widget .nmx-shell .nmx-unified-asset-library,
+    #nextmux\.desktop\.widget .nmx-shell .nmx-coding-goal.is-running .nmx-goal-elapsed > .codicon {
+        animation: none !important;
+    }
+
+    #nextmux\.desktop\.widget .nmx-shell :is(.nmx-titlebar-primary-nav > button, .nmx-titlebar-primary-nav > button > span, .nmx-session-row.is-council-child, .nmx-library-grid > *, .nmx-comic-home-card) {
+        transition: none !important;
+    }
+}

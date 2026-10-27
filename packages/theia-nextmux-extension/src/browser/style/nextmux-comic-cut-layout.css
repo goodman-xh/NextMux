@@ -1,0 +1,38 @@
+/* Editing workspace: shared theme, one media player, and a resizable timeline. */
+.nmx-shell .nmx-cut-main { grid-template-columns: minmax(180px, 220px) minmax(0, 1fr); }
+.nmx-shell .nmx-cut-main.has-selection { grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) minmax(210px, 240px); }
+.nmx-shell .nmx-cut-main > .nmx-cut-bin > :is(header, nav) { flex-shrink: 0; }
+.nmx-shell .nmx-cut-bin-import { flex: none; display: flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; margin: 3px 10px 10px; padding: 8px; border: 1px solid var(--nmx-border-strong, var(--nmx-border)); border-radius: 8px; color: var(--nmx-text); background: var(--nmx-panel-2); font: inherit; font-size: 12px; cursor: pointer; }
+.nmx-shell .nmx-cut-bin-import:hover:not(:disabled) { border-color: var(--nmx-accent); }
+.nmx-shell .nmx-cut-bin-import:disabled { opacity: .5; cursor: default; }
+.nmx-shell .nmx-cut-bin-import > span { min-width: 0; overflow-wrap: anywhere; }
+.nmx-shell .nmx-cut-bin-grid > .nmx-cut-bin-empty { grid-column: 1 / -1; }
+.nmx-shell .nmx-cut-monitor .nmx-comic-editor-stage { flex: 1 1 0; min-height: 0; min-width: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.nmx-shell .nmx-cut-monitor .nmx-comic-editor-frame { flex: none; max-width: 100%; max-height: 100%; }
+.nmx-shell .nmx-cut-monitor .nmx-comic-editor-transport { flex-shrink: 0; gap: 7px; }
+.nmx-shell .nmx-cut-monitor .nmx-comic-editor { padding: 8px 10px; }
+.nmx-shell .nmx-cut-playback-error { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; padding: 7px 10px; color: var(--nmx-text); background: var(--nmx-panel-2); font-size: 12px; }
+.nmx-shell .nmx-cut-playback-error span { flex: 1; }
+.nmx-shell .nmx-cut-playback-error button { flex: 0 0 auto; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.nmx-shell .nmx-cut-cue-bar.is-selected { outline: 2px solid var(--nmx-accent); outline-offset: -2px; }
+.nmx-shell .nmx-cut-inspector .nmx-cut-field textarea { width: 100%; box-sizing: border-box; resize: vertical; color: var(--nmx-text); background: var(--nmx-bg); border: 1px solid var(--nmx-border); border-radius: 6px; padding: 8px; font: inherit; }
+.nmx-shell .nmx-cut-resizer { display: flex; align-items: center; justify-content: center; flex: 0 0 9px; min-height: 9px; cursor: ns-resize; touch-action: none; background: var(--nmx-panel); border-top: 1px solid var(--nmx-border); }
+.nmx-shell .nmx-cut-resizer > span { width: 44px; height: 3px; border-radius: 3px; background: var(--nmx-muted); opacity: .6; }
+.nmx-shell .nmx-cut-resizer:hover > span, .nmx-shell .nmx-cut-resizer:focus-visible > span { background: var(--nmx-accent); opacity: 1; }
+.nmx-shell .nmx-cut-resizer:focus-visible { outline: 2px solid var(--nmx-accent); outline-offset: -2px; }
+.nmx-shell .nmx-cut-timeline { min-height: 112px; overflow-y: auto; align-items: start; border-top: 0; }
+.nmx-shell .nmx-cut-timeline > .nmx-cut-scroller { min-height: 196px; overflow-x: auto; overflow-y: hidden; }
+
+/* An open nonmodal dialog contributes no box. showModal() promotes this same DOM to the top layer. */
+.nmx-comic-preview-shell[open]:not(:modal) { display: contents; }
+.nmx-comic-preview-shell:modal { box-sizing: border-box; position: fixed; inset: 20px; width: calc(100vw - 40px); height: calc(100vh - 40px); max-width: none; max-height: none; margin: 0; padding: 0; overflow: hidden; border: 1px solid var(--nmx-border-strong, var(--nmx-border)); border-radius: 14px; color: var(--nmx-text); background: var(--nmx-panel); box-shadow: 0 24px 80px rgb(0 0 0 / 50%); }
+.nmx-comic-preview-shell:modal::backdrop { background: rgb(0 0 0 / 65%); }
+.nmx-shell .nmx-comic-preview-shell:modal > .nmx-comic-editor { box-sizing: border-box; display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; margin: 0; padding: 12px 18px; border: 0; }
+.nmx-shell .nmx-comic-preview-shell:modal .nmx-comic-editor-stage { display: flex; align-items: center; justify-content: center; flex: 1 1 0; min-height: 0; overflow: hidden; }
+.nmx-shell .nmx-comic-preview-shell:modal .nmx-comic-editor-frame { flex: none; max-width: 100%; max-height: 100%; }
+.nmx-shell .nmx-comic-preview-shell:modal .nmx-comic-editor-transport { flex: none; justify-content: center; }
+.nmx-comic-preview-heading { display: flex; align-items: center; justify-content: space-between; flex: none; gap: 12px; min-height: 32px; }
+.nmx-comic-preview-heading > strong { font-size: 13px; }
+.nmx-comic-preview-close { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: var(--nmx-panel-2); cursor: pointer; }
+.nmx-comic-preview-close:focus-visible { outline: 2px solid var(--nmx-accent); outline-offset: 2px; }
+@media (max-width: 900px) { .nmx-shell .nmx-cut-main.has-selection { grid-template-columns: 160px minmax(0, 1fr) 200px; } .nmx-shell .nmx-cut-main:not(.has-selection) { grid-template-columns: 160px minmax(0, 1fr); } }

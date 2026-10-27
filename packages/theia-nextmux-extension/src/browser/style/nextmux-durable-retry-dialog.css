@@ -1,0 +1,86 @@
+.nmx-shell .nmx-durable-retry-dialog {
+    box-sizing: border-box;
+    width: min(440px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+    padding: 24px;
+    border: 1px solid var(--nmx-border);
+    border-radius: 10px;
+    background: var(--nmx-bg);
+    color: var(--nmx-text);
+    box-shadow: 0 12px 40px #0002;
+    text-align: start;
+}
+.nmx-shell .nmx-durable-retry-dialog > h2 { margin: 0; font-size: 16px; line-height: 1.4; font-weight: 600; }
+.nmx-shell .nmx-durable-retry-dialog > p { margin: 12px 0 24px; font-size: 13px; line-height: 1.65; color: var(--nmx-muted); }
+.nmx-shell .nmx-durable-retry-dialog > footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.nmx-shell .nmx-durable-retry-dialog > footer > button {
+    min-height: 32px;
+    padding: 6px 12px;
+    border: 1px solid var(--nmx-border);
+    border-radius: 5px;
+    color: var(--nmx-text);
+    background: var(--nmx-bg);
+    font: inherit;
+    font-size: 12px;
+    line-height: 1.4;
+    cursor: pointer;
+}
+.nmx-shell .nmx-durable-retry-dialog > footer > button:hover { background: color-mix(in srgb, var(--nmx-text) 7%, var(--nmx-bg)); }
+.nmx-shell .nmx-durable-retry-dialog > footer > button.is-primary { background: var(--nmx-text); border-color: var(--nmx-text); color: var(--nmx-bg); }
+.nmx-shell .nmx-durable-retry-dialog > footer > button.is-primary:hover { opacity: .88; }
+.nmx-shell .nmx-durable-retry-dialog > footer > button:focus-visible { outline: 2px solid var(--nmx-muted); outline-offset: 2px; }
+
+/* Undo a turn's file changes: the files it changed and their line counts, before anything is undone. A long path is
+   cut at its start, so the file name stays readable. */
+.nmx-shell .nmx-durable-retry-dialog > .nmx-restore-diff-summary {
+    display: grid;
+    gap: 1px;
+    max-height: 196px;
+    margin: -12px 0 20px;
+    padding: 4px;
+    overflow-y: auto;
+    border: 1px solid var(--nmx-border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--nmx-text) 3%, var(--nmx-bg));
+    list-style: none;
+    scrollbar-width: thin;
+}
+.nmx-shell .nmx-restore-diff-summary > li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    padding: 4px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+    line-height: 18px;
+}
+.nmx-shell .nmx-restore-diff-summary > li:hover { background: color-mix(in srgb, var(--nmx-text) 5%, transparent); }
+.nmx-shell .nmx-restore-diff-summary > li > code {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--nmx-text);
+    direction: rtl;
+    font-family: var(--nmxv-font-mono, ui-monospace, monospace);
+    font-size: 11.5px;
+    /* Paths read left to right in every interface language; rtl here only moves the cut to the path's start. */
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.nmx-shell .nmx-restore-diff-summary > li > code > bdi { unicode-bidi: isolate; }
+.nmx-shell .nmx-restore-diff-counts {
+    display: inline-flex;
+    flex: 0 0 auto;
+    gap: 6px;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+}
+.nmx-shell .nmx-restore-diff-counts > b { color: var(--nmxv-success, #2ea043); font-weight: 600; }
+.nmx-shell .nmx-restore-diff-counts > em { color: var(--nmxv-danger, #f85149); font-style: normal; font-weight: 600; }
+.nmx-shell .nmx-restore-diff-summary > li.is-more { color: var(--nmx-muted); }

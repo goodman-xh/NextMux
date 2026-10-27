@@ -1,0 +1,48 @@
+/* Keep component typography independent of the desktop button font:inherit reset. */
+/* Geometry follows Neowow's CameraControl: upward popover, preset column, grouped controls. */
+.nmx-camera-control{--nmx-camera-border:color-mix(in srgb,var(--nmx-text,var(--theia-foreground,#eee)) 15%,transparent);position:absolute;bottom:calc(100% + 8px);inset-inline:0 auto;width:min(520px,100%);z-index:100;display:flex;flex-direction:column;max-height:320px;min-height:0;overflow:hidden;border:1px solid var(--nmx-camera-border);border-radius:10px;background:var(--nmx-panel,var(--theia-editorWidget-background,#252525));color:var(--nmx-text,var(--theia-foreground,#eee));box-shadow:0 8px 28px #0005;outline:none;font-family:inherit;font-size:11px;line-height:1.3;font-weight:400;text-align:start;box-sizing:border-box}
+.nmx-camera-control *,.nmx-camera-tags *{box-sizing:border-box}
+.nmx-camera-control button,.nmx-camera-tags button{font-family:inherit;cursor:pointer;color:inherit}
+.nmx-camera-control button:focus-visible,.nmx-camera-tags button:focus-visible{outline:2px solid var(--nmx-accent,var(--theia-focusBorder,#4e96e8));outline-offset:2px}
+.nmx-camera-header{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;padding:6px 10px;border-bottom:1px solid var(--nmx-camera-border);font-size:11px;font-weight:500;gap:8px}
+.nmx-camera-control .nmx-camera-close{display:flex;align-items:center;justify-content:center;width:20px;height:20px;min-width:20px;padding:2px;border:0;border-radius:4px;background:transparent;opacity:.65}
+.nmx-camera-control .nmx-camera-close:hover{opacity:1;background:#8882}
+.nmx-camera-body{display:flex;min-height:0;overflow:hidden;flex:1}
+.nmx-camera-presets{width:116px;min-width:116px;border-inline-end:1px solid var(--nmx-camera-border);display:flex;flex-direction:column;overflow:hidden}
+.nmx-camera-section-title{font-size:10px;font-weight:500;padding:6px 8px 4px;color:var(--nmx-muted);flex-shrink:0}
+.nmx-camera-preset-list{flex:1;min-height:0;overflow-y:auto;padding:2px 4px 6px;scrollbar-width:thin;scrollbar-color:#8885 transparent}
+.nmx-camera-control .nmx-camera-preset{display:flex;flex-direction:column;width:100%;text-align:start;padding:6px 8px;margin:0 0 2px;border:0;border-radius:6px;gap:3px;background:transparent;line-height:1.3}
+.nmx-camera-preset-name{font-size:11px;font-weight:500}.nmx-camera-preset-description{font-size:9px;color:var(--nmx-muted);line-height:1.3}
+.nmx-camera-control .nmx-camera-preset:hover{background:#8882}.nmx-camera-control .nmx-camera-preset.is-selected{background:color-mix(in srgb,var(--cv-image,#60a5fa) 14%,transparent);color:var(--cv-image,#60a5fa)}
+.nmx-camera-options{display:flex;flex-direction:column;flex:1;min-width:0;min-height:0;overflow:hidden}
+.nmx-camera-options>.nmx-camera-section-title{margin-inline-start:8px}
+.nmx-camera-movements{display:flex;flex-direction:column;gap:6px;padding:6px 8px;overflow-y:auto;min-height:0;scrollbar-width:thin;scrollbar-color:#8885 transparent}
+.nmx-camera-category{display:flex;align-items:flex-start;gap:8px;flex-shrink:0}
+.nmx-camera-category-label{width:28px;min-width:28px;padding-top:5px;font-size:10px;line-height:1.4;color:var(--nmx-muted);overflow-wrap:anywhere}
+.nmx-camera-control:not(:lang(zh-CN)):not(:lang(zh-TW)):not(:lang(ja)):not(:lang(ko)) .nmx-camera-category-label{width:64px;min-width:64px}
+.nmx-camera-choices{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.nmx-camera-control .nmx-camera-choices .nmx-camera-option{padding:4px 10px;border:1px solid var(--nmx-camera-border);border-radius:16px;background:transparent;font-size:11px;line-height:1.3;font-weight:400;white-space:normal;max-width:100%;text-align:center}
+.nmx-camera-control .nmx-camera-option:hover{background:#8882}.nmx-camera-control .nmx-camera-option.is-selected{background:#2563eb;border-color:#2563eb;color:white}
+.nmx-camera-category.is-speed{border-top:1px solid var(--nmx-camera-border);padding-top:10px;margin-top:2px;padding-bottom:2px}
+.nmx-camera-category.is-speed .nmx-camera-option.is-selected{background:#7c3aed;border-color:#7c3aed}
+.nmx-camera-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-top:1px solid var(--nmx-camera-border);flex-shrink:0}
+.nmx-camera-footer>span{font-size:10px;color:var(--nmx-muted);line-height:1.4}
+.nmx-camera-control .nmx-camera-footer .nmx-camera-confirm{border:0;border-radius:12px;padding:4px 12px;background:#2563eb;color:white;font-size:11px;flex-shrink:0;line-height:1.4}
+.nmx-camera-control .nmx-camera-confirm:hover{filter:brightness(1.1)}
+.nmx-camera-control.is-dialog{position:relative;inset:auto;bottom:auto;width:min(480px,calc(100vw - 48px));max-height:min(480px,calc(100dvh - 60px));border-radius:20px;border:1px solid var(--nmx-camera-border);box-shadow:none}
+.nmx-camera-control.is-dialog .nmx-camera-header{padding:12px 16px;border-bottom:0;font-size:13px}
+.nmx-camera-control.is-dialog .nmx-camera-presets{background:#88808;border-inline-end:0}
+.nmx-camera-control.is-dialog .nmx-camera-category.is-speed,.nmx-camera-control.is-dialog .nmx-camera-footer{border:0}
+.nmx-camera-control.is-dialog .nmx-camera-option{border:0;border-radius:8px;background:#8882;padding:4px 10px}
+.nmx-camera-control.is-dialog .nmx-camera-option.is-selected,.nmx-camera-control.is-dialog .nmx-camera-preset.is-selected{color:inherit;background:#8885}
+.nmx-camera-control.is-dialog .nmx-camera-confirm{height:34px;min-width:72px;padding:0 16px;border-radius:9px;background:var(--nmx-text,#f4f4f5);color:var(--nmx-panel,#18181b);font-weight:500}
+.nmx-camera-control.is-dialog .nmx-camera-footer{padding:12px 16px}
+.nmx-camera-tags{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:0 0 6px;min-width:0}
+.nmx-camera-tag{display:inline-flex;align-items:center;gap:4px;max-width:100%;border-radius:12px;padding:2px 8px;font-size:11px;line-height:1.4;background:#8882;color:var(--nmx-text,var(--theia-foreground,#eee))}
+.nmx-camera-tag>span{overflow-wrap:anywhere}.nmx-camera-tag.is-preset{background:color-mix(in srgb,var(--cv-audio,#4ade80) 14%,transparent);color:var(--cv-audio,#4ade80)}.nmx-camera-tag.is-speed{background:color-mix(in srgb,var(--cv-image,#60a5fa) 14%,transparent);color:var(--cv-image,#60a5fa)}
+.nmx-camera-tags button{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:16px;height:16px;padding:0;border:0;border-radius:50%;background:transparent;opacity:.6}
+.nmx-camera-tags button:hover{opacity:1;background:#8882}.nmx-camera-tags .nmx-camera-clear{margin-inline-start:2px}
+@media(max-width:560px){.nmx-camera-control.is-dialog{width:calc(100vw - 24px)}.nmx-camera-presets{width:110px;min-width:110px}.nmx-camera-control:not(:lang(zh-CN)):not(:lang(zh-TW)):not(:lang(ja)):not(:lang(ko)) .nmx-camera-category-label{width:45px;min-width:45px}}
+/* Only a genuinely short canvas reduces the panel height; moving its owner does not. */
+.nmx-camera-control.is-short{overflow-y:auto}
+.nmx-camera-control.is-short .nmx-camera-body{min-height:120px;flex-shrink:0}

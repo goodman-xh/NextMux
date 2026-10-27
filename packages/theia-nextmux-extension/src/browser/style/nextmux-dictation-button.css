@@ -1,0 +1,26 @@
+.nmx-shell button.nmx-dictation-button:is(.nmx-mic-button, .nmx-comic-voice-button) {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    flex: 0 0 30px; width: 30px; min-width: 30px; height: 30px; min-height: 30px; padding: 0;
+    border: 0; border-radius: 50%; background: transparent; color: inherit; box-shadow: none; overflow: visible;
+}
+/* Existing active-mic/theme rules use !important; this scoped rule wins in either CSS order. */
+.nmx-shell button.nmx-dictation-button.is-listening[aria-pressed="true"],
+.nmx-shell button.nmx-dictation-button.is-listening[aria-pressed="true"]:hover {
+    background: rgba(229, 83, 83, .17) !important; color: inherit !important;
+}
+button.nmx-dictation-button > .codicon { position: relative; z-index: 1; }
+.nmx-shell button.nmx-dictation-button > .nmx-dictation-ripple { display: block; }
+.nmx-dictation-ripple { position: absolute; inset: 0; pointer-events: none; }
+.nmx-dictation-ripple::before, .nmx-dictation-ripple::after {
+    content: ''; position: absolute; inset: 2px;
+    border: 1px solid rgba(229, 83, 83, .7); border-radius: 50%; opacity: 0;
+    animation: nmx-native-dictation-ripple 300ms ease-out 1 both;
+}
+.nmx-dictation-ripple::after { animation-delay: 35ms; }
+@keyframes nmx-native-dictation-ripple {
+    from { opacity: calc(.2 + var(--nmx-dictation-level) * .5); transform: scale(1); }
+    to { opacity: 0; transform: scale(calc(1.15 + var(--nmx-dictation-level) * .65)); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .nmx-dictation-ripple::before, .nmx-dictation-ripple::after { animation: none; opacity: calc(var(--nmx-dictation-level) * .6); }
+}

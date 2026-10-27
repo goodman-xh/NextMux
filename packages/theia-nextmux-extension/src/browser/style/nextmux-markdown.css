@@ -1,0 +1,769 @@
+/* Conversation Markdown: typography, code, tables and lists for replies.
+ *
+ * Proportions follow the Codex desktop reply column and OpenCode's session
+ * Markdown (MIT); syntax colours mirror the Desktop Codex (macOS/Windows
+ * ChatGPT) light and dark code palettes. Every block uses `margin-block: var(--md-mt)
+ * var(--md-mb)` so a streamed reply split into cached blocks lays out exactly
+ * like the finished single document (no jump when streaming ends). */
+
+.nmx-assistant-markdown,
+.nmx-user-markdown {
+    --md-gap: 10px;
+    --md-rule: rgba(255, 255, 255, .09);
+    --md-rule-strong: rgba(255, 255, 255, .2);
+    --md-inline-bg: rgba(255, 255, 255, .075);
+    --md-code-bg: #181818;
+    --md-code-border: rgba(255, 255, 255, .08);
+    --md-code-head: #b4b4b4;
+    --md-hover: rgba(255, 255, 255, .08);
+    --md-head-bg: rgba(255, 255, 255, .04);
+    --md-zebra: rgba(255, 255, 255, .022);
+    --md-link: #8ab4f8;
+    --md-success: #61c990;
+    --md-tok-comment: #9b9b9b;
+    --md-tok-keyword: #f8a6c8;
+    --md-tok-string: #83d197;
+    --md-tok-escape: #f1a275;
+    --md-tok-number: #f1a275;
+    --md-tok-type: #b897f4;
+    --md-tok-meta: #63a8f8;
+    --md-tok-property: #f9dc78;
+    --md-tok-tag: #63a8f8;
+    --md-tok-function: #b897f4;
+    --md-tok-inserted: #aff5b4;
+    --md-tok-inserted-bg: rgba(46, 160, 67, .15);
+    --md-tok-deleted: #ffdcd7;
+    --md-tok-deleted-bg: rgba(248, 81, 73, .15);
+    text-autospace: normal;
+}
+
+.nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) {
+    --md-rule: rgba(31, 27, 30, .1);
+    --md-rule-strong: rgba(31, 27, 30, .22);
+    --md-inline-bg: rgba(31, 27, 30, .06);
+    --md-code-bg: #f9f9f9;
+    --md-code-border: rgba(13, 13, 13, .08);
+    --md-code-head: #5d5d5d;
+    --md-hover: rgba(31, 27, 30, .07);
+    --md-head-bg: rgba(31, 27, 30, .035);
+    --md-zebra: rgba(31, 27, 30, .022);
+    --md-link: #0969da;
+    --md-success: #1a7f37;
+    --md-tok-comment: #757575;
+    --md-tok-keyword: #ab4f7a;
+    --md-tok-string: #3a843f;
+    --md-tok-escape: #ac4f23;
+    --md-tok-number: #ac4f23;
+    --md-tok-type: #643cae;
+    --md-tok-meta: #1f4e94;
+    --md-tok-property: #b8802b;
+    --md-tok-tag: #1f4e94;
+    --md-tok-function: #643cae;
+    --md-tok-inserted: #116329;
+    --md-tok-inserted-bg: #e6ffec;
+    --md-tok-deleted: #82071e;
+    --md-tok-deleted-bg: #ffebe9;
+}
+
+/* ---- Block rhythm -------------------------------------------------- */
+
+.nmx-desktop-widget .nmx-assistant-markdown :is(p, ul, ol, blockquote, pre, hr, .nmx-md-code, .nmx-md-table, .nmx-md-math, h1, h2, h3, h4, h5, h6) {
+    margin-block: var(--md-mt, 0) var(--md-mb, var(--md-gap));
+}
+.nmx-desktop-widget .nmx-assistant-markdown h1 { --md-mt: 22px; --md-mb: 10px; }
+.nmx-desktop-widget .nmx-assistant-markdown h2 { --md-mt: 20px; --md-mb: 8px; }
+.nmx-desktop-widget .nmx-assistant-markdown h3 { --md-mt: 18px; --md-mb: 6px; }
+.nmx-desktop-widget .nmx-assistant-markdown :is(h4, h5, h6) { --md-mt: 14px; --md-mb: 4px; }
+.nmx-desktop-widget .nmx-assistant-markdown hr { --md-mt: 18px; --md-mb: 18px; }
+.nmx-desktop-widget .nmx-assistant-markdown :is(.nmx-md-code, .nmx-md-table) { --md-mt: 4px; --md-mb: 12px; }
+.nmx-desktop-widget .nmx-assistant-markdown li > :is(p, ul, ol, .nmx-md-code, .nmx-md-table, blockquote) { --md-mt: 0; --md-mb: 4px; }
+.nmx-desktop-widget .nmx-assistant-markdown li > :is(ul, ol) { --md-mt: 4px; --md-mb: 0; }
+
+/* The outer edges of a reply are flush; inner block boundaries keep their
+   natural margins, which collapse through the (padding-less) block wrappers. */
+.nmx-desktop-widget .nmx-assistant-markdown > :first-child { margin-top: 0; }
+.nmx-desktop-widget .nmx-assistant-markdown > :last-child { margin-bottom: 0; }
+.nmx-desktop-widget .nmx-stream-text > .nmx-assistant-markdown + .nmx-assistant-markdown { margin-top: 0; }
+.nmx-desktop-widget .nmx-stream-text > .nmx-assistant-markdown:not(:first-child) > :first-child { margin-top: var(--md-mt, 0); }
+.nmx-desktop-widget .nmx-stream-text > .nmx-assistant-markdown:not(:last-child) > :last-child { margin-bottom: var(--md-mb, var(--md-gap)); }
+
+/* Streamed prose (`.nmx-stream-text`) becomes the turn response
+   (`.nmx-gateway-content`) when the run completes. Both share one line height
+   and the response takes the exact place of the streamed text, so the hand-off
+   is invisible: 6px after the turn start, 2px gap + 6px after a status row. */
+.nmx-desktop-widget :is(.nmx-stream-text, .nmx-gateway-content) .nmx-assistant-markdown { line-height: 1.6; }
+.nmx-desktop-widget .nmx-agent-message > div > .nmx-gateway-content:first-child { margin-top: 6px; }
+.nmx-desktop-widget .nmx-agent-message > div > .nmx-stream:has(+ .nmx-gateway-content) { margin-bottom: 0; }
+.nmx-desktop-widget .nmx-agent-message > div > .nmx-stream + .nmx-gateway-content { margin-top: 8px; }
+
+/* ---- Headings ------------------------------------------------------ */
+
+.nmx-desktop-widget .nmx-assistant-markdown :is(h1, h2, h3, h4, h5, h6) {
+    color: var(--nmx-text);
+    font-weight: 650;
+    line-height: 1.35;
+    letter-spacing: -.005em;
+    text-wrap: balance;
+}
+.nmx-desktop-widget .nmx-assistant-markdown h1 { font-size: 1.5em; letter-spacing: -.012em; }
+.nmx-desktop-widget .nmx-assistant-markdown h2 { font-size: 1.28em; letter-spacing: -.01em; }
+.nmx-desktop-widget .nmx-assistant-markdown h3 { font-size: 1.12em; }
+.nmx-desktop-widget .nmx-assistant-markdown h4 { font-size: 1em; }
+.nmx-desktop-widget .nmx-assistant-markdown :is(h5, h6) { font-size: .94em; color: var(--nmx-subtle); }
+.nmx-desktop-widget .nmx-assistant-markdown :is(strong, b) { font-weight: 650; }
+
+/* ---- Lists --------------------------------------------------------- */
+
+.nmx-desktop-widget .nmx-assistant-markdown :is(ul, ol) { padding-inline-start: 1.55em; }
+.nmx-desktop-widget .nmx-assistant-markdown li { padding-inline-start: .15em; }
+.nmx-desktop-widget .nmx-assistant-markdown li + li { margin-top: 4px; }
+.nmx-desktop-widget .nmx-assistant-markdown li::marker { color: var(--nmx-muted); }
+.nmx-desktop-widget .nmx-assistant-markdown ol > li::marker { font-variant-numeric: tabular-nums; }
+.nmx-desktop-widget .nmx-assistant-markdown ul ul { list-style-type: circle; }
+.nmx-desktop-widget .nmx-assistant-markdown ul ul ul { list-style-type: square; }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-task-list { padding-inline-start: .25em; list-style: none; }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) li.nmx-md-task { padding-inline-start: 0; }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-task-box {
+    appearance: none;
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    margin-inline-end: 8px;
+    vertical-align: -2.5px;
+    border: 1.5px solid var(--md-rule-strong);
+    border-radius: 5px;
+    background: transparent center / 11px 11px no-repeat;
+    opacity: 1;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-task-box:checked {
+    border-color: var(--md-success);
+    background-color: var(--md-success);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E");
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) li.nmx-md-task:has(> .nmx-md-task-box:checked, > p > .nmx-md-task-box:checked) { color: var(--nmx-subtle); }
+
+/* ---- Inline -------------------------------------------------------- */
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :not(pre) > code {
+    padding: .12em .4em;
+    border: 0;
+    border-radius: 6px;
+    color: var(--nmx-text);
+    background: var(--md-inline-bg);
+    font-size: .86em;
+    line-height: 1.45;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(h1, h2, h3, h4) > code { font-size: .9em; }
+
+/* The inline-code rule above also matches the <code> inside a path chip. Reset
+   it there: a chip must never wrap or show a second inline-code background. */
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link) > code {
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    font-size: inherit !important;
+    line-height: inherit !important;
+    white-space: nowrap !important;
+    overflow-wrap: normal !important;
+    word-break: keep-all !important;
+}
+
+/* Bare filenames and image chips stay inline with a pointer cursor and a
+   transparent surface in both themes. */
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link) {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: min(100%, 56ch);
+    margin: 0 1px;
+    padding: 1px 2px;
+    overflow: hidden;
+    border: 1px solid transparent;
+    border-color: transparent !important;
+    border-radius: 7px;
+    color: var(--nmx-text);
+    background: transparent !important;
+    box-shadow: none !important;
+    font: inherit;
+    font-size: .92em;
+    line-height: 1.55;
+    text-decoration: none;
+    text-overflow: clip;
+    vertical-align: baseline;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link):hover {
+    border-color: transparent !important;
+    color: #bfdbfe;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.nmx-theme-light .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link),
+.nmx-desktop-widget.nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link),
+.nmx-desktop-widget .nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link),
+[data-nextmux-theme='light'] .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link) {
+    border-color: transparent !important;
+    color: #0f172a !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.nmx-theme-light .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link):hover,
+.nmx-desktop-widget.nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link):hover,
+.nmx-desktop-widget .nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link):hover,
+[data-nextmux-theme='light'] .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-local-file-link, code.nmx-local-file-link):hover {
+    border-color: transparent !important;
+    color: #020617 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Long paths keep their tail and fade on the left. The decorator marks a long
+   rendered label with `is-long-path`; the icon stays outside <code>, so it is
+   never faded. */
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.is-long-path, a.nmx-local-file-link.is-long-path) > code {
+    display: inline-flex;
+    justify-content: flex-end;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+    -webkit-mask-image: linear-gradient(to right, transparent 0px, rgba(0, 0, 0, .35) 10px, #000 28px, #000 100%);
+    mask-image: linear-gradient(to right, transparent 0px, rgba(0, 0, 0, .35) 10px, #000 28px, #000 100%);
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) code.nmx-local-file-link.is-long-path {
+    justify-content: flex-end;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: clip;
+    white-space: nowrap;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) code.nmx-local-file-link.is-long-path:not(:has(> .codicon)) {
+    -webkit-mask-image: linear-gradient(to right, transparent 0px, rgba(0, 0, 0, .35) 10px, #000 28px, #000 100%);
+    mask-image: linear-gradient(to right, transparent 0px, rgba(0, 0, 0, .35) 10px, #000 28px, #000 100%);
+}
+
+/* Split file labels fade only the directory; the filename retains its own cap.
+   Keep the is-long-path rules above for historical, unsplit labels. */
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link) {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: min(100%, 56ch);
+    padding: 1px 2px;
+    border-color: transparent !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-overflow: clip;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix) {
+    display: inline-flex;
+    align-items: baseline;
+    max-width: min(100%, 56ch);
+    overflow: hidden;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix) > code,
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link) > code.has-dir-prefix,
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix, code.nmx-local-file-link.has-dir-prefix):not(:has(> code)) {
+    display: inline-flex;
+    align-items: baseline;
+    justify-content: flex-start;
+    gap: 0;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    -webkit-mask-image: none;
+    mask-image: none;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix) > code,
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link) > code.has-dir-prefix {
+    max-width: 100%;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link.has-dir-prefix, a.nmx-local-file-link.has-dir-prefix):not(:has(> code)) > .codicon {
+    margin-inline-end: 5px;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-dir {
+    display: inline-flex;
+    justify-content: flex-start;
+    flex: 1 1 3ch;
+    min-width: 2.5ch;
+    overflow: hidden;
+    direction: rtl;
+    unicode-bidi: plaintext;
+    text-overflow: clip;
+    white-space: nowrap;
+    opacity: 0.72;
+    -webkit-mask-image: linear-gradient(to right, transparent 0px, #000 24px, #000 100%);
+    mask-image: linear-gradient(to right, transparent 0px, #000 24px, #000 100%);
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-name {
+    display: inline-block;
+    flex: 0 0 auto;
+    min-width: 0;
+    max-width: min(38ch, 320px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+:is(.nmx-theme-light, [data-nextmux-theme='light'], body.theia-light, body.NextMux-light) .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link),
+.nmx-desktop-widget:is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link),
+.nmx-desktop-widget :is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link) {
+    color: #0f172a !important;
+}
+
+:is(.nmx-theme-light, [data-nextmux-theme='light'], body.theia-light, body.NextMux-light) .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link):hover,
+.nmx-desktop-widget:is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link):hover,
+.nmx-desktop-widget :is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(a.nmx-file-link, a.nmx-local-file-link, code.nmx-local-file-link):hover {
+    color: #020617 !important;
+}
+
+:is(.nmx-theme-light, [data-nextmux-theme='light'], body.theia-light, body.NextMux-light) .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-dir,
+.nmx-desktop-widget:is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-dir,
+.nmx-desktop-widget :is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-dir {
+    color: #1e293b;
+    opacity: 0.9;
+}
+
+:is(.nmx-theme-light, [data-nextmux-theme='light'], body.theia-light, body.NextMux-light) .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-name,
+.nmx-desktop-widget:is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-name,
+.nmx-desktop-widget :is(.nmx-theme-light, [data-nextmux-theme='light']) :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-file-link-name {
+    color: #0f172a;
+    font-weight: 600;
+}
+
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) kbd {
+    padding: .05em .4em;
+    border: 1px solid var(--md-rule-strong);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    font-size: .82em;
+}
+.nmx-desktop-widget .nmx-assistant-markdown a {
+    color: var(--md-link);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, currentColor 38%, transparent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    border-radius: 3px;
+    transition: text-decoration-color 150ms ease;
+}
+.nmx-desktop-widget .nmx-assistant-markdown a:hover { text-decoration-color: currentColor; }
+.nmx-desktop-widget .nmx-assistant-markdown del { color: var(--nmx-subtle); }
+
+/* ---- Quotes, rules, images ------------------------------------------ */
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote {
+    padding: 2px 0;
+    padding-inline-start: 14px;
+    border: 0;
+    border-inline-start: 3px solid var(--md-rule-strong);
+    border-radius: 2px;
+    color: var(--nmx-subtle);
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote > :last-child { margin-bottom: 0; }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote.nmx-md-alert {
+    --nmx-alert-color: #3b82f6;
+    border-inline-start-color: var(--nmx-alert-color);
+    color: var(--nmx-text);
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote.nmx-md-alert.is-tip { --nmx-alert-color: #10b981; }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote.nmx-md-alert.is-important { --nmx-alert-color: #8b5cf6; }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote.nmx-md-alert.is-warning { --nmx-alert-color: #f59e0b; }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote.nmx-md-alert.is-caution { --nmx-alert-color: #ef4444; }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-alert-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    color: var(--nmx-alert-color);
+    font-weight: 600;
+    font-size: .92em;
+    line-height: 1.4;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) details.nmx-md-think {
+    margin-block: var(--md-mt, 4px) var(--md-mb, 8px);
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-think-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    color: var(--nmx-muted);
+    font-size: 13px;
+    line-height: 1.5;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-think-summary::-webkit-details-marker { display: none; }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-think-preview {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: .75;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-think-chevron {
+    font-size: 12px;
+    transition: transform 150ms ease-out;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) details.nmx-md-think[open] > .nmx-md-think-summary .nmx-md-think-chevron {
+    transform: rotate(90deg);
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-think-body {
+    margin-top: 4px;
+    padding-inline-start: 12px;
+    border-inline-start: 2px solid var(--md-rule-strong);
+    color: var(--nmx-subtle);
+    font-size: 13.5px;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) hr {
+    height: 1px;
+    border: 0;
+    background: var(--md-rule);
+}
+.nmx-desktop-widget .nmx-assistant-markdown img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+    vertical-align: middle;
+}
+.nmx-desktop-widget .nmx-assistant-markdown .nmx-site-icon img { border-radius: 3px; }
+
+/* ---- Code blocks ---------------------------------------------------- */
+
+.nmx-desktop-widget .nmx-md-code {
+    position: relative;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    border: 1px solid var(--md-code-border);
+    border-radius: 12px;
+    background: var(--md-code-bg);
+    direction: ltr;
+    text-align: left;
+}
+.nmx-desktop-widget .nmx-md-code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    height: 34px;
+    padding: 0 6px 0 14px;
+    color: var(--md-code-head);
+    font: 500 12px/1 var(--nmx-ui-font, system-ui);
+    user-select: none;
+}
+.nmx-desktop-widget .nmx-md-code-lang {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.nmx-desktop-widget .nmx-md-code-copy {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 8px;
+    color: var(--md-code-head);
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+    transition: background-color 150ms ease, color 150ms ease;
+}
+.nmx-desktop-widget .nmx-md-code-copy:hover { color: var(--nmx-text); background: var(--md-hover); }
+.nmx-desktop-widget .nmx-md-code-copy:active { transform: scale(.96); }
+.nmx-desktop-widget .nmx-md-code-copy .codicon { font-size: 13px; transition: opacity 160ms ease, transform 160ms ease; }
+.nmx-desktop-widget .nmx-md-code-copy .codicon-check { position: absolute; left: 8px; opacity: 0; transform: scale(.6); }
+.nmx-desktop-widget .nmx-md-code-copy.is-copied { color: var(--md-success); }
+.nmx-desktop-widget .nmx-md-code-copy.is-copied .codicon-copy { opacity: 0; transform: scale(.6); }
+.nmx-desktop-widget .nmx-md-code-copy.is-copied .codicon-check { opacity: 1; transform: scale(1); }
+.nmx-desktop-widget .nmx-md-code-copy-label::after { content: attr(data-copy); }
+.nmx-desktop-widget .nmx-md-code-copy.is-copied .nmx-md-code-copy-label::after { content: attr(data-copied); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-code > pre {
+    max-width: 100%;
+    max-height: min(360px, 50dvh);
+    margin: 0;
+    padding: 0 16px 14px;
+    overflow: auto;
+    overscroll-behavior: contain auto;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    scrollbar-width: thin;
+    scrollbar-color: var(--md-rule-strong) transparent;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(.nmx-md-code > pre, pre.nmx-md-plain-code) > code {
+    display: block;
+    width: max-content;
+    min-width: 100%;
+    padding: 0;
+    border-radius: 0;
+    color: var(--nmx-text);
+    background: transparent;
+    font-size: 13px;
+    line-height: 1.55;
+    tab-size: 4;
+    white-space: pre;
+    overflow-wrap: normal;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) pre.nmx-md-plain-code {
+    max-height: min(360px, 50dvh);
+    overflow: auto;
+    overscroll-behavior: contain auto;
+    padding: 12px 16px;
+    border: 1px solid var(--md-code-border);
+    border-radius: 12px;
+    background: var(--md-code-bg);
+}
+.nmx-md-code .nmx-tok-comment { color: var(--md-tok-comment); font-style: normal; }
+.nmx-md-code .nmx-tok-keyword { color: var(--md-tok-keyword); }
+.nmx-md-code .nmx-tok-string { color: var(--md-tok-string); }
+.nmx-md-code .nmx-tok-escape { color: var(--md-tok-escape); }
+.nmx-md-code .nmx-tok-number { color: var(--md-tok-number); }
+.nmx-md-code .nmx-tok-type { color: var(--md-tok-type); }
+.nmx-md-code .nmx-tok-meta { color: var(--md-tok-meta); }
+.nmx-md-code .nmx-tok-property { color: var(--md-tok-property); }
+.nmx-md-code .nmx-tok-tag { color: var(--md-tok-tag); }
+.nmx-md-code .nmx-tok-function { color: var(--md-tok-function); }
+.nmx-md-code .nmx-tok-inserted { display: inline-block; min-width: 100%; color: var(--md-tok-inserted); background: var(--md-tok-inserted-bg); }
+.nmx-md-code .nmx-tok-deleted { display: inline-block; min-width: 100%; color: var(--md-tok-deleted); background: var(--md-tok-deleted-bg); }
+
+/* ---- Tables --------------------------------------------------------- */
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-table {
+    /* The frame wraps the table (OpenCode renders tables as content-width
+       blocks); a wide table fills the column and scrolls inside the frame. */
+    width: fit-content;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    border: 1px solid var(--md-rule);
+    border-radius: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--md-rule-strong) transparent;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-table > table {
+    display: table;
+    width: auto;
+    max-width: none;
+    margin: 0;
+    overflow: visible;
+    border: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: .93em;
+    line-height: 1.5;
+    font-variant-numeric: tabular-nums;
+}
+/* Cells wrap to fit the column; only when every column is at its minimum
+   width does the table scroll inside its own frame. Each cell keeps the
+   direction of its own text (a number with a unit in an Arabic table). */
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-table :is(th, td) {
+    min-width: 5.5em;
+    max-width: 36em;
+    padding: 8px 14px;
+    unicode-bidi: plaintext;
+    border: 0;
+    border-top: 1px solid var(--md-rule);
+    text-align: start;
+    vertical-align: top;
+    overflow-wrap: break-word;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-table th {
+    border-top: 0;
+    color: var(--nmx-text);
+    background: var(--md-head-bg);
+    font-weight: 600;
+    white-space: nowrap;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-table tbody tr:nth-child(even) > td { background: var(--md-zebra); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-table :is(th, td)[style*='center'] { text-align: center; }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-table :is(th, td)[style*='right'] { text-align: end; white-space: nowrap; }
+
+/* ---- Math ------------------------------------------------------------------
+ * TeX shown as Unicode in the system math font (see nextmux-markdown-math.ts).
+ * Display formulas are centred and scroll inside their own line when wide. */
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(.nmx-md-math, .nmx-md-math-inline) {
+    font-family: 'Cambria Math', 'STIX Two Math', 'Latin Modern Math', 'Noto Sans Math', 'Times New Roman', serif;
+    font-variant-numeric: lining-nums;
+    unicode-bidi: isolate;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-math-inline {
+    padding: 0 .08em;
+    font-size: 1.06em;
+    white-space: nowrap;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-math {
+    --md-mt: 6px;
+    --md-mb: 14px;
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 2px 0;
+    font-size: 1.14em;
+    line-height: 1.6;
+    text-align: center;
+    white-space: pre-wrap;
+    scrollbar-width: thin;
+}
+
+/* ---- Sent prompts share code/inline treatment --------------------------- */
+
+.nmx-desktop-widget .nmx-user-markdown .nmx-md-code { margin: 6px 0; }
+.nmx-desktop-widget .nmx-user-markdown .nmx-md-code-header { height: 30px; }
+
+@media (prefers-reduced-motion: reduce) {
+    .nmx-desktop-widget .nmx-md-code-copy,
+    .nmx-desktop-widget .nmx-md-code-copy .codicon,
+    .nmx-desktop-widget .nmx-assistant-markdown a { transition: none; }
+    .nmx-desktop-widget .nmx-md-code-copy:active { transform: none; }
+}
+
+/* ---- Unified conversation & subagent scrollbars (.nmx-stream-details.is-diff style) ---- */
+/* Code, tables, diffs, terminal output, main conversation thread and subagent conversations all share the exact
+   thin rounded pill scrollbar of `.nmx-stream-details.is-diff` (Chromium ignores ::-webkit-scrollbar while
+   scrollbar-width/-color are set, hence the resets). */
+.nmx-desktop-widget :is(
+    .nmx-task-view,
+    .nmx-workspace-scroll,
+    .nmx-agent-child-detail,
+    .nmx-role-conversation-scroll,
+    .nmx-md-code > pre,
+    pre.nmx-md-plain-code,
+    .nmx-md-table,
+    .nmx-stream-details.is-text,
+    .nmx-stream-details.is-diff,
+    .nmx-stream-details.is-terminal > .nmx-agent-command-terminal,
+    .nmx-agent-command-xterm .xterm-viewport,
+    .nmx-composer textarea,
+    .nmx-agent-child-composer textarea
+) {
+    scrollbar-width: auto !important;
+    scrollbar-color: auto !important;
+}
+.nmx-desktop-widget :is(
+    .nmx-task-view,
+    .nmx-workspace-scroll,
+    .nmx-agent-child-detail,
+    .nmx-role-conversation-scroll,
+    .nmx-md-code > pre,
+    pre.nmx-md-plain-code,
+    .nmx-md-table,
+    .nmx-stream-details.is-text,
+    .nmx-stream-details.is-diff,
+    .nmx-stream-details.is-terminal > .nmx-agent-command-terminal,
+    .nmx-agent-command-xterm .xterm-viewport,
+    .nmx-composer textarea,
+    .nmx-agent-child-composer textarea
+)::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background: transparent;
+}
+.nmx-desktop-widget :is(
+    .nmx-task-view,
+    .nmx-workspace-scroll,
+    .nmx-agent-child-detail,
+    .nmx-role-conversation-scroll,
+    .nmx-md-code > pre,
+    pre.nmx-md-plain-code,
+    .nmx-md-table,
+    .nmx-stream-details.is-text,
+    .nmx-stream-details.is-diff,
+    .nmx-stream-details.is-terminal > .nmx-agent-command-terminal,
+    .nmx-agent-command-xterm .xterm-viewport,
+    .nmx-composer textarea,
+    .nmx-agent-child-composer textarea
+)::-webkit-scrollbar-track {
+    background: transparent !important;
+}
+.nmx-desktop-widget :is(
+    .nmx-task-view,
+    .nmx-workspace-scroll,
+    .nmx-agent-child-detail,
+    .nmx-role-conversation-scroll,
+    .nmx-md-code > pre,
+    pre.nmx-md-plain-code,
+    .nmx-md-table,
+    .nmx-stream-details.is-text,
+    .nmx-stream-details.is-diff,
+    .nmx-stream-details.is-terminal > .nmx-agent-command-terminal,
+    .nmx-agent-command-xterm .xterm-viewport,
+    .nmx-composer textarea,
+    .nmx-agent-child-composer textarea
+)::-webkit-scrollbar-thumb {
+    border: 2px solid transparent !important;
+    border-radius: 8px;
+    background-color: color-mix(in srgb, var(--nmx-text, #d8d4d8) 18%, transparent) !important;
+    background-clip: padding-box !important;
+}
+.nmx-desktop-widget :is(
+    .nmx-task-view,
+    .nmx-workspace-scroll,
+    .nmx-agent-child-detail,
+    .nmx-role-conversation-scroll,
+    .nmx-md-code > pre,
+    pre.nmx-md-plain-code,
+    .nmx-md-table,
+    .nmx-stream-details.is-text,
+    .nmx-stream-details.is-diff,
+    .nmx-stream-details.is-terminal > .nmx-agent-command-terminal,
+    .nmx-agent-command-xterm .xterm-viewport,
+    .nmx-composer textarea,
+    .nmx-agent-child-composer textarea
+):is(:hover, :focus-within)::-webkit-scrollbar-thumb {
+    background-color: var(--md-rule-strong, color-mix(in srgb, var(--nmx-text, #d8d4d8) 28%, transparent)) !important;
+}
+.nmx-desktop-widget :is(
+    .nmx-task-view,
+    .nmx-workspace-scroll,
+    .nmx-agent-child-detail,
+    .nmx-role-conversation-scroll,
+    .nmx-md-code > pre,
+    pre.nmx-md-plain-code,
+    .nmx-md-table,
+    .nmx-stream-details.is-text,
+    .nmx-stream-details.is-diff,
+    .nmx-stream-details.is-terminal > .nmx-agent-command-terminal,
+    .nmx-agent-command-xterm .xterm-viewport,
+    .nmx-composer textarea,
+    .nmx-agent-child-composer textarea
+)::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in srgb, var(--nmx-text, #d8d4d8) 40%, transparent) !important;
+    border-width: 1px !important;
+}
+.nmx-desktop-widget :is(
+    .nmx-task-view,
+    .nmx-workspace-scroll,
+    .nmx-agent-child-detail,
+    .nmx-role-conversation-scroll,
+    .nmx-md-code > pre,
+    pre.nmx-md-plain-code,
+    .nmx-md-table,
+    .nmx-stream-details.is-text,
+    .nmx-stream-details.is-diff,
+    .nmx-stream-details.is-terminal > .nmx-agent-command-terminal,
+    .nmx-agent-command-xterm .xterm-viewport,
+    .nmx-composer textarea,
+    .nmx-agent-child-composer textarea
+)::-webkit-scrollbar-corner {
+    background: transparent;
+}

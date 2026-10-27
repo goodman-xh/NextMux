@@ -1,0 +1,614 @@
+/*
+ * 制作台 — the production desk. It covers only the comic studio (the project list and the top bar stay
+ * visible): a dimmed backdrop, a large panel, and carousels in the middle.
+ */
+.nmx-shell .nmx-comic-studio { position: relative; }
+
+.nmx-desk-backdrop {
+    position: absolute; inset: 0; z-index: 40; display: flex; align-items: stretch; justify-content: center;
+    padding: 14px; background: color-mix(in srgb, var(--nmx-bg) 55%, transparent); backdrop-filter: blur(10px);
+    animation: nmx-desk-in 180ms ease-out;
+}
+@keyframes nmx-desk-in { from { opacity: 0; } to { opacity: 1; } }
+
+.nmx-desk {
+    display: flex; flex-direction: column; width: 100%; max-width: 1280px; min-height: 0;
+    border: 1px solid var(--nmx-border); border-radius: 18px; background: var(--nmx-panel);
+    box-shadow: 0 24px 70px rgb(0 0 0 / 28%); overflow: hidden;
+}
+
+.nmx-desk-header { display: flex; align-items: center; gap: 16px; padding: 12px 16px; border-bottom: 1px solid var(--nmx-border); }
+.nmx-desk-title { display: flex; flex-direction: column; min-width: 0; }
+.nmx-desk-title span { font-size: 11px; color: var(--nmx-muted); letter-spacing: 0.04em; }
+.nmx-desk-title strong { font-size: 15px; color: var(--nmx-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.nmx-desk-steps { display: flex; gap: 4px; margin: 0 auto; padding: 0; list-style: none; }
+.nmx-desk-steps button {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 0; border-radius: 999px;
+    background: transparent; color: var(--nmx-muted); font-size: 13px; cursor: pointer;
+}
+.nmx-desk-steps button:disabled { cursor: default; }
+.nmx-desk-steps span {
+    display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+    border: 1px solid var(--nmx-border-strong); font-size: 11px;
+}
+.nmx-desk-steps li.is-current button { background: color-mix(in srgb, var(--nmx-accent) 16%, transparent); color: var(--nmx-text); font-weight: 600; }
+.nmx-desk-steps li.is-current span { background: var(--nmx-text); border-color: var(--nmx-text); color: var(--nmx-panel); font-weight: 700; }
+.nmx-desk-steps li.is-done span { border-color: var(--nmx-accent); color: var(--nmx-accent); }
+.nmx-desk-steps li:not(:last-child)::after { content: ''; display: inline-block; width: 18px; height: 1px; margin: 0 2px; vertical-align: middle; background: var(--nmx-border); }
+.nmx-desk-steps li { display: inline-flex; align-items: center; }
+.nmx-desk-actions { display: flex; align-items: center; gap: 8px; }
+.nmx-desk-actions button { display: inline-flex; align-items: center; gap: 6px; }
+.nmx-desk-progress { font-size: 12px; color: var(--nmx-muted); font-variant-numeric: tabular-nums; }
+.nmx-desk-close { width: 30px; height: 30px; justify-content: center; border-radius: 8px; font-size: 18px; line-height: 1; }
+
+.nmx-desk-countdown {
+    display: flex; align-items: center; gap: 12px; margin: 10px 16px 0; padding: 10px 14px; border-radius: 12px;
+    background: color-mix(in srgb, var(--nmx-accent) 10%, var(--nmx-panel)); border: 1px solid color-mix(in srgb, var(--nmx-accent) 35%, transparent);
+}
+.nmx-desk-countdown strong { flex: 1; font-size: 13px; font-weight: 500; color: var(--nmx-text); }
+.nmx-desk-countdown.is-stopped { background: var(--nmx-panel-2); border-color: var(--nmx-border); }
+.nmx-desk-ring {
+    --nmx-left: 1; display: inline-grid; place-items: center; flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%;
+    font-weight: 700; font-variant-numeric: tabular-nums; color: var(--nmx-text);
+    background: radial-gradient(circle, var(--nmx-panel) 12px, transparent 13px), conic-gradient(var(--nmx-accent) calc(var(--nmx-left) * 360deg), var(--nmx-border) 0);
+}
+
+.nmx-desk-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; perspective: 1400px; }
+.nmx-desk-empty { display: flex; flex-direction: column; height: 100%; align-items: center; justify-content: center; gap: 10px; color: var(--nmx-muted); font-size: 14px; }
+.nmx-desk-empty .codicon { font-size: 26px; color: var(--nmx-accent); }
+.nmx-desk-empty strong { font-size: 16px; font-weight: 600; color: var(--nmx-text); }
+.nmx-desk-empty small { max-width: 520px; text-align: center; line-height: 1.6; }
+
+/* Carousels: items are placed absolutely around the focused one (transform set inline). */
+.nmx-desk-carousel { position: relative; height: 100%; min-height: 320px; transform-style: preserve-3d; outline: none; }
+.nmx-desk-carousel > article {
+    position: absolute; top: 18px; bottom: 44px; left: 50%; transition: transform 420ms cubic-bezier(.2,.8,.2,1), opacity 320ms ease;
+    transform-origin: center center; will-change: transform;
+}
+.nmx-desk-arrow {
+    position: absolute; top: 50%; z-index: 20; width: 38px; height: 38px; margin-top: -19px; border-radius: 50%;
+    display: grid; place-items: center; border: 1px solid var(--nmx-border); background: var(--nmx-panel); box-shadow: 0 4px 14px rgb(0 0 0 / 16%);
+}
+.nmx-desk-arrow.is-left { left: 14px; }
+.nmx-desk-arrow.is-right { right: 14px; }
+.nmx-desk-arrow:disabled { opacity: 0.35; }
+.nmx-desk-dots { position: absolute; left: 0; right: 0; bottom: 14px; z-index: 20; display: flex; justify-content: center; gap: 6px; }
+.nmx-desk-dots button { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%; background: var(--nmx-border-strong); cursor: pointer; }
+.nmx-desk-dots button.is-current { width: 20px; border-radius: 4px; background: var(--nmx-accent); }
+
+/* Episodes: a card with the clip deck on top (filming) and the script below. */
+.nmx-desk-episode {
+    width: min(620px, 58%); display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 16px;
+    border: 1px solid var(--nmx-border); background: var(--nmx-panel-2); box-shadow: 0 16px 40px rgb(0 0 0 / 14%); cursor: pointer;
+}
+.nmx-desk-episode.is-focus { cursor: default; border-color: color-mix(in srgb, var(--nmx-accent) 55%, var(--nmx-border)); }
+.nmx-desk-episode > header { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.nmx-desk-episode > header strong { font-size: 15px; color: var(--nmx-text); white-space: nowrap; }
+.nmx-desk-episode > header span { flex: 1; min-width: 0; color: var(--nmx-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-desk-episode > header small { color: var(--nmx-muted); font-size: 12px; white-space: nowrap; }
+.nmx-desk-script { position: relative; display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 8px; }
+.nmx-desk-script textarea {
+    flex: 1; min-height: 110px; resize: none; padding: 12px; border-radius: 12px; border: 1px solid var(--nmx-border);
+    background: var(--nmx-panel); color: var(--nmx-text); font: inherit; font-size: 13px; line-height: 1.7;
+}
+.nmx-desk-episode:not(.is-focus) .nmx-desk-script textarea { pointer-events: none; }
+.nmx-desk-apply { align-self: flex-end; display: inline-flex; align-items: center; gap: 6px; }
+
+/* 拍摄: the focused episode's clips as the same flip cards as casting (16:9), one text box below. */
+.nmx-desk-shoot { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; min-height: 0; }
+.nmx-desk-episode-bar { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 16px 0; }
+.nmx-desk-episode-bar strong { font-size: 15px; color: var(--nmx-text); }
+.nmx-desk-episode-bar span { color: var(--nmx-text); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-desk-episode-bar small { color: var(--nmx-muted); font-variant-numeric: tabular-nums; }
+.nmx-desk-episode-bar button { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; }
+.nmx-desk-carousel.is-clips { min-height: 240px; }
+.nmx-desk-carousel.is-clips > .nmx-desk-card { top: 10px; bottom: 34px; width: auto; aspect-ratio: 16 / 9; max-width: 62%; }
+.nmx-desk-card.is-clip .nmx-desk-card-front { background: #000; }
+.nmx-desk-card.is-clip .nmx-desk-card-front video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.nmx-desk-card.is-clip:not(.is-focus) .nmx-desk-card-front video { pointer-events: none; }
+.nmx-desk-card.is-clip .nmx-desk-card-back strong { max-width: 86%; font-size: 14px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-desk-card.is-clip.is-video .nmx-desk-card-back::after, .nmx-desk-card.is-clip.is-picture .nmx-desk-card-back::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit;
+    background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 22%) 50%, transparent 70%);
+    background-size: 220% 100%; animation: nmx-desk-shimmer 1.4s linear infinite;
+}
+.nmx-desk-card-flag { position: absolute; top: 8px; inset-inline-start: 8px; z-index: 2; padding: 2px 8px; border-radius: 999px; font-style: normal; font-size: 11px; color: #1b1300; background: #f3c969; }
+.nmx-desk-editor { display: flex; flex-direction: column; gap: 8px; margin: 0 16px 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--nmx-border); background: var(--nmx-panel-2); }
+.nmx-desk-tabs { display: flex; gap: 4px; }
+.nmx-desk-tabs button { padding: 4px 10px; border: 0; border-radius: 999px; background: transparent; color: var(--nmx-muted); font-size: 12px; cursor: pointer; }
+.nmx-desk-tabs button.is-current { background: color-mix(in srgb, var(--nmx-text) 12%, transparent); color: var(--nmx-text); font-weight: 600; }
+.nmx-desk-editor textarea { resize: vertical; min-height: 64px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--nmx-border); background: var(--nmx-panel); color: var(--nmx-text); font: inherit; font-size: 13px; line-height: 1.6; }
+.nmx-desk-editor > button { align-self: flex-end; display: inline-flex; align-items: center; gap: 6px; }
+.nmx-desk-clip-error { color: var(--nmx-danger); font-size: 12px; }
+
+/* 选角: character cards that flip over when their portrait arrives. */
+.nmx-desk-cast { display: grid; grid-template-rows: auto 1fr auto; height: 100%; min-height: 0; }
+.nmx-desk-lead { margin: 12px 16px 0; text-align: center; color: var(--nmx-muted); font-size: 13px; }
+.nmx-desk-card { width: min(240px, 28%); top: 12px; bottom: 36px; perspective: 1200px; cursor: pointer; }
+.nmx-desk-card.is-focus { cursor: default; }
+.nmx-desk-card-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform 700ms cubic-bezier(.3,1.3,.5,1); }
+.nmx-desk-card.is-flipped .nmx-desk-card-inner { transform: rotateY(180deg); }
+.nmx-desk-card-back, .nmx-desk-card-front {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    border-radius: 16px; border: 1px solid var(--nmx-border); backface-visibility: hidden; -webkit-backface-visibility: hidden; overflow: hidden;
+    box-shadow: 0 16px 36px rgb(0 0 0 / 20%);
+}
+.nmx-desk-card-back {
+    /* A card back to draw from: deep indigo with a gold edge, the same in light and dark themes. */
+    color: #f6e7c1;
+    border: 2px solid #c9a55a;
+    box-shadow: inset 0 0 0 6px rgb(12 16 38 / 70%), inset 0 0 0 7px rgb(201 165 90 / 55%), 0 16px 36px rgb(0 0 0 / 28%);
+    background:
+        radial-gradient(circle at 50% 38%, rgb(246 231 193 / 16%), transparent 42%),
+        repeating-linear-gradient(45deg, rgb(201 165 90 / 9%) 0 2px, transparent 2px 14px),
+        repeating-linear-gradient(-45deg, rgb(201 165 90 / 9%) 0 2px, transparent 2px 14px),
+        linear-gradient(165deg, #27306b, #121634 70%);
+}
+.nmx-desk-card-back .codicon { font-size: 28px; opacity: 0.9; }
+.nmx-desk-card-back strong { font-size: 16px; }
+.nmx-desk-card-back small { font-size: 12px; opacity: 0.85; }
+.nmx-desk-card.is-drawing .nmx-desk-card-back::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 28%) 50%, transparent 70%);
+    background-size: 220% 100%; animation: nmx-desk-shimmer 1.4s linear infinite;
+}
+@keyframes nmx-desk-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+.nmx-desk-card.is-failed .nmx-desk-card-back { background: linear-gradient(160deg, #6b2330, #2d0f15); }
+.nmx-desk-card-front { transform: rotateY(180deg); background: #fff; justify-content: flex-end; }
+.nmx-desk-card-front img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+.nmx-desk-card-front strong {
+    position: relative; width: 100%; padding: 22px 10px 10px; text-align: center; color: #fff; font-size: 14px;
+    background: linear-gradient(transparent, rgb(0 0 0 / 65%));
+}
+.nmx-desk-card-detail { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 0 16px 10px; text-align: center; }
+.nmx-desk-card-detail > div:first-child { display: flex; align-items: baseline; gap: 8px; }
+.nmx-desk-card-detail strong { font-size: 15px; color: var(--nmx-text); }
+.nmx-desk-card-detail small, .nmx-desk-card-detail em { font-size: 12px; color: var(--nmx-muted); font-style: normal; }
+.nmx-desk-card-detail em { padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--nmx-accent) 14%, transparent); color: var(--nmx-accent); }
+.nmx-desk-card-detail p { max-width: 640px; margin: 0; font-size: 12px; line-height: 1.6; color: var(--nmx-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.nmx-desk-card-actions { display: flex; gap: 8px; }
+.nmx-desk-card-actions button { display: inline-flex; align-items: center; gap: 6px; }
+.nmx-desk-card-actions select { max-width: 180px; }
+
+.nmx-desk-error { margin: 0 16px 8px; font-variant-numeric: tabular-nums; }
+/* A balance error offers to add funds, right beside what it says. */
+.nmx-desk-error.has-action { display: flex; align-items: center; gap: 12px; }
+.nmx-desk-error.has-action > span { flex: 1; min-width: 0; }
+.nmx-desk-error-action {
+    flex: none;
+    height: 28px;
+    padding: 0 12px;
+    border: 1px solid color-mix(in srgb, var(--nmx-accent) 46%, var(--nmx-border));
+    border-radius: 8px;
+    color: var(--nmx-text);
+    background: color-mix(in srgb, var(--nmx-accent) 16%, transparent);
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+.nmx-desk-error-action:hover { background: color-mix(in srgb, var(--nmx-accent) 26%, transparent); border-color: color-mix(in srgb, var(--nmx-accent) 64%, var(--nmx-border)); }
+.nmx-desk-error-action:focus-visible { outline: 2px solid color-mix(in srgb, var(--nmx-accent) 72%, transparent); outline-offset: 1px; }
+.nmx-desk-footer { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--nmx-border); }
+.nmx-desk-footer-note { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; color: var(--nmx-muted); font-size: 12px; text-align: center; }
+.nmx-desk-wait { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.nmx-desk-wait > span { display: inline-flex; align-items: center; gap: 6px; color: var(--nmx-text); }
+.nmx-desk-wait-time { font-variant-numeric: tabular-nums; color: var(--nmx-muted); }
+.nmx-desk-wait small { font-size: 11px; line-height: 1.4; color: var(--nmx-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* The studio header button that brings the desk back. */
+.nmx-studio-desk { display: inline-flex; align-items: center; gap: 6px; }
+.nmx-studio-desk em { font-style: normal; font-size: 11px; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--nmx-accent) 16%, transparent); color: var(--nmx-accent); font-variant-numeric: tabular-nums; }
+
+/* New-comic sheet: the settings grid and the model row. */
+.nmx-comic-adapt-settings h3 { margin: 0 0 6px; font-size: 13px; color: var(--nmx-text); }
+.nmx-comic-flow-settings { display: flex; flex-direction: column; gap: 10px; }
+.nmx-comic-flow-settings-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.nmx-comic-flow-settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.nmx-comic-flow-settings-grid .nmx-comic-field input { margin-top: 4px; }
+.nmx-comic-model-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.nmx-comic-more summary { cursor: pointer; font-size: 12px; color: var(--nmx-muted); }
+.nmx-comic-adapt-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.nmx-comic-adapt-actions button { display: inline-flex; align-items: center; gap: 6px; }
+/* “重新改编全部” asks once more when filmed clips would be replaced. */
+.nmx-comic-adapt-actions button.is-danger { color: var(--nmx-danger, #e5484d); border-color: color-mix(in srgb, var(--nmx-danger, #e5484d) 55%, transparent); background: color-mix(in srgb, var(--nmx-danger, #e5484d) 8%, transparent); }
+
+/* 续集: the next chapters, pasted under the adaptation settings. */
+.nmx-comic-sequel { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 10px;
+    border: 1px solid var(--nmx-border-strong, var(--nmx-border)); background: var(--nmx-panel-2, var(--nmx-panel)); }
+.nmx-comic-sequel strong { font-size: 13px; color: var(--nmx-text); }
+.nmx-comic-sequel p { margin: 0; font-size: 12px; line-height: 1.55; color: var(--nmx-muted); }
+.nmx-comic-sequel textarea { width: 100%; min-height: 140px; resize: vertical; box-sizing: border-box; font: inherit; font-size: 13px; line-height: 1.6;
+    padding: 8px 10px; border-radius: 8px; border: 1px solid var(--nmx-border); background: var(--nmx-panel); color: var(--nmx-text); }
+.nmx-comic-sequel textarea:focus { outline: none; border-color: var(--nmx-border-strong, var(--nmx-accent)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--nmx-accent) 18%, transparent); }
+.nmx-comic-sequel-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.nmx-comic-sequel-actions button { display: inline-flex; align-items: center; gap: 6px; }
+
+@container comic-studio (max-width: 760px) {
+    .nmx-desk-episode { width: 78%; }
+    .nmx-desk-card { width: 44%; }
+    .nmx-desk-carousel.is-clips > .nmx-desk-card { max-width: 82%; }
+    .nmx-desk-steps button { padding: 6px 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nmx-desk-carousel > article, .nmx-desk-card-inner { transition: none; animation: none; }
+}
+
+/* The clip's lines, as the export shows them: bottom centre, small, no speaker names. */
+
+/* Magnifier on a picture or clip (bottom right, on hover) and the large view it opens. */
+.nmx-zoom-button { position: absolute; right: 10px; bottom: 10px; z-index: 2; display: grid; place-items: center; width: 30px; height: 30px; padding: 0;
+    border: 0; border-radius: 999px; color: #fff; background: rgb(0 0 0 / 55%); opacity: 0; transition: opacity 140ms ease; cursor: zoom-in; }
+.nmx-desk-card:hover .nmx-zoom-button, .nmx-zoom-button:focus-visible { opacity: 1; }
+.nmx-lightbox { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 32px; background: rgb(0 0 0 / 82%); outline: 0; cursor: zoom-out; }
+.nmx-lightbox figure { position: relative; display: grid; gap: 10px; justify-items: center; margin: 0; max-width: 92vw; max-height: 90vh; cursor: default; }
+.nmx-lightbox img { max-width: 92vw; max-height: 82vh; object-fit: contain; border-radius: 10px; background: #fff; }
+.nmx-lightbox figcaption { color: rgb(255 255 255 / 86%); font-size: 13px; }
+/* Full-window: the top strip is the macOS window-drag region, which would swallow the close button's clicks. */
+.nmx-lightbox, .nmx-lightbox-close { -webkit-app-region: no-drag; }
+.nmx-lightbox-close { position: absolute; top: 16px; right: 18px; width: 36px; height: 36px; border: 0; border-radius: 999px; color: #fff; background: rgb(255 255 255 / 14%); font-size: 22px; cursor: pointer; }
+
+/* A clip's lines are its player's own subtitle track: bottom, small, no speaker names — in full screen too. */
+.nmx-desk-card video::cue { font-size: clamp(11px, 1.5vw, 15px); line-height: 1.35; color: #fff; background: rgba(0, 0, 0, 0.45); }
+.nmx-desk-card video:fullscreen::cue { font-size: clamp(16px, 2vw, 28px); }
+
+/* Carousel cards are painted in z-index order in their own flat layer (perspective moves onto the carousel):
+   a card tilted toward the viewer no longer cuts through the arrows. */
+.nmx-desk-carousel { transform-style: flat; perspective: 1400px; }
+.nmx-desk-arrow { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-panel) 88%, transparent); backdrop-filter: blur(8px); cursor: pointer; transition: background-color .14s ease, transform .14s ease; }
+.nmx-desk-arrow:hover:not(:disabled) { background: var(--nmx-panel-2); transform: scale(1.06); }
+.nmx-desk-arrow:disabled { cursor: default; }
+
+/* Desk controls share one button system (plain buttons used to fall back to the grey system style). */
+.nmx-shell .nmx-desk button { font: inherit; }
+.nmx-shell .nmx-desk :is(.nmx-desk-footer, .nmx-desk-card-actions, .nmx-desk-actions, .nmx-desk-countdown, .nmx-desk-clip-actions) > button:not(.nmx-primary-button):not(.nmx-desk-close),
+.nmx-shell .nmx-desk .nmx-desk-card-actions select {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px;
+    border: 1px solid var(--nmx-border-strong, var(--nmx-border)); border-radius: 9px; color: var(--nmx-text); background: transparent;
+    font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: background-color .14s ease, border-color .14s ease;
+}
+.nmx-shell .nmx-desk .nmx-desk-card-actions select { padding: 0 10px; }
+.nmx-shell .nmx-desk :is(.nmx-desk-footer, .nmx-desk-card-actions, .nmx-desk-actions, .nmx-desk-countdown, .nmx-desk-clip-actions) > button:not(.nmx-primary-button):not(.nmx-desk-close):hover:not(:disabled),
+.nmx-shell .nmx-desk .nmx-desk-card-actions select:hover:not(:disabled) { background: var(--nmx-control-hover, var(--nmx-panel-2)); }
+.nmx-shell .nmx-desk :is(button, select):disabled { opacity: .5; cursor: default; }
+.nmx-shell .nmx-desk .nmx-primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; min-height: 32px; padding: 0 16px; border-radius: 9px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.nmx-shell .nmx-desk .nmx-desk-close { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 9px; color: var(--nmx-muted); background: transparent; font-size: 18px; cursor: pointer; }
+.nmx-shell .nmx-desk .nmx-desk-close:hover { color: var(--nmx-text); background: var(--nmx-panel-2); }
+.nmx-shell .nmx-desk .nmx-desk-close:focus-visible { outline: 2px solid var(--nmx-focus-ring, var(--nmx-border-strong)); outline-offset: 1px; }
+
+/* The studio header's 制作台 button and the desk's episode arrows had no surface of their own (browser grey). */
+.nmx-comic-studio .nmx-studio-desk { min-height: 30px; padding: 0 12px; border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: var(--nmx-panel-2); font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.nmx-comic-studio .nmx-studio-desk:hover:not(:disabled) { background: var(--nmx-control-hover, var(--nmx-panel)); }
+.nmx-comic-studio .nmx-studio-desk.is-running { border-color: color-mix(in srgb, #8e4ec6 55%, var(--nmx-border)); }
+.nmx-comic-studio .nmx-studio-desk:disabled { opacity: .5; cursor: default; }
+.nmx-desk-episode-bar button { padding: 0; border: 1px solid var(--nmx-border); color: var(--nmx-text); background: transparent; cursor: pointer; transition: background-color .14s ease; }
+.nmx-desk-episode-bar button:hover:not(:disabled) { background: var(--nmx-panel-2); }
+.nmx-desk-episode-bar button:disabled { opacity: .35; cursor: default; }
+
+/* 实际英文提示词: the prompt actually sent to an English-only video model, read-only and folded by default. */
+.nmx-shell .nmx-desk-editor > details { border: 1px solid var(--nmx-border); border-radius: 8px; background: color-mix(in srgb, var(--nmx-control-background) 55%, transparent); }
+.nmx-shell .nmx-desk-editor > details > summary { display: flex; align-items: center; gap: 7px; padding: 7px 10px; color: var(--nmx-subtle); font-size: 12px; list-style: none; cursor: pointer; }
+.nmx-shell .nmx-desk-editor > details > summary::-webkit-details-marker { display: none; }
+.nmx-shell .nmx-desk-editor > details > summary::before { width: 5px; height: 5px; flex: 0 0 5px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease; content: ''; }
+.nmx-shell .nmx-desk-editor > details[open] > summary::before { transform: rotate(45deg); }
+[dir='rtl'] .nmx-shell .nmx-desk-editor > details:not([open]) > summary::before { transform: rotate(135deg); }
+.nmx-shell .nmx-desk-editor > details > summary:hover { color: var(--nmx-text); }
+.nmx-shell .nmx-desk-editor > details > textarea { display: block; box-sizing: border-box; width: calc(100% - 16px); margin: 0 8px 8px; padding: 8px; border: 1px solid var(--nmx-border); border-radius: 6px; color: var(--nmx-subtle); background: var(--nmx-bg); font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; resize: vertical; }
+
+/* 剪辑, the window's fourth step: the cut editor and its command bar fill the whole window. */
+.nmx-shell .nmx-desk-backdrop.is-edit { padding: 0; background: var(--nmx-bg); backdrop-filter: none; }
+.nmx-shell .nmx-desk.is-edit { max-width: none; border: 0; border-radius: 0; box-shadow: none; }
+.nmx-desk.is-edit .nmx-desk-stage { display: flex; perspective: none; }
+.nmx-desk-cut { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; min-height: 0; }
+.nmx-shell .nmx-comic-studio .nmx-desk-cut > .nmx-comic-editor-layout.is-cut { flex: 1 1 auto; height: auto; min-height: 0; }
+.nmx-shell .nmx-comic-studio .nmx-desk-cut > .nmx-comic-agent-bar { border-top: 1px solid var(--nmx-border); }
+.nmx-desk-footer > .nmx-primary-button .codicon { margin-inline-end: 6px; }
+
+/* ── 剪辑 media library sections: 本对话 / 同项目其他对话 / 全部素材 ── */
+.nmx-shell .nmx-cut-bin.has-groups { overflow: hidden; }
+.nmx-shell .nmx-cut-bin-groups { display: flex; flex: 1 1 auto; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; padding-bottom: 8px; }
+.nmx-shell .nmx-cut-bin-group { display: flex; flex-direction: column; flex: none; }
+.nmx-shell .nmx-cut-bin-group-head {
+    position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 6px; margin: 0; padding: 7px 10px; border: 0; border-bottom: 1px solid transparent;
+    color: var(--nmx-text); background: var(--nmx-panel); font-size: 12px; text-align: start; cursor: pointer;
+}
+.nmx-shell .nmx-cut-bin-group-head:disabled { cursor: default; }
+.nmx-shell .nmx-cut-bin-group-head > .codicon { flex: none; color: var(--nmx-muted); font-size: 12px; }
+.nmx-shell .nmx-cut-bin-group-head > strong { flex: 1 1 auto; min-width: 0; overflow: hidden; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell .nmx-cut-bin-group-head > small { flex: none; min-width: 18px; padding: 0 5px; border-radius: 9px; color: var(--nmx-muted); background: var(--nmx-panel-2); font-size: 10.5px; text-align: center; }
+.nmx-shell .nmx-cut-bin-group-head:hover:not(:disabled) { background: var(--nmx-panel-2); }
+.nmx-shell .nmx-cut-bin-group.is-open > .nmx-cut-bin-group-head { border-bottom-color: var(--nmx-border); }
+.nmx-shell .nmx-cut-bin-group > .nmx-cut-bin-grid { overflow: visible; }
+.nmx-shell .nmx-cut-bin-empty { margin: 8px 12px 10px; color: var(--nmx-muted); font-size: 11.5px; line-height: 1.45; }
+
+/* ── 剧本 step: the story (剧本 / 续集) and the AI 改编 settings side by side ── */
+.nmx-desk.is-scripts .nmx-desk-stage { perspective: none; overflow: hidden; }
+.nmx-desk-source { height: 100%; min-height: 0; }
+.nmx-desk-source-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); height: 100%; min-height: 0; }
+.nmx-desk-source-editor { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 14px 16px 16px; }
+.nmx-desk-source-editor > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.nmx-desk-source-editor > header > strong { font-size: 14px; color: var(--nmx-text); }
+.nmx-desk-source-editor > header > small { color: var(--nmx-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.nmx-desk-source-editor textarea {
+    flex: 1 1 auto; width: 100%; min-height: 260px; resize: none; padding: 14px 16px; border: 1px solid var(--nmx-border); border-radius: 12px;
+    color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 3%, transparent); font-size: 14px; line-height: 1.8; outline: none;
+}
+.nmx-desk-source-editor textarea:focus { border-color: color-mix(in srgb, var(--nmx-accent) 55%, var(--nmx-border)); }
+.nmx-desk-source-editor .nmx-desk-tabs { padding: 3px; border: 1px solid var(--nmx-border); border-radius: 999px; }
+.nmx-desk-source-editor .nmx-desk-tabs button { padding: 4px 14px; font-size: 13px; }
+.nmx-desk-source-settings { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; padding: 14px 16px 16px; border-inline-start: 1px solid var(--nmx-border); }
+.nmx-desk-source-settings > h3 { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--nmx-text); font-size: 14px; }
+.nmx-desk-source-settings > h3 > .codicon { color: var(--nmx-accent); }
+.nmx-desk-source-picture { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--nmx-border); }
+.nmx-desk-source-picture > h4 { margin: 0; color: var(--nmx-muted); font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+.nmx-desk-source-picture-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.nmx-desk-source-picture-row select { width: 100%; min-width: 0; }
+.nmx-desk-source-picture > .nmx-comic-field-hint { color: var(--nmx-muted); font-size: 11.5px; line-height: 1.45; }
+.nmx-desk-style { border: 1px solid var(--nmx-border); border-radius: 10px; padding: 8px 10px; }
+.nmx-desk-style > summary { color: var(--nmx-text); font-size: 13px; cursor: pointer; }
+.nmx-desk-style[open] { display: flex; flex-direction: column; gap: 8px; }
+.nmx-desk-style textarea { width: 100%; resize: vertical; padding: 8px 10px; border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: transparent; font-size: 12.5px; line-height: 1.6; }
+.nmx-desk-footer-actions { display: inline-flex; align-items: center; gap: 8px; }
+@media (max-width: 860px) {
+    .nmx-desk-source-layout { grid-template-columns: 1fr; overflow-y: auto; }
+    .nmx-desk-source-settings { border-inline-start: 0; border-top: 1px solid var(--nmx-border); overflow: visible; }
+}
+
+/* ── 选角 review: the cards, one look prompt per character, one script per episode ── */
+.nmx-desk.is-cast .nmx-desk-stage { overflow-y: auto; }
+.nmx-desk-review { display: flex; flex-direction: column; gap: 14px; min-height: 100%; padding-bottom: 16px; }
+.nmx-desk-review-bar { display: flex; align-items: center; gap: 14px; margin: 12px 16px 0; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--nmx-accent) 30%, var(--nmx-border)); border-radius: 12px;
+    background: color-mix(in srgb, var(--nmx-accent) 7%, transparent); }
+.nmx-desk-review-bar > .nmx-desk-lead { flex: 1 1 auto; margin: 0; text-align: start; line-height: 1.55; }
+.nmx-desk-review-bar > button { flex: none; display: inline-flex; align-items: center; gap: 6px; }
+.nmx-desk-carousel.is-review { flex: none; height: 300px; min-height: 300px; }
+.nmx-desk-carousel.is-review > .nmx-desk-card { width: min(190px, 24%); }
+.nmx-desk-empty.is-inline { height: auto; padding: 24px 0; }
+.nmx-desk-row { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.nmx-desk-row > header { display: flex; align-items: baseline; gap: 10px; padding: 0 16px; }
+.nmx-desk-row > header > strong { flex: none; color: var(--nmx-text); font-size: 13.5px; white-space: nowrap; }
+.nmx-desk-row > header > small { min-width: 0; overflow: hidden; color: var(--nmx-muted); font-size: 11.5px; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-desk-strip { display: flex; gap: 12px; overflow-x: auto; padding: 2px 16px 8px; scroll-snap-type: x proximity; scrollbar-width: thin; }
+.nmx-desk-strip > article {
+    display: flex; flex: 0 0 auto; flex-direction: column; gap: 8px; min-width: 0; padding: 10px; border: 1px solid var(--nmx-border); border-radius: 12px;
+    background: color-mix(in srgb, var(--nmx-text) 2.5%, transparent); scroll-snap-align: center; transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.nmx-desk-strip > article > header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; min-width: 0; }
+.nmx-desk-strip > article > header > strong { color: var(--nmx-text); font-size: 13px; }
+.nmx-desk-strip > article > header > span { min-width: 0; overflow: hidden; color: var(--nmx-text); font-size: 12.5px; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-desk-strip > article > header > em { padding: 0 6px; border-radius: 999px; color: var(--nmx-accent); background: color-mix(in srgb, var(--nmx-accent) 14%, transparent); font-size: 11px; font-style: normal; }
+.nmx-desk-strip > article > header > small { margin-inline-start: auto; color: var(--nmx-muted); font-size: 11px; }
+.nmx-desk-strip textarea {
+    width: 100%; resize: vertical; padding: 8px 10px; border: 1px solid var(--nmx-border); border-radius: 9px; color: var(--nmx-text); background: var(--nmx-panel);
+    font-size: 12.5px; line-height: 1.6; outline: none;
+}
+.nmx-desk-strip textarea:focus { border-color: color-mix(in srgb, var(--nmx-accent) 55%, var(--nmx-border)); }
+.nmx-desk-strip textarea[readonly] { opacity: .7; }
+.nmx-desk-strip > article > footer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.nmx-desk-strip > article > footer > button { display: inline-flex; align-items: center; gap: 5px; }
+.nmx-desk-strip > article > footer > select { max-width: 110px; }
+.nmx-desk-strip > article > footer > small { display: inline-flex; align-items: center; gap: 4px; color: var(--nmx-muted); font-size: 11px; }
+.nmx-desk-look { width: 340px; cursor: default; }
+.nmx-desk-look > footer > select { flex: 1 1 90px; }
+.nmx-desk-review-warning { display: block; margin-top: 4px; color: var(--nmx-warning, #d9a441); font-size: 12px; font-weight: 500; }
+.nmx-desk-look.is-focus { border-color: color-mix(in srgb, var(--nmx-accent) 60%, var(--nmx-border)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--nmx-accent) 30%, transparent); }
+.nmx-desk-look-role { margin: -2px 0 0; color: var(--nmx-muted); font-size: 11.5px; line-height: 1.45; }
+.nmx-desk-look-state.is-ready { color: var(--nmx-success, #3fb27f) !important; }
+.nmx-desk-look-state.is-failed { color: var(--nmx-danger, #e5484d) !important; }
+.nmx-desk-look-note { color: var(--nmx-warning, #d9a441); font-size: 11.5px; }
+.nmx-desk-episode-box { width: 360px; }
+.nmx-desk-episode-box.is-busy { border-color: color-mix(in srgb, var(--nmx-accent) 50%, var(--nmx-border)); }
+.nmx-desk-card-flag { position: absolute; top: 8px; inset-inline-start: 8px; padding: 1px 7px; border-radius: 999px; color: #fff; background: rgb(0 0 0 / 55%); font-size: 11px; font-style: normal; }
+
+/* ── A question over the desk ── */
+.nmx-desk-confirm-backdrop { position: fixed; inset: 0; z-index: 1600; display: grid; place-items: center; padding: 24px; background: rgb(0 0 0 / 42%); animation: nmx-desk-fade 140ms ease-out; }
+.nmx-desk-confirm { width: min(460px, 100%); padding: 18px 18px 14px; border: 1px solid var(--nmx-border); border-radius: 16px; background: var(--nmx-panel); box-shadow: 0 24px 70px rgb(0 0 0 / 35%); outline: none; }
+.nmx-desk-confirm > h3 { margin: 0 0 8px; color: var(--nmx-text); font-size: 15px; }
+.nmx-desk-confirm > p { margin: 0 0 16px; color: var(--nmx-muted); font-size: 13px; line-height: 1.65; white-space: pre-line; }
+.nmx-desk-confirm > footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.nmx-desk-confirm .nmx-secondary-button.is-danger { color: var(--nmx-danger, #e5484d); border-color: color-mix(in srgb, var(--nmx-danger, #e5484d) 45%, var(--nmx-border)); }
+/* What the confirmed work is expected to cost: steps in one aligned column (scrolling when long), then the total and
+   the balance kept in view; a shortfall in the danger color. Figures use tabular numerals so amounts line up. */
+.nmx-desk-confirm-cost {
+    display: grid;
+    gap: 0;
+    margin: -4px 0 16px;
+    border: 1px solid var(--nmx-border);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--nmx-text) 3%, transparent);
+    font-size: 12.5px;
+    line-height: 18px;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+}
+.nmx-desk-confirm-cost > dl { margin: 0; padding: 6px 12px; }
+.nmx-desk-confirm-cost-rows { max-height: 216px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.nmx-desk-confirm-cost-sum { border-top: 1px solid var(--nmx-border); background: color-mix(in srgb, var(--nmx-text) 2.5%, transparent); }
+.nmx-desk-confirm-cost-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 16px; padding: 4px 0; }
+.nmx-desk-confirm-cost-row > dt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; color: color-mix(in srgb, var(--nmx-text) 84%, transparent); }
+.nmx-desk-confirm-cost-row > dt > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.nmx-desk-confirm-cost-detail { color: var(--nmx-muted); font-size: 11.5px; white-space: nowrap; }
+.nmx-desk-confirm-cost-row > dd { margin: 0; color: var(--nmx-text); font-weight: 500; text-align: end; white-space: nowrap; }
+.nmx-desk-confirm-cost-row.is-total > dt { color: var(--nmx-text); font-weight: 600; }
+.nmx-desk-confirm-cost-row.is-total > dd { font-size: 13.5px; font-weight: 600; }
+.nmx-desk-confirm-cost-row.is-balance > dt { color: var(--nmx-muted); }
+.nmx-desk-confirm-cost.is-short .nmx-desk-confirm-cost-row.is-balance > dd { color: var(--nmx-danger, #e5484d); }
+.nmx-desk-confirm-cost-short {
+    display: flex;
+    align-items: flex-start;
+    gap: 7px;
+    margin: 0;
+    padding: 8px 12px;
+    border-top: 1px solid color-mix(in srgb, var(--nmx-danger, #e5484d) 32%, var(--nmx-border));
+    color: var(--nmx-danger, #e5484d);
+    background: color-mix(in srgb, var(--nmx-danger, #e5484d) 9%, transparent);
+    font-weight: 600;
+}
+.nmx-desk-confirm-cost-short > .codicon { flex: none; margin-top: 1px; font-size: 14px; }
+.nmx-desk-confirm-cost-note { margin: 0; padding: 7px 12px 8px; border-top: 1px solid var(--nmx-border); color: var(--nmx-muted); font-size: 11.5px; line-height: 16px; }
+/* The light theme paints every border neutral; the shortfall and the add-funds action keep their tint. */
+.nmx-shell.nmx-theme-light .nmx-desk-confirm-cost-short { border-top-color: color-mix(in srgb, var(--nmx-danger, #c92a32) 30%, #e4e0dd) !important; }
+.nmx-shell.nmx-theme-light .nmx-desk-error-action { border-color: color-mix(in srgb, var(--nmx-accent) 42%, #e4e0dd) !important; }
+
+@keyframes nmx-desk-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .nmx-desk-confirm-backdrop { animation: none; } }
+
+/* ───────────────────────────────────────────────────────────────────────────
+ * Round 33 visual refresh. One accent (the comic brand gradient, as on 导出 and the
+ * home page), a real stepper, primary actions that read as primary, cards laid out in
+ * grids instead of strips cut off at the edge, neutral placeholders and a filmstrip.
+ * ─────────────────────────────────────────────────────────────────────────── */
+.nmx-shell .nmx-desk { --desk-brand: var(--nmx-text); --desk-brand-soft: color-mix(in srgb, var(--nmx-text) 12%, transparent);
+    max-width: 1360px; border-radius: 16px; box-shadow: 0 28px 80px rgb(0 0 0 / 34%); }
+.nmx-shell .nmx-desk-backdrop { padding: 16px; background: color-mix(in srgb, var(--nmx-bg) 72%, transparent); }
+
+/* Header: title, stepper on a rail, window actions. */
+.nmx-shell .nmx-desk-header { min-height: 60px; padding: 10px 18px; gap: 20px; }
+.nmx-shell .nmx-desk-title { gap: 2px; }
+.nmx-shell .nmx-desk-title span { font-size: 11px; font-weight: 600; letter-spacing: .08em; color: var(--nmx-muted); }
+.nmx-shell .nmx-desk-title strong { font-size: 15px; font-weight: 650; max-width: 300px; }
+.nmx-shell .nmx-desk-steps { gap: 0; }
+.nmx-shell .nmx-desk-steps li:not(:last-child)::after { width: 40px; height: 2px; margin: 0 4px; border-radius: 2px; background: var(--nmx-border); }
+.nmx-shell .nmx-desk-steps li.is-done:not(:last-child)::after { background: var(--desk-brand); }
+.nmx-shell .nmx-desk-steps button { gap: 8px; padding: 6px 10px; border-radius: 10px; color: var(--nmx-muted); font-size: 13px; font-weight: 500; transition: color .14s ease, background-color .14s ease; }
+.nmx-shell .nmx-desk-steps button:hover:not(:disabled) { color: var(--nmx-text); background: var(--nmx-panel-2); }
+.nmx-shell .nmx-desk-steps span { width: 22px; height: 22px; border: 1.5px solid var(--nmx-border-strong, var(--nmx-border)); font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.nmx-shell .nmx-desk-steps li.is-done button { color: var(--nmx-text); }
+.nmx-shell .nmx-desk-steps li.is-done span { border: 0; color: var(--nmx-bg); background: var(--desk-brand); }
+.nmx-shell .nmx-desk-steps li.is-current button { color: var(--nmx-text); font-weight: 650; background: transparent; }
+.nmx-shell .nmx-desk .nmx-desk-steps li:is(.is-current, .is-done) button:disabled { opacity: 1; }
+.nmx-shell .nmx-desk-steps li.is-current span { border: 0; color: var(--nmx-bg); background: var(--desk-brand); box-shadow: 0 0 0 4px color-mix(in srgb, var(--nmx-text) 18%, transparent); }
+
+/* Footer and every primary action in the desk: monochrome fill, one height. */
+.nmx-shell .nmx-desk-footer { min-height: 62px; padding: 12px 18px; gap: 12px; background: color-mix(in srgb, var(--nmx-panel-2) 40%, var(--nmx-panel)); }
+.nmx-shell .nmx-desk :is(.nmx-desk-footer, .nmx-desk-footer-actions, .nmx-desk-review-bar, .nmx-desk-countdown, .nmx-desk-editor) .nmx-primary-button {
+    height: 36px; min-height: 36px; padding: 0 20px; border: 1px solid var(--nmx-text) !important; border-radius: 10px; color: var(--nmx-bg) !important; background: var(--nmx-text) !important;
+    box-shadow: none; font-size: 13px; font-weight: 650; transition: background-color .14s ease, border-color .14s ease, transform .14s ease; }
+.nmx-shell .nmx-desk :is(.nmx-desk-footer, .nmx-desk-footer-actions, .nmx-desk-review-bar, .nmx-desk-countdown, .nmx-desk-editor) .nmx-primary-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--nmx-text) 85%, var(--nmx-bg)) !important; color: var(--nmx-bg) !important; border-color: color-mix(in srgb, var(--nmx-text) 85%, var(--nmx-bg)) !important; transform: translateY(-1px); }
+.nmx-shell .nmx-desk :is(.nmx-desk-footer, .nmx-desk-footer-actions, .nmx-desk-review-bar, .nmx-desk-countdown, .nmx-desk-editor) .nmx-primary-button:disabled { box-shadow: none; filter: saturate(.3); opacity: .45; transform: none; }
+.nmx-shell .nmx-desk :is(.nmx-desk-footer, .nmx-desk-footer-actions) > button:not(.nmx-primary-button):not(.nmx-desk-close) {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 16px; border: 1px solid var(--nmx-border-strong, var(--nmx-border));
+    border-radius: 10px; color: var(--nmx-text); background: transparent; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.nmx-shell .nmx-desk :is(.nmx-desk-footer, .nmx-desk-footer-actions) > button:not(.nmx-primary-button):not(.nmx-desk-close):hover:not(:disabled) { background: var(--nmx-panel-2); }
+.nmx-shell .nmx-desk-footer-note { font-size: 12.5px; }
+
+/* The canvas is the workspace, not a numbered production wizard. Keep one
+ * compact project header and one guarded editor entry; recover the footer area. */
+.nmx-shell .nmx-desk-backdrop.is-canvas { padding: 0; background: var(--nmx-bg); backdrop-filter: none; }
+.nmx-shell .nmx-desk.is-canvas { max-width: none; border: 0; border-radius: 0; box-shadow: none; }
+.nmx-shell .nmx-desk.is-canvas > .nmx-desk-header { min-height: 44px; box-sizing: border-box; padding: 6px 12px; gap: 12px; }
+.nmx-shell .nmx-desk.is-canvas .nmx-desk-title { flex: 1; }
+.nmx-shell .nmx-desk.is-canvas .nmx-desk-title strong { max-width: none; font-size: 13px; }
+.nmx-shell .nmx-desk.is-canvas .nmx-desk-actions { flex: 0 0 auto; }
+/* 画布 → 剪辑: the canvas header's one forward step. Monochrome filled button fitting the 44px header. */
+.nmx-shell .nmx-desk.is-canvas .nmx-desk-actions > button.nmx-desk-enter-editor {
+    height: 30px; padding: 0 12px 0 10px; gap: 6px;
+    border: 1px solid var(--nmx-text); border-radius: 8px;
+    color: var(--nmx-bg); background: var(--nmx-text);
+    font-size: 12.5px; font-weight: 600; line-height: 1;
+    transition: background-color .14s ease, border-color .14s ease, color .14s ease;
+}
+.nmx-shell .nmx-desk.is-canvas .nmx-desk-actions > button.nmx-desk-enter-editor > .codicon { font-size: 14px; color: var(--nmx-bg); }
+.nmx-shell .nmx-desk.is-canvas .nmx-desk-actions > button.nmx-desk-enter-editor:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--nmx-text) 85%, var(--nmx-bg)); color: var(--nmx-bg); background: color-mix(in srgb, var(--nmx-text) 85%, var(--nmx-bg)); }
+.nmx-shell .nmx-desk.is-canvas .nmx-desk-actions > button.nmx-desk-enter-editor:active:not(:disabled) { background: color-mix(in srgb, var(--nmx-text) 78%, var(--nmx-bg)); color: var(--nmx-bg); }
+.nmx-shell .nmx-desk.is-canvas .nmx-desk-actions > button.nmx-desk-enter-editor:focus-visible {
+    outline: 2px solid var(--nmx-focus-ring, var(--nmx-text)); outline-offset: 2px; }
+/* Guarded until clips are ready: a plain muted outline, never a faded brand tint that still looks enabled. */
+.nmx-shell .nmx-desk.is-canvas .nmx-desk-actions > button.nmx-desk-enter-editor:disabled {
+    border-color: var(--nmx-border); color: var(--nmx-muted); background: transparent; opacity: .7; cursor: not-allowed; }
+.nmx-shell .nmx-desk.is-canvas .nmx-desk-actions > button.nmx-desk-enter-editor:disabled > .codicon { color: inherit; }
+.nmx-shell.nmx-theme-light .nmx-desk.is-canvas .nmx-desk-actions > button.nmx-desk-enter-editor {
+    border-color: var(--nmx-text); color: var(--nmx-bg); background: var(--nmx-text); }
+.nmx-shell.nmx-theme-light .nmx-desk.is-canvas .nmx-desk-actions > button.nmx-desk-enter-editor > .codicon { color: var(--nmx-bg); }
+.nmx-shell.nmx-theme-light .nmx-desk.is-canvas .nmx-desk-actions > button.nmx-desk-enter-editor:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--nmx-text) 85%, var(--nmx-bg)); color: var(--nmx-bg); background: color-mix(in srgb, var(--nmx-text) 85%, var(--nmx-bg)); }
+.nmx-shell.nmx-theme-light .nmx-desk.is-canvas .nmx-desk-actions > button.nmx-desk-enter-editor:active:not(:disabled) { background: color-mix(in srgb, var(--nmx-text) 78%, var(--nmx-bg)); color: var(--nmx-bg); }
+.nmx-shell.nmx-theme-light .nmx-desk.is-canvas .nmx-desk-actions > button.nmx-desk-enter-editor:disabled {
+    border-color: var(--nmx-border); color: var(--nmx-muted); background: transparent; }
+.nmx-desk-canvas-status { display: flex; align-items: center; gap: 8px; padding: 6px 12px; color: var(--nmx-muted); font-size: 12px; }
+.nmx-desk-canvas-status[role='alert'] { color: var(--nmx-danger); }
+.nmx-shell .nmx-desk-countdown { margin: 12px 18px 0; border-radius: 12px; border-color: color-mix(in srgb, var(--nmx-text) 28%, var(--nmx-border)); background: color-mix(in srgb, var(--nmx-text) 6%, var(--nmx-panel)); }
+.nmx-shell .nmx-desk-ring { background: radial-gradient(circle, var(--nmx-panel) 12px, transparent 13px), conic-gradient(var(--nmx-text) calc(var(--nmx-left) * 360deg), var(--nmx-border) 0); }
+
+/* 剧本: roomier editor; the settings in two columns so they fit without scrolling past the model. */
+.nmx-shell .nmx-desk-source-layout { grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); }
+.nmx-shell .nmx-desk-source-editor { padding: 16px 20px 18px; }
+.nmx-shell .nmx-desk-source-editor textarea { padding: 18px 22px; border-radius: 14px; font-size: 14.5px; line-height: 1.9; }
+.nmx-shell .nmx-desk-source-settings { gap: 14px; padding: 16px 18px 18px; background: color-mix(in srgb, var(--nmx-panel-2) 35%, transparent); }
+.nmx-shell .nmx-desk-source-settings > h3 { font-size: 14px; font-weight: 650; }
+.nmx-shell .nmx-desk-source-settings > h3 > .codicon { color: var(--nmx-text); }
+.nmx-shell .nmx-desk-source-settings .nmx-comic-flow-settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.nmx-shell .nmx-desk-source-settings .nmx-comic-flow-settings-row { gap: 12px; }
+.nmx-shell .nmx-desk-source-settings .nmx-comic-field :is(input, select) { height: 34px; border-radius: 9px; }
+.nmx-shell .nmx-desk-source-settings .nmx-comic-length-plan { padding: 9px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--nmx-text) 16%, transparent); background: color-mix(in srgb, var(--nmx-text) 5%, transparent); line-height: 1.55; }
+
+/* 选角: a banner with the one big action, then cards in a grid (nothing cut off at the right edge). */
+.nmx-shell .nmx-desk-review { gap: 18px; }
+.nmx-shell .nmx-desk-review-bar { margin: 14px 18px 0; padding: 12px 14px 12px 16px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--nmx-text) 20%, var(--nmx-border));
+    background: color-mix(in srgb, var(--nmx-text) 5%, transparent); }
+.nmx-shell .nmx-desk-review-bar > .nmx-desk-lead { color: var(--nmx-text); font-size: 13px; }
+.nmx-shell .nmx-desk-row > header { padding: 0 18px; }
+.nmx-shell .nmx-desk-row > header > strong { font-size: 14px; font-weight: 650; }
+.nmx-shell .nmx-desk-row > header > small { white-space: normal; line-height: 1.5; }
+.nmx-shell .nmx-desk-row > .nmx-desk-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; overflow: visible; padding: 2px 18px 6px; }
+.nmx-shell .nmx-desk-row .nmx-desk-look, .nmx-shell .nmx-desk-row .nmx-desk-episode-box { width: auto; }
+.nmx-shell .nmx-desk-strip > article { gap: 10px; padding: 14px; border-radius: 14px; background: color-mix(in srgb, var(--nmx-text) 3%, var(--nmx-panel)); }
+.nmx-shell .nmx-desk-strip > article > header > strong { font-size: 14px; font-weight: 650; }
+.nmx-shell .nmx-desk-strip > article > header > small { padding: 1px 8px; border-radius: 999px; background: var(--nmx-panel-2); }
+.nmx-shell .nmx-desk-strip textarea { padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.65; }
+.nmx-shell .nmx-desk-strip > article > footer { flex-wrap: nowrap; gap: 8px; }
+.nmx-shell .nmx-desk-strip > article > footer > button { flex: none; }
+.nmx-shell .nmx-desk-strip > article > footer > :is(button, select) { height: 30px; padding: 0 12px; border: 1px solid var(--nmx-border-strong, var(--nmx-border)); border-radius: 8px;
+    color: var(--nmx-text); background: transparent; font-size: 12px; font-weight: 600; cursor: pointer; }
+.nmx-shell .nmx-desk-strip > article > footer > .nmx-primary-button { border: 1px solid var(--nmx-text) !important; color: var(--nmx-bg) !important; background: var(--nmx-text) !important; }
+.nmx-shell .nmx-desk-strip > article > footer > :is(button, select):hover:not(:disabled) { background: var(--nmx-panel-2); }
+.nmx-shell .nmx-desk-strip > article > footer > .nmx-primary-button:hover:not(:disabled) { background: color-mix(in srgb, var(--nmx-text) 85%, var(--nmx-bg)) !important; color: var(--nmx-bg) !important; border-color: color-mix(in srgb, var(--nmx-text) 85%, var(--nmx-bg)) !important; }
+.nmx-shell .nmx-desk-strip > article > footer > select { flex: 1 1 120px; max-width: none; min-width: 0; font-weight: 500; }
+.nmx-shell .nmx-desk-strip > article > footer > button[aria-label] { width: 30px; padding: 0; justify-content: center; }
+.nmx-shell .nmx-desk-look.is-focus { border-color: color-mix(in srgb, var(--nmx-text) 55%, var(--nmx-border)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--nmx-text) 14%, transparent); }
+
+/* Placeholder cards (a portrait or clip not drawn yet): quiet and modern instead of an ornate card back. */
+.nmx-shell .nmx-desk-card-back {
+    color: color-mix(in srgb, var(--nmx-text) 82%, transparent); border: 1px solid var(--nmx-border);
+    box-shadow: 0 14px 34px rgb(0 0 0 / 22%);
+    background: radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, var(--nmx-text) 10%, var(--nmx-panel-2)), var(--nmx-panel-2) 70%);
+}
+.nmx-shell .nmx-desk-card-back .codicon { color: var(--nmx-text); font-size: 26px; }
+.nmx-shell .nmx-desk-card.is-failed .nmx-desk-card-back { background: radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, #e5484d 20%, var(--nmx-panel-2)), var(--nmx-panel-2) 70%); }
+.nmx-shell .nmx-desk-card.is-failed .nmx-desk-card-back .codicon { color: var(--nmx-danger, #e5484d); }
+
+/* 拍摄: episode switcher as a pill, a filmstrip of every clip instead of dots, a calmer detail panel. */
+.nmx-shell .nmx-desk-episode-bar { padding: 12px 18px 0; }
+.nmx-shell .nmx-desk-episode-bar strong { font-weight: 650; }
+.nmx-shell .nmx-desk-episode-bar small { padding: 1px 8px; border-radius: 999px; color: var(--nmx-text); background: var(--desk-brand-soft); }
+.nmx-shell .nmx-desk-carousel.is-clips .nmx-desk-dots { display: none; }
+.nmx-shell .nmx-desk-carousel.is-clips > .nmx-desk-card { bottom: 10px; }
+.nmx-desk-filmstrip { display: flex; gap: 8px; margin: 0 18px 12px; padding: 4px 2px 6px; overflow-x: auto; scrollbar-width: none; }
+.nmx-desk-filmstrip:hover { scrollbar-width: thin; }
+.nmx-desk-filmstrip > button {
+    position: relative; flex: 0 0 auto; display: grid; place-items: center; width: 92px; aspect-ratio: 16 / 9; padding: 0; overflow: hidden;
+    border: 1.5px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-muted); background: var(--nmx-panel-2); cursor: pointer;
+    transition: border-color .14s ease, transform .14s ease, box-shadow .14s ease;
+}
+.nmx-desk-filmstrip > button:hover { transform: translateY(-1px); border-color: var(--nmx-border-strong, var(--nmx-border)); }
+.nmx-desk-filmstrip > button.is-focus { border-color: var(--nmx-text); box-shadow: 0 0 0 3px color-mix(in srgb, var(--nmx-text) 18%, transparent); }
+.nmx-desk-filmstrip > button > :is(img, video) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.nmx-desk-filmstrip > button > .codicon { font-size: 16px; }
+.nmx-desk-filmstrip > button > span, .nmx-desk-filmstrip > button > em {
+    position: absolute; bottom: 3px; z-index: 1; padding: 0 5px; border-radius: 4px; color: #fff; background: rgb(0 0 0 / 55%);
+    font-size: 10px; font-style: normal; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 15px; }
+.nmx-desk-filmstrip > button > span { left: 4px; }
+.nmx-desk-filmstrip > button > em { right: 4px; font-weight: 500; }
+.nmx-desk-filmstrip > button.is-done::after { content: ''; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: #3fb27f; box-shadow: 0 0 0 2px rgb(0 0 0 / 35%); }
+.nmx-desk-filmstrip > button.is-failed { border-color: color-mix(in srgb, #e5484d 60%, var(--nmx-border)); color: var(--nmx-danger, #e5484d); }
+.nmx-desk-filmstrip > button:is(.is-video, .is-picture)::before { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 16%) 50%, transparent 70%); background-size: 220% 100%; animation: nmx-desk-shimmer 1.4s linear infinite; }
+.nmx-desk-filmstrip > button.is-outdated::after { content: ''; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: #f3c969; }
+.nmx-shell .nmx-desk-editor { gap: 10px; margin: 0 18px 14px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--nmx-text) 3%, var(--nmx-panel)); }
+.nmx-shell .nmx-desk-editor textarea { padding: 10px 12px; border-radius: 10px; font-size: 13.5px; line-height: 1.7; }
+.nmx-shell .nmx-desk-editor > .nmx-primary-button { height: 34px; min-height: 34px; }
+@media (prefers-reduced-motion: reduce) { .nmx-desk-filmstrip > button:is(.is-video, .is-picture)::before { animation: none; } }

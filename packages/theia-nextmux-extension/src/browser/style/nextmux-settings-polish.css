@@ -1,0 +1,317 @@
+/*
+ * Settings, Model Center and pickers: soft, consistent controls (REQUIREMENTS §4.1, §4.2, §6.8).
+ *
+ * One token-driven button language for every settings tab in both themes:
+ * secondary = control surface, primary = inverted text colour, danger-confirm
+ * = tinted. Press feedback and open/close motion follow Radix UI / shadcn
+ * (MIT): short ease-out, opacity/transform only, disabled under reduced motion.
+ * Loaded after the legacy sheets so it only has to win on specificity where
+ * those hard-coded dark-theme colours (light theme regression) or Theia's
+ * blue button colour (inconsistent with NextMux) leaked into Settings.
+ */
+
+/* ---- Layout: nested sections fill their card (a global 680px section cap
+   left MCP, conversation transfer and installed Skills narrower than the card).
+   Modal permission sheets render inside the panel but keep their own width. ---- */
+.nmx-shell .nmx-settings-page .nmx-settings-panel section:not(.nmx-permission-sheet) {
+    width: auto;
+    max-width: 100%;
+}
+/* The same global rule also gave every nested section the page heading's
+   28px bottom padding and divider: an empty band under “Available now”, a
+   stray line under the MCP list. Nested blocks keep only their own chrome. */
+.nmx-shell .nmx-settings-page .nmx-settings-panel :is(.nmx-mcp-access, .nmx-usage-analytics) {
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+.nmx-shell .nmx-settings-page .nmx-settings-panel :is(.nmx-installed-skills, .nmx-community-skills-list) {
+    padding-bottom: 0;
+    border: 1px solid var(--nmx-border);
+    border-radius: 10px;
+}
+.nmx-shell .nmx-settings-page .nmx-settings-panel .nmx-conversation-archive {
+    padding-bottom: 14px;
+    border: 1px solid var(--nmx-border);
+    border-radius: 10px;
+}
+
+/* ---- Buttons: one secondary / primary / confirm style in both themes ---- */
+.nmx-shell .nmx-settings-page :is(
+    .nmx-settings-actions button,
+    .nmx-profile-card > button,
+    .nmx-local-data-list > article > button,
+    .nmx-community-skill-card button,
+    .nmx-community-skills-toolbar > button,
+    .nmx-skill-install-link > button,
+    .nmx-conversation-archive button,
+    .nmx-mcp-access button:not(.nmx-mcp-server-toggle),
+    .nmx-settings-inline-error > button,
+    .nmx-terminal-profile-controls > button,
+    .nmx-terminal-runtime-note > button,
+    .nmx-community-skills-more
+) {
+    min-height: 30px;
+    border: 1px solid var(--nmx-border-strong);
+    border-radius: 8px;
+    color: var(--nmx-text);
+    background: var(--nmx-control-background, var(--nmx-panel));
+    box-shadow: none;
+    transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 120ms cubic-bezier(.16, 1, .3, 1), opacity 140ms ease;
+}
+
+.nmx-shell .nmx-settings-page :is(
+    .nmx-settings-actions button,
+    .nmx-profile-card > button,
+    .nmx-local-data-list > article > button,
+    .nmx-community-skill-card button,
+    .nmx-community-skills-toolbar > button,
+    .nmx-skill-install-link > button,
+    .nmx-conversation-archive button,
+    .nmx-mcp-access button:not(.nmx-mcp-server-toggle),
+    .nmx-settings-inline-error > button,
+    .nmx-terminal-profile-controls > button,
+    .nmx-terminal-runtime-note > button,
+    .nmx-community-skills-more
+):hover:not(:disabled) {
+    border-color: var(--nmx-focus-ring, var(--nmx-border-strong));
+    color: var(--nmx-text);
+    background: var(--nmx-control-hover, var(--nmx-hover));
+}
+
+.nmx-shell .nmx-settings-page :is(
+    .nmx-settings-actions button.is-primary,
+    .nmx-community-skill-card button.is-primary,
+    .nmx-community-skill-card button.is-update,
+    .nmx-skill-install-link > button.is-primary,
+    .nmx-conversation-archive button.is-primary,
+    .nmx-mcp-access button[type='submit']
+) {
+    border-color: var(--nmx-text);
+    color: var(--nmx-bg);
+    background: var(--nmx-text);
+}
+
+.nmx-shell .nmx-settings-page :is(
+    .nmx-settings-actions button.is-primary,
+    .nmx-community-skill-card button.is-primary,
+    .nmx-community-skill-card button.is-update,
+    .nmx-skill-install-link > button.is-primary,
+    .nmx-conversation-archive button.is-primary,
+    .nmx-mcp-access button[type='submit']
+):hover:not(:disabled) {
+    border-color: var(--nmx-text);
+    color: var(--nmx-bg);
+    background: var(--nmx-text);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, .18);
+}
+
+.nmx-shell .nmx-settings-page :is(.nmx-local-data-list > article > button.is-confirm, button.is-danger) {
+    border-color: color-mix(in srgb, var(--nmx-danger, #c2464f) 55%, transparent);
+    color: var(--nmx-danger, #e1b0b8);
+    background: color-mix(in srgb, var(--nmx-danger, #c2464f) 12%, transparent);
+}
+
+.nmx-shell .nmx-settings-page button:active:not(:disabled) {
+    transform: scale(.97);
+}
+
+.nmx-shell .nmx-settings-page button:disabled {
+    cursor: default;
+    opacity: .46;
+}
+
+.nmx-shell .nmx-settings-page button:focus-visible {
+    outline: 2px solid var(--nmx-focus-ring, currentColor);
+    outline-offset: 2px;
+}
+
+/* Inputs keep the app-wide “no browser blue ring” rule but still show a
+   themed focus state (§4.2 hover / focus). */
+.nmx-shell .nmx-settings-page :is(input:not([type=checkbox]):not([type=radio]), select, textarea) {
+    transition: border-color 140ms ease, background-color 140ms ease;
+}
+.nmx-shell .nmx-settings-page :is(input:not([type=checkbox]):not([type=radio]), select, textarea):focus-visible,
+.nmx-shell .nmx-settings-page label:focus-within:is(.nmx-skill-install-link > label, .nmx-community-skills-toolbar > label) {
+    border-color: var(--nmx-focus-ring, var(--nmx-border-strong));
+}
+
+/* ---- Rows and cards: soft radii ---- */
+.nmx-shell .nmx-settings-page .nmx-skill-setting {
+    /* The legacy flat-row rule forces 0 with !important. */
+    border-radius: 8px !important;
+}
+
+/* ---- Skills: breathing room between toolbar rows ---- */
+/* One explicit minmax(0, 1fr) column: an implicit `auto` column could be
+   stretched past the panel by a long unbreakable skill name or path. */
+.nmx-shell .nmx-settings-page .nmx-skills-settings,
+.nmx-shell .nmx-coding-plugins .nmx-skills-settings,
+.nmx-shell .nmx-coding-plugins-page .nmx-skills-settings {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    align-content: start;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.nmx-shell .nmx-settings-page .nmx-skills-settings > .nmx-community-skills-toolbar,
+.nmx-shell .nmx-settings-page .nmx-skills-settings > .nmx-skill-install-link {
+    margin: 0;
+}
+/* Load issues and inline errors are grid children too: long paths, error
+   codes and <pre> details wrap instead of widening the panel. */
+.nmx-shell .nmx-settings-page .nmx-skills-settings > :is(.nmx-settings-group, .nmx-settings-inline-error),
+.nmx-shell .nmx-coding-plugins .nmx-skills-settings > :is(.nmx-settings-group, .nmx-settings-inline-error) {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+.nmx-shell .nmx-skills-settings :is(.nmx-setting-row > span, .nmx-settings-inline-error > span) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+.nmx-shell .nmx-skills-settings .nmx-settings-inline-error {
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+.nmx-shell .nmx-skills-settings .nmx-settings-inline-error > span { flex: 1 1 220px; }
+.nmx-shell .nmx-skills-settings .nmx-settings-inline-error > button { flex: 0 0 auto; }
+.nmx-shell .nmx-skills-settings .nmx-settings-inline-error > details {
+    flex: 1 1 260px;
+    min-width: 0;
+    max-width: 100%;
+}
+.nmx-shell .nmx-skills-settings .nmx-settings-inline-error > details > summary { overflow-wrap: anywhere; }
+.nmx-shell .nmx-skills-settings .nmx-settings-inline-error pre {
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.nmx-shell .nmx-settings-page .nmx-installed-skills > div:empty {
+    display: none;
+}
+
+/* ---- MCP: the intro is quiet copy, not an input-like box ---- */
+.nmx-shell .nmx-settings-page .nmx-mcp-heading .nmx-settings-note {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--nmx-muted);
+    font-size: 13px;
+}
+.nmx-shell .nmx-settings-page .nmx-mcp-access :is(input[type='search'], form input, textarea, select) {
+    border-radius: 8px;
+    border-color: var(--nmx-border-strong);
+    background: var(--nmx-control-background, var(--nmx-panel));
+    color: var(--nmx-text);
+}
+.nmx-shell .nmx-settings-page .nmx-mcp-server-list,
+.nmx-shell .nmx-settings-page .nmx-mcp-access form,
+.nmx-shell .nmx-settings-page .nmx-mcp-presets {
+    border-color: var(--nmx-border);
+    border-radius: 10px;
+    background: transparent;
+}
+.nmx-shell .nmx-settings-page .nmx-mcp-server + .nmx-mcp-server {
+    border-top-color: var(--nmx-border);
+}
+.nmx-shell .nmx-settings-page .nmx-mcp-server-heading {
+    transition: background-color 140ms ease;
+}
+.nmx-shell .nmx-settings-page .nmx-mcp-server-heading:hover {
+    background: var(--nmx-hover);
+}
+
+/* ---- Conversation transfer card follows NextMux tokens, not Theia's ---- */
+.nmx-shell .nmx-settings-page .nmx-conversation-archive {
+    background: transparent;
+}
+.nmx-shell .nmx-settings-page .nmx-conversation-archive :is(p, .nmx-archive-privacy) {
+    color: var(--nmx-muted);
+}
+
+/* ---- Switches: light theme “off” was a near-black track that read as “on” ---- */
+.nmx-shell.nmx-theme-light .nmx-switch i {
+    border-color: var(--nmx-border-strong);
+    background: #e4dfdc;
+}
+.nmx-shell.nmx-theme-light .nmx-switch i::after {
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(40, 30, 36, .28);
+}
+.nmx-shell.nmx-theme-light .nmx-switch input:checked + i {
+    border-color: #2f7d5b;
+    background: #3a8f69;
+}
+.nmx-switch input:focus-visible + i {
+    outline: 2px solid var(--nmx-focus-ring, currentColor);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell .nmx-settings-page button:active:not(:disabled) { transform: none; }
+    .nmx-shell .nmx-settings-page :is(button, input, select, textarea) { transition: none; }
+}
+
+/* Nested sections: the page-level 28px section rhythm is too loose inside a card. */
+.nmx-shell .nmx-settings-page .nmx-settings-panel section + section {
+    margin-top: 12px;
+}
+.nmx-shell .nmx-settings-page .nmx-skills-settings > section + section {
+    margin-top: 0;
+}
+.nmx-shell .nmx-settings-page .nmx-models-settings > .nmx-model-visibility-settings {
+    margin-top: 0;
+}
+
+/* ---- Scheduled task dialog (§6.6): same soft controls, theme-correct primary ---- */
+.nmx-shell .nmx-schedule-dialog .nmx-schedule-workspace-row button {
+    width: 34px;
+    height: 34px;
+    display: inline-grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--nmx-border-strong);
+    border-radius: 8px;
+    color: var(--nmx-subtle);
+    background: var(--nmx-control-background, var(--nmx-panel));
+    cursor: pointer;
+}
+.nmx-shell .nmx-schedule-dialog :is(.nmx-schedule-workspace-row button, > header button, > footer button) {
+    transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease, transform 120ms cubic-bezier(.16, 1, .3, 1);
+}
+.nmx-shell .nmx-schedule-dialog :is(.nmx-schedule-workspace-row button, > header button, > footer button:not(.is-primary)):hover:not(:disabled) {
+    color: var(--nmx-text);
+    background: var(--nmx-control-hover, var(--nmx-hover));
+}
+.nmx-shell .nmx-schedule-dialog > footer button.is-primary {
+    border-color: var(--nmx-text);
+    color: var(--nmx-bg);
+    background: var(--nmx-text);
+}
+.nmx-shell .nmx-schedule-dialog > footer button:disabled {
+    cursor: default;
+    opacity: .46;
+}
+.nmx-shell .nmx-schedule-dialog button:active:not(:disabled) {
+    transform: scale(.97);
+}
+.nmx-shell .nmx-schedule-dialog :is(input, select, textarea) {
+    background: var(--nmx-control-background, var(--nmx-panel));
+    transition: border-color 140ms ease;
+}
+.nmx-shell .nmx-schedule-dialog :is(input, select, textarea):focus-visible {
+    border-color: var(--nmx-focus-ring, var(--nmx-border-strong));
+}
+.nmx-shell.nmx-theme-light .nmx-dialog-backdrop > .nmx-schedule-dialog {
+    box-shadow: 0 24px 64px rgba(40, 30, 36, .18);
+}
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell .nmx-schedule-dialog button:active:not(:disabled) { transform: none; }
+}
+
+/* The link that opens Settings → Models when an API has no checked models. */
+.nmx-shell .nmx-schedule-dialog .nmx-link-button { display: inline; min-height: 0; padding: 0; border: 0; color: var(--nmx-accent, #e0729a); background: transparent; font: inherit; text-decoration: underline; cursor: pointer; }

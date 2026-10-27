@@ -1,0 +1,79 @@
+import { totalCopy } from './nextmux-copy-fallback';
+import { canvasTransferText } from './nextmux-comic-canvas-transfer-text';
+
+export const COMIC_CANVAS_TABS_LOCALES = ['zh-CN', 'en', 'zh-TW', 'ja', 'ko', 'es', 'fr', 'de', 'pt-BR', 'ru', 'ar', 'hi'] as const;
+export type ComicCanvasTabsTextKey = 'main' | 'free' | 'closeTitle' | 'closeBody' | 'return' | 'close' | 'mainLocked' | 'tabFailed' | 'copyDone';
+const COPY: Readonly<Record<string, Readonly<Record<ComicCanvasTabsTextKey, string>>>> = {
+    'zh-CN': { main: '主画布', free: '自由画布', closeTitle: '关闭「{name}」？', closeBody: '此画布尚未保存、正在保存或保存失败。关闭前会再次保存；保存失败时保留标签与改动。', return: '返回画布', close: '保存并关闭', mainLocked: '主画布用于进入剪辑，不能删除。', tabFailed: '画布操作失败：{error}', copyDone: '已将当前版本复制到主画布内容右侧（{x}, {y}）。' },
+    en: { main: 'Main canvas', free: 'Free canvas', closeTitle: 'Close “{name}”?', closeBody: 'This canvas has unsaved changes, is saving, or failed to save. It will be saved again before closing; a failed save keeps the tab and changes.', return: 'Back to canvas', close: 'Save and close', mainLocked: 'The main canvas supplies the editor and cannot be deleted.', tabFailed: 'Canvas action failed: {error}', copyDone: 'Copied the current version to the right of the main canvas content ({x}, {y}).' },
+    'zh-TW': { main: '主畫布', free: '自由畫布', closeTitle: '關閉「{name}」？', closeBody: '此畫布尚未儲存、正在儲存或儲存失敗。關閉前會再次儲存；失敗時保留分頁與變更。', return: '返回畫布', close: '儲存並關閉', mainLocked: '主畫布用於進入剪輯，不能刪除。', tabFailed: '畫布操作失敗：{error}', copyDone: '已將目前版本複製到主畫布內容右側（{x}, {y}）。' },
+    ja: { main: 'メインキャンバス', free: '自由キャンバス', closeTitle: '「{name}」を閉じますか？', closeBody: '未保存の変更、保存処理中、または保存エラーがあります。閉じる前に再保存し、失敗した場合はタブと変更を保持します。', return: 'キャンバスに戻る', close: '保存して閉じる', mainLocked: 'メインキャンバスは編集画面で使用するため削除できません。', tabFailed: 'キャンバス操作に失敗しました：{error}', copyDone: '現在のバージョンをメインキャンバスの内容の右側にコピーしました（{x}, {y}）。' },
+    ko: { main: '메인 캔버스', free: '자유 캔버스', closeTitle: '“{name}”을 닫을까요?', closeBody: '저장되지 않은 변경 사항, 저장 중 상태 또는 저장 오류가 있습니다. 닫기 전에 다시 저장하며, 실패하면 탭과 변경 사항을 유지합니다.', return: '캔버스로 돌아가기', close: '저장 후 닫기', mainLocked: '메인 캔버스는 편집기에 사용되므로 삭제할 수 없습니다.', tabFailed: '캔버스 작업 실패: {error}', copyDone: '현재 버전을 메인 캔버스 콘텐츠 오른쪽에 복사했습니다 ({x}, {y}).' },
+    es: { main: 'Lienzo principal', free: 'Lienzo libre', closeTitle: '¿Cerrar «{name}»?', closeBody: 'Hay cambios sin guardar, un guardado en curso o un error al guardar. Se guardará de nuevo antes de cerrar; si falla, se conservarán la pestaña y los cambios.', return: 'Volver al lienzo', close: 'Guardar y cerrar', mainLocked: 'El lienzo principal se usa en el editor y no se puede eliminar.', tabFailed: 'Falló la acción del lienzo: {error}', copyDone: 'Versión actual copiada a la derecha del contenido del lienzo principal ({x}, {y}).' },
+    fr: { main: 'Canevas principal', free: 'Canevas libre', closeTitle: 'Fermer « {name} » ?', closeBody: 'Des modifications ne sont pas enregistrées, un enregistrement est en cours ou a échoué. Un nouvel enregistrement précède la fermeture ; en cas d’échec, l’onglet et les modifications sont conservés.', return: 'Retour au canevas', close: 'Enregistrer et fermer', mainLocked: 'Le canevas principal alimente l’éditeur et ne peut pas être supprimé.', tabFailed: 'Échec de l’action sur le canevas : {error}', copyDone: 'Version actuelle copiée à droite du contenu du canevas principal ({x}, {y}).' },
+    de: { main: 'Hauptfläche', free: 'Freie Fläche', closeTitle: '„{name}“ schließen?', closeBody: 'Änderungen sind ungespeichert, werden gespeichert oder das Speichern ist fehlgeschlagen. Vor dem Schließen wird erneut gespeichert; bei einem Fehler bleiben Tab und Änderungen erhalten.', return: 'Zurück zur Fläche', close: 'Speichern und schließen', mainLocked: 'Die Hauptfläche wird im Editor verwendet und kann nicht gelöscht werden.', tabFailed: 'Aktion auf der Fläche fehlgeschlagen: {error}', copyDone: 'Aktuelle Version rechts neben den Inhalt der Hauptfläche kopiert ({x}, {y}).' },
+    'pt-BR': { main: 'Tela principal', free: 'Tela livre', closeTitle: 'Fechar “{name}”?', closeBody: 'Há alterações não salvas, um salvamento em andamento ou uma falha ao salvar. A tela será salva novamente antes de fechar; se falhar, a aba e as alterações serão mantidas.', return: 'Voltar à tela', close: 'Salvar e fechar', mainLocked: 'A tela principal é usada no editor e não pode ser excluída.', tabFailed: 'Falha na ação da tela: {error}', copyDone: 'Versão atual copiada à direita do conteúdo da tela principal ({x}, {y}).' },
+    ru: { main: 'Основной холст', free: 'Свободный холст', closeTitle: 'Закрыть «{name}»?', closeBody: 'Есть несохранённые изменения, сохранение выполняется или завершилось ошибкой. Перед закрытием холст сохраняется повторно; при ошибке вкладка и изменения остаются.', return: 'Вернуться к холсту', close: 'Сохранить и закрыть', mainLocked: 'Основной холст используется в редакторе и не может быть удалён.', tabFailed: 'Ошибка действия с холстом: {error}', copyDone: 'Текущая версия скопирована справа от содержимого основного холста ({x}, {y}).' },
+    ar: { main: 'اللوحة الرئيسية', free: 'لوحة حرة', closeTitle: 'إغلاق «{name}»؟', closeBody: 'توجد تغييرات غير محفوظة أو حفظ جارٍ أو فشل في الحفظ. سيُعاد الحفظ قبل الإغلاق؛ وإذا فشل ستبقى علامة التبويب والتغييرات.', return: 'العودة إلى اللوحة', close: 'حفظ وإغلاق', mainLocked: 'تُستخدم اللوحة الرئيسية في المحرر ولا يمكن حذفها.', tabFailed: 'فشل إجراء اللوحة: {error}', copyDone: 'نُسخت النسخة الحالية إلى يمين محتوى اللوحة الرئيسية ({x}, {y}).' },
+    hi: { main: 'मुख्य कैनवास', free: 'स्वतंत्र कैनवास', closeTitle: '“{name}” बंद करें?', closeBody: 'कुछ बदलाव सहेजे नहीं गए हैं, सहेजना जारी है या विफल हुआ है। बंद करने से पहले फिर सहेजा जाएगा; विफल होने पर टैब और बदलाव बने रहेंगे।', return: 'कैनवास पर वापस जाएँ', close: 'सहेजें और बंद करें', mainLocked: 'मुख्य कैनवास संपादक में उपयोग होता है और हटाया नहीं जा सकता।', tabFailed: 'कैनवास कार्रवाई विफल: {error}', copyDone: 'वर्तमान संस्करण मुख्य कैनवास की सामग्री के दाईं ओर कॉपी किया गया ({x}, {y})।' }
+};
+
+export function canvasTabsText(locale: string, key: ComicCanvasTabsTextKey, values: Readonly<Record<string, string | number>> = {}): string {
+    return totalCopy(locale, key, language => COPY[language]?.[key]).replace(/\{(\w+)\}/gu, (match, name: string) => String(values[name] ?? match));
+}
+
+type ErrorKey = 'invalidName' | 'folderExists' | 'notFound' | 'busy' | 'invalidCover' | 'invalidOrder' | 'noResult' | 'saveFailed' | 'failed';
+const ERROR_COPY: Readonly<Record<string, readonly string[]>> = {
+    'zh-CN': ['名称需为 1 至 64 个字符。', '已有同名文件夹。', '项目、文件夹或画布已不存在。', '此画布仍有任务运行，请完成后重试。', '封面只能使用此项目已就绪的图片。', '画布排序必须包含全部现有画布，且不能重复。', '此节点还没有可复制的当前素材。', '保存失败，请重试后再切换或关闭。', '操作失败，请重试。'],
+    en: ['Names must contain 1 to 64 characters.', 'A folder with this name already exists.', 'The project, folder, or canvas no longer exists.', 'This canvas still has running jobs. Retry when they finish.', 'The cover must be a ready image from this project.', 'The order must include every existing canvas exactly once.', 'This node has no current media to copy.', 'Saving failed. Retry before switching or closing.', 'The action failed. Please retry.'],
+    'zh-TW': ['名稱需為 1 至 64 個字元。', '已有同名資料夾。', '專案、資料夾或畫布已不存在。', '此畫布仍有工作執行中，請完成後重試。', '封面只能使用此專案已就緒的圖片。', '畫布排序必須包含全部現有畫布，且不能重複。', '此節點尚無可複製的目前素材。', '儲存失敗，請重試後再切換或關閉。', '操作失敗，請重試。'],
+    ja: ['名前は 1～64 文字で入力してください。', '同じ名前のフォルダーがあります。', 'プロジェクト、フォルダー、またはキャンバスが存在しません。', 'このキャンバスでは処理が実行中です。完了後に再試行してください。', '表紙にはこのプロジェクトの準備済み画像を使用してください。', '並び順には既存のすべてのキャンバスを 1 回ずつ含めてください。', 'このノードにはコピーできる現在の素材がありません。', '保存に失敗しました。切り替えや終了の前に再試行してください。', '操作に失敗しました。再試行してください。'],
+    ko: ['이름은 1~64자로 입력하세요.', '같은 이름의 폴더가 이미 있습니다.', '프로젝트, 폴더 또는 캔버스가 더 이상 존재하지 않습니다.', '이 캔버스에서 작업이 실행 중입니다. 완료 후 다시 시도하세요.', '표지는 이 프로젝트의 준비된 이미지만 사용할 수 있습니다.', '순서에 모든 기존 캔버스를 한 번씩 포함해야 합니다.', '이 노드에 복사할 현재 미디어가 없습니다.', '저장에 실패했습니다. 전환하거나 닫기 전에 다시 시도하세요.', '작업에 실패했습니다. 다시 시도하세요.'],
+    es: ['El nombre debe tener entre 1 y 64 caracteres.', 'Ya existe una carpeta con este nombre.', 'El proyecto, la carpeta o el lienzo ya no existe.', 'Este lienzo aún tiene tareas en curso. Reintenta al terminar.', 'La portada debe ser una imagen lista de este proyecto.', 'El orden debe incluir cada lienzo existente exactamente una vez.', 'Este nodo no tiene contenido actual que copiar.', 'Error al guardar. Reintenta antes de cambiar o cerrar.', 'La acción falló. Reintenta.'],
+    fr: ['Le nom doit contenir entre 1 et 64 caractères.', 'Un dossier porte déjà ce nom.', 'Le projet, dossier ou canevas n’existe plus.', 'Des tâches sont en cours sur ce canevas. Réessayez après leur fin.', 'La couverture doit être une image prête de ce projet.', 'L’ordre doit inclure chaque canevas existant une seule fois.', 'Ce nœud ne contient aucun média actuel à copier.', 'Échec de l’enregistrement. Réessayez avant de changer ou fermer.', 'L’action a échoué. Réessayez.'],
+    de: ['Der Name muss 1 bis 64 Zeichen enthalten.', 'Ein Ordner mit diesem Namen existiert bereits.', 'Projekt, Ordner oder Fläche existiert nicht mehr.', 'Auf dieser Fläche laufen noch Aufgaben. Nach Abschluss erneut versuchen.', 'Das Titelbild muss ein fertiges Bild aus diesem Projekt sein.', 'Die Reihenfolge muss jede vorhandene Fläche genau einmal enthalten.', 'Dieser Knoten hat kein aktuelles Medium zum Kopieren.', 'Speichern fehlgeschlagen. Vor Wechsel oder Schließen erneut versuchen.', 'Die Aktion ist fehlgeschlagen. Erneut versuchen.'],
+    'pt-BR': ['O nome deve ter de 1 a 64 caracteres.', 'Já existe uma pasta com esse nome.', 'O projeto, a pasta ou a tela não existe mais.', 'Esta tela ainda tem tarefas em andamento. Tente quando terminarem.', 'A capa deve ser uma imagem pronta deste projeto.', 'A ordem deve incluir cada tela existente exatamente uma vez.', 'Este nó não tem mídia atual para copiar.', 'Falha ao salvar. Tente novamente antes de trocar ou fechar.', 'A ação falhou. Tente novamente.'],
+    ru: ['Имя должно содержать от 1 до 64 символов.', 'Папка с таким именем уже существует.', 'Проект, папка или холст больше не существует.', 'На этом холсте ещё выполняются задачи. Повторите после их завершения.', 'Обложка должна быть готовым изображением из этого проекта.', 'Порядок должен включать каждый существующий холст ровно один раз.', 'У этого узла нет текущего материала для копирования.', 'Ошибка сохранения. Повторите перед переключением или закрытием.', 'Действие не выполнено. Повторите попытку.'],
+    ar: ['يجب أن يتكون الاسم من 1 إلى 64 حرفًا.', 'يوجد مجلد بهذا الاسم بالفعل.', 'لم يعد المشروع أو المجلد أو اللوحة موجودًا.', 'ما زالت هناك مهام قيد التشغيل في هذه اللوحة. أعد المحاولة بعد اكتمالها.', 'يجب أن يكون الغلاف صورة جاهزة من هذا المشروع.', 'يجب أن يتضمن الترتيب كل لوحة موجودة مرة واحدة فقط.', 'لا توجد وسائط حالية في هذه العقدة لنسخها.', 'فشل الحفظ. أعد المحاولة قبل التبديل أو الإغلاق.', 'فشل الإجراء. أعد المحاولة.'],
+    hi: ['नाम में 1 से 64 अक्षर होने चाहिए।', 'इस नाम का फ़ोल्डर पहले से मौजूद है।', 'प्रोजेक्ट, फ़ोल्डर या कैनवास अब मौजूद नहीं है।', 'इस कैनवास में कार्य अभी चल रहे हैं। पूरा होने पर फिर प्रयास करें।', 'कवर इस प्रोजेक्ट की तैयार छवि होनी चाहिए।', 'क्रम में हर मौजूदा कैनवास ठीक एक बार शामिल होना चाहिए।', 'इस नोड में कॉपी करने के लिए वर्तमान मीडिया नहीं है।', 'सहेजना विफल हुआ। बदलने या बंद करने से पहले फिर प्रयास करें।', 'कार्रवाई विफल हुई। फिर प्रयास करें।']
+};
+const ERROR_KEYS: readonly ErrorKey[] = ['invalidName', 'folderExists', 'notFound', 'busy', 'invalidCover', 'invalidOrder', 'noResult', 'saveFailed', 'failed'];
+
+/** RPC messages are diagnostics; UI strings are selected by stable error codes. */
+export function comicCanvasTabsErrorText(locale: string, error: unknown): string {
+    const item = error as { readonly code?: unknown; readonly message?: unknown; readonly uiLocalized?: boolean } | undefined;
+    if (item?.uiLocalized && typeof item.message === 'string') return item.message;
+    const code = typeof item?.code === 'string' ? item.code : '';
+    if (code === 'CANVAS_TRANSFER_CONFLICT') return canvasTransferText(locale, 'conflict');
+    if (code === 'MAIN_CANVAS_PROTECTED' || code === 'MAIN_CANVAS_SOURCE') return canvasTabsText(locale, 'mainLocked');
+    let key: ErrorKey = 'failed';
+    if (code === 'INVALID_NAME') key = 'invalidName';
+    else if (code === 'DUPLICATE_FOLDER_NAME') key = 'folderExists';
+    else if (code.endsWith('_NOT_FOUND')) key = 'notFound';
+    else if (/BUSY|ACTIVE_JOB|RUNNING_JOB|DELETION_PENDING|RETIRING/u.test(code)) key = 'busy';
+    else if (code === 'INVALID_COVER') key = 'invalidCover';
+    else if (code === 'INVALID_CANVAS_ORDER') key = 'invalidOrder';
+    else if (code === 'NO_CURRENT_RESULT') key = 'noResult';
+    else if (/SAVE_FAILED|REVISION_CONFLICT/u.test(code)) key = 'saveFailed';
+    return totalCopy(locale, key, language => ERROR_COPY[language]?.[ERROR_KEYS.indexOf(key)]);
+}
+
+export type CanvasTabsActionKey = 'tabs' | 'create' | 'reopen' | 'copyToMain' | 'deleteTitle' | 'deleteBody' | 'closeTab';
+const ACTION_KEYS: readonly CanvasTabsActionKey[] = ['tabs', 'create', 'reopen', 'copyToMain', 'deleteTitle', 'deleteBody', 'closeTab'];
+const ACTION_COPY: Readonly<Record<string, readonly string[]>> = {
+    'zh-CN': ['项目画布', '新建自由画布', '重新打开画布', '发送素材到主画布', '删除「{name}」？', '此自由画布将移到废纸篓。项目和主画布会保留。', '关闭「{name}」'],
+    en: ['Project canvases', 'Create free canvas', 'Reopen canvas', 'Send media to main canvas', 'Delete “{name}”?', 'This free canvas will move to Trash. The project and main canvas will remain.', 'Close “{name}”'],
+    'zh-TW': ['專案畫布', '新增自由畫布', '重新開啟畫布', '傳送素材至主畫布', '刪除「{name}」？', '此自由畫布將移到垃圾桶。專案和主畫布會保留。', '關閉「{name}」'],
+    ja: ['プロジェクトのキャンバス', '自由キャンバスを作成', 'キャンバスを再開', '素材をメインキャンバスへ送る', '「{name}」を削除しますか？', 'この自由キャンバスはゴミ箱へ移動します。プロジェクトとメインキャンバスは保持されます。', '「{name}」を閉じる'],
+    ko: ['프로젝트 캔버스', '자유 캔버스 만들기', '캔버스 다시 열기', '미디어를 메인 캔버스로 보내기', '“{name}”을 삭제할까요?', '이 자유 캔버스는 휴지통으로 이동합니다. 프로젝트와 메인 캔버스는 유지됩니다.', '“{name}” 닫기'],
+    es: ['Lienzos del proyecto', 'Crear lienzo libre', 'Reabrir lienzo', 'Enviar contenido al lienzo principal', '¿Eliminar «{name}»?', 'Este lienzo libre se moverá a la Papelera. El proyecto y el lienzo principal se conservarán.', 'Cerrar «{name}»'],
+    fr: ['Canevas du projet', 'Créer un canevas libre', 'Rouvrir un canevas', 'Envoyer un média au canevas principal', 'Supprimer « {name} » ?', 'Ce canevas libre sera placé dans la Corbeille. Le projet et le canevas principal seront conservés.', 'Fermer « {name} »'],
+    de: ['Projektflächen', 'Freie Fläche erstellen', 'Fläche erneut öffnen', 'Medium zur Hauptfläche senden', '„{name}“ löschen?', 'Diese freie Fläche wird in den Papierkorb verschoben. Projekt und Hauptfläche bleiben erhalten.', '„{name}“ schließen'],
+    'pt-BR': ['Telas do projeto', 'Criar tela livre', 'Reabrir tela', 'Enviar mídia para a tela principal', 'Excluir “{name}”?', 'Esta tela livre será movida para a Lixeira. O projeto e a tela principal serão mantidos.', 'Fechar “{name}”'],
+    ru: ['Холсты проекта', 'Создать свободный холст', 'Открыть холст снова', 'Отправить материал на основной холст', 'Удалить «{name}»?', 'Этот свободный холст будет перемещён в Корзину. Проект и основной холст сохранятся.', 'Закрыть «{name}»'],
+    ar: ['لوحات المشروع', 'إنشاء لوحة حرة', 'إعادة فتح لوحة', 'إرسال وسائط إلى اللوحة الرئيسية', 'حذف «{name}»؟', 'ستُنقل هذه اللوحة الحرة إلى سلة المهملات. سيبقى المشروع واللوحة الرئيسية.', 'إغلاق «{name}»'],
+    hi: ['प्रोजेक्ट कैनवास', 'स्वतंत्र कैनवास बनाएँ', 'कैनवास फिर खोलें', 'मीडिया मुख्य कैनवास पर भेजें', '“{name}” हटाएँ?', 'यह स्वतंत्र कैनवास ट्रैश में जाएगा। प्रोजेक्ट और मुख्य कैनवास बने रहेंगे।', '“{name}” बंद करें']
+};
+export function canvasTabsActionText(locale: string, key: CanvasTabsActionKey, values: Readonly<Record<string, string | number>> = {}): string {
+    return totalCopy(locale, key, language => ACTION_COPY[language]?.[ACTION_KEYS.indexOf(key)]).replace(/\{(\w+)\}/gu, (match, name: string) => String(values[name] ?? match));
+}

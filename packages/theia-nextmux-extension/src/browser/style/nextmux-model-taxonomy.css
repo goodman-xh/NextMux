@@ -1,0 +1,76 @@
+/*
+ * One chip strip for a model's primary category and capability badges (nextmux-model-taxonomy-tags.tsx): the same
+ * vocabulary and the same look in Settings → Models, the Model Center, the coding model picker and the comic studio.
+ * The category chip is tinted by category (one hue each, readable on both themes); badges are quiet outlines, so
+ * "what a model is" never reads like "what else it can do".
+ */
+.nmx-model-taxonomy {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    max-width: 100%;
+    vertical-align: middle;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    letter-spacing: 0;
+}
+
+.nmx-model-taxonomy > span {
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 5px;
+    white-space: nowrap;
+}
+
+.nmx-model-taxonomy-category {
+    --nmx-taxonomy-hue: #8a8f98;
+    color: color-mix(in srgb, var(--nmx-taxonomy-hue) 72%, var(--nmx-text, #eeecee));
+    background: color-mix(in srgb, var(--nmx-taxonomy-hue) 16%, transparent);
+    font-weight: 600;
+}
+
+.nmx-model-taxonomy-category[data-model-category='language'] { --nmx-taxonomy-hue: #5b8def; }
+.nmx-model-taxonomy-category[data-model-category='image'] { --nmx-taxonomy-hue: #a26be0; }
+.nmx-model-taxonomy-category[data-model-category='video'] { --nmx-taxonomy-hue: #e0607e; }
+.nmx-model-taxonomy-category[data-model-category='speech'] { --nmx-taxonomy-hue: #2fa58a; }
+.nmx-model-taxonomy-category[data-model-category='music'] { --nmx-taxonomy-hue: #d9922b; }
+.nmx-model-taxonomy-category[data-model-category='sound_effect'] { --nmx-taxonomy-hue: #e07a3f; }
+.nmx-model-taxonomy-category[data-model-category='transcription'] { --nmx-taxonomy-hue: #2b9fc4; }
+.nmx-model-taxonomy-category[data-model-category='decision'] { --nmx-taxonomy-hue: #7a72e6; }
+.nmx-model-taxonomy-category[data-model-category='embedding'] { --nmx-taxonomy-hue: #7d8a99; }
+.nmx-model-taxonomy-category[data-model-category='rerank'] { --nmx-taxonomy-hue: #5f9a7a; }
+
+/* The muted token alone is under 4.5:1 at 11px on the dark panels: lean it toward the text colour. */
+.nmx-model-taxonomy-badge {
+    border: 1px solid color-mix(in srgb, var(--nmx-border-strong, var(--nmx-border, #413d40)) 85%, transparent);
+    color: color-mix(in srgb, var(--nmx-muted, #7b777c) 55%, var(--nmx-text, #eeecee));
+    background: transparent;
+}
+
+.nmx-shell.nmx-theme-light .nmx-model-taxonomy-category,
+.nmx-theme-light .nmx-model-taxonomy-category {
+    color: color-mix(in srgb, var(--nmx-taxonomy-hue) 58%, var(--nmx-text, #282527));
+    background: color-mix(in srgb, var(--nmx-taxonomy-hue) 12%, transparent);
+}
+
+.nmx-shell.nmx-theme-light .nmx-model-taxonomy-badge,
+.nmx-theme-light .nmx-model-taxonomy-badge {
+    border-color: color-mix(in srgb, var(--nmx-border-strong, #c7c1c4) 90%, transparent);
+    color: color-mix(in srgb, var(--nmx-muted, #6f6a6d) 70%, var(--nmx-text, #282527));
+}
+
+/* Where the strip sits on each surface. */
+.nmx-model-visibility-row > span > .nmx-model-taxonomy { margin-top: 1px; }
+.nmx-mc-model-name > .nmx-model-taxonomy { display: flex; margin-top: 5px; }
+.nmx-model-effort-menu > header > .nmx-model-taxonomy { margin-top: 5px; }
+.nmx-comic-setup-option-copy > .nmx-model-taxonomy { margin-top: 3px; }
+
+@media (forced-colors: active) {
+    .nmx-model-taxonomy > span { border: 1px solid CanvasText; color: CanvasText; background: Canvas; forced-color-adjust: none; }
+}
