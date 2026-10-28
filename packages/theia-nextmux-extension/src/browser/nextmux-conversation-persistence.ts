@@ -67,3 +67,32 @@ export function conversationPersistenceNeedsFollowUp(
         && saveConversationHistory
         && currentRevision !== flushStartRevision;
 }
+
+/**
+ * Recognizes concurrent conversation store updates across both direct in-memory
+ * errors (`ConversationStoreError` / `PlatformRequestError`) and RPC-decoded
+ * `PlatformRequestError` envelopes where `error.message` is the generic English
+ * model/operation fallback while `domainError.code` carries
+ * `CONVERSATION_STORE_CONCURRENT_UPDATE`, as well as `INCOGNITO_MODE_CHANGED`
+ * CAS conflicts on origin-owned conversations.
+ */
+export function isConversationStoreConcurrentUpdateError(error: unknown): boolean {
+    if (!error || typeof error !== 'object') return false;
+    const record = error as {
+        readonly code?: unknown;
+        readonly message?: unknown;
+        readonly domainError?: { readonly code?: unknown; readonly params?: { readonly reason?: unknown } };
+        readonly data?: { readonly domainError?: { readonly code?: unknown; readonly params?: { readonly reason?: unknown } } };
+    };
+    if (record.code === 'INCOGNITO_MODE_CHANGED') return true;
+    if (record.code !== 'IMPORT_CONFLICT') return false;
+    const domain = record.domainError && typeof record.domainError === 'object'
+        ? record.domainError
+        : record.data && typeof record.data === 'object' && record.data.domainError && typeof record.data.domainError === 'object'
+            ? record.data.domainError
+            : undefined;
+    if (domain?.code === 'CONVERSATION_STORE_CONCURRENT_UPDATE' || domain?.params?.reason === 'store_concurrent_update') {
+        return true;
+    }
+    return String(record.message ?? '').includes('store_concurrent_update');
+}

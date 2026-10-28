@@ -430,7 +430,8 @@ import {
     conversationPersistenceChanges,
     conversationPersistenceNeedsFollowUp,
     createConversationPersistenceBaseline,
-    hasConversationPersistenceChanges
+    hasConversationPersistenceChanges,
+    isConversationStoreConcurrentUpdateError
 } from './nextmux-conversation-persistence';
 import { conversationText } from './nextmux-conversation-locale';
 import { historyReadinessText } from './nextmux-history-readiness-locale';
@@ -20037,8 +20038,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         ...(changes.upserts.length ? { baseUpdatedAt: Object.fromEntries(changes.upserts.map(session => [session.id, this.conversationHistoryPersistedSessions.get(session.id)?.updatedAt ?? 0])) } : {})
                     });
                 } catch (error) {
-                    const code = (error as { code?: unknown } | undefined)?.code;
-                    if ((code !== 'IMPORT_CONFLICT' || !String((error as Error).message).includes('store_concurrent_update')) || conflictMerges >= 3) throw error;
+                    if (!isConversationStoreConcurrentUpdateError(error) || conflictMerges >= 3) throw error;
                     conflictMerges++;
                     await this.mergeStoredConversationChanges(changes.upserts.map(session => session.id));
                     continue;
@@ -20362,15 +20362,53 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const normalized = this.normalizeCodingSessions([loaded])[0];
             if (!normalized) continue;
             const baseline = this.conversationHistoryPersistedSessions.get(sessionId);
-            if (baseline && normalized.updatedAt <= baseline.updatedAt) continue;
+            if (baseline
+                && normalized.updatedAt <= baseline.updatedAt
+                && normalized.incognito === baseline.incognito
+                && normalized.incognitoRevision === baseline.incognitoRevision
+                && normalized.workspacePath === baseline.workspacePath) continue;
             const durable: CodingSessionRecord = { ...normalized, historyLoaded: true,
-                ...(local.privateWorkspacePath ? { privateWorkspacePath: local.privateWorkspacePath } : {}) };
+                ...(local.privateWorkspacePath && !normalized.workspacePath ? { privateWorkspacePath: local.privateWorkspacePath } : {}) };
             const merged = mergeConversationHistorySessions([local], [durable], {
                 mutatedDuringLoad: true, initialSessionIds: new Set([sessionId]),
                 initialSnapshot: { complete: false, sessions: [baseline || durable] }
             }).sessions[0] || durable;
             this.conversationHistoryPersistedSessions.set(sessionId, durable);
-            const next = merged === durable ? durable : { ...merged, updatedAt: Math.max(merged.updatedAt, durable.updatedAt) + 1 };
+            let localFieldOverrides: Record<string, unknown> | undefined;
+            if (baseline && local.updatedAt <= durable.updatedAt) {
+                const now = local as unknown as Record<string, unknown>;
+                const before = baseline as unknown as Record<string, unknown>;
+                const saved = durable as unknown as Record<string, unknown>;
+                for (const key of new Set([...Object.keys(before), ...Object.keys(now)])) {
+                    if (['id', 'turns', 'updatedAt', 'historyRevision', 'historyLoaded', 'incognito', 'incognitoOrigin', 'incognitoRevision', 'ownedWorkspace', 'workspacePath', 'privateWorkspacePath', '__proto__', 'constructor', 'prototype'].includes(key)) continue;
+                    const nowVal = now[key];
+                    const beforeVal = before[key];
+                    const savedVal = saved[key];
+                    const sameAsBaseline = Object.is(nowVal, beforeVal) || JSON.stringify(nowVal) === JSON.stringify(beforeVal);
+                    if (sameAsBaseline) continue;
+                    const durableUnchangedFromBaseline = Object.is(savedVal, beforeVal) || JSON.stringify(savedVal) === JSON.stringify(beforeVal);
+                    if (!durableUnchangedFromBaseline) continue;
+                    localFieldOverrides ||= {};
+                    localFieldOverrides[key] = nowVal;
+                }
+            }
+            const mergedWithLocalFields: CodingSessionRecord = localFieldOverrides
+                ? { ...merged, ...(localFieldOverrides as Partial<CodingSessionRecord>) }
+                : merged;
+            const reconciled: CodingSessionRecord = durable.incognitoOrigin
+                ? {
+                    ...mergedWithLocalFields,
+                    incognito: durable.incognito,
+                    incognitoOrigin: durable.incognitoOrigin,
+                    incognitoRevision: durable.incognitoRevision,
+                    ownedWorkspace: durable.ownedWorkspace,
+                    ...(durable.incognito === false ? {
+                        workspacePath: durable.workspacePath,
+                        ...(durable.workspacePath ? { privateWorkspacePath: undefined } : {})
+                    } : {})
+                }
+                : mergedWithLocalFields;
+            const next = reconciled === durable ? durable : { ...reconciled, updatedAt: Math.max(reconciled.updatedAt, durable.updatedAt) + 1 };
             this.codingSessions = this.codingSessions.map(session => session.id === sessionId ? next : session);
         }
         this.update();
