@@ -7226,13 +7226,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const contextShown = contextMaximum !== undefined && contextChoices.length > 1;
         const settingsRowCount = (depth.options.length ? 1 + Math.ceil(depth.options.length / 6) : 0) + (contextShown ? 1 + Math.ceil(contextChoices.length / 6) : 0)
             + (contextMaximum === undefined ? 0 : 1) + (contextCapped ? 2 : 0);
+        const pickerWidth = Math.round(anchor.closest<HTMLElement>('.nmx-council-model-dropdown, .nmx-model-picker-popover')?.getBoundingClientRect().width || 264);
         this.cancelModelEffortPickerClose();
-        this.modelPickerEffortPlacement = placeAdjacentFloatingPanel(
-            anchor.getBoundingClientRect(),
-            { width: window.innerWidth, height: window.innerHeight },
-            272,
-            Math.max(220, 142 + settingsRowCount * 30)
-        );
+        this.modelPickerEffortPlacement = {
+            ...placeAdjacentFloatingPanel(
+                anchor.getBoundingClientRect(),
+                { width: window.innerWidth, height: window.innerHeight },
+                pickerWidth,
+                Math.max(220, 142 + settingsRowCount * 30)
+            ),
+            width: pickerWidth
+        };
         if (this.modelPickerEffortModelId !== candidate.routeId) {
             this.modelPickerEffortModelId = candidate.routeId;
             this.update();
@@ -7266,7 +7270,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             { label: relayText(this.desktopLocale, 'price'), value: ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag')
                 : relayMultiplierTag(this.desktopLocale, multiplier) || '—' }
         ];
-        const evidenceRows = offering || officialOffering ? metrics.slice(0, 2) : metrics;
+        const contextRow = contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
+        const evidenceRows = [...(offering || officialOffering ? metrics.slice(0, 2) : metrics), ...(!contextShown ? contextRow : [])];
         const taxonomyTarget = modelOption || {
             model: candidate.modelId,
             label: candidate.label,
@@ -7309,7 +7314,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         <span>{contextBudgetText(this.desktopLocale, 'learned').split('{cap}').join(contextWindowTokenLabel(learnedContextCap!))}</span>
                     </p>}
                     <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}><dt>{metric.label}</dt><dd data-unmeasured={metric.value === '—' || undefined}>{metric.value}</dd></div>)}</dl>
-                    {(offering || officialOffering) && <OfferingPriceCard locale={this.desktopLocale} offering={(offering || officialOffering)!} collapsible officialOnly={!offering && Boolean(officialOffering)} />}
+                    {(offering || officialOffering) && <OfferingPriceCard locale={this.desktopLocale} offering={(offering || officialOffering)!} collapsible pullOutDrawer officialOnly={!offering && Boolean(officialOffering)} />}
                 </section>
             </div>,
             document.body
@@ -21946,7 +21951,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.agentProgressPopoverOpen = false;
             changed = true;
         }
-        if (this.codingPopover === 'routes' && !target?.closest('.nmx-model-picker-popover, .nmx-model-effort-menu, .nmx-composer-relay-button, .nmx-route-button')) {
+        if (this.codingPopover === 'routes' && !target?.closest('.nmx-model-picker-popover, .nmx-model-effort-menu, .nmx-composer-relay-button, .nmx-route-button') && !target?.closest('.nmx-model-price-overlay-drawer')) {
             this.codingPopover = '';
             this.modelPickerRelayOpen = false;
             this.closeModelEffortPickerImmediately();
@@ -31717,12 +31722,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected calculateModelEffortPlacement(anchor: HTMLElement, levelCount: number): AdjacentFloatingPanelPlacement {
         const rect = anchor.getBoundingClientRect();
-        const menu = document.querySelector<HTMLElement>('.nmx-model-effort-menu');
+        const menu = document.querySelector<HTMLElement>('.nmx-model-effort-menu:not(.nmx-model-price-overlay-drawer)');
         const measuredHeight = menu && menu.dataset.modelId === anchor.dataset.modelId ? menu.scrollHeight : 0;
         const viewport = { width: window.innerWidth, height: window.innerHeight };
         const detail = this.calculateModelPickerPlacement(1).detail;
-        const initial = placeAdjacentFloatingPanel(rect, viewport, detail?.width ?? 272, Math.max(measuredHeight, 142 + levelCount * 30));
-        return { ...initial, ...detail };
+        const width = detail?.width ?? 264;
+        const initial = placeAdjacentFloatingPanel(rect, viewport, width, Math.max(measuredHeight, 142 + levelCount * 30));
+        return { ...initial, width, ...detail };
     }
 
     /**
@@ -32013,7 +32019,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.update();
         }
         const dismissPopover = this.codingPopover
-            && !target.closest('.nmx-header-popover, .nmx-context-product, .nmx-context-heading > div > button, .nmx-composer-popover, .nmx-model-effort-menu, .nmx-composer-tool, .nmx-permission-button, .nmx-composer-relay-button, .nmx-route-button');
+            && !target.closest('.nmx-header-popover, .nmx-context-product, .nmx-context-heading > div > button, .nmx-composer-popover, .nmx-model-effort-menu, .nmx-composer-tool, .nmx-permission-button, .nmx-composer-relay-button, .nmx-route-button')
+            && !target.closest('.nmx-model-price-overlay-drawer');
         const dismissSessionMenu = Boolean(this.codingSessionMenuId || this.conversationTabMenuAt) && !target.closest('.nmx-session-menu, .nmx-session-more');
         if (this.projectMenuPath && !target.closest('.nmx-project-menu, .nmx-project-header')) {
             this.projectMenuPath = '';
@@ -34683,7 +34690,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     /** One click sets whatever the API's own thinking parameter is (effort, switch, mode or budget). */
     protected setModelOptionReasoningDepth(modelId: string, option: ReasoningDepthOption, workbench: 'coding' | 'comic', displayedQuote?: { readonly id?: string }, routeId?: string): void {
-        const routes = this.routesForRelay(this.activeRelayKey, workbench, true);
+        const routes = [
+            ...this.routesForRelay(this.activeRelayKey, workbench, true),
+            ...(this.councilConfigModalOpen && typeof this.councilRoutesForRelay === 'function' ? this.councilRoutesForRelay(this.councilModalRelayKey) : [])
+        ];
         const route = (routeId ? routes.find(candidate => candidate.id === routeId) : undefined)
             || routes.find(candidate => this.modelKeyForRoute(candidate) === modelId);
         if (!route || !this.reasoningDepthChoicesForRoute(route).options.some(item => item.id === option.id)) return;
@@ -34700,7 +34710,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // A thinking-only change cannot approve a background price update.
         if (keepQuote) this.activeKeyPriceQuoteId = previousQuote;
         this.persistActiveRouteSelection();
-        this.completeNavigationSurface();
+        this.cancelModelEffortPickerClose?.();
+        this.update();
     }
 
     /** Own APIs keep what they proved or refused on this computer only (merchant APIs: the platform keeps it for everyone). */
@@ -34982,7 +34993,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected setModelOptionContextWindow(modelId: string, value: number | undefined, displayedQuote?: { readonly id?: string }, routeId?: string): void {
-        const routes = this.routesForRelay(this.activeRelayKey, 'coding', true);
+        const routes = [
+            ...this.routesForRelay(this.activeRelayKey, 'coding', true),
+            ...(this.councilConfigModalOpen && typeof this.councilRoutesForRelay === 'function' ? this.councilRoutesForRelay(this.councilModalRelayKey) : [])
+        ];
         const route = (routeId ? routes.find(candidate => candidate.id === routeId) : undefined)
             || routes.find(candidate => this.modelKeyForRoute(candidate) === modelId);
         if (!route) return;
@@ -35003,7 +35017,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.contextWindowByModel = nextByModel;
         try { window.localStorage.setItem('nextmux.desktop.contextWindow.v1', JSON.stringify(this.contextWindowByModel)); } catch { /* ignore */ }
         this.persistActiveRouteSelection();
-        this.completeNavigationSurface();
+        this.cancelModelEffortPickerClose?.();
+        this.update();
     }
 
     protected defaultReasoningEffort(route: DesktopModelRoute): AgentReasoningEffort {
@@ -35050,7 +35065,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected setModelOptionReasoningEffort(modelId: string, value: AgentReasoningEffort, workbench: 'coding' | 'comic', displayedQuote?: { readonly id?: string }, routeId?: string): void {
-        const routes = this.routesForRelay(this.activeRelayKey, workbench, true);
+        const routes = [
+            ...this.routesForRelay(this.activeRelayKey, workbench, true),
+            ...(this.councilConfigModalOpen && typeof this.councilRoutesForRelay === 'function' ? this.councilRoutesForRelay(this.councilModalRelayKey) : [])
+        ];
         const route = (routeId ? routes.find(candidate => candidate.id === routeId) : undefined)
             || routes.find(candidate => this.modelKeyForRoute(candidate) === modelId);
         if (!route || !this.reasoningEffortLevels(route).includes(value)) return;
@@ -35064,7 +35082,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.reasoningEffortByModel = { ...this.reasoningEffortByModel, [this.modelKeyForRoute(route)]: value };
         window.localStorage.setItem('nextmux.desktop.reasoningEffort.v1', JSON.stringify(this.reasoningEffortByModel));
         this.persistActiveRouteSelection();
-        this.completeNavigationSurface();
+        this.cancelModelEffortPickerClose?.();
+        this.update();
     }
 
     protected reasoningEffortLabel(value: AgentReasoningEffort): string {
@@ -43899,7 +43918,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const contextCapped = learnedContextCap !== undefined && rawContextMaximum !== undefined && learnedContextCap < rawContextMaximum;
             const contextShown = contextMaximum !== undefined && contextChoices.length > 1;
             const settingsRowCount = (depth.options.length ? 1 + Math.ceil(depth.options.length / 6) : 0) + (contextShown ? 1 + Math.ceil(contextChoices.length / 6) : 0)
-                + (contextCapped ? 2 : 0);
+                + (!contextShown && contextMaximum !== undefined ? 1 : 0) + (contextCapped ? 2 : 0);
             const selected = supported && this.selectedModelIds.coding === baseModelId && (!model.variantRouteId || this.activeModelRouteId === model.variantRouteId);
             const effortOpen = this.modelPickerEffortModelId === model.id;
             const placement = effortOpen ? this.modelPickerEffortPlacement : undefined;
@@ -43927,7 +43946,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // Every managed row carries its multiplier; the hover card has the full price.
             const variantTag = offering ? ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, multiplier) : '';
             const contextRow = contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
-            const evidenceRows = offering || officialOffering ? metrics.slice(0, 2) : metrics;
+            const evidenceRows = [...(offering || officialOffering ? metrics.slice(0, 2) : metrics), ...(!contextShown ? contextRow : [])];
             const optionTitle = [model.label, optionRouteLabel, ...[...metrics, ...contextRow].map(metric => `${metric.label}: ${metric.value}`), !supported && unavailableLabel].filter(Boolean).join(' · ');
             return <div className={`nmx-model-option ${supported ? '' : 'is-unsupported'} ${selected ? 'is-selected' : ''}`} key={model.id} data-model-id={model.id}
                 data-capability-gate={supported ? 'verified_generation_and_tools' : model.listingPending ? 'listing_pending' : unavailableReason}
@@ -43978,7 +43997,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 <span>{contextBudgetText(this.desktopLocale, 'learned').split('{cap}').join(contextWindowTokenLabel(learnedContextCap!))}</span>
                             </p>}
                             <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}><dt>{metric.label}</dt><dd data-unmeasured={metric.value === '—' || undefined}>{metric.value}</dd></div>)}</dl>
-                            {(offering || officialOffering) && <OfferingPriceCard locale={this.desktopLocale} offering={(offering || officialOffering)!} collapsible officialOnly={!offering && Boolean(officialOffering)} />}
+                            {(offering || officialOffering) && <OfferingPriceCard locale={this.desktopLocale} offering={(offering || officialOffering)!} collapsible pullOutDrawer officialOnly={!offering && Boolean(officialOffering)} />}
                             {!supported && <p className='nmx-model-evidence-note'>{unavailableLabel}</p>}
                         </section>
                     </div>,

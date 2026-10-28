@@ -136,6 +136,12 @@ export interface OfferingPriceCardProps {
     readonly className?: string;
     /** The quote headings are toggles. Side by side the quotes are read row against row, so they open and close together. */
     readonly collapsible?: boolean;
+    /**
+     * In the hovered model detail drawer (Column 2), render a compact trigger bar at the bottom instead of an inline
+     * price table; hovering or focusing that bar pulls out a secondary price drawer (.nmx-model-price-overlay-drawer)
+     * directly over the model picker drawer (Column 1) with the exact same left and width.
+     */
+    readonly pullOutDrawer?: boolean;
     readonly hideMultiplier?: boolean;
     /** An own API pays the official price: that quote alone, in one column, with no multiplier and no relay price. */
     readonly officialOnly?: boolean;
@@ -143,17 +149,160 @@ export interface OfferingPriceCardProps {
 
 /** Price card: 官方报价 | 倍率 | 中转商报价 side by side in three columns, one row per billed dimension. */
 export function OfferingPriceCard(props: OfferingPriceCardProps): React.ReactElement {
-    const { locale, offering, collapsible, officialOnly } = props;
+    const { locale, offering, collapsible, pullOutDrawer, officialOnly } = props;
     const readExpanded = (): Record<PriceSection, boolean> => ({ official: offeringPriceSectionExpanded('official'), user: offeringPriceSectionExpanded('user') });
     const [expanded, setExpanded] = React.useState(readExpanded);
     const sectionId = React.useId();
+    const triggerRef = React.useRef<HTMLDivElement>(null);
+    const overlayRef = React.useRef<HTMLElement>(null);
+    const closeTimerRef = React.useRef<number>();
+    const [pullOutOpen, setPullOutOpen] = React.useState(false);
+    const [overlayRect, setOverlayRect] = React.useState<{
+        readonly left: number;
+        readonly top: number;
+        readonly width: number;
+        readonly minHeight: number;
+        readonly maxHeight: number;
+        readonly side: 'left' | 'right';
+    }>();
+    const cancelPullOutClose = React.useCallback((): void => {
+        if (closeTimerRef.current !== undefined) {
+            window.clearTimeout(closeTimerRef.current);
+            closeTimerRef.current = undefined;
+        }
+    }, []);
+    const measureOverlayRect = React.useCallback((): void => {
+        if (typeof window === 'undefined' || typeof document === 'undefined') return;
+        const edge = 8;
+        const gap = 7;
+        const pickerEl = document.querySelector<HTMLElement>('.nmx-model-picker-popover, .nmx-council-model-dropdown, [data-comic-model-panel], .nmx-comic-setup');
+        const detailEl = triggerRef.current?.closest<HTMLElement>('.nmx-model-effort-menu:not(.nmx-model-price-overlay-drawer)');
+        const pickerBox = pickerEl?.getBoundingClientRect();
+        const detailBox = detailEl?.getBoundingClientRect();
+        let left = edge;
+        let width = 264;
+        if (pickerBox && pickerBox.width > 0) {
+            left = pickerBox.left;
+            width = pickerBox.width;
+        } else if (detailBox && detailBox.width > 0) {
+            width = detailBox.width;
+            left = detailEl?.classList.contains('is-left')
+                ? Math.min(window.innerWidth - edge - width, detailBox.right + gap)
+                : Math.max(edge, detailBox.left - gap - width);
+        }
+        const desiredHeight = Math.max(pickerBox?.height ?? 0, overlayRef.current?.scrollHeight ?? 0, 220);
+        const baseTop = pickerBox && pickerBox.height > 0 ? pickerBox.top : (detailBox?.top ?? edge);
+        const top = Math.max(edge, Math.min(baseTop, window.innerHeight - edge - desiredHeight));
+        const maxHeight = Math.max(160, window.innerHeight - top - edge);
+        const minHeight = pickerBox && pickerBox.height > 0 ? Math.min(pickerBox.height, maxHeight) : 0;
+        const side: 'left' | 'right' = detailBox && left > detailBox.left ? 'right' : 'left';
+        setOverlayRect(prev => prev
+            && Math.abs(prev.left - left) < 1
+            && Math.abs(prev.top - top) < 1
+            && Math.abs(prev.width - width) < 1
+            && Math.abs(prev.minHeight - minHeight) < 1
+            && Math.abs(prev.maxHeight - maxHeight) < 1
+            && prev.side === side
+            ? prev
+            : { left, top, width, minHeight, maxHeight, side });
+    }, []);
+    const openPullOut = React.useCallback((): void => {
+        cancelPullOutClose();
+        measureOverlayRect();
+        setPullOutOpen(true);
+    }, [cancelPullOutClose, measureOverlayRect]);
+    const schedulePullOutClose = React.useCallback((): void => {
+        cancelPullOutClose();
+        closeTimerRef.current = window.setTimeout(() => {
+            closeTimerRef.current = undefined;
+            setPullOutOpen(false);
+        }, 160);
+    }, [cancelPullOutClose]);
+    React.useEffect(() => () => cancelPullOutClose(), [cancelPullOutClose]);
     React.useEffect(() => {
         if (collapsible) setExpanded(readExpanded());
     }, [collapsible, offering.id, offering.keyPriceQuoteId]);
+    React.useEffect(() => {
+        if (pullOutDrawer) {
+            cancelPullOutClose();
+            setPullOutOpen(false);
+        }
+    }, [pullOutDrawer, offering.id, cancelPullOutClose]);
+    React.useEffect(() => {
+        if (!pullOutDrawer || !pullOutOpen) return;
+        measureOverlayRect();
+        if (typeof window === 'undefined') return;
+        const onResize = (): void => measureOverlayRect();
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, [pullOutDrawer, pullOutOpen, offering.id, offering.keyPriceQuoteId, measureOverlayRect]);
     const open = !collapsible || expanded.official || expanded.user;
     const official: PriceLike = offeringOfficialPrice(offering);
     const user = offering.price as PriceLike;
     const bps = offeringMultiplierBps(offering);
+    if (pullOutDrawer) {
+        const rateBadge = officialOnly
+            ? undefined
+            : bps === null
+                ? offeringPriceText(locale, 'ownTag')
+                : `${offeringMultiplierText(locale, bps)}x`;
+        const summaryLabel = officialOnly
+            ? offeringPriceText(locale, 'official')
+            : `${offeringPriceText(locale, 'official')} · ${offeringPriceText(locale, 'multiplierShort')} · ${offeringPriceText(locale, 'relay')}`;
+        const portalHost = triggerRef.current?.closest('.nmx-model-effort-portal') || (typeof document !== 'undefined' ? document.body : null);
+        return <div ref={triggerRef}
+            className={`nmx-offering-price is-pullout-trigger${props.className ? ` ${props.className}` : ''}${officialOnly ? ' is-official-only' : ''}${pullOutOpen ? ' is-open' : ''}`}
+            data-price-mode={bps === null ? 'direct' : 'multiplier'}
+            onPointerEnter={openPullOut}
+            onPointerLeave={schedulePullOutClose}>
+            <button type='button'
+                className={`nmx-model-price-drawer-trigger${pullOutOpen ? ' is-active' : ''}`}
+                aria-expanded={pullOutOpen}
+                aria-haspopup='dialog'
+                onFocus={openPullOut}
+                onBlur={schedulePullOutClose}
+                onClick={event => {
+                    event.stopPropagation();
+                    if (pullOutOpen) {
+                        cancelPullOutClose();
+                        setPullOutOpen(false);
+                    } else {
+                        openPullOut();
+                    }
+                }}>
+                <span className='nmx-model-price-drawer-trigger-lead'>
+                    <span className='nmx-price-section-badge' aria-hidden='true'><i className='codicon codicon-tag' /></span>
+                    <span className='nmx-model-price-drawer-trigger-title'>{summaryLabel}</span>
+                </span>
+                <span className='nmx-model-price-drawer-trigger-trail'>
+                    {rateBadge && <strong className='nmx-model-price-drawer-trigger-rate' dir='ltr'>{rateBadge}</strong>}
+                    <span className='nmx-price-section-chevron' aria-hidden='true'><i className={`codicon codicon-chevron-${overlayRect?.side === 'right' ? 'right' : 'left'}`} /></span>
+                </span>
+            </button>
+            {pullOutOpen && overlayRect && portalHost && ReactDOM.createPortal(
+                <section ref={overlayRef}
+                    className={`nmx-model-effort-menu nmx-model-evidence-menu nmx-model-price-overlay-drawer is-${overlayRect.side}`}
+                    data-compact={overlayRect.width < 240 || undefined}
+                    aria-label={summaryLabel}
+                    style={{
+                        position: 'fixed',
+                        top: `${overlayRect.top}px`,
+                        left: `${overlayRect.left}px`,
+                        width: `${overlayRect.width}px`,
+                        minHeight: overlayRect.minHeight ? `${overlayRect.minHeight}px` : undefined,
+                        maxHeight: `${overlayRect.maxHeight}px`,
+                        zIndex: 2210
+                    }}
+                    onPointerEnter={cancelPullOutClose}
+                    onPointerLeave={schedulePullOutClose}
+                    onFocus={cancelPullOutClose}
+                    onBlur={schedulePullOutClose}>
+                    <OfferingPriceCard locale={locale} offering={offering} officialOnly={officialOnly} />
+                </section>,
+                portalHost
+            )}
+        </div>;
+    }
     const currency = offering.price?.currency || 'USD';
     // Multi-tier image/video prices (quality × size, resolution × audio); invalid data is not shown.
     const mediaTiers = normalizeOfferingMediaTiers((offering.price as typeof offering.price & { readonly mediaTiers?: unknown } | undefined)?.mediaTiers);

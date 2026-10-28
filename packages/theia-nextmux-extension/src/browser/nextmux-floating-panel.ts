@@ -46,14 +46,14 @@ export interface AdjacentFloatingPanelPlacement {
 }
 
 /**
- * The model drawer beside the picker: wide enough for the official and relay quotes side by side. The stylesheet
- * gives a drawer placed without this layout the same width (.nmx-model-evidence-menu:has(.nmx-offering-price)).
+ * The model drawer beside the picker matches the picker's own width (264px) so both columns look balanced.
+ * The stylesheet gives a drawer placed without this layout the same width (.nmx-model-evidence-menu).
  */
-export const MODEL_PRICE_DETAIL_WIDTH = 340;
+export const MODEL_PRICE_DETAIL_WIDTH = 264;
 
 /** Reserve two adjacent columns before hover so opening prices never moves the row under the pointer. */
 export function placeModelPickerPanels(picker: AnchoredFloatingPanelPlacement, viewport: FloatingPanelViewport,
-    detailWidth = MODEL_PRICE_DETAIL_WIDTH, gap = 7, edge = 8): { readonly picker: AnchoredFloatingPanelPlacement; readonly detail: { readonly side: 'left' | 'right'; readonly left: number; readonly width: number } } {
+    detailWidth = picker.width, gap = 7, edge = 8): { readonly picker: AnchoredFloatingPanelPlacement; readonly detail: { readonly side: 'left' | 'right'; readonly left: number; readonly width: number } } {
     const available = Math.max(2, viewport.width - edge * 2 - gap);
     const width = Math.min(picker.width, Math.max(1, available * picker.width / (picker.width + detailWidth)));
     const fits = picker.width + detailWidth <= available;

@@ -469,7 +469,7 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
         const close = (event: Event): void => {
             if (event.type === 'keydown') { if ((event as KeyboardEvent).key === 'Escape') setPopover(undefined); return; }
             const target = event.target as Element | null;
-            if (target?.closest?.('.nmx-comic-chat-popover, [data-nmx-chat-toggle], .nmx-offering-price-pop')) return;
+            if (target?.closest?.('.nmx-comic-chat-popover, [data-nmx-chat-toggle], .nmx-offering-price-pop, .nmx-model-price-overlay-drawer')) return;
             setPopover(undefined);
         };
         window.addEventListener('pointerdown', close, true);
@@ -592,7 +592,7 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                         <button type='button' role='switch' aria-checked={picker.recommended} className={`nmx-comic-chat-recommend ${picker.recommended ? 'is-on' : ''}`}
                             title={picker.recommended ? `${t('recommendedOn')}\n${picker.summary}` : t('recommendedOff')} onClick={() => { setPopover(undefined); props.onRecommended(!picker.recommended); }}>
                             <i className='codicon codicon-sparkle' aria-hidden='true'></i><span>{t('recommended')}</span><b aria-hidden='true'></b></button>
-                        {popover === 'models' && current && <div className='nmx-comic-chat-popover is-models' role='dialog' aria-label={t('selectModel')}>
+                        {popover === 'models' && current && <div className='nmx-comic-chat-popover is-models' data-comic-model-panel role='dialog' aria-label={t('selectModel')}>
                             <header><span data-nmx-literal={Boolean(picker.relay) || undefined}>{picker.relay?.label || t('selectModel')}</span>
                                 <button type='button' className='nmx-link-button' onClick={() => { setPopover(undefined); props.onOpenRelay(); }}>{t('changeRelay')}</button></header>
                             <div className='nmx-comic-chat-model-tabs' role='tablist'>

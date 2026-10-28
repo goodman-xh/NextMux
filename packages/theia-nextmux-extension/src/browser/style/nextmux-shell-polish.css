@@ -1259,10 +1259,10 @@
 }
 .nmx-offering-price[data-price-mode='direct'] .nmx-offering-price-multiplier strong { color: var(--nmx-muted, #8f8a8f); }
 
-/* Inside the composer model drawer: below the evidence rows. The drawer widens so both quotes fit side by side
-   (the coding picker reserves this width: MODEL_PRICE_DETAIL_WIDTH in nextmux-floating-panel.ts). */
+/* Inside the composer model drawer: below the evidence rows. Both the picker drawer and the detail drawer
+   share the exact same width (264px: MODEL_PRICE_DETAIL_WIDTH in nextmux-floating-panel.ts). */
 .nmx-model-effort-menu.nmx-model-evidence-menu:has(.nmx-offering-price) {
-    width: 340px;
+    width: 264px;
     max-width: calc(100vw - 24px);
     container: nmx-price-drawer / inline-size;
 }
@@ -1271,6 +1271,92 @@
     margin: 2px 7px 8px;
     padding-top: 8px;
     border-top: 1px solid var(--nmx-border, rgba(255, 255, 255, .1));
+}
+.nmx-model-effort-menu .nmx-offering-price.is-pullout-trigger {
+    margin: 2px 7px 7px;
+    padding-top: 7px;
+}
+.nmx-model-price-drawer-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    min-height: 30px;
+    padding: 5px 8px;
+    box-sizing: border-box;
+    border: 1px solid var(--nmx-border, rgba(255, 255, 255, .12));
+    border-radius: 7px;
+    background: rgba(255, 255, 255, .035);
+    color: var(--nmx-text, #eeecee);
+    font: inherit;
+    font-size: 11px;
+    line-height: 1.3;
+    text-align: start;
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+.nmx-model-price-drawer-trigger:hover,
+.nmx-model-price-drawer-trigger:focus-visible,
+.nmx-model-price-drawer-trigger.is-active {
+    background: rgba(255, 255, 255, .075);
+    border-color: rgba(255, 255, 255, .22);
+    outline: none;
+}
+.nmx-theme-light .nmx-model-price-drawer-trigger {
+    background: rgba(17, 24, 39, .03);
+    border-color: rgba(17, 24, 39, .1);
+}
+.nmx-theme-light .nmx-model-price-drawer-trigger:hover,
+.nmx-theme-light .nmx-model-price-drawer-trigger:focus-visible,
+.nmx-theme-light .nmx-model-price-drawer-trigger.is-active {
+    background: rgba(17, 24, 39, .06);
+    border-color: rgba(17, 24, 39, .2);
+}
+.nmx-model-price-drawer-trigger-lead {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+.nmx-model-price-drawer-trigger-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+.nmx-model-price-drawer-trigger-trail {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+}
+.nmx-model-price-drawer-trigger-rate {
+    padding: 1px 5px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .08);
+    color: var(--nmx-text, #eeecee);
+    font-size: 10.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.nmx-theme-light .nmx-model-price-drawer-trigger-rate {
+    background: rgba(17, 24, 39, .07);
+}
+.nmx-model-effort-menu.nmx-model-price-overlay-drawer {
+    position: fixed;
+    z-index: 2210;
+    box-sizing: border-box;
+    padding: 6px 2px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.nmx-model-effort-menu.nmx-model-price-overlay-drawer > .nmx-offering-price {
+    margin: 2px 7px;
+    padding-top: 0;
+    border-top: 0;
 }
 .nmx-model-effort-menu .nmx-offering-price-multiplier { min-width: 34px; }
 /* A narrow window squeezes the drawer: the quotes stack rather than crush three columns. */

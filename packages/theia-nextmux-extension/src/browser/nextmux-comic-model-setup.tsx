@@ -391,7 +391,7 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
         // reaches what was pressed. Other model pickers' own portals (price cards) count as inside.
         const outside = (event: Event): void => {
             const target = event.target as Element | null;
-            if (!target || panel.current?.contains(target) || target.closest?.('.nmx-offering-price-pop') || anchor()?.contains(target)) return;
+            if (!target || panel.current?.contains(target) || target.closest?.('.nmx-offering-price-pop, .nmx-model-price-overlay-drawer') || anchor()?.contains(target)) return;
             close();
         };
         let frame = 0;
@@ -558,7 +558,7 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
 
     return ReactDOM.createPortal(<div className='nmx-model-picker-portal nmx-desktop-widget' dir={rtl ? 'rtl' : 'ltr'} lang={props.locale}>
         <div className={`nmx-model-picker-surface nmx-shell ${props.themeClass}`}>
-            <section ref={panel} className={`nmx-comic-setup is-${phase} ${props.intro ? 'is-intro' : ''} ${props.auto ? 'is-auto' : 'is-manual'}`} role='dialog' aria-modal='false' aria-labelledby={`${id}-title`}
+            <section ref={panel} data-comic-model-panel className={`nmx-comic-setup is-${phase} ${props.intro ? 'is-intro' : ''} ${props.auto ? 'is-auto' : 'is-manual'}`} role='dialog' aria-modal='false' aria-labelledby={`${id}-title`}
                 tabIndex={-1} onKeyDown={keyDown} style={place ? { top: place.top, [rtl ? 'left' : 'right']: place.side, maxHeight: place.maxHeight } : { visibility: 'hidden' }}>
                 <header className='nmx-comic-setup-head'>
                     <span className='nmx-comic-setup-mark' aria-hidden='true'><i className='codicon codicon-sparkle'></i></span>

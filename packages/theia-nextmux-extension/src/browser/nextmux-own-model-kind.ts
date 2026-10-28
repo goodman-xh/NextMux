@@ -27,6 +27,7 @@ const MUSIC_NAME = /lyria|music|suno|(?:^|[\s/_.-])udio(?:$|[\s/_.-])|(?:^|[\s/_
 // "wan2.1-t2v-turbo" is a video model and "wanx2.1-t2i-turbo" a picture model; ElevenLabs' "eleven_text_to_sound_v2"
 // is a sound effect, matched before the "eleven_" voice rule that catches "eleven_multilingual_v2".
 const NAME_RULES: readonly [OwnModelKind, RegExp][] = [
+    ['decision', /(^|\/)(?:jev(?:$|[._-])|tev1-4b-experimental|mercury-decide|solar-decide|gliner-[\d.]+-decide|span-01)/],
     ['rerank', /rerank/],
     ['moderation', /moderation|guard/],
     ['embedding', /embed|(^|[/_-])(bge|gte|e5)([/_-]|$)/],
@@ -36,8 +37,8 @@ const NAME_RULES: readonly [OwnModelKind, RegExp][] = [
     // Before the "wan-<n>" video rule: the dashed spelling of "wan2.2-t2i-flash" ("wan-2.2-t2i-flash") is a picture model.
     ['image', /(^|[/_-])wanx?-?\d+(\.\d+)?-(t2i|i2i|image)/],
     ['speech', /(^|[/_-])(tts|speech|voice)([/_-]|$)|^tts|aura-|orpheus|fish-audio|elevenlabs|(^|\/)eleven_|cosyvoice|minimax-speech|audio-tts/],
-    ['video', /veo-|sora|kling|(^|[/_-])wan-\d|(^|[/_-])wanx?\d+(\.\d+)?-(t2v|i2v|kf2v|s2v|r2v|vace|animate)|(^|[/_-])[ti]2v([/_.-]|$)|hailuo|seedance|runway[-/]gen[34]|pixverse|vidu|video|ltx-|mochi|happyhorse/],
-    ['image', /dall-e|gpt-image|imagen|flux|sdxl|stable-diffusion|seedream|recraft|midjourney|ideogram|qwen-image|(^|[/_-])wanx?\d+(\.\d+)?-(t2i|i2i|image)|-image(-|$)|image-\d/],
+    ['video', /veo-|sora|kling(?![-_\s](?:image|kolors|multi-image2image|tts|text-to-audio|(?:custom-|presets-)?voices))|(^|[/_-])wan-\d|(^|[/_-])wanx?\d+(\.\d+)?-(t2v|i2v|kf2v|s2v|r2v|vace|animate|video|videoedit|video-edit)|(^|[/_-])[tir]2v([/_.-]|$)|hailuo|minimax-h-?0?3|seedance|dreamina-seedance|runway[-/]gen[34]|(^|[/_-])gen-(?:3a|4(?:\.5)?)|(^|[/_-])(?:luma[-_]|ray-[23])|pika-[12]|jimeng-video|cogvideox|hunyuan-video|flux-3-video|avatar-iv|pixverse|vidu|video|ltx-|mochi|happyhorse/],
+    ['image', /dall-e|gpt-image|imagen|flux|sdxl|stable-diffusion|seedream|dola-seedream|recraft|midjourney|ideogram|qwen-image|grok-imagine-image|hunyuan-image|kling-image|(^|[/_-])wanx?\d+(\.\d+)?-(t2i|i2i|image)|-image(-|$)|image-\d/],
     ['3d', /trellis|hunyuan[-_]?3d|tripo[-_]?3d|triposr|meshy|rodin[-_]?3d|point-e|shap-e|zero123|(^|[/_-])3d([/_-]|$)/],
 ];
 

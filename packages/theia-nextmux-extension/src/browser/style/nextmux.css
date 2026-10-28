@@ -18492,7 +18492,7 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     background: #302d2f;
 }
 
-.nmx-model-effort-menu.nmx-model-evidence-menu { width: 190px; overflow: auto; }
+.nmx-model-effort-menu.nmx-model-evidence-menu { width: 264px; overflow: auto; }
 .nmx-model-evidence { margin: 7px; font-size: 11px; }
 .nmx-model-evidence > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-block: 5px; }
 .nmx-model-evidence dt { min-width: 0; color: var(--nmx-muted, #a9a2a5); }
