@@ -82,7 +82,12 @@ export function DesktopUpdateAction({ state, locale, busy, onDownload, onDetails
     const model = resolveDesktopUpdateActionModel(state, locale, busy);
     return <button type='button' className={`nmx-account-update is-${state.phase}${model.tone === 'warning' ? ' is-warning' : ''}`} data-nmx-literal
         disabled={model.disabled} title={model.hint} aria-label={`${model.label} · ${model.hint}`} aria-busy={state.phase === 'downloading'}
-        onClick={() => { if (model.disabled) return; if (model.action === 'download') onDownload(); else onDetails(); }}>
+        onClick={() => {
+            if (model.disabled) return;
+            if (model.action === 'download') onDownload();
+            else if (state.phase === 'ready' && typeof window !== 'undefined' && typeof window.nextmuxDesktop?.installUpdate === 'function') void window.nextmuxDesktop.installUpdate();
+            else onDetails();
+        }}>
         <span>{model.label}</span>
     </button>;
 }

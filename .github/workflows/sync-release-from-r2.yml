@@ -1,0 +1,91 @@
+name: Sync Verified Desktop Release from R2 (Zero-Downtime Draft-to-Latest)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.1.3)"
+        required: true
+        default: "0.1.3"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-publish:
+    name: Stage 4-Arch Installers to Draft Release & Atomically Promote
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download & verify 4-architecture installers from immutable R2 staging
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/r2-release
+          cd /tmp/r2-release
+
+          BASE="https://nextmux.app/updates/releases/v${VERSION}"
+
+          echo "=== Downloading 4-arch installers & SHA256SUMS from immutable R2 staging (${BASE}) ==="
+          curl -fSL --retry 5 -o "NextMux-${VERSION}-arm64.dmg" "${BASE}/macos/arm64/NextMux-${VERSION}-arm64.dmg" &
+          curl -fSL --retry 5 -o "NextMux-${VERSION}-x64.dmg" "${BASE}/macos/x64/NextMux-${VERSION}-x64.dmg" &
+          curl -fSL --retry 5 -o "NextMux-${VERSION}-x64-setup.exe" "${BASE}/windows/x64/NextMux-${VERSION}-x64-setup.exe" &
+          curl -fSL --retry 5 -o "NextMux-${VERSION}-arm64-setup.exe" "${BASE}/windows/arm64/NextMux-${VERSION}-arm64-setup.exe" &
+          wait
+
+          curl -fSL --retry 5 -o "SHA256SUMS-macos-arm64.txt" "${BASE}/macos/arm64/SHA256SUMS-macos-arm64.txt"
+          curl -fSL --retry 5 -o "SHA256SUMS-macos-x64.txt" "${BASE}/macos/x64/SHA256SUMS-macos-x64.txt"
+          curl -fSL --retry 5 -o "SHA256SUMS-windows-x64.txt" "${BASE}/windows/x64/SHA256SUMS-windows-x64.txt"
+          curl -fSL --retry 5 -o "SHA256SUMS-windows-arm64.txt" "${BASE}/windows/arm64/SHA256SUMS-windows-arm64.txt"
+
+          cat SHA256SUMS-macos-arm64.txt SHA256SUMS-macos-x64.txt SHA256SUMS-windows-x64.txt SHA256SUMS-windows-arm64.txt > SHA256SUMS.txt
+          ls -lh /tmp/r2-release
+
+          echo "=== Verifying SHA-256 checksums for all 4 installers ==="
+          grep -E "NextMux-${VERSION}-(arm64\.dmg|x64\.dmg|x64-setup\.exe|arm64-setup\.exe)$" SHA256SUMS.txt > /tmp/verify.sha256
+          cat /tmp/verify.sha256
+          sha256sum -c /tmp/verify.sha256
+
+      - name: Upload all assets to Draft Release & atomically publish as Latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cd /tmp/r2-release
+          TAG="v${VERSION}"
+
+          # Ensure Draft Release exists (without touching current Latest release)
+          REL_ID=$(gh api "repos/${REPO}/releases" --jq "[.[] | select(.tag_name == \"${TAG}\")][0].id // empty")
+          if [ -z "${REL_ID}" ]; then
+            echo "Creating Draft Release ${TAG}..."
+            gh release create "${TAG}" --repo "${REPO}" --draft --title "NextMux ${TAG}" --notes "NextMux ${TAG} Desktop Release (macOS Apple Silicon, macOS Intel, Windows x64, Windows ARM64)"
+          fi
+
+          echo "=== Uploading all 4 architecture installers + SHA256SUMS to Release ${TAG} ==="
+          gh release upload "${TAG}" \
+            "NextMux-${VERSION}-arm64.dmg" \
+            "NextMux-${VERSION}-x64.dmg" \
+            "NextMux-${VERSION}-x64-setup.exe" \
+            "NextMux-${VERSION}-arm64-setup.exe" \
+            "SHA256SUMS-macos-arm64.txt" \
+            "SHA256SUMS-macos-x64.txt" \
+            "SHA256SUMS-windows-x64.txt" \
+            "SHA256SUMS-windows-arm64.txt" \
+            "SHA256SUMS.txt" \
+            --clobber --repo "${REPO}"
+
+          echo "=== Verifying all 4 installer assets are in 'uploaded' state before promoting Draft to Latest ==="
+          UPLOADED_COUNT=$(gh api "repos/${REPO}/releases" --jq "[.[] | select(.tag_name == \"${TAG}\")][0].assets | map(select(.state == \"uploaded\" and (.name | test(\"\\\\.(dmg|exe)$\")))) | length")
+          echo "Verified uploaded installer count: ${UPLOADED_COUNT}"
+          if [ "${UPLOADED_COUNT}" -lt 4 ]; then
+            echo "ERROR: Expected 4 uploaded installers, found ${UPLOADED_COUNT}"
+            exit 1
+          fi
+
+          echo "=== Atomically promoting Release ${TAG} from Draft to Latest ==="
+          gh release edit "${TAG}" --repo "${REPO}" --draft=false --latest
+          echo "ATOMIC_GITHUB_RELEASE_PROMOTED_OK"

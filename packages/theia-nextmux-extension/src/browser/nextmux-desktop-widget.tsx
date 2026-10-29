@@ -8565,6 +8565,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected applyDesktopUpdateState(state: NextMuxDesktopUpdateState): void {
         if (!state || !['idle', 'checking', 'available', 'downloading', 'current', 'ready', 'error', 'unsupported'].includes(state.phase)) return;
         if ((state.revision || 0) < (this.updateState.revision || 0)) return;
+        const previousPhase = this.updateState.phase;
         this.updateState = {
             ...state,
             progress: Math.max(0, Math.min(100, Number(state.progress) || 0)),
@@ -8575,12 +8576,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // A failed attempt keeps phase 'available' when an update is still known
         // (updateFailed publishes errorCode there so the user can retry). Clearing
         // the message on anything but 'error' hid exactly that failure.
-        if (state.error || state.errorCode) {
+        if (state.phase === 'downloading' || state.phase === 'ready') {
+            this.updateError = '';
+        } else if (state.error || state.errorCode) {
             this.updateError = String(state.error || state.message || desktopUpdateText(this.desktopLocale, 'downloadFailed'));
         } else if (state.phase !== 'error') {
             this.updateError = '';
         }
         this.update();
+        if (previousPhase === 'downloading' && state.phase === 'ready' && !this.hasRunningConversationForExit?.()) {
+            void this.installDesktopUpdate?.();
+        }
+    }
+
+    protected async installDesktopUpdate(): Promise<void> {
+        await window.nextmuxDesktop?.installUpdate?.();
     }
 
     protected async checkForDesktopUpdates(): Promise<void> {
@@ -8602,7 +8612,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected async downloadDesktopUpdate(): Promise<void> {
         const bridge = window.nextmuxDesktop;
-        if (!bridge || this.updateBusy || this.updateState.phase !== 'available') return;
+        if (!bridge || this.updateBusy) return;
+        if (this.updateState.phase === 'ready') {
+            await this.installDesktopUpdate?.();
+            return;
+        }
+        if (this.updateState.phase !== 'available') return;
         this.updateBusy = true;
         this.updateError = '';
         // Acknowledge the click before the IPC round-trip: the button must never
@@ -8617,6 +8632,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // A failure is reported on 'available' with an errorCode: show the
             // details and the manual download option instead of a silent button.
             if (next?.errorCode || next?.error || this.updateError) this.openSettingsPanel('updates');
+            else if (next?.phase === 'ready' && !this.hasRunningConversationForExit?.()) await this.installDesktopUpdate?.();
         } catch {
             this.updateError = desktopUpdateText(this.desktopLocale, 'downloadFailed');
             this.openSettingsPanel('updates');
@@ -51521,7 +51537,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 {state.phase === 'downloading' && <div className='nmx-update-progress' role='progressbar' aria-label='更新下载进度' aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.progress)}><i style={{ width: `${state.progress}%` }}></i></div>}
                 {state.checkedAt > 0 && <div className='nmx-update-meta'><span>{text('checkedAt')}</span><strong>{new Date(state.checkedAt).toLocaleString(this.desktopLocale)}</strong></div>}
                 {(this.updateError || this.updateMessage) && <div className={`nmx-network-message ${this.updateError ? 'is-error' : ''}`}>{this.updateError || this.updateMessage}</div>}
-                <div className='nmx-settings-actions'><button disabled={this.updateBusy || state.phase === 'downloading' || state.phase === 'ready' || state.reason === 'development' || state.restartRequired} onClick={() => void this.checkForDesktopUpdates()}>{state.phase === 'checking' ? text('checking') : text('check')}</button><button onClick={() => void this.openDesktopDownloadPage()}>{text('downloadPage')}</button>{state.phase === 'available' && <button className='is-primary' disabled={this.updateBusy} onClick={() => void this.downloadDesktopUpdate()}>{text('download')}</button>}</div>
+                <div className='nmx-settings-actions'><button disabled={this.updateBusy || state.phase === 'downloading' || state.phase === 'ready' || state.reason === 'development' || state.restartRequired} onClick={() => void this.checkForDesktopUpdates()}>{state.phase === 'checking' ? text('checking') : text('check')}</button><button onClick={() => void this.openDesktopDownloadPage()}>{text('downloadPage')}</button>{state.phase === 'available' && <button className='is-primary' disabled={this.updateBusy} onClick={() => void this.downloadDesktopUpdate()}>{text('download')}</button>}{state.phase === 'ready' && <button className='is-primary' disabled={this.updateBusy} onClick={() => void this.installDesktopUpdate()}>{localizeDesktopSurface(this.desktopLocale, '立即安装并重启')}</button>}</div>
             </section>;
         }
         return <>
