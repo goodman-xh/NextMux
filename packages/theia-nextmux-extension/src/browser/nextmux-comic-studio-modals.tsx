@@ -42,6 +42,7 @@ export interface ComicMediaStudioModalProps {
     readonly locale: NextMuxDesktopLocale;
     readonly kind: ComicStudioModalKind;
     readonly open: boolean;
+    readonly isLightTheme?: boolean;
     /** Bound project path when reopening an existing project card; undefined before first generation. */
     readonly boundProjectPath?: string;
     readonly title: string;
@@ -52,6 +53,7 @@ export interface ComicMediaStudioModalProps {
     readonly previewFolderPath: string;
     readonly onChooseDirectory?: () => void;
     readonly onResetDirectory?: () => void;
+    readonly onOpenDirectory?: () => void;
     /** Source files (images for image-to-video; optional own materials for topic-to-video) */
     readonly sourceFiles: readonly ComicStudioSourceFile[];
     readonly onPickLocalFiles?: () => void;
@@ -288,10 +290,10 @@ const en: StudioModalCopyTable = {
     projectTitlePlaceholder: 'Project name (optional)',
     boundProjectBadge: 'Folder bound',
     close: 'Close',
-    selectImages: 'Select images',
-    dropImagesHint: 'Drop images here or click to upload (PNG / JPG / WebP)',
-    referenceAssetsOptional: 'Reference materials (optional)',
-    dropTopicFilesHint: 'Drop reference images or clips here, or click to add',
+    selectImages: 'Select image',
+    dropImagesHint: 'Drop an image here or click to upload (PNG / JPG / WebP)',
+    referenceAssetsOptional: 'Reference material (optional)',
+    dropTopicFilesHint: 'Drop a reference image or clip here, or click to add',
     localUpload: 'Local upload',
     assetLibrary: 'Asset library',
     libraryEmpty: 'No matching assets in library yet',
@@ -491,7 +493,9 @@ const es: StudioModalCopyTable = {
     titleTopic: 'Tema a vídeo',
     titleMusic: 'Producción musical',
     close: 'Cerrar',
-    selectImages: 'Seleccionar imágenes',
+    selectImages: 'Seleccionar imagen',
+    dropImagesHint: 'Arrastra una imagen aquí o haz clic para subir (PNG / JPG / WebP)',
+    dropTopicFilesHint: 'Arrastra una imagen o vídeo de referencia aquí, o haz clic para añadir',
     localUpload: 'Subir archivo',
     assetLibrary: 'Biblioteca',
     videoModel: 'Modelo de vídeo',
@@ -537,7 +541,9 @@ const fr: StudioModalCopyTable = {
     titleTopic: 'Sujet en vidéo',
     titleMusic: 'Studio musical',
     close: 'Fermer',
-    selectImages: 'Choisir des images',
+    selectImages: 'Choisir une image',
+    dropImagesHint: 'Déposez une image ici ou cliquez pour importer (PNG / JPG / WebP)',
+    dropTopicFilesHint: 'Déposez une image ou un extrait de référence ici, ou cliquez pour ajouter',
     localUpload: 'Importer',
     assetLibrary: 'Bibliothèque',
     videoModel: 'Modèle vidéo',
@@ -583,7 +589,9 @@ const de: StudioModalCopyTable = {
     titleTopic: 'Thema zu Video',
     titleMusic: 'Musikproduktion',
     close: 'Schließen',
-    selectImages: 'Bilder auswählen',
+    selectImages: 'Bild auswählen',
+    dropImagesHint: 'Bild hierher ziehen oder zum Hochladen klicken (PNG / JPG / WebP)',
+    dropTopicFilesHint: 'Referenzbild oder Clip hierher ziehen oder zum Hinzufügen klicken',
     localUpload: 'Hochladen',
     assetLibrary: 'Mediathek',
     videoModel: 'Videomodell',
@@ -629,7 +637,9 @@ const ptBR: StudioModalCopyTable = {
     titleTopic: 'Tema em vídeo',
     titleMusic: 'Estúdio musical',
     close: 'Fechar',
-    selectImages: 'Selecionar imagens',
+    selectImages: 'Selecionar imagem',
+    dropImagesHint: 'Arraste uma imagem aqui ou clique para enviar (PNG / JPG / WebP)',
+    dropTopicFilesHint: 'Arraste uma imagem ou vídeo de referência aqui, ou clique para adicionar',
     localUpload: 'Enviar do computador',
     assetLibrary: 'Biblioteca',
     videoModel: 'Modelo de vídeo',
@@ -675,7 +685,9 @@ const ru: StudioModalCopyTable = {
     titleTopic: 'Тема в видео',
     titleMusic: 'Создание музыки',
     close: 'Закрыть',
-    selectImages: 'Выбрать изображения',
+    selectImages: 'Выбрать изображение',
+    dropImagesHint: 'Перетащите изображение сюда или нажмите для загрузки (PNG / JPG / WebP)',
+    dropTopicFilesHint: 'Перетащите референсное изображение или видео сюда либо нажмите, чтобы добавить',
     localUpload: 'Загрузить файл',
     assetLibrary: 'Библиотека',
     videoModel: 'Видеомодель',
@@ -721,7 +733,7 @@ const ar: StudioModalCopyTable = {
     titleTopic: 'موضوع إلى فيديو',
     titleMusic: 'إنتاج الموسيقى',
     close: 'إغلاق',
-    selectImages: 'اختيار الصور',
+    selectImages: 'اختيار صورة',
     localUpload: 'رفع محلي',
     assetLibrary: 'مكتبة المواد',
     videoModel: 'نموذج الفيديو',
@@ -863,7 +875,19 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
     const [showTopicAssets, setShowTopicAssets] = React.useState(false);
     const [contextMenu, setContextMenu] = React.useState<StudioContextMenuState | undefined>(undefined);
     const [lightboxOpen, setLightboxOpen] = React.useState(false);
-    const [isLightTheme, setIsLightTheme] = React.useState(false);
+    const [isLightTheme, setIsLightTheme] = React.useState(() => {
+        if (typeof props.isLightTheme === 'boolean') {
+            return props.isLightTheme;
+        }
+        if (typeof document !== 'undefined') {
+            return Boolean(
+                document.querySelector(
+                    '.nmx-shell.nmx-theme-light, .nmx-desktop-widget.nmx-theme-light, body.nmx-theme-light'
+                )
+            );
+        }
+        return false;
+    });
 
     // Media playback state for active take
     const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -902,15 +926,45 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
             setDraggingFiles(false);
             return;
         }
-        if (typeof document !== 'undefined') {
-            const lightHost = document.querySelector('.nmx-shell.nmx-theme-light, .nmx-desktop-widget.nmx-theme-light');
-            setIsLightTheme(Boolean(lightHost));
+        if (typeof props.isLightTheme === 'boolean') {
+            setIsLightTheme(props.isLightTheme);
+            return;
         }
-    }, [props.open]);
+        if (typeof document === 'undefined') {
+            return;
+        }
+        const syncThemeFromDom = (): void => {
+            const lightHost = document.querySelector(
+                '.nmx-shell.nmx-theme-light, .nmx-desktop-widget.nmx-theme-light, body.nmx-theme-light'
+            );
+            setIsLightTheme(Boolean(lightHost));
+        };
+        syncThemeFromDom();
+        if (typeof MutationObserver === 'undefined') {
+            return;
+        }
+        const observer = new MutationObserver(() => syncThemeFromDom());
+        const targets = new Set<Element>(
+            Array.from(document.querySelectorAll('.nmx-shell, .nmx-desktop-widget'))
+        );
+        if (document.body) {
+            targets.add(document.body);
+        }
+        if (document.documentElement) {
+            targets.add(document.documentElement);
+        }
+        for (const target of targets) {
+            observer.observe(target, { attributes: true, attributeFilter: ['class'] });
+        }
+        return () => observer.disconnect();
+    }, [props.open, props.isLightTheme]);
 
     React.useEffect(() => {
-        if (props.sourceFiles.length > 0 && props.kind === 'topic') {
-            setShowTopicAssets(true);
+        if (props.sourceFiles.length > 0) {
+            setShowLibrary(false);
+            if (props.kind === 'topic') {
+                setShowTopicAssets(true);
+            }
         }
     }, [props.sourceFiles.length, props.kind]);
 
@@ -1132,12 +1186,12 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
 
     const renderSourcePickerBlock = (mode: 'image' | 'topic'): React.ReactElement => {
         const accept = mode === 'image' ? 'image/png,image/jpeg,image/webp,image/bmp' : 'image/*,video/*';
+        const activeSource = props.sourceFiles[0];
         return (
             <div className='nmx-comic-studio-source-block'>
                 <input
                     ref={fileInputRef}
                     type='file'
-                    multiple
                     accept={accept}
                     className='nmx-comic-studio-hidden-file'
                     tabIndex={-1}
@@ -1148,129 +1202,135 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                         }
                     }}
                 />
-                <div
-                    className={`nmx-comic-studio-dropzone${draggingFiles ? ' is-dragging' : ''}`}
-                    onDragOver={event => {
-                        event.preventDefault();
-                        setDraggingFiles(true);
-                    }}
-                    onDragLeave={() => setDraggingFiles(false)}
-                    onDrop={handleDrop}
-                    onClick={triggerLocalPick}
-                    role='button'
-                    tabIndex={0}
-                    onKeyDown={event => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            triggerLocalPick();
-                        }
-                    }}
-                >
-                    <i className='codicon codicon-cloud-upload' aria-hidden='true' />
-                    <span>{mode === 'image' ? t('dropImagesHint') : t('dropTopicFilesHint')}</span>
-                </div>
-                <div className='nmx-comic-studio-source-actions'>
-                    <button
-                        type='button'
-                        className='nmx-comic-studio-ghost-btn'
-                        disabled={props.generating}
-                        onClick={triggerLocalPick}
-                    >
-                        <i className='codicon codicon-folder-opened' aria-hidden='true' />
-                        <span>{t('localUpload')}</span>
-                    </button>
-                    {(props.libraryItems !== undefined || props.onToggleLibraryItem !== undefined) && (
-                        <button
-                            type='button'
-                            className={`nmx-comic-studio-ghost-btn${showLibrary ? ' is-active' : ''}`}
-                            disabled={props.generating}
-                            aria-expanded={showLibrary}
-                            onClick={() => setShowLibrary(current => !current)}
+                {!activeSource ? (
+                    <>
+                        <div
+                            className={`nmx-comic-studio-dropzone${draggingFiles ? ' is-dragging' : ''}`}
+                            onDragOver={event => {
+                                event.preventDefault();
+                                setDraggingFiles(true);
+                            }}
+                            onDragLeave={() => setDraggingFiles(false)}
+                            onDrop={handleDrop}
+                            onClick={triggerLocalPick}
+                            role='button'
+                            tabIndex={0}
+                            onKeyDown={event => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    triggerLocalPick();
+                                }
+                            }}
                         >
-                            <i className='codicon codicon-library' aria-hidden='true' />
-                            <span>{t('assetLibrary')}</span>
-                            {filteredLibraryItems.length > 0 && (
-                                <b data-nmx-literal>{filteredLibraryItems.length}</b>
-                            )}
-                        </button>
-                    )}
-                </div>
-                {showLibrary && (
-                    <div className='nmx-comic-studio-lib-drawer'>
-                        {filteredLibraryItems.length === 0 ? (
-                            <p className='nmx-comic-studio-lib-empty'>{t('libraryEmpty')}</p>
-                        ) : (
-                            <div className='nmx-comic-studio-lib-grid' role='list'>
-                                {filteredLibraryItems.map(item => {
-                                    const selected = isLibraryItemSelected(item);
-                                    return (
-                                        <button
-                                            key={item.id}
-                                            type='button'
-                                            role='listitem'
-                                            className={`nmx-comic-studio-lib-item${selected ? ' is-selected' : ''}`}
-                                            title={item.name}
-                                            onClick={() => props.onToggleLibraryItem?.(item)}
-                                        >
-                                            <span className='nmx-comic-studio-lib-thumb'>
-                                                {item.kind === 'image' && item.previewUrl ? (
-                                                    <img src={item.previewUrl} alt='' loading='lazy' draggable={false} />
-                                                ) : item.kind === 'video' && item.previewUrl ? (
-                                                    <video src={item.previewUrl} muted preload='metadata' />
-                                                ) : (
-                                                    <i
-                                                        className={`codicon codicon-${item.kind === 'video' ? 'device-camera-video' : 'file-media'}`}
-                                                        aria-hidden='true'
-                                                    />
-                                                )}
-                                                {selected && (
-                                                    <em className='nmx-comic-studio-lib-check' aria-hidden='true'>
-                                                        <i className='codicon codicon-check' />
-                                                    </em>
-                                                )}
-                                            </span>
-                                            <small data-nmx-literal>{item.name}</small>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-                )}
-                {props.sourceFiles.length > 0 && (
-                    <div className='nmx-comic-studio-source-strip' role='list'>
-                        {props.sourceFiles.map((file, idx) => (
-                            <div key={file.id} role='listitem' className='nmx-comic-studio-source-chip' title={file.name}>
-                                <span className='nmx-comic-studio-source-thumb'>
-                                    {file.kind === 'image' && file.previewUrl ? (
-                                        <img src={file.previewUrl} alt='' draggable={false} />
-                                    ) : file.kind === 'video' && file.previewUrl ? (
-                                        <video src={file.previewUrl} muted preload='metadata' />
-                                    ) : (
-                                        <i
-                                            className={`codicon codicon-${file.kind === 'video' ? 'device-camera-video' : file.kind === 'audio' ? 'music' : 'file-media'}`}
-                                            aria-hidden='true'
-                                        />
+                            <i className='codicon codicon-cloud-upload' aria-hidden='true' />
+                            <span>{mode === 'image' ? t('dropImagesHint') : t('dropTopicFilesHint')}</span>
+                        </div>
+                        <div className='nmx-comic-studio-source-actions'>
+                            <button
+                                type='button'
+                                className='nmx-comic-studio-ghost-btn'
+                                disabled={props.generating}
+                                onClick={triggerLocalPick}
+                            >
+                                <i className='codicon codicon-folder-opened' aria-hidden='true' />
+                                <span>{t('localUpload')}</span>
+                            </button>
+                            {(props.libraryItems !== undefined || props.onToggleLibraryItem !== undefined) && (
+                                <button
+                                    type='button'
+                                    className={`nmx-comic-studio-ghost-btn${showLibrary ? ' is-active' : ''}`}
+                                    disabled={props.generating}
+                                    aria-expanded={showLibrary}
+                                    onClick={() => setShowLibrary(current => !current)}
+                                >
+                                    <i className='codicon codicon-library' aria-hidden='true' />
+                                    <span>{t('assetLibrary')}</span>
+                                    {filteredLibraryItems.length > 0 && (
+                                        <b data-nmx-literal>{filteredLibraryItems.length}</b>
                                     )}
-                                    <em data-nmx-literal>#{idx + 1}</em>
-                                </span>
-                                <span className='nmx-comic-studio-source-name' data-nmx-literal>
-                                    {file.name}
-                                </span>
-                                {props.onRemoveSourceFile && (
-                                    <button
-                                        type='button'
-                                        className='nmx-comic-studio-source-remove'
-                                        aria-label={`${t('removeFile')} ${file.name}`}
-                                        title={t('removeFile')}
-                                        disabled={props.generating}
-                                        onClick={() => props.onRemoveSourceFile?.(file.id)}
-                                    >
-                                        <i className='codicon codicon-close' aria-hidden='true' />
-                                    </button>
+                                </button>
+                            )}
+                        </div>
+                        {showLibrary && (
+                            <div className='nmx-comic-studio-lib-drawer'>
+                                {filteredLibraryItems.length === 0 ? (
+                                    <p className='nmx-comic-studio-lib-empty'>{t('libraryEmpty')}</p>
+                                ) : (
+                                    <div className='nmx-comic-studio-lib-grid' role='list'>
+                                        {filteredLibraryItems.map(item => {
+                                            const selected = isLibraryItemSelected(item);
+                                            return (
+                                                <button
+                                                    key={item.id}
+                                                    type='button'
+                                                    role='listitem'
+                                                    className={`nmx-comic-studio-lib-item${selected ? ' is-selected' : ''}`}
+                                                    title={item.name}
+                                                    onClick={() => {
+                                                        props.onToggleLibraryItem?.(item);
+                                                        setShowLibrary(false);
+                                                    }}
+                                                >
+                                                    <span className='nmx-comic-studio-lib-thumb'>
+                                                        {item.kind === 'image' && item.previewUrl ? (
+                                                            <img src={item.previewUrl} alt='' loading='lazy' draggable={false} />
+                                                        ) : item.kind === 'video' && item.previewUrl ? (
+                                                            <video src={item.previewUrl} muted preload='metadata' />
+                                                        ) : (
+                                                            <i
+                                                                className={`codicon codicon-${item.kind === 'video' ? 'device-camera-video' : 'file-media'}`}
+                                                                aria-hidden='true'
+                                                            />
+                                                        )}
+                                                        {selected && (
+                                                            <em className='nmx-comic-studio-lib-check' aria-hidden='true'>
+                                                                <i className='codicon codicon-check' />
+                                                            </em>
+                                                        )}
+                                                    </span>
+                                                    <small data-nmx-literal>{item.name}</small>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 )}
                             </div>
-                        ))}
+                        )}
+                    </>
+                ) : (
+                    <div className='nmx-comic-studio-dropzone-preview' data-source-kind={activeSource.kind}>
+                        <div className='nmx-comic-studio-dropzone-media'>
+                            {activeSource.kind === 'image' && activeSource.previewUrl ? (
+                                <img src={activeSource.previewUrl} alt={activeSource.name} draggable={false} />
+                            ) : activeSource.kind === 'video' && activeSource.previewUrl ? (
+                                <video src={activeSource.previewUrl} muted playsInline preload='metadata' />
+                            ) : (
+                                <div className='nmx-comic-studio-dropzone-fallback'>
+                                    <i
+                                        className={`codicon codicon-${activeSource.kind === 'video' ? 'device-camera-video' : activeSource.kind === 'audio' ? 'music' : 'file-media'}`}
+                                        aria-hidden='true'
+                                    />
+                                </div>
+                            )}
+                        </div>
+                        <div className='nmx-comic-studio-dropzone-caption' title={activeSource.name}>
+                            <span data-nmx-literal>{activeSource.name}</span>
+                        </div>
+                        {props.onRemoveSourceFile && (
+                            <button
+                                type='button'
+                                className='nmx-comic-studio-dropzone-remove'
+                                aria-label={`${t('removeFile')} ${activeSource.name}`}
+                                title={t('removeFile')}
+                                disabled={props.generating}
+                                onClick={event => {
+                                    event.stopPropagation();
+                                    props.onRemoveSourceFile?.(activeSource.id);
+                                }}
+                            >
+                                <i className='codicon codicon-close' aria-hidden='true' />
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
@@ -1387,10 +1447,11 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
     const isAudioStage = props.kind === 'music' || activeTake?.kind === 'audio';
     const effectiveAudioDuration =
         duration > 0 ? duration : activeTake?.durationSeconds && activeTake.durationSeconds > 0 ? activeTake.durationSeconds : 30;
+    const effectiveLightTheme = typeof props.isLightTheme === 'boolean' ? props.isLightTheme : isLightTheme;
 
     return (
         <div
-            className={`nmx-comic-studio-modal-backdrop is-${props.kind}${isLightTheme ? ' nmx-theme-light' : ''}`}
+            className={`nmx-comic-studio-modal-backdrop is-${props.kind}${effectiveLightTheme ? ' nmx-theme-light' : ''}`}
             dir={props.locale === 'ar' ? 'rtl' : undefined}
             onMouseDown={event => {
                 if (event.target === event.currentTarget && !props.generating) {
@@ -1456,6 +1517,7 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                 readOnly={Boolean(props.boundProjectPath)}
                                 onChooseDirectory={props.onChooseDirectory}
                                 onResetDirectory={props.onResetDirectory}
+                                onOpenDirectory={props.onOpenDirectory}
                             />
 
                             {props.kind === 'image' && (

@@ -12378,7 +12378,23 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }
             }
             if (importedImages.length > 0) {
-                modal.sourceFiles = importedImages;
+                modal.sourceFiles = importedImages.slice(-1);
+            }
+        } else if (kind === 'topic' && modal.sourceFiles.length === 0) {
+            const importedTopicRefs: ComicStudioSourceFile[] = [];
+            for (const [absPath, asset] of assetsByPath.entries()) {
+                if ((asset.kind === 'image' || asset.kind === 'video') && asset.source === 'imported' && asset.status === 'ready') {
+                    importedTopicRefs.push({
+                        id: `asset:${asset.id}`,
+                        name: asset.uri.split('/').pop() || asset.id,
+                        kind: asset.kind,
+                        path: absPath,
+                        previewUrl: URI.fromFilePath(absPath).toString()
+                    });
+                }
+            }
+            if (importedTopicRefs.length > 0) {
+                modal.sourceFiles = importedTopicRefs.slice(-1);
             }
         }
 
@@ -12444,15 +12460,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!modal || modal.generating) return;
         const imageOnly = modal.kind === 'image';
         const filters: Record<string, string[]> = imageOnly
-            ? { Images: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }
-            : { Media: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'mp4', 'mov', 'webm', 'm4v'] };
-        const title = comicSheetText(this.desktopLocale, imageOnly ? 'images' : 'chooseFolder');
+            ? { Images: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }
+            : { Media: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'mp4', 'mov', 'webm', 'm4v'] };
+        const title = comicSheetText(this.desktopLocale, 'images');
         const selected = await this.fileDialogService?.showOpenDialog?.({
             title,
             openLabel: title,
             canSelectFiles: true,
             canSelectFolders: false,
-            canSelectMany: true,
+            canSelectMany: false,
             filters
         });
         const resources = Array.isArray(selected) ? selected : selected ? [selected] : [];
@@ -12475,25 +12491,27 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const modal = this.comicStudioModalState;
         if (!modal) return;
         const imageOnly = modal.kind === 'image';
-        const existingPaths = new Set(modal.sourceFiles.map(item => item.path).filter(Boolean));
-        const next = [...modal.sourceFiles];
+        let singleEntry: ComicStudioSourceFile | undefined;
         for (const fsPath of paths) {
-            if (!fsPath || existingPaths.has(fsPath)) continue;
+            if (!fsPath) continue;
             const ext = /\.([^./\\]+)$/.exec(fsPath)?.[1]?.toLowerCase() || '';
-            const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext);
+            const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'].includes(ext);
             const isVideo = ['mp4', 'mov', 'webm', 'm4v'].includes(ext);
             if (imageOnly && !isImage) continue;
             if (!isImage && !isVideo) continue;
-            existingPaths.add(fsPath);
-            next.push({
+            singleEntry = {
                 id: `local:${fsPath}`,
                 name: fsPath.split(/[\\/]/).pop() || fsPath,
                 kind: isVideo ? 'video' : 'image',
                 path: fsPath,
                 previewUrl: URI.fromFilePath(fsPath).toString()
-            });
+            };
+            break;
         }
-        modal.sourceFiles = next;
+        if (!singleEntry) return;
+        modal.sourceFiles = [singleEntry];
+        const matched = this.comicCreationLibraryItems?.().find(item => item.path === singleEntry.path);
+        modal.selectedLibraryIds = matched ? new Set([matched.id]) : new Set();
         this.comicKindError = '';
         this.update();
     }
@@ -12502,26 +12520,24 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const modal = this.comicStudioModalState;
         if (!modal || modal.generating) return;
         if (modal.kind === 'image' && item.kind !== 'image') return;
-        const selected = new Set(modal.selectedLibraryIds);
-        if (selected.has(item.id)) {
-            selected.delete(item.id);
-            modal.sourceFiles = modal.sourceFiles.filter(entry => entry.id !== `lib:${item.id}` && entry.path !== item.path);
+        const alreadySelected =
+            modal.selectedLibraryIds.has(item.id)
+            || modal.sourceFiles.some(entry => entry.id === `lib:${item.id}` || entry.path === item.path);
+        if (alreadySelected) {
+            modal.selectedLibraryIds = new Set();
+            modal.sourceFiles = [];
         } else {
-            selected.add(item.id);
-            if (!modal.sourceFiles.some(entry => entry.path === item.path)) {
-                modal.sourceFiles = [
-                    ...modal.sourceFiles,
-                    {
-                        id: `lib:${item.id}`,
-                        name: item.name,
-                        kind: item.kind,
-                        path: item.path,
-                        previewUrl: item.previewUrl || URI.fromFilePath(item.path).toString()
-                    }
-                ];
-            }
+            modal.selectedLibraryIds = new Set([item.id]);
+            modal.sourceFiles = [
+                {
+                    id: `lib:${item.id}`,
+                    name: item.name,
+                    kind: item.kind,
+                    path: item.path,
+                    previewUrl: item.previewUrl || URI.fromFilePath(item.path).toString()
+                }
+            ];
         }
-        modal.selectedLibraryIds = selected;
         this.comicKindError = '';
         this.update();
     }
@@ -12531,13 +12547,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!modal || modal.generating) return;
         const target = modal.sourceFiles.find(item => item.id === id);
         modal.sourceFiles = modal.sourceFiles.filter(item => item.id !== id);
-        if (id.startsWith('lib:')) {
+        if (modal.sourceFiles.length === 0) {
+            modal.selectedLibraryIds = new Set();
+        } else if (id.startsWith('lib:')) {
             const libId = id.slice('lib:'.length);
             const selected = new Set(modal.selectedLibraryIds);
             selected.delete(libId);
             modal.selectedLibraryIds = selected;
         } else if (target?.path) {
-            const matchedLib = this.comicCreationLibraryItems().find(item => item.path === target.path);
+            const matchedLib = this.comicCreationLibraryItems?.().find(item => item.path === target.path);
             if (matchedLib && modal.selectedLibraryIds.has(matchedLib.id)) {
                 const selected = new Set(modal.selectedLibraryIds);
                 selected.delete(matchedLib.id);
@@ -13918,6 +13936,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 locale={this.desktopLocale}
                 kind={kind}
                 open={modal.open}
+                isLightTheme={this.resolvedDesktopTheme ? this.resolvedDesktopTheme() === 'light' : undefined}
                 boundProjectPath={modal.boundProjectPath}
                 title={modal.title}
                 onTitleChange={value => {
@@ -13933,6 +13952,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     this.comicCreateParentDirectory = undefined;
                     this.update();
                 } : undefined}
+                onOpenDirectory={modal.boundProjectPath ? () => { void this.platformService.openFolderInFileManager(modal.boundProjectPath!); } : undefined}
                 sourceFiles={modal.sourceFiles}
                 onPickLocalFiles={() => { void this.pickComicStudioLocalFiles(); }}
                 onDropLocalFiles={files => this.addComicStudioDroppedFiles(files)}

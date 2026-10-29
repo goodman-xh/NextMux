@@ -24,13 +24,14 @@ export function comicProjectKindOf(value: string | undefined): ComicProjectKind 
 
 type KindKey = 'novel' | 'image' | 'topic' | 'music' | 'novelLead' | 'imageLead' | 'topicLead' | 'musicLead' | 'novelTags' | 'imageTags' | 'topicTags' | 'musicTags' | 'start' | 'projects' | 'empty' | 'newProject'
     | 'statusAll' | 'statusDraft' | 'statusProgress' | 'statusDone' | 'statusExported' | 'statusFailed' | 'statusEmpty' | 'failedBadge' | 'updated' | 'deletedNotice';
-type SheetKey = 'imageTitle' | 'imageLead' | 'name' | 'images' | 'imagesDrop' | 'imagesAdd' | 'motion' | 'motionPlaceholder' | 'motionAll' | 'motionAllPlaceholder'
+export type ComicSheetKey = 'imageTitle' | 'imageLead' | 'name' | 'images' | 'imagesDrop' | 'imagesAdd' | 'motion' | 'motionPlaceholder' | 'motionAll' | 'motionAllPlaceholder'
     | 'clipSeconds' | 'aspect' | 'create' | 'creating' | 'cancel' | 'remove' | 'needImages'
     | 'topicTitle' | 'topicLead' | 'topic' | 'topicPlaceholder' | 'length' | 'visual' | 'visualImages' | 'visualVideos' | 'voice' | 'voiceOn' | 'style' | 'stylePlaceholder'
     | 'textModel' | 'needTopic' | 'seconds'
     | 'sources' | 'sourcesLead' | 'sourceOwn' | 'sourceOwnLead' | 'sourceStock' | 'sourceStockLead' | 'sourceAi' | 'sourceAiLead' | 'filesDrop'
     | 'stockProvider' | 'stockKeyPlaceholder' | 'stockKeySaved' | 'stockKeyChange' | 'stockGetKey' | 'stockLicense' | 'needSource' | 'needFiles' | 'needStockKey' | 'noAiNote'
-    | 'localUpload' | 'pickFromLibrary' | 'libraryEmpty' | 'saveLocation' | 'chooseFolder' | 'resetFolder';
+    | 'localUpload' | 'pickFromLibrary' | 'libraryEmpty' | 'saveLocation' | 'chooseFolder' | 'openFolder' | 'resetFolder';
+type SheetKey = ComicSheetKey;
 
 const kindCopy: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<KindKey, string>>>> = {
     'zh-CN': { novel: '小说转漫剧', image: '图片转视频', topic: '主题一键成片', music: '音乐制作',
@@ -129,10 +130,10 @@ const sheetEn: Readonly<Record<SheetKey, string>> = {
     visual: 'Pictures from', visualImages: 'AI images (faster, cheaper)', visualVideos: 'AI video clips', voice: 'Voice-over', voiceOn: 'Generate voice-over and subtitles',
     style: 'Style', stylePlaceholder: 'Optional: documentary, warm and cosy, cyberpunk…', textModel: 'Script model', needTopic: 'Write a topic first.', seconds: 's',
     sources: 'Pictures from (choose any)', sourcesLead: 'Used shot by shot in this order: your files, then stock, then AI for the rest.', sourceOwn: 'My files', sourceOwnLead: 'Your pictures and clips, in the order you add them', sourceStock: 'Free stock', sourceStockLead: 'Photos and clips from Pexels or Pixabay that match each shot', sourceAi: 'AI', sourceAiLead: 'Image or video models make the remaining shots', filesDrop: 'Drop pictures or clips here, or click to choose', stockProvider: 'Stock library', stockKeyPlaceholder: 'Paste your free API key', stockKeySaved: 'API key saved in this computer’s keychain', stockKeyChange: 'Change', stockGetKey: 'Get a free key', stockLicense: 'Free to use commercially; the author and source stay in each file name.', needSource: 'Choose at least one picture source.', needFiles: 'Add at least one picture or clip.', needStockKey: 'Enter the stock library’s API key.', noAiNote: 'Shots without material stay empty; fill them in the editor later.',
-    localUpload: 'Upload from computer', pickFromLibrary: 'Pick from asset library', libraryEmpty: 'No matching assets in library yet', saveLocation: 'Save location', chooseFolder: 'Choose folder', resetFolder: 'Default'
+    localUpload: 'Upload from computer', pickFromLibrary: 'Pick from asset library', libraryEmpty: 'No matching assets in library yet', saveLocation: 'Save location', chooseFolder: 'Choose folder', openFolder: 'Open folder', resetFolder: 'Default'
 };
 
-const sheetCopy: Readonly<Partial<Record<NextMuxDesktopLocale, Readonly<Record<SheetKey, string>>>>> = {
+export const COMIC_SHEET_STRINGS: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<ComicSheetKey, string>>>> = {
     'zh-CN': { imageTitle: '图片转视频', imageLead: '每张图片会成为一个镜头，视频模型按你的动作描述让它动起来。', name: '名称',
         images: '图片', imagesDrop: '把图片拖到这里，或点击选择（PNG、JPG、WebP）', imagesAdd: '添加图片', motion: '动作描述', motionPlaceholder: '描述画面怎么动',
         motionAll: '统一动作描述', motionAllPlaceholder: '没有单独写动作的图片都用这一句', clipSeconds: '每段时长', aspect: '画面比例',
@@ -142,7 +143,7 @@ const sheetCopy: Readonly<Partial<Record<NextMuxDesktopLocale, Readonly<Record<S
         visual: '画面来源', visualImages: 'AI 生成图片（更快更省）', visualVideos: 'AI 生成视频', voice: '配音', voiceOn: '生成配音和字幕',
         style: '风格', stylePlaceholder: '可选：纪录片、温暖治愈、赛博朋克…', textModel: '文案模型', needTopic: '请先写下主题。', seconds: '秒',
         sources: '画面来源（可多选）', sourcesLead: '逐个镜头按顺序取用：先用你的素材，再用网络素材，剩下的由 AI 生成。', sourceOwn: '我的素材', sourceOwnLead: '你的图片和视频，按添加顺序放进镜头', sourceStock: '网络素材', sourceStockLead: '从免费图库（Pexels / Pixabay）为每个镜头找图片和视频', sourceAi: 'AI 生成', sourceAiLead: '用图片或视频模型生成剩下的镜头', filesDrop: '把图片或视频拖到这里，或点击选择', stockProvider: '图库', stockKeyPlaceholder: '粘贴免费申请的 API Key', stockKeySaved: 'API Key 已保存在本机钥匙串', stockKeyChange: '更换', stockGetKey: '免费申请 Key', stockLicense: '可免费商用，作者和来源会保留在文件名里。', needSource: '请至少选择一种画面来源。', needFiles: '请至少添加一张图片或一段视频。', needStockKey: '请填写图库的 API Key。', noAiNote: '没有素材的镜头会先空着，之后可以在剪辑里补上。',
-        localUpload: '本地上传', pickFromLibrary: '从素材库挑选', libraryEmpty: '素材库中还没有可用素材', saveLocation: '保存位置', chooseFolder: '选择文件夹', resetFolder: '默认位置' },
+        localUpload: '本地上传', pickFromLibrary: '从素材库挑选', libraryEmpty: '素材库中还没有可用素材', saveLocation: '保存位置', chooseFolder: '选择文件夹', openFolder: '打开文件夹', resetFolder: '默认位置' },
     'zh-TW': { imageTitle: '圖片轉影片', imageLead: '每張圖片會成為一個鏡頭，影片模型依你的動作描述讓它動起來。', name: '名稱',
         images: '圖片', imagesDrop: '把圖片拖到這裡，或點擊選擇（PNG、JPG、WebP）', imagesAdd: '新增圖片', motion: '動作描述', motionPlaceholder: '描述畫面怎麼動',
         motionAll: '統一動作描述', motionAllPlaceholder: '沒有單獨寫動作的圖片都用這一句', clipSeconds: '每段時長', aspect: '畫面比例',
@@ -152,7 +153,7 @@ const sheetCopy: Readonly<Partial<Record<NextMuxDesktopLocale, Readonly<Record<S
         visual: '畫面來源', visualImages: 'AI 生成圖片（更快更省）', visualVideos: 'AI 生成影片', voice: '配音', voiceOn: '生成配音和字幕',
         style: '風格', stylePlaceholder: '選填：紀錄片、溫暖療癒、賽博龐克…', textModel: '文案模型', needTopic: '請先寫下主題。', seconds: '秒',
         sources: '畫面來源（可多選）', sourcesLead: '逐個鏡頭依序取用：先用你的素材，再用網路素材，剩下的由 AI 生成。', sourceOwn: '我的素材', sourceOwnLead: '你的圖片和影片，依新增順序放進鏡頭', sourceStock: '網路素材', sourceStockLead: '從免費圖庫（Pexels / Pixabay）為每個鏡頭找圖片和影片', sourceAi: 'AI 生成', sourceAiLead: '用圖片或影片模型生成剩下的鏡頭', filesDrop: '把圖片或影片拖到這裡，或點擊選擇', stockProvider: '圖庫', stockKeyPlaceholder: '貼上免費申請的 API Key', stockKeySaved: 'API Key 已儲存在本機鑰匙圈', stockKeyChange: '更換', stockGetKey: '免費申請 Key', stockLicense: '可免費商用，作者和來源會保留在檔名裡。', needSource: '請至少選擇一種畫面來源。', needFiles: '請至少新增一張圖片或一段影片。', needStockKey: '請填寫圖庫的 API Key。', noAiNote: '沒有素材的鏡頭會先空著，之後可以在剪輯裡補上。',
-        localUpload: '本機上傳', pickFromLibrary: '從素材庫挑選', libraryEmpty: '素材庫中還沒有可用素材', saveLocation: '儲存位置', chooseFolder: '選擇資料夾', resetFolder: '預設位置' },
+        localUpload: '本機上傳', pickFromLibrary: '從素材庫挑選', libraryEmpty: '素材庫中還沒有可用素材', saveLocation: '儲存位置', chooseFolder: '選擇資料夾', openFolder: '開啟資料夾', resetFolder: '預設位置' },
     en: sheetEn,
     ja: { ...sheetEn, imageTitle: '画像から動画', imageLead: '画像ごとに 1 ショットになり、動画モデルが動きの指示どおりに動かします。', name: '名前',
         images: '画像', imagesDrop: '画像をここにドロップ、またはクリックして選択（PNG、JPG、WebP）', imagesAdd: '画像を追加', motion: '動き', motionPlaceholder: '画像の動きを入力',
@@ -162,7 +163,7 @@ const sheetCopy: Readonly<Partial<Record<NextMuxDesktopLocale, Readonly<Record<S
         topic: 'テーマ・キーワード', topicPlaceholder: 'テーマやキーワード', length: '動画の長さ', visual: '映像', visualImages: 'AI 画像（速い・安い）', visualVideos: 'AI 動画',
         voice: 'ナレーション', voiceOn: 'ナレーションと字幕を生成', style: 'スタイル', stylePlaceholder: '任意：ドキュメンタリー、あたたかい雰囲気…', textModel: '原稿モデル', needTopic: '先にテーマを書いてください。', seconds: '秒',
         sources: '映像の素材（複数選択可）', sourcesLead: 'ショットごとにこの順で使います：自分の素材 → フリー素材 → 残りは AI。', sourceOwn: '自分の素材', sourceOwnLead: '画像や動画を追加した順にショットへ', sourceStock: 'フリー素材', sourceStockLead: 'Pexels / Pixabay から各ショットに合う写真や動画を探します', sourceAi: 'AI 生成', sourceAiLead: '残りのショットを画像・動画モデルで生成', filesDrop: '画像や動画をここにドロップ、またはクリックして選択', stockProvider: '素材サイト', stockKeyPlaceholder: '無料で取得した API キーを貼り付け', stockKeySaved: 'API キーはこのパソコンのキーチェーンに保存済み', stockKeyChange: '変更', stockGetKey: '無料でキーを取得', stockLicense: '商用利用可。作者と出典はファイル名に残ります。', needSource: '素材の種類を 1 つ以上選んでください。', needFiles: '画像か動画を 1 つ以上追加してください。', needStockKey: '素材サイトの API キーを入力してください。', noAiNote: '素材のないショットは空のままです。あとで編集で埋められます。',
-        localUpload: 'パソコンから選択', pickFromLibrary: '素材ライブラリから選ぶ', libraryEmpty: '素材ライブラリに使える素材がありません', saveLocation: '保存先', chooseFolder: 'フォルダを選択', resetFolder: '規定の場所' },
+        localUpload: 'パソコンから選択', pickFromLibrary: '素材ライブラリから選ぶ', libraryEmpty: '素材ライブラリに使える素材がありません', saveLocation: '保存先', chooseFolder: 'フォルダを選択', openFolder: 'フォルダを開く', resetFolder: '規定の場所' },
     ko: { ...sheetEn, imageTitle: '이미지로 영상', imageLead: '이미지마다 샷 하나가 되고, 영상 모델이 동작 설명대로 움직입니다.', name: '이름',
         images: '이미지', imagesDrop: '이미지를 여기로 끌어 놓거나 눌러서 선택하세요(PNG, JPG, WebP)', imagesAdd: '이미지 추가', motion: '동작 설명', motionPlaceholder: '움직임을 설명',
         motionAll: '모든 이미지 동작', motionAllPlaceholder: '따로 적지 않은 이미지에 사용됩니다', clipSeconds: '클립 길이', aspect: '화면 비율',
@@ -171,8 +172,16 @@ const sheetCopy: Readonly<Partial<Record<NextMuxDesktopLocale, Readonly<Record<S
         topic: '주제 또는 키워드', topicPlaceholder: '주제 또는 키워드', length: '영상 길이', visual: '화면', visualImages: 'AI 이미지(빠르고 저렴)', visualVideos: 'AI 영상',
         voice: '내레이션', voiceOn: '내레이션과 자막 생성', style: '스타일', stylePlaceholder: '선택: 다큐멘터리, 따뜻한 분위기…', textModel: '원고 모델', needTopic: '먼저 주제를 적어 주세요.', seconds: '초',
         sources: '화면 소스(여러 개 선택 가능)', sourcesLead: '샷마다 이 순서로 씁니다: 내 소재 → 무료 스톡 → 나머지는 AI.', sourceOwn: '내 소재', sourceOwnLead: '추가한 순서대로 이미지와 영상을 샷에 넣습니다', sourceStock: '무료 스톡', sourceStockLead: 'Pexels / Pixabay에서 샷마다 어울리는 사진과 영상을 찾습니다', sourceAi: 'AI 생성', sourceAiLead: '남은 샷을 이미지·영상 모델로 생성', filesDrop: '이미지나 영상을 여기로 끌어 놓거나 눌러서 선택하세요', stockProvider: '스톡 사이트', stockKeyPlaceholder: '무료로 받은 API 키를 붙여 넣으세요', stockKeySaved: 'API 키가 이 컴퓨터의 키체인에 저장되어 있습니다', stockKeyChange: '변경', stockGetKey: '무료 키 받기', stockLicense: '상업적으로 무료 사용 가능하며, 작성자와 출처는 파일 이름에 남습니다.', needSource: '화면 소스를 하나 이상 고르세요.', needFiles: '이미지나 영상을 하나 이상 추가하세요.', needStockKey: '스톡 사이트의 API 키를 입력하세요.', noAiNote: '소재가 없는 샷은 비워 두며, 나중에 편집에서 채울 수 있습니다.',
-        localUpload: '내 컴퓨터에서 업로드', pickFromLibrary: '소재 라이브러리에서 선택', libraryEmpty: '라이브러리에 사용할 수 있는 소재가 없습니다', saveLocation: '저장 위치', chooseFolder: '폴더 선택', resetFolder: '기본 위치' }
+        localUpload: '내 컴퓨터에서 업로드', pickFromLibrary: '소재 라이브러리에서 선택', libraryEmpty: '라이브러리에 사용할 수 있는 소재가 없습니다', saveLocation: '저장 위치', chooseFolder: '폴더 선택', openFolder: '폴더 열기', resetFolder: '기본 위치' },
+    es: { ...sheetEn, openFolder: 'Abrir carpeta' },
+    fr: { ...sheetEn, openFolder: 'Ouvrir le dossier' },
+    de: { ...sheetEn, openFolder: 'Ordner öffnen' },
+    'pt-BR': { ...sheetEn, openFolder: 'Abrir pasta' },
+    ru: { ...sheetEn, openFolder: 'Открыть папку' },
+    ar: { ...sheetEn, openFolder: 'فتح المجلد' },
+    hi: { ...sheetEn, openFolder: 'फ़ोल्डर खोलें' }
 };
+const sheetCopy = COMIC_SHEET_STRINGS;
 
 type ProjectKey = 'delete' | 'deleteTitle' | 'deleteHint' | 'outsideHint' | 'trash' | 'removeFromList' | 'cancel' | 'deleting' | 'failed' | 'reorderHint' | 'binMac' | 'binWin';
 
@@ -302,11 +311,7 @@ export function previewComicProjectFolderPath(
     return `${base}${sep}${slug}`;
 }
 
-/**
- * 保存位置: the one place a creation sheet shows where the project goes. `readOnly` is for a folder that is used
- * as-is (an open empty folder), so there is nothing to choose.
- */
-export function ComicProjectLocationField(props: {
+export interface ComicProjectLocationFieldProps {
     readonly locale: NextMuxDesktopLocale;
     readonly parentDirectory: string;
     readonly defaultDirectory?: string;
@@ -315,7 +320,14 @@ export function ComicProjectLocationField(props: {
     readonly readOnly?: boolean;
     readonly onChooseDirectory?: () => void;
     readonly onResetDirectory?: () => void;
-}): React.ReactElement {
+    readonly onOpenDirectory?: () => void;
+}
+
+/**
+ * 保存位置: the one place a creation sheet shows where the project goes. `readOnly` is for a folder that is used
+ * as-is (an open empty folder or bound project directory).
+ */
+export function ComicProjectLocationField(props: ComicProjectLocationFieldProps): React.ReactElement {
     const t = (key: SheetKey): string => comicSheetText(props.locale, key);
     const displayPath = props.previewPath || props.parentDirectory;
     const isCustom = Boolean(props.defaultDirectory && props.parentDirectory && props.parentDirectory !== props.defaultDirectory);
@@ -330,7 +342,9 @@ export function ComicProjectLocationField(props: {
             {!props.readOnly && isCustom && props.onResetDirectory && <button type='button' className='nmx-secondary-button nmx-comic-location-btn' disabled={props.disabled} onClick={props.onResetDirectory}>
                 {t('resetFolder')}</button>}
             {!props.readOnly && <button type='button' className='nmx-secondary-button nmx-comic-location-btn' disabled={props.disabled || !props.onChooseDirectory} onClick={props.onChooseDirectory}>
-                <i className='codicon codicon-folder' aria-hidden='true'></i>{t('chooseFolder')}</button>}
+                <i className='codicon codicon-folder-opened' aria-hidden='true'></i>{t('chooseFolder')}</button>}
+            {props.readOnly && props.onOpenDirectory && <button type='button' className='nmx-secondary-button nmx-comic-location-btn is-open-folder' onClick={props.onOpenDirectory}>
+                <i className='codicon codicon-folder-opened' aria-hidden='true'></i>{t('openFolder')}</button>}
         </div>
     </div>;
 }
@@ -635,9 +649,9 @@ export function ComicImageCreateSheet(props: {
     const [problem, setProblem] = React.useState('');
     const urls = React.useRef<string[]>([]);
     React.useEffect(() => () => { for (const url of urls.current) URL.revokeObjectURL(url); }, []);
-    const secondsKey = props.secondsOptions.join(',');
+    const secondsKey = (props.secondsOptions ?? []).join(',');
     React.useEffect(() => {
-        if (props.secondsOptions.length > 0 && !props.secondsOptions.includes(seconds)) {
+        if (props.secondsOptions && props.secondsOptions.length > 0 && !props.secondsOptions.includes(seconds)) {
             setSeconds(props.secondsOptions[0]);
         }
     }, [secondsKey, seconds]);
