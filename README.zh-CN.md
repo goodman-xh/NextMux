@@ -103,7 +103,7 @@ https://github.com/user-attachments/assets/a71b55cf-17e3-4dc3-8cbf-5459afc54d77
 
 ---
 
-## 客户端下载（`v0.1.1` 四架构独立构建）
+## 客户端下载（`v0.1.5` 四架构独立构建）
 
 每个发布版本均针对不同操作系统与 CPU 架构独立编译、打包并校验原生二进制边界。您可直接从 **[官网下载页 (nextmux.app/download)](https://nextmux.app/download)** 或 **GitHub Releases** 获取安装包：
 
