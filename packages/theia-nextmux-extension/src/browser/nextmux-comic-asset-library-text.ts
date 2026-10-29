@@ -61,6 +61,8 @@ const words={
     renameTitle:['重命名素材','Rename asset','重新命名素材','素材の名前を変更','소재 이름 바꾸기','Renombrar recurso','Renommer la ressource','Material umbenennen','Renomear ativo','Переименовать материал','إعادة تسمية الأصل','सामग्री का नाम बदलें'],
     renamePlaceholder:['输入素材名称','Asset name','輸入素材名稱','素材名を入力','소재 이름 입력','Nombre del recurso','Nom de la ressource','Materialname','Nome do ativo','Название материала','اسم الأصل','सामग्री का नाम'],
     renameSave:['保存','Save','儲存','保存','저장','Guardar','Enregistrer','Speichern','Salvar','Сохранить','حفظ','सहेजें'],
+    confirm:['确定','Confirm','確定','確定','확인','Confirmar','Confirmer','Bestätigen','Confirmar','Подтвердить','تأكيد','पुष्टि करें'],
+    zoomPreview:['放大预览','Zoom preview','放大預覽','拡大プレビュー','확대 미리보기','Vista ampliada','Aperçu agrandi','Vergrößerte Vorschau','Visualização ampliada','Увеличенный просмотр','معاينة مكبّرة','बड़ा पूर्वावलोकन'],
 } as const;
 export type ComicAssetLibraryTextKey=keyof typeof words;
 export function comicAssetLibraryText(locale:string,key:ComicAssetLibraryTextKey):string {

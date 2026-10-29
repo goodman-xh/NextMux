@@ -89,3 +89,24 @@ jobs:
           echo "=== Atomically promoting Release ${TAG} from Draft to Latest ==="
           gh release edit "${TAG}" --repo "${REPO}" --draft=false --latest
           echo "ATOMIC_GITHUB_RELEASE_PROMOTED_OK"
+
+      - name: Checkout repository to keep GitHub homepage README download buttons synced
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Sync GitHub homepage README & README.zh-CN download buttons to new release version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          node scripts/sync-readme-release-version.mjs "${VERSION}"
+          if [ -n "$(git status --porcelain README.md README.zh-CN.md .github/workflows/sync-release-from-r2.yml)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add README.md README.zh-CN.md .github/workflows/sync-release-from-r2.yml
+            git commit -m "docs(release): update homepage download buttons to v${VERSION}"
+            git pull --rebase origin main
+            git push origin main
+          fi

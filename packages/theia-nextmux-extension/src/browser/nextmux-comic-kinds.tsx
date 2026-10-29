@@ -318,6 +318,7 @@ export interface ComicProjectLocationFieldProps {
     readonly previewPath: string;
     readonly disabled?: boolean;
     readonly readOnly?: boolean;
+    readonly canOpenDirectory?: boolean;
     readonly onChooseDirectory?: () => void;
     readonly onResetDirectory?: () => void;
     readonly onOpenDirectory?: () => void;
@@ -343,7 +344,7 @@ export function ComicProjectLocationField(props: ComicProjectLocationFieldProps)
                 {t('resetFolder')}</button>}
             {!props.readOnly && <button type='button' className='nmx-secondary-button nmx-comic-location-btn' disabled={props.disabled || !props.onChooseDirectory} onClick={props.onChooseDirectory}>
                 <i className='codicon codicon-folder-opened' aria-hidden='true'></i>{t('chooseFolder')}</button>}
-            {props.readOnly && props.onOpenDirectory && <button type='button' className='nmx-secondary-button nmx-comic-location-btn is-open-folder' onClick={props.onOpenDirectory}>
+            {(props.readOnly || props.canOpenDirectory) && props.onOpenDirectory && <button type='button' className='nmx-secondary-button nmx-comic-location-btn is-open-folder' disabled={props.disabled && !props.readOnly} onClick={props.onOpenDirectory}>
                 <i className='codicon codicon-folder-opened' aria-hidden='true'></i>{t('openFolder')}</button>}
         </div>
     </div>;

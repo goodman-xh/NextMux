@@ -1261,16 +1261,35 @@
 
 /* Inside the composer model drawer: below the evidence rows. Both the picker drawer and the detail drawer
    share the exact same width (264px: MODEL_PRICE_DETAIL_WIDTH in nextmux-floating-panel.ts). */
+.nmx-model-effort-menu.nmx-model-evidence-menu,
+.nmx-model-effort-portal .nmx-model-effort-menu.nmx-model-evidence-menu {
+    overflow-x: hidden !important;
+    overflow-y: auto;
+}
 .nmx-model-effort-menu.nmx-model-evidence-menu:has(.nmx-offering-price) {
     width: 264px;
     max-width: calc(100vw - 24px);
     container: nmx-price-drawer / inline-size;
 }
 .nmx-model-effort-menu .nmx-offering-price {
-    min-width: 0;
+    min-width: 0 !important;
+    max-width: 100%;
+    box-sizing: border-box;
     margin: 2px 7px 8px;
     padding-top: 8px;
     border-top: 1px solid var(--nmx-border, rgba(255, 255, 255, .1));
+}
+.nmx-model-effort-menu :is(
+    .nmx-offering-price-columns,
+    .nmx-offering-price-block,
+    .nmx-price-section,
+    .nmx-price-section-body,
+    .nmx-price-section-body > dl,
+    .nmx-offering-price-notes
+) {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 .nmx-model-effort-menu .nmx-offering-price.is-pullout-trigger {
     margin: 2px 7px 7px;
@@ -1347,16 +1366,55 @@
 .nmx-model-effort-menu.nmx-model-price-overlay-drawer {
     position: fixed;
     z-index: 2210;
+    height: auto !important;
+    min-height: 0 !important;
+    min-width: 0;
+    max-width: calc(100vw - 16px);
     box-sizing: border-box;
     padding: 6px 2px;
-    overflow-x: hidden;
+    overflow-x: hidden !important;
     overflow-y: auto;
     overscroll-behavior: contain;
+    container: nmx-price-drawer / inline-size;
 }
 .nmx-model-effort-menu.nmx-model-price-overlay-drawer > .nmx-offering-price {
+    min-width: 0 !important;
+    max-width: 100%;
     margin: 2px 7px;
     padding-top: 0;
     border-top: 0;
+}
+/* Quote Drawer c (`~232px–244px` width, narrower than Drawer a's `264px`) always stacks quote cards cleanly without horizontal overflow. */
+.nmx-model-effort-menu.nmx-model-price-overlay-drawer .nmx-offering-price-columns:not(.is-single) {
+    grid-template-columns: minmax(0, 1fr);
+}
+.nmx-model-effort-menu.nmx-model-price-overlay-drawer .nmx-offering-price-multiplier {
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+    max-width: none;
+    flex-wrap: wrap;
+    gap: 2px 8px;
+    padding: 4px 7px;
+}
+.nmx-model-effort-menu .nmx-price-section-body dd {
+    min-width: 0;
+    max-width: 100%;
+}
+.nmx-model-effort-menu .nmx-media-tier-table {
+    width: 100%;
+    max-width: 100%;
+}
+.nmx-model-effort-menu .nmx-media-tier-table tbody th {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.nmx-model-effort-menu .nmx-media-tier-table :is(th, td) + :is(th, td) {
+    padding-inline-start: 6px;
+}
+.nmx-model-effort-menu .nmx-media-tier-addon {
+    overflow-wrap: anywhere;
 }
 .nmx-model-effort-menu .nmx-offering-price-multiplier { min-width: 34px; }
 /* A narrow window squeezes the drawer: the quotes stack rather than crush three columns. */

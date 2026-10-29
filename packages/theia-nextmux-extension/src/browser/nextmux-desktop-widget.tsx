@@ -305,7 +305,7 @@ import {
     type ComicStudioSourceFile
 } from './nextmux-comic-studio-modals';
 import type { DesktopComicProjectDiskStatus } from '../common/nextmux-platform-protocol';
-import { stockQueryFromShot, type StockMediaProvider, type StockMediaState } from '../common/nextmux-stock-media';
+import { STOCK_MEDIA_SITES, stockQueryFromShot, type StockMediaProvider, type StockMediaState } from '../common/nextmux-stock-media';
 import type { MediaJob, MediaJobKind, MediaVideoJobInput } from '@nextmux/media-core';
 import { inferModelCapabilityEvidence, mergeModelCapabilityEvidence, modelCapabilitySupport, protocolSupportsReasoningEffort } from '@nextmux/model-runtime/capabilities';
 import { OFFICIAL_PROVIDER_PRESETS, isOfficialMediaProtocol, officialMediaCapabilities, officialProviderSupportsCredentialSource } from '@nextmux/model-runtime/presets';
@@ -4089,6 +4089,93 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected relayMetricTooltip: { readonly key: string; readonly text: string; readonly anchor: HTMLElement } | undefined;
+    protected modelEvidenceTooltip: { readonly text: string; readonly left: number; readonly top: number; readonly width: number } | undefined;
+    protected playbackFileUrlByPath = new Map<string, string>();
+    protected playbackFileProbedPaths = new Set<string>();
+
+    protected showModelEvidenceTooltip(text: string, anchor: HTMLElement | null | undefined): void {
+        if (!text || !anchor || typeof window === 'undefined' || typeof anchor.getBoundingClientRect !== 'function') return;
+        const rect = anchor.getBoundingClientRect();
+        const viewportW = Math.max(200, window.innerWidth || 800);
+        const viewportH = Math.max(200, window.innerHeight || 600);
+        const maxWidth = Math.min(248, viewportW - 16);
+        const width = Math.max(120, Math.min(maxWidth, Math.ceil(text.length * 11) + 28));
+        const left = Math.max(8, Math.min(Math.round(rect.left + rect.width / 2 - width / 2), viewportW - width - 8));
+        const belowTop = Math.round(rect.bottom + 6);
+        const top = belowTop + 56 <= viewportH - 8
+            ? Math.max(8, belowTop)
+            : Math.max(8, Math.round(rect.top - 42));
+        if (this.modelEvidenceTooltip
+            && this.modelEvidenceTooltip.text === text
+            && Math.abs(this.modelEvidenceTooltip.left - left) <= 1
+            && Math.abs(this.modelEvidenceTooltip.top - top) <= 1) {
+            return;
+        }
+        this.modelEvidenceTooltip = { text, left, top, width };
+        this.update();
+    }
+
+    protected hideModelEvidenceTooltip(): void {
+        if (!this.modelEvidenceTooltip) return;
+        this.modelEvidenceTooltip = undefined;
+        this.update();
+    }
+
+    protected renderModelEvidenceTooltipPortal(): React.ReactNode {
+        const tip = this.modelEvidenceTooltip;
+        if (!tip || typeof document === 'undefined' || !document.body) return null;
+        return ReactDOM.createPortal(
+            <div
+                className={`nmx-relay-metric-tooltip nmx-model-evidence-tooltip nmx-theme-${this.resolvedDesktopTheme()}`}
+                role='tooltip'
+                dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'}
+                lang={this.desktopLocale}
+                style={{
+                    position: 'fixed',
+                    left: `${tip.left}px`,
+                    top: `${tip.top}px`,
+                    width: `${tip.width}px`,
+                    zIndex: 12200,
+                    pointerEvents: 'none'
+                }}
+            >
+                {tip.text}
+            </div>,
+            document.body
+        );
+    }
+
+    protected async preparePlaybackFileMap(filePaths: readonly string[]): Promise<Record<string, string>> {
+        if (!Array.isArray(filePaths) || filePaths.length === 0) return {};
+        const prepare = this.platformService?.preparePlaybackFiles;
+        if (typeof prepare !== 'function') return {};
+        try {
+            const mapped = await prepare.call(this.platformService, filePaths);
+            if (!mapped || typeof mapped !== 'object') return {};
+            let changed = false;
+            for (const [srcPath, outPath] of Object.entries(mapped)) {
+                if (typeof outPath !== 'string' || !outPath) continue;
+                const url = /^(?:file:|https?:|data:|blob:)/i.test(outPath) ? outPath : URI.fromFilePath(outPath).toString();
+                if (this.playbackFileUrlByPath.get(srcPath) !== url) {
+                    this.playbackFileUrlByPath.set(srcPath, url);
+                    changed = true;
+                }
+            }
+            if (changed) this.update();
+            return mapped;
+        } catch {
+            return {};
+        }
+    }
+
+    protected ensurePlaybackUrlsForPaths(filePaths: readonly (string | undefined)[]): void {
+        const candidates = [...new Set(
+            filePaths.filter((p): p is string => Boolean(p && /\.(?:mp4|m4v|mov)$/i.test(p) && !this.playbackFileProbedPaths.has(p)))
+        )].slice(0, 64);
+        if (candidates.length === 0) return;
+        for (const p of candidates) this.playbackFileProbedPaths.add(p);
+        void this.preparePlaybackFileMap(candidates);
+    }
     protected favoriteMerchantLabels = parseRelayFavoriteMerchants(window.localStorage.getItem(RELAY_FAVORITES_STORAGE_KEY));
     protected publicMerchantPage: PublicMerchantDirectoryPage | undefined;
     protected favoriteMerchantPage: PublicMerchantDirectoryPage | undefined;
@@ -4574,18 +4661,29 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected comicInspectorOpen = false;
     protected comicInspectorTab: 'shot' | 'scene' | 'style' = 'shot';
     protected comicErrorState: string | { readonly failure: unknown } = '';
+    protected comicErrorText(value: unknown): string {
+        if (!value) return '';
+        if (typeof value === 'string') return value;
+        const unwrapped = typeof value === 'object' && value !== null && 'failure' in value
+            ? (value as { readonly failure: unknown }).failure
+            : value;
+        const text = modelFailureText(this.desktopLocale, unwrapped);
+        return typeof text === 'string' ? text : String(text ?? '');
+    }
     protected get comicError(): string {
-        return typeof this.comicErrorState === 'string' ? this.comicErrorState : modelFailureText(this.desktopLocale, this.comicErrorState.failure);
+        return this.comicErrorText(this.comicErrorState);
     }
     protected set comicError(value: string | { readonly failure: unknown }) {
         this.comicErrorState = value;
         if (value && typeof value === 'object') {
-            const text = this.comicError;
+            const text = this.comicErrorText(value);
             if (text) this.addNotification?.('error', comicKindText(this.desktopLocale, 'novel'), text);
         }
     }
     protected get comicErrorDetail(): string | undefined {
-        return typeof this.comicErrorState === 'string' ? undefined : modelFailure(this.desktopLocale, this.comicErrorState.failure).detail;
+        return typeof this.comicErrorState === 'string' || !this.comicErrorState || !('failure' in this.comicErrorState)
+            ? undefined
+            : modelFailure(this.desktopLocale, this.comicErrorState.failure).detail;
     }
     protected comicMessage = '';
     protected comicVoicePending: { readonly transcript: string; readonly command: ComicVoiceCommand; readonly target?: ReturnType<NextMuxDesktopWidget['captureComicVoiceTarget']> } | undefined;
@@ -4634,6 +4732,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         soundEnabled: boolean;
         topicVisualMode: 'videos' | 'images';
         topicVoiceSubtitles: boolean;
+        topicSources: { own: boolean; stock: boolean; ai: boolean };
+        topicStockProvider: StockMediaProvider;
+        topicStockKeyInput: string;
+        topicStockEditingKey: boolean;
         musicInstrumental: boolean;
         musicFullTrack: boolean;
         generating: boolean;
@@ -4789,17 +4891,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected comicCreateParentDirectory: string | undefined = undefined;
     protected comicKindErrorState: string | { readonly failure: unknown } = '';
     protected get comicKindError(): string {
-        return typeof this.comicKindErrorState === 'string' ? this.comicKindErrorState : modelFailureText(this.desktopLocale, this.comicKindErrorState.failure);
+        return this.comicErrorText(this.comicKindErrorState);
     }
     protected set comicKindError(value: string | { readonly failure: unknown }) {
         this.comicKindErrorState = value;
         if (value && typeof value === 'object') {
-            const text = this.comicKindError;
+            const text = this.comicErrorText(value);
             if (text) this.addNotification?.('error', comicKindText(this.desktopLocale, this.comicKindSheet || 'novel'), text);
         }
     }
     protected get comicKindErrorDetail(): string | undefined {
-        return typeof this.comicKindErrorState === 'string' ? undefined : modelFailure(this.desktopLocale, this.comicKindErrorState.failure).detail;
+        return typeof this.comicKindErrorState === 'string' || !this.comicKindErrorState || !('failure' in this.comicKindErrorState)
+            ? undefined
+            : modelFailure(this.desktopLocale, this.comicKindErrorState.failure).detail;
     }
     /** A batch of generation jobs waiting for the user's go-ahead (cost confirmation). */
     protected comicBatchPending: { readonly kinds: readonly ComicAgentKind[]; readonly count: number } | undefined;
@@ -7365,16 +7469,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const offering = optionRoute?.kind === 'managed_gateway' ? optionRoute.offering : undefined;
         const officialOffering = !offering && optionRoute?.kind === 'official_connection' ? this.officialRoutePriceOffering?.(optionRoute, candidate.label) : undefined;
         const fidelity = measuredModelFidelity(offering?.fidelity || modelOption?.fidelity);
+        const authenticityPending = Boolean(offering) && fidelity === undefined;
+        const authenticityHint = authenticityPending ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint') : undefined;
         const quality = offering ? measuredRelayQuality([offering]) : undefined;
         const ownPriced = Boolean(offering && offeringIsOwnPriced(offering));
         const multiplier = offering ? offeringMultiplierBps(offering) : modelOption?.discoveredMultiplierBps;
-        const metrics = [
-            { label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'), value: relayPercentText(this.desktopLocale, fidelity) },
+        const metrics: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = [
+            { label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'), value: authenticityPending ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPending') : relayPercentText(this.desktopLocale, fidelity), unmeasured: authenticityPending, hint: authenticityHint },
             { label: relayText(this.desktopLocale, 'quality'), value: relayPercentText(this.desktopLocale, quality) },
             { label: relayText(this.desktopLocale, 'price'), value: ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag')
                 : relayMultiplierTag(this.desktopLocale, multiplier) || '—' }
         ];
-        const contextRow = contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
+        const contextRow: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
         const evidenceRows = [...(offering || officialOffering ? metrics.slice(0, 2) : metrics), ...(!contextShown ? contextRow : [])];
         const taxonomyTarget = modelOption || {
             model: candidate.modelId,
@@ -7396,29 +7502,54 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         <div className='nmx-model-effort-caption'>{reasoningControlText(this.desktopLocale, 'depth')}</div>
                         <div className='nmx-model-depth' role='radiogroup' aria-label={reasoningControlText(this.desktopLocale, 'depth')}
                             style={{ '--nmx-depth-cols': Math.min(6, depth.options.length) } as React.CSSProperties}>
-                            {depth.options.map(item => <button key={item.id} type='button' role='radio' aria-checked={activeDepth === item.id}
-                                data-reasoning-depth={item.id} className={activeDepth === item.id ? 'is-active' : ''}
-                                title={item.evidence ? `${this.reasoningDepthLabel(item)} · ${reasoningControlText(this.desktopLocale, 'verified')}` : this.reasoningDepthLabel(item)}
-                                onClick={() => this.setModelOptionReasoningDepth(baseModelId, item, 'coding',
-                                    optionRoute?.kind === 'managed_gateway' ? { id: optionRoute.offering.keyPriceQuoteId } : undefined, optionRoute?.id)}>{this.reasoningDepthLabel(item)}</button>)}
+                            {depth.options.map(item => {
+                                const depthLabel = this.reasoningDepthLabel(item);
+                                const depthTip = `${reasoningControlText(this.desktopLocale, 'depth')}: ${item.evidence ? `${depthLabel} · ${reasoningControlText(this.desktopLocale, 'verified')}` : depthLabel}`;
+                                return <button key={item.id} type='button' role='radio' aria-checked={activeDepth === item.id}
+                                    data-reasoning-depth={item.id} className={activeDepth === item.id ? 'is-active' : ''}
+                                    title={depthTip} aria-label={depthTip}
+                                    onPointerEnter={event => this.showModelEvidenceTooltip?.(depthTip, event.currentTarget)}
+                                    onPointerLeave={() => this.hideModelEvidenceTooltip?.()}
+                                    onFocus={event => this.showModelEvidenceTooltip?.(depthTip, event.currentTarget)}
+                                    onBlur={() => this.hideModelEvidenceTooltip?.()}
+                                    onClick={() => this.setModelOptionReasoningDepth(baseModelId, item, 'coding',
+                                        optionRoute?.kind === 'managed_gateway' ? { id: optionRoute.offering.keyPriceQuoteId } : undefined, optionRoute?.id)}>{depthLabel}</button>;
+                            })}
                         </div>
                     </>}
                     {contextShown && <>
                         <div className='nmx-model-effort-caption nmx-model-context-caption'>{contextBudgetText(this.desktopLocale, 'window')}</div>
                         <div className='nmx-model-depth nmx-model-context-window' role='radiogroup' aria-label={contextBudgetText(this.desktopLocale, 'window')}
                             style={{ '--nmx-depth-cols': Math.min(6, contextChoices.length) } as React.CSSProperties}>
-                            {contextChoices.map(tokens => <button key={tokens} type='button' role='radio' aria-checked={activeContextTokens === tokens}
-                                data-context-window={tokens} className={activeContextTokens === tokens ? 'is-active' : ''} dir='ltr'
-                                onClick={() => this.setModelOptionContextWindow(baseModelId, tokens,
-                                    optionRoute?.kind === 'managed_gateway' ? { id: optionRoute.offering.keyPriceQuoteId } : undefined, optionRoute?.id)}>{contextWindowTokenLabel(tokens)}</button>)}
+                            {contextChoices.map(tokens => {
+                                const shortLabel = contextWindowTokenLabel(tokens);
+                                const fullTokens = (() => { try { return tokens.toLocaleString(this.desktopLocale); } catch { return String(tokens); } })();
+                                const contextTip = `${contextBudgetText(this.desktopLocale, 'window')}: ${shortLabel} (${fullTokens} Tokens)`;
+                                return <button key={tokens} type='button' role='radio' aria-checked={activeContextTokens === tokens}
+                                    data-context-window={tokens} className={activeContextTokens === tokens ? 'is-active' : ''} dir='ltr'
+                                    title={contextTip} aria-label={contextTip}
+                                    onPointerEnter={event => this.showModelEvidenceTooltip?.(contextTip, event.currentTarget)}
+                                    onPointerLeave={() => this.hideModelEvidenceTooltip?.()}
+                                    onFocus={event => this.showModelEvidenceTooltip?.(contextTip, event.currentTarget)}
+                                    onBlur={() => this.hideModelEvidenceTooltip?.()}
+                                    onClick={() => this.setModelOptionContextWindow(baseModelId, tokens,
+                                        optionRoute?.kind === 'managed_gateway' ? { id: optionRoute.offering.keyPriceQuoteId } : undefined, optionRoute?.id)}>{shortLabel}</button>;
+                            })}
                         </div>
                     </>}
                     {contextCapped && <p className='nmx-model-context-learned' role='note'>
                         <i className='codicon codicon-info' aria-hidden='true'></i>
                         <span>{contextBudgetText(this.desktopLocale, 'learned').split('{cap}').join(contextWindowTokenLabel(learnedContextCap!))}</span>
                     </p>}
-                    <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}><dt>{metric.label}</dt><dd data-unmeasured={metric.value === '—' || undefined}>{metric.value}</dd></div>)}</dl>
+                    <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}
+                        title={metric.hint}
+                        tabIndex={metric.hint ? 0 : undefined}
+                        onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
+                        onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
+                        onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
+                        onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd></div>)}</dl>
                     {(offering || officialOffering) && <OfferingPriceCard locale={this.desktopLocale} offering={(offering || officialOffering)!} collapsible pullOutDrawer officialOnly={!offering && Boolean(officialOffering)} />}
+                    {this.renderModelEvidenceTooltipPortal?.()}
                 </section>
             </div>,
             document.body
@@ -12242,6 +12373,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
             soundEnabled: true,
             topicVisualMode: 'videos',
             topicVoiceSubtitles: true,
+            topicSources: { own: false, stock: false, ai: true },
+            topicStockProvider: 'pexels',
+            topicStockKeyInput: '',
+            topicStockEditingKey: false,
             musicInstrumental: false,
             musicFullTrack: true,
             generating: false,
@@ -12309,6 +12444,72 @@ export class NextMuxDesktopWidget extends ReactWidget {
         await this.openBoundComicStudioModal(project.kind, project.path, project.title, disk);
     }
 
+    protected async resolveStudioModalPlaybackTakes(
+        workspaceRoot: string,
+        modal: NonNullable<NextMuxDesktopWidget['comicStudioModalState']>,
+        loadedProject?: ComicProject
+    ): Promise<void> {
+        if (!workspaceRoot || !modal.takes.some(take => take.kind === 'video')) return;
+        const copies = await this.platformService?.preparePlaybackMedia?.(workspaceRoot).catch(() => undefined);
+        if (!copies || Object.keys(copies).length === 0) return;
+        if (this.comicStudioModalState !== modal || !modal.open) return;
+
+        const project = loadedProject
+            ?? (await this.platformService?.getComicProject?.(workspaceRoot).catch(() => undefined))?.project;
+        const assets = project?.assets ?? [];
+        const rootUri = URI.fromFilePath(workspaceRoot);
+        const rootPrefix = workspaceRoot.replace(/[\\/]+$/, '');
+        let changed = false;
+
+        const nextTakes = modal.takes.map(take => {
+            if (take.kind !== 'video') return take;
+            let copyRel: string | undefined;
+
+            const normTake = take.filePath.replace(/\\/g, '/');
+            const normRoot = rootPrefix.replace(/\\/g, '/');
+            if (normTake.startsWith(`${normRoot}/`)) {
+                const rel = normTake.slice(normRoot.length + 1);
+                if (copies[rel]) copyRel = copies[rel];
+            }
+
+            if (!copyRel && take.assetId) {
+                const byId = assets.find(a => a.id === take.assetId);
+                if (byId?.uri && copies[byId.uri]) {
+                    copyRel = copies[byId.uri];
+                }
+            }
+
+            if (!copyRel && assets.length > 0) {
+                const takeBase = take.filePath.split(/[\\/]/).pop() || '';
+                for (const asset of assets) {
+                    if (asset.kind !== 'video' || !asset.uri || !copies[asset.uri]) continue;
+                    let matches = Boolean(takeBase && asset.model === takeBase);
+                    if (!matches) {
+                        try {
+                            const abs = rootUri.resolve(asset.uri).path.fsPath();
+                            matches = abs === take.filePath;
+                        } catch { /* ignore invalid uri */ }
+                    }
+                    if (matches) {
+                        copyRel = copies[asset.uri];
+                        break;
+                    }
+                }
+            }
+
+            if (!copyRel) return take;
+            const nextMediaUrl = rootUri.resolve(copyRel).toString();
+            if (nextMediaUrl === take.mediaUrl) return take;
+            changed = true;
+            return { ...take, mediaUrl: nextMediaUrl };
+        });
+
+        if (changed && this.comicStudioModalState === modal && modal.open) {
+            modal.takes = nextTakes;
+            this.update();
+        }
+    }
+
     protected async openBoundComicStudioModal(
         kind: ComicStudioModalKind,
         projectPath: string,
@@ -12323,6 +12524,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.comicKindError = '';
         this.initComicStudioModalState(kind, projectPath, fallbackTitle);
         this.ensureComicChatDirectories?.();
+        if (kind === 'topic') void this.loadStockMediaState?.();
         void this.loadComicLibrary?.();
         void this.refreshComicAssetLibrary?.();
         void this.loadVideoProfiles?.();
@@ -12343,24 +12545,44 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (ratio === '16:9' || ratio === '9:16' || ratio === '1:1' || ratio === '4:3' || ratio === '3:4') {
             modal.aspectRatio = ratio;
         }
+        const savedTopic = kind === 'topic' ? this.comicTopicSettings(projectPath) : undefined;
         if (kind === 'topic') {
-            const savedTopic = this.comicTopicSettings(projectPath);
             if (savedTopic) {
                 if (savedTopic.topic && !modal.prompt) modal.prompt = savedTopic.topic;
                 if (savedTopic.seconds) modal.seconds = savedTopic.seconds;
                 modal.topicVisualMode = savedTopic.visual === 'image' ? 'images' : 'videos';
                 modal.topicVoiceSubtitles = savedTopic.voice !== false;
+                if (savedTopic.style) modal.stylePresetId = savedTopic.style;
+                if (savedTopic.sources) {
+                    const s = savedTopic.sources;
+                    modal.topicSources = (s.own || s.stock || s.ai)
+                        ? { own: Boolean(s.own), stock: Boolean(s.stock), ai: Boolean(s.ai) }
+                        : { own: false, stock: false, ai: true };
+                }
+                if (savedTopic.stockProvider === 'pexels' || savedTopic.stockProvider === 'pixabay') {
+                    modal.topicStockProvider = savedTopic.stockProvider;
+                }
             } else if (projectState?.production?.script?.text && !modal.prompt) {
                 modal.prompt = projectState.production.script.text;
+            }
+        } else if (kind === 'music' && loadedProject?.music) {
+            modal.musicInstrumental = Boolean(loadedProject.music.instrumental);
+            modal.musicFullTrack = loadedProject.music.length !== 'clip';
+            if (loadedProject.music.lyrics && !modal.prompt) {
+                modal.prompt = loadedProject.music.lyrics;
+            } else if (loadedProject.music.style && !modal.prompt) {
+                modal.prompt = loadedProject.music.style;
             }
         }
 
         const assetsByPath = new Map<string, ComicProject['assets'][number]>();
+        const assetsById = new Map<string, { readonly absPath: string; readonly asset: ComicProject['assets'][number] }>();
         for (const asset of loadedProject?.assets ?? []) {
             if (!asset.uri) continue;
             try {
                 const abs = URI.fromFilePath(projectPath).resolve(asset.uri).path.fsPath();
                 assetsByPath.set(abs, asset);
+                assetsById.set(asset.id, { absPath: abs, asset });
             } catch { /* ignore invalid uri */ }
         }
 
@@ -12370,7 +12592,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 if (asset.kind === 'image' && asset.source === 'imported' && asset.status === 'ready') {
                     importedImages.push({
                         id: `asset:${asset.id}`,
-                        name: asset.uri.split('/').pop() || asset.id,
+                        name: asset.model || asset.uri.split('/').pop() || asset.id,
                         kind: 'image',
                         path: absPath,
                         previewUrl: URI.fromFilePath(absPath).toString()
@@ -12382,43 +12604,106 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
         } else if (kind === 'topic' && modal.sourceFiles.length === 0) {
             const importedTopicRefs: ComicStudioSourceFile[] = [];
-            for (const [absPath, asset] of assetsByPath.entries()) {
-                if ((asset.kind === 'image' || asset.kind === 'video') && asset.source === 'imported' && asset.status === 'ready') {
-                    importedTopicRefs.push({
-                        id: `asset:${asset.id}`,
-                        name: asset.uri.split('/').pop() || asset.id,
-                        kind: asset.kind,
-                        path: absPath,
-                        previewUrl: URI.fromFilePath(absPath).toString()
-                    });
+            if (savedTopic?.materials?.length) {
+                for (const mat of savedTopic.materials) {
+                    const hit = assetsById.get(mat.assetId);
+                    if (hit && hit.asset.status === 'ready' && (hit.asset.kind === 'image' || hit.asset.kind === 'video')) {
+                        importedTopicRefs.push({
+                            id: `asset:${hit.asset.id}`,
+                            name: mat.name || hit.asset.model || hit.asset.uri.split('/').pop() || hit.asset.id,
+                            kind: hit.asset.kind,
+                            path: hit.absPath,
+                            previewUrl: URI.fromFilePath(hit.absPath).toString()
+                        });
+                    }
+                }
+            }
+            if (importedTopicRefs.length === 0) {
+                for (const [absPath, asset] of assetsByPath.entries()) {
+                    if ((asset.kind === 'image' || asset.kind === 'video') && asset.source === 'imported' && asset.status === 'ready') {
+                        importedTopicRefs.push({
+                            id: `asset:${asset.id}`,
+                            name: asset.model || asset.uri.split('/').pop() || asset.id,
+                            kind: asset.kind,
+                            path: absPath,
+                            previewUrl: URI.fromFilePath(absPath).toString()
+                        });
+                    }
                 }
             }
             if (importedTopicRefs.length > 0) {
                 modal.sourceFiles = importedTopicRefs.slice(-1);
+                if (!savedTopic?.sources) {
+                    modal.topicSources = { ...modal.topicSources, own: true };
+                }
             }
         }
 
-        const existingFiles = resolvedDisk?.existingMediaFiles ?? [];
-        const takes: ComicStudioGeneratedTake[] = existingFiles.map(entry => {
-            const matchedAsset = assetsByPath.get(entry.filePath);
-            const aspect = matchedAsset?.width && matchedAsset?.height
-                ? comicChatAspectOf(matchedAsset.width, matchedAsset.height)
-                : modal.aspectRatio;
+        const existingFiles = (resolvedDisk?.existingMediaFiles ?? []).filter(entry =>
+            kind === 'music' ? entry.kind === 'audio' : entry.kind !== 'audio'
+        );
+        let takes: ComicStudioGeneratedTake[] = existingFiles.map(entry => {
+            const matchedAsset = (entry.assetId ? assetsById.get(entry.assetId)?.asset : undefined)
+                ?? assetsByPath.get(entry.filePath);
+            const aspect = entry.aspectRatio
+                || (matchedAsset?.width && matchedAsset?.height
+                    ? comicChatAspectOf(matchedAsset.width, matchedAsset.height)
+                    : modal.aspectRatio);
+            const resolvedModelLabel = entry.modelLabel
+                || (matchedAsset?.provider && matchedAsset.source !== 'imported' ? matchedAsset.provider : undefined);
+            const resolvedPrompt = entry.prompt || matchedAsset?.prompt;
+            const resolvedAssetId = entry.assetId || matchedAsset?.id;
             return {
                 id: entry.id,
                 kind: entry.kind,
                 title: entry.title || (entry.filePath.split(/[\\/]/).pop() || fallbackTitle).replace(/\.[^.]+$/, ''),
                 mediaUrl: URI.fromFilePath(entry.filePath).toString(),
                 filePath: entry.filePath,
+                ...(resolvedAssetId ? { assetId: resolvedAssetId } : {}),
                 ...(entry.durationSeconds ? { durationSeconds: entry.durationSeconds } : matchedAsset?.durationMs ? { durationSeconds: Math.round(matchedAsset.durationMs / 1000) } : {}),
-                ...(entry.kind === 'video' && aspect ? { aspectRatio: aspect } : {}),
-                ...(matchedAsset?.provider && matchedAsset.source !== 'imported' ? { modelLabel: matchedAsset.provider } : {}),
-                ...(matchedAsset?.prompt ? { prompt: matchedAsset.prompt } : {})
+                ...((entry.kind === 'video' || entry.kind === 'image') && aspect ? { aspectRatio: aspect } : {}),
+                ...(resolvedModelLabel ? { modelLabel: resolvedModelLabel } : {}),
+                ...(resolvedPrompt ? { prompt: resolvedPrompt } : {})
             };
         });
+
+        if (takes.length === 0 && loadedProject?.assets?.length) {
+            const legacyTakes: ComicStudioGeneratedTake[] = [];
+            for (const asset of [...loadedProject.assets].reverse()) {
+                if (asset.status !== 'ready' || asset.source === 'imported' || !asset.uri) continue;
+                const isAudioAsset = asset.kind === 'music' || asset.kind === 'audio';
+                const isVisualAsset = asset.kind === 'video' || asset.kind === 'image';
+                if (kind === 'music' ? !isAudioAsset : !isVisualAsset) continue;
+                const hit = assetsById.get(asset.id);
+                if (!hit) continue;
+                const takeKind: ComicStudioGeneratedTake['kind'] = asset.kind === 'image'
+                    ? 'image'
+                    : isAudioAsset
+                        ? 'audio'
+                        : 'video';
+                const aspect = asset.width && asset.height
+                    ? comicChatAspectOf(asset.width, asset.height)
+                    : modal.aspectRatio;
+                legacyTakes.push({
+                    id: `asset-take:${asset.id}`,
+                    kind: takeKind,
+                    title: (asset.model || asset.uri.split('/').pop() || fallbackTitle).replace(/\.[^.]+$/, ''),
+                    mediaUrl: URI.fromFilePath(hit.absPath).toString(),
+                    filePath: hit.absPath,
+                    assetId: asset.id,
+                    ...(asset.durationMs ? { durationSeconds: Math.round(asset.durationMs / 1000) } : {}),
+                    ...(takeKind !== 'audio' && aspect ? { aspectRatio: aspect } : {}),
+                    ...(asset.provider ? { modelLabel: asset.provider } : {}),
+                    ...(asset.prompt ? { prompt: asset.prompt } : {})
+                });
+            }
+            takes = legacyTakes;
+        }
+
         modal.takes = takes;
         modal.activeTakeId = takes[0]?.id;
         this.update();
+        void this.resolveStudioModalPlaybackTakes(projectPath, modal, loadedProject);
     }
 
     protected async chooseComicCreateDirectory(): Promise<void> {
@@ -12491,7 +12776,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const modal = this.comicStudioModalState;
         if (!modal) return;
         const imageOnly = modal.kind === 'image';
-        let singleEntry: ComicStudioSourceFile | undefined;
+        const entries: ComicStudioSourceFile[] = [];
         for (const fsPath of paths) {
             if (!fsPath) continue;
             const ext = /\.([^./\\]+)$/.exec(fsPath)?.[1]?.toLowerCase() || '';
@@ -12499,19 +12784,24 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const isVideo = ['mp4', 'mov', 'webm', 'm4v'].includes(ext);
             if (imageOnly && !isImage) continue;
             if (!isImage && !isVideo) continue;
-            singleEntry = {
+            entries.push({
                 id: `local:${fsPath}`,
                 name: fsPath.split(/[\\/]/).pop() || fsPath,
                 kind: isVideo ? 'video' : 'image',
                 path: fsPath,
                 previewUrl: URI.fromFilePath(fsPath).toString()
-            };
+            });
             break;
         }
-        if (!singleEntry) return;
+        if (entries.length === 0) return;
+
+        const singleEntry = entries[0];
         modal.sourceFiles = [singleEntry];
         const matched = this.comicCreationLibraryItems?.().find(item => item.path === singleEntry.path);
         modal.selectedLibraryIds = matched ? new Set([matched.id]) : new Set();
+        if (modal.kind === 'topic') {
+            modal.topicSources = { ...modal.topicSources, own: true };
+        }
         this.comicKindError = '';
         this.update();
     }
@@ -12537,6 +12827,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     previewUrl: item.previewUrl || URI.fromFilePath(item.path).toString()
                 }
             ];
+            if (modal.kind === 'topic') {
+                modal.topicSources = { ...modal.topicSources, own: true };
+            }
         }
         this.comicKindError = '';
         this.update();
@@ -12912,7 +13205,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                     className={`nmx-model-effort-portal nmx-comic-model-effort-portal nmx-theme-${this.resolvedDesktopTheme()}`}
                                                     dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'}
                                                     lang={this.desktopLocale}
-                                                    style={{ display: 'block', position: 'fixed', top: 0, left: 0, width: 0, height: 0, zIndex: 12020 }}
+                                                    style={{ display: 'block', position: 'fixed', top: 0, left: 0, width: 0, height: 0, zIndex: 12050 }}
                                                     onPointerEnter={() => this.cancelComicModelHoverClose()}
                                                     onPointerLeave={() => this.scheduleComicModelHoverClose()}
                                                 >
@@ -12926,7 +13219,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                             left: `${hoverPlacement.left}px`,
                                                             width: hoverPlacement.width === undefined ? undefined : `${hoverPlacement.width}px`,
                                                             maxHeight: `${hoverPlacement.maxHeight}px`,
-                                                            zIndex: 2200
+                                                            zIndex: 12050
                                                         }}
                                                         aria-label={optionTitle}
                                                         onFocus={() => this.cancelComicModelHoverClose()}
@@ -12989,7 +13282,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected comicStudioModalSecondsOptions(modal: NonNullable<NextMuxDesktopWidget['comicStudioModalState']>): readonly number[] {
-        if (modal.kind === 'topic') return [15, 30, 60, 90];
+        if (modal.kind === 'topic') return [15, 30, 60, 90, 180];
         if (modal.kind === 'music') return [30, 180];
         const candidate = this.comicStepChoiceForKind('image', 'video');
         const choices = this.comicChatSecondsChoices(candidate, Math.max(1, modal.sourceFiles.length));
@@ -13054,6 +13347,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 )
             };
         }
+        if (!modal.topicSources.ai) {
+            const textCandidate = this.comicStepChoiceForKind('topic', 'text');
+            if (!textCandidate) return { label: '—' };
+            return {
+                label: localizeDesktopSurface(this.desktopLocale, '仅计文案/配音'),
+                hint: localizeDesktopSurface(this.desktopLocale, '画面使用本地或免费网络素材，仅按实际文案分镜与配音调用结算')
+            };
+        }
         const visualCap: 'video' | 'image' = modal.topicVisualMode === 'images' ? 'image' : 'video';
         const visualCandidate = this.comicStepChoiceForKind('topic', visualCap);
         if (!visualCandidate) return { label: '—' };
@@ -13072,14 +13373,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
         readonly actionLabel?: string;
         readonly onAction?: () => void;
     } {
+        if (modal.kind === 'topic' && !modal.topicSources.own && !modal.topicSources.stock && !modal.topicSources.ai) {
+            return {
+                reason: localizeDesktopSurface(this.desktopLocale, '请至少选择一种画面来源')
+            };
+        }
+        const topicUsesAi = modal.kind === 'topic' && modal.topicSources.ai;
+        const topicNativeSound = topicUsesAi && this.topicUsesVideoNativeSound(modal.topicVisualMode);
         const requiredCapabilities: ComicStepCapability[] = modal.kind === 'image'
             ? ['video']
             : modal.kind === 'music'
                 ? ['music']
                 : [
                     'text',
-                    modal.topicVisualMode === 'images' ? 'image' : 'video',
-                    ...(modal.topicVoiceSubtitles && !this.topicUsesVideoNativeSound(modal.topicVisualMode) ? ['speech' as const] : [])
+                    ...(topicUsesAi ? [modal.topicVisualMode === 'images' ? 'image' as const : 'video' as const] : []),
+                    ...(modal.topicVoiceSubtitles && !topicNativeSound ? ['speech' as const] : [])
                 ];
         const chosen = requiredCapabilities.map(cap => ({ cap, candidate: this.comicStepChoiceForKind(modal.kind, cap) }));
         if (
@@ -13105,6 +13413,23 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const policy = this.comicChatReferencePolicy('video', candidate);
             if (candidate && policy.limit === 0) {
                 return { reason: this.comicChatT('noFirstFrame') };
+            }
+        }
+        if (modal.kind === 'topic') {
+            if (modal.topicSources.stock) {
+                const keySaved = Boolean(this.stockMediaState?.providers?.[modal.topicStockProvider]?.configured);
+                if (!keySaved && !modal.topicStockKeyInput.trim()) {
+                    return {
+                        reason: localizeDesktopSurface(this.desktopLocale, '请先填写网络素材 API Key')
+                    };
+                }
+            }
+            if (modal.topicSources.own && !modal.topicSources.stock && !modal.topicSources.ai) {
+                if (!modal.sourceFiles.some(item => Boolean(item.path))) {
+                    return {
+                        reason: localizeDesktopSurface(this.desktopLocale, '请先添加本地图片或视频素材')
+                    };
+                }
             }
         }
         return {};
@@ -13339,12 +13664,80 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     modelLabel: candidate.label,
                     durationSeconds: seconds
                 });
+                try {
+                    let latestState = await this.platformService.getComicProject(workspaceRoot);
+                    let proj = latestState.project;
+                    const targetAssetId = exported.assetId
+                        || proj?.assets.find(a => a.kind === 'video' && a.model === exported.fileName)?.id;
+                    if (proj && targetAssetId) {
+                        if (proj.scenes.length === 0) {
+                            latestState = await this.platformService.applyComicCommand({
+                                locale: this.desktopLocale,
+                                workspaceRoot,
+                                command: {
+                                    type: 'scene.add',
+                                    expectedRevision: proj.revision,
+                                    scene: { title: baseName }
+                                } as ComicCommand
+                            });
+                            proj = latestState.project;
+                        }
+                        const firstScene = proj?.scenes[0];
+                        if (proj && firstScene && firstScene.shots.length === 0) {
+                            latestState = await this.platformService.applyComicCommand({
+                                locale: this.desktopLocale,
+                                workspaceRoot,
+                                command: {
+                                    type: 'shot.add',
+                                    expectedRevision: proj.revision,
+                                    sceneId: firstScene.id
+                                } as ComicCommand
+                            });
+                            proj = latestState.project;
+                        }
+                        const targetScene = proj?.scenes[0];
+                        const targetShot = targetScene?.shots[0];
+                        if (proj && targetScene && targetShot) {
+                            const durationFrames = Math.max(24, Math.round(seconds * proj.frameRate));
+                            latestState = await this.platformService.applyComicCommand({
+                                locale: this.desktopLocale,
+                                workspaceRoot,
+                                command: {
+                                    type: 'shot.update',
+                                    expectedRevision: proj.revision,
+                                    sceneId: targetScene.id,
+                                    shotId: targetShot.id,
+                                    patch: {
+                                        durationFrames,
+                                        ...(modal.prompt.trim() ? { visualPrompt: modal.prompt.trim() } : {})
+                                    }
+                                } as ComicCommand
+                            });
+                            proj = latestState.project;
+                            if (proj) {
+                                await this.platformService.applyComicCommand({
+                                    locale: this.desktopLocale,
+                                    workspaceRoot,
+                                    command: {
+                                        type: 'media.link',
+                                        expectedRevision: proj.revision,
+                                        sceneId: targetScene.id,
+                                        shotId: targetShot.id,
+                                        slot: 'video',
+                                        assetId: targetAssetId
+                                    } as ComicCommand
+                                });
+                            }
+                        }
+                    }
+                } catch { /* syncComicFolderMaterials also auto-links on editor entry */ }
                 const take: ComicStudioGeneratedTake = {
                     id: exported.takeId,
                     kind: 'video',
                     title: exported.fileName.replace(/\.[^.]+$/, ''),
                     mediaUrl: URI.fromFilePath(exported.filePath).toString(),
                     filePath: exported.filePath,
+                    ...(exported.assetId ? { assetId: exported.assetId } : {}),
                     thumbnailUrl: URI.fromFilePath(workspaceRoot).resolve(refAssets[0].uri).toString(),
                     durationSeconds: seconds,
                     aspectRatio: modal.aspectRatio,
@@ -13353,6 +13746,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 };
                 modal.takes = [take, ...modal.takes.filter(item => item.filePath !== take.filePath)];
                 modal.activeTakeId = take.id;
+                void this.resolveStudioModalPlaybackTakes(workspaceRoot, modal);
             } else if (modal.kind === 'music') {
                 const projectState = await this.platformService.getComicProject(workspaceRoot);
                 const project = projectState.project;
@@ -13378,6 +13772,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     ...(keyPriceQuoteId ? { keyPriceQuoteId } : {}),
                     model: route.model,
                     prompt: musicPrompt,
+                    ...(!modal.musicInstrumental && modal.prompt.trim() ? { lyrics: modal.prompt.trim() } : {}),
                     durationSeconds,
                     format: 'mp3',
                     instrumental: Boolean(modal.musicInstrumental),
@@ -13411,6 +13806,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }
                 const completed = await this.waitForStudioMediaJob(workspaceRoot, job.id, run);
                 const sourcePath = URI.fromFilePath(workspaceRoot).resolve(completed.output!.relativeUri).path.fsPath();
+                const probedSeconds = await this.musicDurationSeconds?.(URI.fromFilePath(sourcePath).toString()).catch(() => undefined);
+                const actualDurationSeconds = probedSeconds && Number.isFinite(probedSeconds) && probedSeconds > 0
+                    ? Math.round(probedSeconds)
+                    : undefined;
                 const baseName = modal.title.trim() || this.comicChatFolderName(workspaceRoot) || '音乐作品';
                 const exported = await this.platformService.exportStudioTakeToProjectFolder({
                     workspaceRoot,
@@ -13419,15 +13818,78 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     title: baseName,
                     ...(modal.prompt.trim() ? { prompt: modal.prompt.trim() } : {}),
                     modelLabel: candidate.label,
-                    durationSeconds
+                    ...(actualDurationSeconds ? { durationSeconds: actualDurationSeconds } : {})
                 });
+                try {
+                    let latestState = await this.platformService.getComicProject(workspaceRoot);
+                    let proj = latestState.project;
+                    const targetAssetId = exported.assetId
+                        || proj?.assets.find(a => (a.kind === 'music' || a.kind === 'audio') && a.model === exported.fileName)?.id;
+                    if (proj) {
+                        latestState = await this.platformService.applyComicCommand({
+                            locale: this.desktopLocale,
+                            workspaceRoot,
+                            command: {
+                                type: 'project.update',
+                                expectedRevision: proj.revision,
+                                patch: {
+                                    music: defaultMusicSettings({
+                                        ...(proj.music || {}),
+                                        instrumental: Boolean(modal.musicInstrumental),
+                                        length: modal.musicFullTrack ? 'full' : 'clip',
+                                        ...(!modal.musicInstrumental && modal.prompt.trim() ? { lyrics: modal.prompt.trim() } : {})
+                                    })
+                                }
+                            } as ComicCommand
+                        });
+                        proj = latestState.project;
+                        if (proj && proj.scenes.length === 0) {
+                            latestState = await this.platformService.applyComicCommand({
+                                locale: this.desktopLocale,
+                                workspaceRoot,
+                                command: {
+                                    type: 'scene.add',
+                                    expectedRevision: proj.revision,
+                                    scene: { title: baseName }
+                                } as ComicCommand
+                            });
+                            proj = latestState.project;
+                        }
+                        const firstScene = proj?.scenes[0];
+                        if (proj && firstScene && firstScene.shots.length === 0) {
+                            latestState = await this.platformService.applyComicCommand({
+                                locale: this.desktopLocale,
+                                workspaceRoot,
+                                command: {
+                                    type: 'shot.add',
+                                    expectedRevision: proj.revision,
+                                    sceneId: firstScene.id
+                                } as ComicCommand
+                            });
+                            proj = latestState.project;
+                        }
+                        if (proj && targetAssetId && proj.scenes[0]?.shots[0]) {
+                            await this.platformService.applyComicCommand({
+                                locale: this.desktopLocale,
+                                workspaceRoot,
+                                command: {
+                                    type: 'music.select',
+                                    expectedRevision: proj.revision,
+                                    assetId: targetAssetId,
+                                    ...(actualDurationSeconds ? { durationFrames: Math.max(1, Math.round(actualDurationSeconds * proj.frameRate)) } : {})
+                                } as ComicCommand
+                            });
+                        }
+                    }
+                } catch { /* syncComicFolderMaterials also auto-links on editor entry */ }
                 const take: ComicStudioGeneratedTake = {
                     id: exported.takeId,
                     kind: 'audio',
                     title: exported.fileName.replace(/\.[^.]+$/, ''),
                     mediaUrl: URI.fromFilePath(exported.filePath).toString(),
                     filePath: exported.filePath,
-                    durationSeconds,
+                    ...(exported.assetId ? { assetId: exported.assetId } : {}),
+                    ...(actualDurationSeconds ? { durationSeconds: actualDurationSeconds } : {}),
                     modelLabel: candidate.label,
                     ...(modal.prompt.trim() ? { prompt: modal.prompt.trim() } : {})
                 };
@@ -13438,13 +13900,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 const textChoice = this.comicTextRouteForKind('topic');
                 if (!textChoice) throw new Error(this.ct('noTextModel'));
                 const visualCap: 'video' | 'image' = modal.topicVisualMode === 'images' ? 'image' : 'video';
-                const visualCandidate = this.comicStepChoiceForKind('topic', visualCap);
+                const visualCandidate = modal.topicSources.ai ? this.comicStepChoiceForKind('topic', visualCap) : undefined;
                 const visualRoute = visualCandidate ? this.comicMediaRoute(visualCap, visualCandidate.routeId) : undefined;
-                if (!visualCandidate || !visualRoute) throw new Error(this.comicChatT('noModel'));
+                if (modal.topicSources.ai && (!visualCandidate || !visualRoute)) {
+                    throw new Error(this.comicChatT('noModel'));
+                }
+
+                if (modal.topicSources.stock && modal.topicStockKeyInput.trim()) {
+                    modal.generatingStageLabel = localizeDesktopSurface(this.desktopLocale, '正在保存网络素材 API Key…');
+                    this.update();
+                    this.stockMediaState = await this.platformService.saveStockMediaKey(
+                        modal.topicStockProvider,
+                        modal.topicStockKeyInput.trim()
+                    );
+                    modal.topicStockKeyInput = '';
+                    modal.topicStockEditingKey = false;
+                }
 
                 let projectState = await this.platformService.getComicProject(workspaceRoot);
                 const materials: ComicTopicSettings['materials'][number][] = [];
-                if (validSources.length > 0) {
+                if (modal.topicSources.own && validSources.length > 0) {
                     modal.generatingStageLabel = localizeDesktopSurface(this.desktopLocale, '正在导入参考素材…');
                     this.update();
                     const imported = await this.platformService.importComicMedia({
@@ -13465,8 +13940,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     visual: visualCap === 'video' ? 'video' : 'image',
                     voice: modal.topicVoiceSubtitles,
                     style: modal.stylePresetId === 'none' ? '' : modal.stylePresetId,
-                    sources: { own: materials.length > 0, stock: false, ai: true },
-                    stockProvider: 'pexels',
+                    sources: {
+                        own: Boolean(modal.topicSources.own),
+                        stock: Boolean(modal.topicSources.stock),
+                        ai: Boolean(modal.topicSources.ai)
+                    },
+                    stockProvider: modal.topicStockProvider,
                     materials
                 });
                 await this.platformService.updateComicScript({
@@ -13486,7 +13965,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     aspectRatio: modal.aspectRatio,
                     language: comicTextLanguage(mergedPrompt, this.comicLanguageName()),
                     narrator: this.ct('narratorName'),
-                    ...(materials.length ? { materials: materials.map(({ name, kind }) => ({ name, kind })) } : {})
+                    ...(modal.topicSources.own && materials.length ? { materials: materials.map(({ name, kind }) => ({ name, kind })) } : {}),
+                    ...(modal.topicSources.stock ? { stockSearch: true } : {})
                 })}\n\nCall comic.apply_adaptation with mode "replace".`;
 
                 const conversationId = window.crypto.randomUUID();
@@ -13589,7 +14069,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }
 
                 // Link any user-supplied own materials into the leading shots
-                if (materials.length > 0) {
+                if (modal.topicSources.own && materials.length > 0) {
                     const openShots = project.scenes.flatMap(scene => scene.shots.map(shot => ({ scene, shot })));
                     const pairs = openShots.slice(0, materials.length).map((entry, idx) => ({ ...entry, material: materials[idx] }));
                     if (pairs.length > 0) {
@@ -13624,13 +14104,54 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     }
                 }
 
-                // Stage 2: Generate visuals & optional narration voice-overs across shots
+                const readyAsset = (assetId: string | undefined): ComicProject['assets'][number] | undefined =>
+                    assetId ? project?.assets.find(a => a.id === assetId && a.status === 'ready') : undefined;
+
+                // Retrieve free stock visuals (Pexels / Pixabay) for remaining open shots when stock source is enabled
+                if (modal.topicSources.stock) {
+                    const openForStock = project.scenes.flatMap(scene =>
+                        scene.shots
+                            .filter(shot => !readyAsset(shot.videoAssetId) && !readyAsset(shot.visualAssetId))
+                            .map(shot => ({ scene, shot }))
+                    );
+                    if (openForStock.length > 0) {
+                        modal.generatingStageLabel = localizeDesktopSurface(this.desktopLocale, '第 2/3 步：正在检索免费网络素材…');
+                        this.update();
+                        for (let idx = 0; idx < openForStock.length; idx += 50) {
+                            if (run.cancelled) {
+                                throw Object.assign(new Error(this.comicChatT('cancelled')), { code: 'AGENT_CANCELLED' });
+                            }
+                            const batch = openForStock.slice(idx, idx + 50);
+                            const stockResult = await this.platformService.fillComicShotsWithStock({
+                                workspaceRoot,
+                                provider: modal.topicStockProvider,
+                                kind: visualCap,
+                                locale: this.desktopLocale,
+                                shots: batch.map(({ scene, shot }) => ({
+                                    sceneId: scene.id,
+                                    shotId: shot.id,
+                                    query: stockQueryFromShot(shot),
+                                    fallbackQuery: shot.title,
+                                    seconds: Math.max(1, Math.ceil(shot.durationFrames / project!.frameRate))
+                                }))
+                            });
+                            if (stockResult.state?.project) {
+                                projectState = stockResult.state;
+                                project = projectState.project!;
+                            }
+                            if (stockResult.error && !modal.topicSources.ai && stockResult.filled === 0) {
+                                throw new Error(stockResult.error);
+                            }
+                            if (stockResult.error) break;
+                        }
+                    }
+                }
+
+                // Stage 2: Generate AI visuals (when enabled) & optional narration voice-overs across shots
                 modal.generatingStageLabel = localizeDesktopSurface(this.desktopLocale, '第 2/3 步：正在生成画面与配音…');
                 this.update();
 
-                const readyAsset = (assetId: string | undefined): ComicProject['assets'][number] | undefined =>
-                    assetId ? project?.assets.find(a => a.id === assetId && a.status === 'ready') : undefined;
-                const nativeVideoSound = this.topicUsesVideoNativeSound(modal.topicVisualMode);
+                const nativeVideoSound = modal.topicSources.ai && this.topicUsesVideoNativeSound(modal.topicVisualMode);
                 const speechCandidate = modal.topicVoiceSubtitles && !nativeVideoSound
                     ? this.comicStepChoiceForKind('topic', 'speech')
                     : undefined;
@@ -13642,8 +14163,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     for (const shot of scene.shots) {
                         const hasReadyVideo = Boolean(readyAsset(shot.videoAssetId));
                         const readyVisual = readyAsset(shot.visualAssetId);
-                        const needVisual = visualCap === 'video' ? !hasReadyVideo : (!readyVisual && !hasReadyVideo);
-                        if (needVisual) {
+                        const needVisual = modal.topicSources.ai && visualCandidate && visualRoute
+                            ? (!hasReadyVideo && !readyVisual)
+                            : false;
+                        if (needVisual && visualRoute) {
                             const rawVisualPrompt = mergeComicPromptWithStylePreset(
                                 shot.visualPrompt?.trim() || shot.title || modal.prompt.trim(),
                                 modal.stylePresetId,
@@ -13752,10 +14275,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     }
                 }
 
-                const completedVisualJobs: MediaJob[] = [];
+                const completedVideoJobs: MediaJob[] = [];
+                const completedImageJobs: MediaJob[] = [];
                 for (const item of pendingJobs) {
                     const doneJob = await this.waitForStudioMediaJob(workspaceRoot, item.jobId, run);
-                    if (item.kind === 'video') completedVisualJobs.push(doneJob);
+                    if (item.kind === 'video') completedVideoJobs.push(doneJob);
+                    else if (item.kind === 'image') completedImageJobs.push(doneJob);
                 }
 
                 // Promote any pendingVideoAssetId on shots before final export
@@ -13777,13 +14302,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         }
                     }
                 }
+                project = projectState.project!;
 
                 // Stage 3: Compose final .mp4 and save into workspaceRoot
                 modal.generatingStageLabel = localizeDesktopSurface(this.desktopLocale, '第 3/3 步：正在合成最终成片…');
                 this.update();
 
                 let finalSourcePath = '';
-                let finalDuration = modal.seconds;
+                let finalTakeKind: 'video' | 'image' = 'video';
+                let finalDuration: number | undefined = modal.seconds;
                 try {
                     const startedExport = await this.platformService.startComicExport({
                         workspaceRoot,
@@ -13809,6 +14336,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             finalSourcePath = currentExport.output.savedPath
                                 || URI.fromFilePath(workspaceRoot).resolve(currentExport.output.relativeUri).path.fsPath();
                             finalDuration = currentExport.output.durationSeconds || modal.seconds;
+                            finalTakeKind = 'video';
                             break;
                         }
                         if (currentExport.status === 'failed') {
@@ -13821,8 +14349,28 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     }
                 } catch (exportErr) {
                     if ((exportErr as { code?: string })?.code === 'AGENT_CANCELLED') throw exportErr;
-                    if (completedVisualJobs.length === 1 && completedVisualJobs[0].output?.relativeUri) {
-                        finalSourcePath = URI.fromFilePath(workspaceRoot).resolve(completedVisualJobs[0].output.relativeUri).path.fsPath();
+                    const linkedAssets = project.scenes.flatMap(scene =>
+                        scene.shots.flatMap(shot => [shot.videoAssetId, shot.visualAssetId])
+                    ).map(id => id ? project!.assets.find(a => a.id === id && a.status === 'ready') : undefined)
+                        .filter((a): a is NonNullable<typeof a> => Boolean(a?.uri));
+                    const linkedVideo = linkedAssets.find(a => a.kind === 'video');
+                    const linkedImage = linkedAssets.find(a => a.kind === 'image');
+
+                    if (completedVideoJobs[0]?.output?.relativeUri) {
+                        finalSourcePath = URI.fromFilePath(workspaceRoot).resolve(completedVideoJobs[0].output.relativeUri).path.fsPath();
+                        finalTakeKind = 'video';
+                    } else if (linkedVideo) {
+                        finalSourcePath = URI.fromFilePath(workspaceRoot).resolve(linkedVideo.uri).path.fsPath();
+                        finalTakeKind = 'video';
+                        finalDuration = linkedVideo.durationMs ? Math.round(linkedVideo.durationMs / 1000) : modal.seconds;
+                    } else if (completedImageJobs[0]?.output?.relativeUri) {
+                        finalSourcePath = URI.fromFilePath(workspaceRoot).resolve(completedImageJobs[0].output.relativeUri).path.fsPath();
+                        finalTakeKind = 'image';
+                        finalDuration = undefined;
+                    } else if (linkedImage) {
+                        finalSourcePath = URI.fromFilePath(workspaceRoot).resolve(linkedImage.uri).path.fsPath();
+                        finalTakeKind = 'image';
+                        finalDuration = undefined;
                     } else {
                         throw exportErr;
                     }
@@ -13831,29 +14379,33 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }
 
                 const baseName = modal.title.trim() || this.comicChatFolderName(workspaceRoot) || '主题成片';
+                const resolvedModelLabel = (modal.topicSources.ai && visualCandidate?.label)
+                    || (modal.topicSources.stock ? STOCK_MEDIA_SITES[modal.topicStockProvider].name : undefined);
                 const exported = await this.platformService.exportStudioTakeToProjectFolder({
                     workspaceRoot,
                     sourcePathOrDataUrl: finalSourcePath,
-                    kind: 'video',
+                    kind: finalTakeKind,
                     title: baseName,
                     ...(modal.prompt.trim() ? { prompt: modal.prompt.trim() } : {}),
                     aspectRatio: modal.aspectRatio,
-                    modelLabel: visualCandidate.label,
-                    durationSeconds: finalDuration
+                    ...(resolvedModelLabel ? { modelLabel: resolvedModelLabel } : {}),
+                    ...(finalDuration ? { durationSeconds: finalDuration } : {})
                 });
                 const take: ComicStudioGeneratedTake = {
                     id: exported.takeId,
-                    kind: 'video',
+                    kind: finalTakeKind,
                     title: exported.fileName.replace(/\.[^.]+$/, ''),
                     mediaUrl: URI.fromFilePath(exported.filePath).toString(),
                     filePath: exported.filePath,
-                    durationSeconds: finalDuration,
+                    ...(exported.assetId ? { assetId: exported.assetId } : {}),
+                    ...(finalDuration ? { durationSeconds: finalDuration } : {}),
                     aspectRatio: modal.aspectRatio,
-                    modelLabel: visualCandidate.label,
+                    ...(resolvedModelLabel ? { modelLabel: resolvedModelLabel } : {}),
                     ...(modal.prompt.trim() ? { prompt: modal.prompt.trim() } : {})
                 };
                 modal.takes = [take, ...modal.takes.filter(item => item.filePath !== take.filePath)];
                 modal.activeTakeId = take.id;
+                void this.resolveStudioModalPlaybackTakes(workspaceRoot, modal);
             }
             void this.loadComicLibrary?.();
         } catch (error) {
@@ -13870,6 +14422,42 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
     }
 
+    protected async openStudioDirectoryInFileManager(
+        modal: NonNullable<NextMuxDesktopWidget['comicStudioModalState']>
+    ): Promise<void> {
+        const defaultDir = this.comicLibrary?.root || '';
+        const parentDir = modal.parentDirectory ?? this.comicCreateParentDirectory ?? defaultDir;
+        const candidates = [modal.boundProjectPath, parentDir].filter((item): item is string => Boolean(item && item.trim()));
+        for (const candidate of candidates) {
+            const opened = await this.platformService?.openFolderInFileManager?.(candidate).catch(() => false);
+            if (opened) return;
+        }
+        this.comicKindError = localizeDesktopSurface(this.desktopLocale, '文件夹尚未创建或无法在系统文件管理器中打开');
+        this.update();
+    }
+
+    protected async revealStudioTakeInFileManager(
+        filePath: string,
+        modal: NonNullable<NextMuxDesktopWidget['comicStudioModalState']>
+    ): Promise<void> {
+        const cleanPath = filePath.trim();
+        if (cleanPath) {
+            const revealed = await this.platformService?.revealInFileManager?.(cleanPath).catch(() => false);
+            if (revealed) return;
+            const parentFolder = cleanPath.replace(/[\\/][^\\/]+$/, '');
+            if (parentFolder && parentFolder !== cleanPath) {
+                const openedParent = await this.platformService?.openFolderInFileManager?.(parentFolder).catch(() => false);
+                if (openedParent) return;
+            }
+        }
+        if (modal.boundProjectPath) {
+            const openedBound = await this.platformService?.openFolderInFileManager?.(modal.boundProjectPath).catch(() => false);
+            if (openedBound) return;
+        }
+        this.comicKindError = localizeDesktopSurface(this.desktopLocale, '无法定位该媒体文件，请检查文件是否仍存在于项目目录中');
+        this.update();
+    }
+
     protected async enterComicStudioModalEditor(): Promise<void> {
         const modal = this.comicStudioModalState;
         if (!modal || modal.generating || !modal.boundProjectPath) return;
@@ -13877,19 +14465,46 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const label = modal.title.trim() || this.comicChatFolderName(workspaceRoot) || workspaceRoot;
         try {
             const syncedState = await this.platformService.syncComicFolderMaterials(workspaceRoot);
+            if (this.comicKindSheet) {
+                this.completeNavigationSurface?.();
+            }
             this.closeComicStudioModalState();
-            this.completeNavigationSurface?.();
-            this.comicChatUi().surface = 'studio';
-            this.comicChatUi().editor = false;
+            this.activeSection = 'comic';
+            const ui = this.comicChatUi();
+            ui.surface = 'studio';
+            ui.editor = false;
+            if (this.comicDesk) {
+                this.comicDesk.visible = false;
+            }
             if (!this.comicWorkspaceOptions.some(item => item.path === workspaceRoot)) {
                 this.comicWorkspaceOptions = [...this.comicWorkspaceOptions, { path: workspaceRoot, label }];
                 this.persistComicWorkspaceSelection?.();
             }
-            this.selectComicWorkspaceRoot(workspaceRoot);
+            this.selectComicWorkspaceRoot?.(workspaceRoot);
+            this.comicLoadSequence = (this.comicLoadSequence || 0) + 1;
+            this.activeComicWorkspaceRoot = workspaceRoot;
             this.comicWorkspaceRoot = workspaceRoot;
-            this.comicState = syncedState;
+            this.comicExternalChange = false;
+            this.comicError = '';
+            this.comicStage = 'idle';
             this.comicLandingPending = false;
-            this.setComicView('timeline');
+            this.comicState = syncedState;
+            const syncedProject = syncedState.project;
+            if (syncedProject?.projectKind === 'chat') {
+                ui.surface = 'chat';
+                this.openComicChatEditor?.();
+            } else if (syncedProject && this.comicUsesDesk?.(syncedProject)) {
+                this.openComicEditor?.();
+            } else {
+                this.setComicView?.('timeline');
+            }
+            this.syncComicSelection?.();
+            this.reconcileMusicSong?.();
+            if (syncedProject) {
+                void this.refreshComicPlayback?.(workspaceRoot, syncedProject);
+            }
+            void this.loadMediaState?.(true);
+            void this.loadComicExportState?.(true);
             void this.loadComicLibrary?.();
             this.update();
         } catch (error) {
@@ -13921,15 +14536,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const blockedInfo = this.comicStudioModalBlockedInfo(modal);
         const videoRoute = kind === 'image' ? this.comicStepMediaRouteForKind('image', 'video') : undefined;
         const soundSupported = kind === 'image' ? this.comicVideoMakesSound(videoRoute) : false;
+        const topicNativeVideoAudio = kind === 'topic'
+            && modal.topicSources.ai
+            && this.topicUsesVideoNativeSound(modal.topicVisualMode);
 
         const primaryModelPickerSlot = kind === 'image'
             ? this.renderComicStudioIsolatedModelSlot('image', 'video')
             : kind === 'music'
                 ? this.renderComicStudioIsolatedModelSlot('music', 'music')
-                : this.renderComicStudioIsolatedModelSlot('topic', modal.topicVisualMode === 'images' ? 'image' : 'video');
+                : modal.topicSources.ai
+                    ? this.renderComicStudioIsolatedModelSlot('topic', modal.topicVisualMode === 'images' ? 'image' : 'video')
+                    : undefined;
         const secondaryModelPickerSlot = kind === 'topic'
             ? this.renderComicStudioIsolatedModelSlot('topic', 'text')
             : undefined;
+        const tertiaryModelPickerSlot = kind === 'topic' && modal.topicVoiceSubtitles && !topicNativeVideoAudio
+            ? this.renderComicStudioIsolatedModelSlot('topic', 'speech')
+            : undefined;
+        const safeErrorText = this.comicErrorText(this.comicKindError) || this.comicErrorText(this.comicKindErrorState);
+        const canOpenDirectory = Boolean(modal.boundProjectPath || parentDir);
 
         return (
             <ComicMediaStudioModal
@@ -13946,13 +14571,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 parentDirectory={parentDir}
                 defaultDirectory={defaultDir || undefined}
                 previewFolderPath={previewFolderPath}
+                canOpenDirectory={canOpenDirectory}
                 onChooseDirectory={!modal.boundProjectPath && this.chooseComicCreateDirectory ? () => { void this.chooseComicCreateDirectory(); } : undefined}
                 onResetDirectory={!modal.boundProjectPath ? () => {
                     modal.parentDirectory = undefined;
                     this.comicCreateParentDirectory = undefined;
                     this.update();
                 } : undefined}
-                onOpenDirectory={modal.boundProjectPath ? () => { void this.platformService.openFolderInFileManager(modal.boundProjectPath!); } : undefined}
+                onOpenDirectory={canOpenDirectory ? () => { void this.openStudioDirectoryInFileManager(modal); } : undefined}
+                onFormScroll={() => {
+                    if (this.comicStudioIsolatedPicker) {
+                        this.closeComicStudioIsolatedPicker(false);
+                    }
+                }}
+                onDismissTransientOverlay={() => {
+                    if (this.comicStudioIsolatedPicker) {
+                        this.closeComicStudioIsolatedPicker(false);
+                        return true;
+                    }
+                    return false;
+                }}
                 sourceFiles={modal.sourceFiles}
                 onPickLocalFiles={() => { void this.pickComicStudioLocalFiles(); }}
                 onDropLocalFiles={files => this.addComicStudioDroppedFiles(files)}
@@ -13962,6 +14600,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 selectedLibraryIds={modal.selectedLibraryIds}
                 primaryModelPickerSlot={primaryModelPickerSlot}
                 secondaryModelPickerSlot={secondaryModelPickerSlot}
+                tertiaryModelPickerSlot={tertiaryModelPickerSlot}
                 prompt={modal.prompt}
                 onPromptChange={value => {
                     modal.prompt = value;
@@ -13991,6 +14630,48 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     modal.soundEnabled = enabled;
                     this.update();
                 }}
+                topicSources={modal.topicSources}
+                onTopicToggleSource={sourceKey => {
+                    const cur = modal.topicSources;
+                    const activeCount = (cur.own ? 1 : 0) + (cur.stock ? 1 : 0) + (cur.ai ? 1 : 0);
+                    if (cur[sourceKey] && activeCount <= 1) return;
+                    modal.topicSources = { ...cur, [sourceKey]: !cur[sourceKey] };
+                    if (
+                        !modal.topicSources.ai
+                        && this.comicStudioIsolatedPicker
+                        && (this.comicStudioIsolatedPicker.capability === 'video' || this.comicStudioIsolatedPicker.capability === 'image')
+                    ) {
+                        this.comicStudioIsolatedPicker = undefined;
+                    }
+                    if (sourceKey === 'stock' && modal.topicSources.stock && !this.stockMediaState) {
+                        void this.loadStockMediaState?.();
+                    }
+                    if (this.comicKindError) this.comicKindError = '';
+                    this.update();
+                }}
+                topicStockProvider={modal.topicStockProvider}
+                onTopicStockProviderChange={provider => {
+                    modal.topicStockProvider = provider;
+                    modal.topicStockKeyInput = '';
+                    modal.topicStockEditingKey = false;
+                    if (this.comicKindError) this.comicKindError = '';
+                    this.update();
+                }}
+                topicStockKeySaved={Boolean(this.stockMediaState?.providers?.[modal.topicStockProvider]?.configured)}
+                topicStockKeyInput={modal.topicStockKeyInput}
+                onTopicStockKeyInputChange={val => {
+                    modal.topicStockKeyInput = val;
+                    if (this.comicKindError) this.comicKindError = '';
+                    this.update();
+                }}
+                topicStockEditingKey={modal.topicStockEditingKey}
+                onTopicStockEditingKeyChange={editing => {
+                    modal.topicStockEditingKey = editing;
+                    this.update();
+                }}
+                onOpenStockKeyPage={provider => {
+                    this.openExternalUrl(STOCK_MEDIA_SITES[provider].keyPage);
+                }}
                 topicVisualMode={modal.topicVisualMode}
                 onTopicVisualModeChange={mode => {
                     modal.topicVisualMode = mode;
@@ -14000,9 +14681,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 topicVoiceSubtitles={modal.topicVoiceSubtitles}
                 onTopicVoiceSubtitlesChange={enabled => {
                     modal.topicVoiceSubtitles = enabled;
+                    if (!enabled && this.comicStudioIsolatedPicker?.capability === 'speech') {
+                        this.comicStudioIsolatedPicker = undefined;
+                    }
                     this.update();
                 }}
-                topicVoiceSummaryText={kind === 'topic' ? this.topicVoiceSummaryText(modal.topicVisualMode) : undefined}
+                topicVoiceSummaryText={kind === 'topic' ? this.topicVoiceSummaryText(modal.topicVisualMode, modal.topicSources.ai) : undefined}
                 musicInstrumental={modal.musicInstrumental}
                 onMusicInstrumentalChange={instrumental => {
                     modal.musicInstrumental = instrumental;
@@ -14021,7 +14705,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 blockedActionLabel={blockedInfo.actionLabel}
                 generating={modal.generating}
                 generatingStageLabel={modal.generatingStageLabel}
-                errorMessage={this.comicKindError || undefined}
+                errorMessage={safeErrorText || undefined}
                 takes={modal.takes}
                 activeTakeId={modal.activeTakeId}
                 onSelectTake={takeId => {
@@ -14030,7 +14714,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }}
                 onGenerate={() => { void this.runComicStudioModalGenerate(); }}
                 onCancelGenerate={() => this.cancelComicStudioModalGenerate()}
-                onRevealInFolder={filePath => { void this.platformService.revealInFileManager(filePath); }}
+                onRevealInFolder={filePath => { void this.revealStudioTakeInFileManager(filePath, modal); }}
                 onEnterEditor={() => { void this.enterComicStudioModalEditor(); }}
                 onClose={() => {
                     if (!modal.generating && !this.comicKindBusy) {
@@ -14044,9 +14728,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected renderComicKindSheet(): React.ReactNode {
         if (!this.comicKindSheet) return undefined;
         if (this.renderComicStudioModal) return this.renderComicStudioModal();
+        const errText = this.comicErrorText(this.comicKindError) || this.comicErrorText(this.comicKindErrorState);
         return <div className='nmx-comic-studio-fallback'>
-            {this.comicKindError && <div className='nmx-agent-inline-error' role='alert'>
-                <span data-nmx-literal={Boolean(this.comicKindErrorDetail) || undefined}>{this.comicKindError}</span>
+            {errText && <div className='nmx-agent-inline-error' role='alert'>
+                <span data-nmx-literal={Boolean(this.comicKindErrorDetail) || undefined}>{errText}</span>
                 {this.comicKindErrorDetail && <MediaDiagnostic locale={this.desktopLocale} detail={this.comicKindErrorDetail} />}
             </div>}
         </div>;
@@ -15243,8 +15928,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return this.comicVideoMakesSound(topicVideoRoute);
     }
 
-    protected topicVoiceSummaryText(visualMode: 'videos' | 'images' = 'videos'): string {
-        if (this.topicUsesVideoNativeSound(visualMode)) {
+    protected topicVoiceSummaryText(visualMode: 'videos' | 'images' = 'videos', aiVisualEnabled = true): string {
+        if (aiVisualEnabled && this.topicUsesVideoNativeSound(visualMode)) {
             return this.topicNativeVideoAudioLabel();
         }
         const speechCandidate = this.comicStepChoiceForKind('topic', 'speech');
@@ -15258,9 +15943,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected renderComicStepSummary(capability: ComicStepCapability, variant: 'field' | 'inline' = 'field', label?: string): React.ReactNode {
         const kind = this.comicModelKind();
         const candidate = this.comicStepResolutionForKind(kind, capability).candidate;
-        const coveredByTopicVideo = capability === 'speech' && kind === 'topic' && this.topicUsesVideoNativeSound(
-            this.comicStudioModalState?.kind === 'topic' ? this.comicStudioModalState.topicVisualMode : 'videos'
-        );
+        const coveredByTopicVideo = capability === 'speech' && kind === 'topic'
+            && (this.comicStudioModalState?.kind === 'topic' ? this.comicStudioModalState.topicSources.ai : true)
+            && this.topicUsesVideoNativeSound(
+                this.comicStudioModalState?.kind === 'topic' ? this.comicStudioModalState.topicVisualMode : 'videos'
+            );
         const busy = this.catalogLoading || this.registryModelsLoading || this.officialModelsLoading;
         const name = label || comicStepName(this.desktopLocale, capability);
         return <div className={`nmx-step-summary is-${variant} ${candidate || coveredByTopicVideo ? '' : 'is-missing'}`} data-capability={capability}>
@@ -19157,6 +19844,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     }}
                     onResumeGeneration={(nodeId, renderedJobId) => { void this.resumeComicCanvasGeneration(session, nodeId, renderedJobId, locale); }}
                     assetLibraryCategories={() => this.platformService.comicAssetLibraryCategories()} assetLibraryEntries={() => this.platformService.listComicAssetLibrary()}
+                    preparePlaybackFiles={paths => this.preparePlaybackFileMap(paths)}
                     loadHistoryCanvases={() => this.loadComicCanvasHistory(session)} onSelectHistoryVersion={(canvasId, nodeId, versionId) => this.selectComicCanvasHistoryVersion(session, canvasId, nodeId, versionId)}
                     libraryScope={`${session.workspaceRoot}:${session.canvasId}`}
                     onUploadLibrary={(category, retryFailed) => this.uploadComicLibraryFiles(category, retryFailed)} onPinLibrary={(assetId, pinned) => this.platformService.setComicAssetLibraryPinned({ assetId, pinned }).then(() => this.refreshComicAssetLibrary())}
@@ -28948,17 +29636,55 @@ export class NextMuxDesktopWidget extends ReactWidget {
             : /^(?:https?:|data:|blob:)/i.test(target) ? { path: target.startsWith('data:') ? '' : target, url: target } : undefined;
         if (!resolved) return false;
         const name = fallbackName || resolved.path.split(/[\\/]/).pop() || resolved.path;
+        const initialUrl = (kind === 'video' && resolved.path ? this.playbackFileUrlByPath?.get(resolved.path) : undefined) || resolved.url;
         if (this.activeSection === 'comic' && this.comicChatUi?.()?.surface === 'chat') {
-            this.comicChatUi().viewer = { url: resolved.url, name, kind };
+            this.comicChatUi().viewer = { url: initialUrl, name, kind };
         }
         if (kind === 'image') {
-            this.openAttachmentLightbox(name, resolved.url);
+            this.openAttachmentLightbox(name, initialUrl);
             this.attachmentLightboxPath = resolved.path;
         } else {
-            this.mediaViewer = { kind, src: resolved.url, name, path: resolved.path };
+            this.mediaViewer = { kind, src: initialUrl, name, path: resolved.path };
+        }
+        if (kind === 'video' && resolved.path && /\.(?:mp4|m4v|mov)$/i.test(resolved.path) && !this.playbackFileUrlByPath?.has(resolved.path)) {
+            void this.preparePlaybackFileMap?.([resolved.path]).then(() => {
+                const upgraded = this.playbackFileUrlByPath?.get(resolved.path);
+                if (!upgraded || upgraded === initialUrl) return;
+                let updated = false;
+                if (this.mediaViewer?.path === resolved.path && this.mediaViewer.src === initialUrl) {
+                    this.mediaViewer = { ...this.mediaViewer, src: upgraded };
+                    updated = true;
+                }
+                const ui = this.comicChatUi?.();
+                if (ui?.viewer?.url === initialUrl) {
+                    ui.viewer = { ...ui.viewer, url: upgraded };
+                    updated = true;
+                }
+                if (updated) this.update();
+            });
         }
         this.update();
         return true;
+    }
+
+    protected openComicViewerMedia(url: string, name: string, kind: 'image' | 'video' | 'audio', localPath?: string): void {
+        const ui = this.comicChatUi();
+        let fileKey = localPath || '';
+        if (!fileKey && /^file:\/\//i.test(url)) {
+            try { fileKey = new URI(url).path.fsPath(); } catch { fileKey = ''; }
+        }
+        const initialUrl = (kind === 'video' && fileKey ? this.playbackFileUrlByPath?.get(fileKey) : undefined) || url;
+        ui.viewer = { url: initialUrl, name, kind };
+        if (kind === 'video' && fileKey && /\.(?:mp4|m4v|mov)$/i.test(fileKey) && !this.playbackFileUrlByPath?.has(fileKey)) {
+            void this.preparePlaybackFileMap?.([fileKey]).then(() => {
+                const upgraded = this.playbackFileUrlByPath?.get(fileKey);
+                if (upgraded && upgraded !== initialUrl && ui.viewer?.url === initialUrl) {
+                    ui.viewer = { ...ui.viewer, url: upgraded };
+                    this.update();
+                }
+            });
+        }
+        this.update();
     }
 
     protected markMediaViewerFailed(): void {
@@ -32579,6 +33305,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected handleSurfaceEscape = (event: KeyboardEvent): void => {
         if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || !this.node.isConnected) return;
         if (this.walletTopupSheetOpen) return;
+        if (typeof document !== 'undefined' && document.querySelector('.nmx-comic-studio-context-menu, .nmx-comic-studio-lightbox')) {
+            return;
+        }
         const transient = this.hasTransientNavigationSurface();
         const target = event.target instanceof Element ? event.target : undefined;
         // Trigger focus is outside the portal. Keep other active layers' Escape
@@ -33057,6 +33786,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.modelPickerHiddenVisibleLimit = 10;
         this.modelPickerHiddenPopoverTicked.clear();
         this.relayMetricTooltip = undefined;
+        this.modelEvidenceTooltip = undefined;
         this.closeModelEffortPickerImmediately();
         this.update();
         if (trigger) requestAnimationFrame(() => {
@@ -33823,6 +34553,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.modelPickerEffortModelId = '';
         this.modelPickerEffortLevelCount = 0;
         this.modelPickerEffortPlacement = undefined;
+        this.modelEvidenceTooltip = undefined;
     }
 
     protected modelPickerMaximumHeight(): number {
@@ -45999,18 +46730,20 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const offering = optionRoute?.kind === 'managed_gateway' ? optionRoute.offering : undefined;
             const officialOffering = !offering && optionRoute?.kind === 'official_connection' ? this.officialRoutePriceOffering?.(optionRoute, model.label) : undefined;
             const fidelity = measuredModelFidelity(offering?.fidelity || model.fidelity);
+            const authenticityPending = Boolean(offering) && fidelity === undefined;
+            const authenticityHint = authenticityPending ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint') : undefined;
             const quality = offering ? measuredRelayQuality([offering]) : undefined;
             const ownPriced = Boolean(offering && offeringIsOwnPriced(offering));
             const multiplier = offering ? offeringMultiplierBps(offering) : model.discoveredMultiplierBps;
-            const metrics = [
-                { label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'), value: relayPercentText(this.desktopLocale, fidelity) },
+            const metrics: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = [
+                { label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'), value: authenticityPending ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPending') : relayPercentText(this.desktopLocale, fidelity), unmeasured: authenticityPending, hint: authenticityHint },
                 { label: relayText(this.desktopLocale, 'quality'), value: relayPercentText(this.desktopLocale, quality) },
                 { label: relayText(this.desktopLocale, 'price'), value: ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag')
                     : relayMultiplierTag(this.desktopLocale, multiplier) || '—' }
             ];
             // Every managed row carries its multiplier; the hover card has the full price.
             const variantTag = offering ? ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, multiplier) : '';
-            const contextRow = contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
+            const contextRow: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
             const evidenceRows = [...(offering || officialOffering ? metrics.slice(0, 2) : metrics), ...(!contextShown ? contextRow : [])];
             const optionTitle = [model.label, optionRouteLabel, ...[...metrics, ...contextRow].map(metric => `${metric.label}: ${metric.value}`), !supported && unavailableLabel].filter(Boolean).join(' · ');
             return <div className={`nmx-model-option ${supported ? '' : 'is-unsupported'} ${selected ? 'is-selected' : ''}`} key={model.id} data-model-id={model.id}
@@ -46040,30 +46773,55 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 <div className='nmx-model-effort-caption'>{reasoningControlText(this.desktopLocale, 'depth')}</div>
                                 <div className='nmx-model-depth' role='radiogroup' aria-label={reasoningControlText(this.desktopLocale, 'depth')}
                                     style={{ '--nmx-depth-cols': Math.min(6, depth.options.length) } as React.CSSProperties}>
-                                    {depth.options.map(item => <button key={item.id} type='button' role='radio' aria-checked={activeDepth === item.id}
-                                        data-reasoning-depth={item.id} className={activeDepth === item.id ? 'is-active' : ''}
-                                        title={item.evidence ? `${this.reasoningDepthLabel(item)} · ${reasoningControlText(this.desktopLocale, 'verified')}` : this.reasoningDepthLabel(item)}
-                                        onClick={() => this.setModelOptionReasoningDepth(baseModelId, item, 'coding',
-                                            optionRoute?.kind === 'managed_gateway' ? { id: optionRoute.offering.keyPriceQuoteId } : undefined, optionRoute?.id)}>{this.reasoningDepthLabel(item)}</button>)}
+                                    {depth.options.map(item => {
+                                        const depthLabel = this.reasoningDepthLabel(item);
+                                        const depthTip = `${reasoningControlText(this.desktopLocale, 'depth')}: ${item.evidence ? `${depthLabel} · ${reasoningControlText(this.desktopLocale, 'verified')}` : depthLabel}`;
+                                        return <button key={item.id} type='button' role='radio' aria-checked={activeDepth === item.id}
+                                            data-reasoning-depth={item.id} className={activeDepth === item.id ? 'is-active' : ''}
+                                            title={depthTip} aria-label={depthTip}
+                                            onPointerEnter={event => this.showModelEvidenceTooltip?.(depthTip, event.currentTarget)}
+                                            onPointerLeave={() => this.hideModelEvidenceTooltip?.()}
+                                            onFocus={event => this.showModelEvidenceTooltip?.(depthTip, event.currentTarget)}
+                                            onBlur={() => this.hideModelEvidenceTooltip?.()}
+                                            onClick={() => this.setModelOptionReasoningDepth(baseModelId, item, 'coding',
+                                                optionRoute?.kind === 'managed_gateway' ? { id: optionRoute.offering.keyPriceQuoteId } : undefined, optionRoute?.id)}>{depthLabel}</button>;
+                                    })}
                                 </div>
                             </>}
                             {contextShown && <>
                                 <div className='nmx-model-effort-caption nmx-model-context-caption'>{contextBudgetText(this.desktopLocale, 'window')}</div>
                                 <div className='nmx-model-depth nmx-model-context-window' role='radiogroup' aria-label={contextBudgetText(this.desktopLocale, 'window')}
                                     style={{ '--nmx-depth-cols': Math.min(6, contextChoices.length) } as React.CSSProperties}>
-                                    {contextChoices.map(tokens => <button key={tokens} type='button' role='radio' aria-checked={activeContextTokens === tokens}
-                                        data-context-window={tokens} className={activeContextTokens === tokens ? 'is-active' : ''} dir='ltr'
-                                        onClick={() => this.setModelOptionContextWindow(baseModelId, tokens,
-                                            optionRoute?.kind === 'managed_gateway' ? { id: optionRoute.offering.keyPriceQuoteId } : undefined, optionRoute?.id)}>{contextWindowTokenLabel(tokens)}</button>)}
+                                    {contextChoices.map(tokens => {
+                                        const shortLabel = contextWindowTokenLabel(tokens);
+                                        const fullTokens = (() => { try { return tokens.toLocaleString(this.desktopLocale); } catch { return String(tokens); } })();
+                                        const contextTip = `${contextBudgetText(this.desktopLocale, 'window')}: ${shortLabel} (${fullTokens} Tokens)`;
+                                        return <button key={tokens} type='button' role='radio' aria-checked={activeContextTokens === tokens}
+                                            data-context-window={tokens} className={activeContextTokens === tokens ? 'is-active' : ''} dir='ltr'
+                                            title={contextTip} aria-label={contextTip}
+                                            onPointerEnter={event => this.showModelEvidenceTooltip?.(contextTip, event.currentTarget)}
+                                            onPointerLeave={() => this.hideModelEvidenceTooltip?.()}
+                                            onFocus={event => this.showModelEvidenceTooltip?.(contextTip, event.currentTarget)}
+                                            onBlur={() => this.hideModelEvidenceTooltip?.()}
+                                            onClick={() => this.setModelOptionContextWindow(baseModelId, tokens,
+                                                optionRoute?.kind === 'managed_gateway' ? { id: optionRoute.offering.keyPriceQuoteId } : undefined, optionRoute?.id)}>{shortLabel}</button>;
+                                    })}
                                 </div>
                             </>}
                             {contextCapped && <p className='nmx-model-context-learned' role='note'>
                                 <i className='codicon codicon-info' aria-hidden='true'></i>
                                 <span>{contextBudgetText(this.desktopLocale, 'learned').split('{cap}').join(contextWindowTokenLabel(learnedContextCap!))}</span>
                             </p>}
-                            <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}><dt>{metric.label}</dt><dd data-unmeasured={metric.value === '—' || undefined}>{metric.value}</dd></div>)}</dl>
+                            <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}
+                                title={metric.hint}
+                                tabIndex={metric.hint ? 0 : undefined}
+                                onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
+                                onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
+                                onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
+                                onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd></div>)}</dl>
                             {(offering || officialOffering) && <OfferingPriceCard locale={this.desktopLocale} offering={(offering || officialOffering)!} collapsible pullOutDrawer officialOnly={!offering && Boolean(officialOffering)} />}
                             {!supported && <p className='nmx-model-evidence-note'>{unavailableLabel}</p>}
+                            {this.renderModelEvidenceTooltipPortal?.()}
                         </section>
                     </div>,
                     document.body
@@ -47622,6 +48380,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.cancelComicModelHoverClose();
         this.comicModelHoverKey = '';
         this.comicModelHoverPlacement = undefined;
+        this.modelEvidenceTooltip = undefined;
     }
 
     protected openComicModelHover(key: string, anchor: HTMLElement, detailGeometry?: { readonly side: 'left' | 'right'; readonly left: number; readonly width: number }): void {
@@ -48558,7 +49317,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (target.fromMaterialsPanel && context === 'chat') {
             items.push({ id: 'sendToChat', label: t('sendToChat'), icon: 'send', disabled: !canSendToChat });
         }
-        if (target.kind === 'image' && target.url) items.push({ id: 'open', label: t('openLarge'), icon: 'zoom-in', ...(target.fromMaterialsPanel && context === 'chat' ? { separatorBefore: true } : {}) });
+        if ((target.kind === 'image' || target.kind === 'video') && target.url) items.push({ id: 'open', label: t('openLarge'), icon: 'zoom-in', ...(target.fromMaterialsPanel && context === 'chat' ? { separatorBefore: true } : {}) });
         items.push({ id: 'save', label: t('save'), icon: 'save', disabled: !target.uri && !target.externalPath });
         if (!target.fromMaterialsPanel) {
             items.push({ id: 'saveLibrary', label: comicAssetLibraryText(this.desktopLocale, 'save'), icon: 'library', disabled: !target.uri && !target.externalPath });
@@ -48630,7 +49389,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             this.focusComicChatComposer();
         }
-        else if (id === 'open' && target.url) ui.viewer = { url: target.url, name: target.title, kind: target.kind };
+        else if (id === 'open' && target.url) this.openComicViewerMedia(target.url, target.title, target.kind, target.externalPath);
         else if (id === 'save') await this.saveComicChatMedia(target);
         else if(id==='saveLibrary'&&(target.externalPath||target.uri&&root)){
             const path=target.externalPath||URI.fromFilePath(root).resolve(target.uri!).path.fsPath();
@@ -49005,7 +49764,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.comicAssetOnTimeline(destination, assetId)) {
             ui.error = '';
             ui.notice = this.comicChatT('alreadyInEditor');
-            this.update();
+            this.openComicChatEditor();
             return;
         }
         const episodeNumber = this.comicCutEpisodeNumber();
@@ -49202,7 +49961,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 libraryAssetId: entry.assetId,
                 kind: entry.assetType === 'video' ? 'video' as const : entry.assetType === 'audio' ? 'audio' as const : 'image' as const,
                 category: entry.assetCategory === 'character' || entry.characterBundleId ? 'character' as const : entry.assetType === 'image' ? 'image' as const : 'other' as const,
-                ...(entry.mediaPath ? { url: URI.fromFilePath(entry.mediaPath).toString(), path: entry.mediaPath } : {}),
+                ...(entry.mediaPath ? { url: this.playbackFileUrlByPath?.get(entry.mediaPath) || URI.fromFilePath(entry.mediaPath).toString(), path: entry.mediaPath } : {}),
                 ...((entry.remark || entry.textContent) ? { prompt: entry.remark || entry.textContent } : {}),
                 title: entry.assetName,
                 origin: entry.source.origin === 'character' ? 'flow' as const : 'imported' as const,
@@ -49348,6 +50107,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (!this.comicLibraryLoaded) await this.loadComicLibrary();
             const paths = [...new Set([...ui.folders, ...(ui.managed ? [ui.managed] : []), ...this.comicLibrary.projects.map(item => item.path)])];
             ui.allMaterials = await this.platformService.listComicMaterials(paths);
+            const extVideos = ui.allMaterials.flatMap(project =>
+                project.assets
+                    .filter(asset => asset.kind === 'video')
+                    .map(asset => URI.fromFilePath(project.path).resolve(asset.uri).path.fsPath())
+            );
+            this.ensurePlaybackUrlsForPaths?.(extVideos);
         } catch (error) {
             ui.allMaterials = [];
             ui.error = modelFailureText(this.desktopLocale, error);
@@ -49383,7 +50148,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     assetId: asset.id, kind: asset.kind === 'image' ? 'image' as const : asset.kind === 'video' ? 'video' as const : 'audio' as const,
                     ...(category ? { category } : {}),
                     ...(libraryEntry ? { libraryAssetId: libraryEntry.assetId } : {}),
-                    url: file.toString(), title, origin: asset.source === 'imported' ? 'imported' as const : 'chat' as const,
+                    url: this.playbackFileUrlByPath?.get(filePath) || file.toString(), title, origin: asset.source === 'imported' ? 'imported' as const : 'chat' as const,
                     ...(asset.prompt ? { prompt: asset.prompt } : {}), ...(asset.width && asset.height ? (aspect => aspect ? { aspect } : {})(comicChatAspectOf(asset.width, asset.height)) : {}),
                     updatedAt: asset.createdAt, project: name, path: filePath
                 },
@@ -49498,7 +50263,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         feedbackSubmitting={Object.fromEntries(this.comicRelayFeedbackSubmitting)}
                         feedbackByTurnId={{ ...Object.fromEntries(turns.filter(view => view.turn.feedback).map(view => [view.turn.id, view.turn.feedback])), ...this.comicFeedbackByTurnId } as Record<string, 'up' | 'down' | null | undefined>}
                         onMenu={(media, event) => { ui.menu = { x: event.clientX, y: event.clientY, target: this.comicChatMediaTarget(media), origin: event.currentTarget as HTMLElement }; this.update(); }}
-                        onOpen={media => { if (media.url) { ui.viewer = { url: media.url, name: chat?.title || t('image'), kind: media.kind === 'video' ? 'video' : media.kind === 'image' ? 'image' : 'audio' }; this.update(); } }}
+                        onOpen={media => { if (media.url) this.openComicViewerMedia(media.url, chat?.title || t('image'), media.kind === 'video' ? 'video' : media.kind === 'image' ? 'image' : 'audio'); }}
                         onRetry={jobId => void this.platformService.retryMediaJob(root, jobId).then(() => this.loadMediaState(true), error => { ui.error = modelFailureText(this.desktopLocale, error); this.update(); })}
                         onCancel={jobId => void this.platformService.cancelMediaJob(root, jobId).then(() => this.loadMediaState(true), error => { ui.error = modelFailureText(this.desktopLocale, error); this.update(); })}
                         onGenerate={(turnId, ids) => { if (chat) void this.generateComicChatProposals(chat.id, turnId, ids); }}
@@ -49522,7 +50287,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             : { key: `asset:${item.assetId}`, assetId: item.assetId, ...(item.url ? { url: item.url } : {}), name: item.title }], policy.limit);
                         this.focusComicChatComposer();
                     }}
-                    onOpen={item => { if (item.url) ui.viewer = { url: item.url, name: item.title, kind: item.kind }; this.update(); }}
+                    onOpen={item => { if (item.url) this.openComicViewerMedia(item.url, item.title, item.kind, item.path); else this.update(); }}
                     onMenu={(item, event) => { ui.menu = { x: event.clientX, y: event.clientY, target: this.comicMaterialTarget(item), origin: event.currentTarget as HTMLElement }; this.update(); }}
                     onClose={() => { ui.materials = undefined; this.update(); }} />}
             </div>
@@ -51842,6 +52607,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const usable=Boolean(inCanvas&&session?.doc&&this.comicCanvasIsTracked(session));
         return <CanvasModalLayer locale={this.desktopLocale}><CanvasAssetLibraryDialog key={`unified:${usable&&session?`${session.workspaceRoot}:${session.canvasId}`:'browse'}`} locale={this.desktopLocale} initialFilter={filter}
             revision={this.comicAssetLibraryRevision} entries={this.comicAssetLibraryEntries}
+            preparePlaybackFiles={paths=>this.preparePlaybackFileMap?this.preparePlaybackFileMap(paths):(this.platformService?.preparePlaybackFiles?.(paths)??Promise.resolve({}))}
             operationScope={`unified:${usable&&session?`${session.workspaceRoot}:${session.canvasId}`:'browse'}`} load={async()=>{await this.refreshComicAssetLibrary();return this.comicAssetLibraryEntries;}}
             {...(usable&&session?{onUse:async(assetId:string,requestId:string)=>{
                 const position=this.comicLibraryImportPositions.get(requestId)??placeCanvasNode(session.doc!,{x:120,y:120});
@@ -52008,6 +52774,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (sequence !== this.comicAssetLibraryLoadSequence) return;
             this.comicAssetLibraryEntries = entries;
             this.comicAssetLibraryRevision++;
+            this.ensurePlaybackUrlsForPaths?.(entries.filter(item => item.assetType === 'video').map(item => item.mediaPath));
             this.update();
         } catch {
             // A transient read failure must not erase the shared library or undo a newer mutation.

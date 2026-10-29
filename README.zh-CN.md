@@ -5,7 +5,7 @@
 **开源 AI 编程、多智能体“臭皮匠模式”、桌面应用/游戏自动化与漫剧多轨视频工作台**
 
 [![License: Apache-2.0 with Commons Clause](https://img.shields.io/badge/License-Apache%202.0%20%2B%20Commons%20Clause-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.1.1-1263db)](https://github.com/goodman-xh/NextMux/releases/tag/v0.1.1)
+[![Release](https://img.shields.io/badge/Release-v0.1.5-1263db)](https://github.com/goodman-xh/NextMux/releases/tag/v0.1.5)
 [![Website](https://img.shields.io/badge/Website-nextmux.app-111111)](https://nextmux.app)
 
 [English](./README.md) | **简体中文**
@@ -109,10 +109,10 @@ https://github.com/user-attachments/assets/a71b55cf-17e3-4dc3-8cbf-5459afc54d77
 
 | 操作系统 | CPU 架构 | GitHub Release 安装包下载 | 官网高速直链 (`nextmux.app`) |
 | :--- | :--- | :--- | :--- |
-| **macOS** (`12.0+`) | Apple 芯片 (`darwin-arm64`) | [`NextMux-0.1.1-arm64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.1/NextMux-0.1.1-arm64.dmg) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.1/macos/arm64/NextMux-0.1.1-arm64.dmg) |
-| **macOS** (`12.0+`) | Intel 芯片 (`darwin-x64`) | [`NextMux-0.1.1-x64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.1/NextMux-0.1.1-x64.dmg) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.1/macos/x64/NextMux-0.1.1-x64.dmg) |
-| **Windows** (`10 / 11`) | x64 (`win32-x64`) | [`NextMux-0.1.1-x64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.1/NextMux-0.1.1-x64-setup.exe) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.1/windows/x64/NextMux-0.1.1-x64-setup.exe) |
-| **Windows** (`11`) | ARM64 (`win32-arm64`) | [`NextMux-0.1.1-arm64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.1/NextMux-0.1.1-arm64-setup.exe) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.1/windows/arm64/NextMux-0.1.1-arm64-setup.exe) |
+| **macOS** (`12.0+`) | Apple 芯片 (`darwin-arm64`) | [`NextMux-0.1.5-arm64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.5/NextMux-0.1.5-arm64.dmg) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.5/macos/arm64/NextMux-0.1.5-arm64.dmg) |
+| **macOS** (`12.0+`) | Intel 芯片 (`darwin-x64`) | [`NextMux-0.1.5-x64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.5/NextMux-0.1.5-x64.dmg) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.5/macos/x64/NextMux-0.1.5-x64.dmg) |
+| **Windows** (`10 / 11`) | x64 (`win32-x64`) | [`NextMux-0.1.5-x64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.5/NextMux-0.1.5-x64-setup.exe) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.5/windows/x64/NextMux-0.1.5-x64-setup.exe) |
+| **Windows** (`11`) | ARM64 (`win32-arm64`) | [`NextMux-0.1.5-arm64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.5/NextMux-0.1.5-arm64-setup.exe) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.5/windows/arm64/NextMux-0.1.5-arm64-setup.exe) |
 
 > 已安装的桌面端会在后台自动检测 `https://nextmux.app/updates`，当发现新版本时会在左下角账户栏旁显示圆角蓝色 **“更新”** 按钮，支持后台静默下载与一键升级。
 

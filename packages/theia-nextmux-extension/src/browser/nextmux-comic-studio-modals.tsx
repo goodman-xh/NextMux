@@ -16,11 +16,11 @@ export type ComicStudioModalKind = 'image' | 'topic' | 'music';
 
 export interface ComicStudioGeneratedTake {
     readonly id: string;
-    readonly kind: 'video' | 'audio';
+    readonly kind: 'video' | 'audio' | 'image';
     readonly title: string;
     /** Playable URL in renderer (data:, blob:, file:// or local media preview URL). */
     readonly mediaUrl: string;
-    /** Absolute path on disk inside user's selected folder, used by right-click "打开视频/音频所在文件夹". */
+    /** Absolute path on disk inside user's selected folder, used by right-click "打开视频/音频/图片所在文件夹". */
     readonly filePath: string;
     readonly thumbnailUrl?: string;
     readonly durationSeconds?: number;
@@ -28,6 +28,7 @@ export interface ComicStudioGeneratedTake {
     readonly createdAtLabel?: string;
     readonly modelLabel?: string;
     readonly prompt?: string;
+    readonly assetId?: string;
 }
 
 export interface ComicStudioSourceFile {
@@ -51,6 +52,7 @@ export interface ComicMediaStudioModalProps {
     readonly parentDirectory: string;
     readonly defaultDirectory?: string;
     readonly previewFolderPath: string;
+    readonly canOpenDirectory?: boolean;
     readonly onChooseDirectory?: () => void;
     readonly onResetDirectory?: () => void;
     readonly onOpenDirectory?: () => void;
@@ -63,9 +65,11 @@ export interface ComicMediaStudioModalProps {
     readonly onToggleLibraryItem?: (item: ComicCreationLibraryItem) => void;
     readonly selectedLibraryIds?: ReadonlySet<string>;
     /** Isolated Coding-style Relay + Model picker slot(s) rendered by parent widget */
-    readonly primaryModelPickerSlot: React.ReactNode;
-    /** Optional secondary model picker slot ONLY for `topic` (e.g. script model + visual/voice summary); NEVER rendered for `image` or `music`! */
+    readonly primaryModelPickerSlot?: React.ReactNode;
+    /** Optional secondary model picker slot ONLY for `topic` (script model); NEVER rendered for `image` or `music`! */
     readonly secondaryModelPickerSlot?: React.ReactNode;
+    /** Optional tertiary model picker slot ONLY for `topic` (speech / voice-over model when TTS is active). */
+    readonly tertiaryModelPickerSlot?: React.ReactNode;
     /** Prompt & style */
     readonly prompt: string;
     readonly onPromptChange: (value: string) => void;
@@ -88,6 +92,16 @@ export interface ComicMediaStudioModalProps {
     readonly topicVoiceSubtitles?: boolean;
     readonly onTopicVoiceSubtitlesChange?: (enabled: boolean) => void;
     readonly topicVoiceSummaryText?: string;
+    readonly topicSources?: { readonly own: boolean; readonly stock: boolean; readonly ai: boolean };
+    readonly onTopicToggleSource?: (key: 'own' | 'stock' | 'ai') => void;
+    readonly topicStockProvider?: 'pexels' | 'pixabay';
+    readonly onTopicStockProviderChange?: (provider: 'pexels' | 'pixabay') => void;
+    readonly topicStockKeySaved?: boolean;
+    readonly topicStockKeyInput?: string;
+    readonly onTopicStockKeyInputChange?: (value: string) => void;
+    readonly topicStockEditingKey?: boolean;
+    readonly onTopicStockEditingKeyChange?: (editing: boolean) => void;
+    readonly onOpenStockKeyPage?: (provider: 'pexels' | 'pixabay') => void;
     /** Music-specific controls */
     readonly musicInstrumental?: boolean;
     readonly onMusicInstrumentalChange?: (instrumental: boolean) => void;
@@ -112,6 +126,8 @@ export interface ComicMediaStudioModalProps {
     readonly onRevealInFolder: (filePath: string) => void;
     readonly onEnterEditor: () => void;
     readonly onClose: () => void;
+    readonly onFormScroll?: () => void;
+    readonly onDismissTransientOverlay?: () => boolean;
 }
 
 const DEFAULT_ASPECT_RATIOS: readonly ('16:9' | '9:16' | '1:1' | '4:3' | '3:4')[] = [
@@ -189,6 +205,21 @@ const zhCN = {
     revealInFolder: '打开所在文件夹',
     revealVideoInFolder: '打开视频所在文件夹',
     revealAudioInFolder: '打开音频所在文件夹',
+    revealImageInFolder: '打开图片所在文件夹',
+    voiceModel: '配音模型',
+    visualSources: '画面来源（可多选）',
+    sourceOwn: '我的素材',
+    sourceOwnSub: '本地图片 / 视频',
+    sourceStock: '网络素材',
+    sourceStockSub: 'Pexels · Pixabay',
+    sourceAi: 'AI 生成',
+    sourceAiSub: 'AI 图片 · AI 视频',
+    stockKeySaved: 'API Key 已保存在系统钥匙串',
+    stockKeyChange: '更换',
+    stockKeyPlaceholder: '粘贴 {provider} API Key',
+    stockGetKey: '免费申请 Key',
+    stockLicenseNote: '来自 Pexels / Pixabay 免费商用素材库，生成时自动检索并下载至项目文件夹。',
+    noAiHintNote: '没有素材的镜头会先空着，之后可以在剪辑里补上。',
     enterEditor: '进入剪辑',
     emptyStageTitle: '作品预览舞台',
     emptyStageHint: '生成完成后将在此直接播放，并自动保存至所选文件夹',
@@ -268,6 +299,21 @@ const zhTW: StudioModalCopyTable = {
     revealInFolder: '開啟所在資料夾',
     revealVideoInFolder: '開啟影片所在資料夾',
     revealAudioInFolder: '開啟音訊所在資料夾',
+    revealImageInFolder: '開啟圖片所在資料夾',
+    voiceModel: '配音模型',
+    visualSources: '畫面來源（可多選）',
+    sourceOwn: '我的素材',
+    sourceOwnSub: '本機圖片 / 影片',
+    sourceStock: '網路素材',
+    sourceStockSub: 'Pexels · Pixabay',
+    sourceAi: 'AI 生成',
+    sourceAiSub: 'AI 圖片 · AI 影片',
+    stockKeySaved: 'API Key 已儲存在系統鑰匙圈',
+    stockKeyChange: '更換',
+    stockKeyPlaceholder: '貼上 {provider} API Key',
+    stockGetKey: '免費申請 Key',
+    stockLicenseNote: '來自 Pexels / Pixabay 免費商用素材庫，生成時自動檢索並下載至專案資料夾。',
+    noAiHintNote: '沒有素材的鏡頭會先留空，之後可以在剪輯裡補上。',
     enterEditor: '進入剪輯',
     emptyStageTitle: '作品預覽舞台',
     emptyStageHint: '生成完成後將在此直接播放，並自動儲存至所選資料夾',
@@ -344,6 +390,21 @@ const en: StudioModalCopyTable = {
     revealInFolder: 'Show in folder',
     revealVideoInFolder: 'Show video in folder',
     revealAudioInFolder: 'Show audio in folder',
+    revealImageInFolder: 'Show image in folder',
+    voiceModel: 'Voice model',
+    visualSources: 'Visual sources (multi-select)',
+    sourceOwn: 'My media',
+    sourceOwnSub: 'Local photos & clips',
+    sourceStock: 'Stock media',
+    sourceStockSub: 'Pexels · Pixabay',
+    sourceAi: 'AI generated',
+    sourceAiSub: 'AI images · AI video',
+    stockKeySaved: 'API Key saved in system keychain',
+    stockKeyChange: 'Change',
+    stockKeyPlaceholder: 'Paste {provider} API Key',
+    stockGetKey: 'Get free Key',
+    stockLicenseNote: 'Royalty-free clips and photos from Pexels / Pixabay are downloaded directly into your project folder.',
+    noAiHintNote: 'Shots without matching media stay empty for now and can be filled in the Editor later.',
     enterEditor: 'Open in Editor',
     emptyStageTitle: 'Preview Stage',
     emptyStageHint: 'Generated media will play right here and save automatically to your selected folder',
@@ -413,6 +474,21 @@ const ja: StudioModalCopyTable = {
     revealInFolder: 'フォルダを開く',
     revealVideoInFolder: '動画の保存先フォルダを開く',
     revealAudioInFolder: '音声の保存先フォルダを開く',
+    revealImageInFolder: '画像の保存先フォルダを開く',
+    voiceModel: '音声モデル',
+    visualSources: '映像ソース（複数選択可）',
+    sourceOwn: '自分の素材',
+    sourceOwnSub: 'ローカル画像 / 動画',
+    sourceStock: 'フリー素材',
+    sourceStockSub: 'Pexels · Pixabay',
+    sourceAi: 'AI 生成',
+    sourceAiSub: 'AI 画像 · AI 動画',
+    stockKeySaved: 'API キーはシステムのキーチェーンに保存済みです',
+    stockKeyChange: '変更',
+    stockKeyPlaceholder: '{provider} API Key を貼り付け',
+    stockGetKey: '無料でキーを取得',
+    stockLicenseNote: 'Pexels / Pixabay の商用利用可能な素材を検索し、プロジェクトフォルダへ保存します。',
+    noAiHintNote: '素材がないカットは空のまま残され、後から編集画面で追加できます。',
     enterEditor: '編集へ進む',
     emptyStageTitle: 'プレビューステージ',
     emptyStageHint: '生成が完了するとここで再生され、選択したフォルダに自動保存されます',
@@ -477,6 +553,21 @@ const ko: StudioModalCopyTable = {
     revealInFolder: '폴더에서 열기',
     revealVideoInFolder: '영상이 있는 폴더 열기',
     revealAudioInFolder: '오디오가 있는 폴더 열기',
+    revealImageInFolder: '이미지가 있는 폴더 열기',
+    voiceModel: '음성 모델',
+    visualSources: '화면 소스 (다중 선택)',
+    sourceOwn: '내 소재',
+    sourceOwnSub: '로컬 이미지 / 영상',
+    sourceStock: '웹 무료 소재',
+    sourceStockSub: 'Pexels · Pixabay',
+    sourceAi: 'AI 생성',
+    sourceAiSub: 'AI 이미지 · AI 영상',
+    stockKeySaved: 'API 키가 시스템 키체인에 저장되었습니다',
+    stockKeyChange: '변경',
+    stockKeyPlaceholder: '{provider} API Key 붙여넣기',
+    stockGetKey: '무료 키 발급',
+    stockLicenseNote: 'Pexels / Pixabay 무료 상업용 소재를 검색해 프로젝트 폴더로 바로 저장합니다.',
+    noAiHintNote: '소재가 없는 컷은 비워 두며 나중에 편집에서 채울 수 있습니다.',
     enterEditor: '편집으로 이동',
     emptyStageTitle: '미리보기 스테이지',
     emptyStageHint: '생성이 완료되면 이곳에서 바로 재생되고 선택한 폴더에 자동 저장됩니다',
@@ -532,6 +623,21 @@ const es: StudioModalCopyTable = {
     revealInFolder: 'Mostrar en carpeta',
     revealVideoInFolder: 'Mostrar vídeo en carpeta',
     revealAudioInFolder: 'Mostrar audio en carpeta',
+    revealImageInFolder: 'Mostrar imagen en carpeta',
+    voiceModel: 'Modelo de voz',
+    visualSources: 'Fuentes visuales (selección múltiple)',
+    sourceOwn: 'Mis archivos',
+    sourceOwnSub: 'Fotos y clips locales',
+    sourceStock: 'Material web',
+    sourceStockSub: 'Pexels · Pixabay',
+    sourceAi: 'Generación IA',
+    sourceAiSub: 'Imagen IA · Vídeo IA',
+    stockKeySaved: 'Clave API guardada en el llavero del sistema',
+    stockKeyChange: 'Cambiar',
+    stockKeyPlaceholder: 'Pegar clave API de {provider}',
+    stockGetKey: 'Obtener clave gratis',
+    stockLicenseNote: 'Material libre de derechos de Pexels / Pixabay descargado directamente en tu carpeta.',
+    noAiHintNote: 'Las tomas sin material quedarán vacías por ahora y podrás completarlas en el editor.',
     enterEditor: 'Ir al editor'
 };
 
@@ -580,6 +686,21 @@ const fr: StudioModalCopyTable = {
     revealInFolder: 'Afficher dans le dossier',
     revealVideoInFolder: 'Afficher la vidéo dans le dossier',
     revealAudioInFolder: 'Afficher l’audio dans le dossier',
+    revealImageInFolder: 'Afficher l’image dans le dossier',
+    voiceModel: 'Modèle vocal',
+    visualSources: 'Sources visuelles (choix multiple)',
+    sourceOwn: 'Mes médias',
+    sourceOwnSub: 'Photos et vidéos locales',
+    sourceStock: 'Banque libre',
+    sourceStockSub: 'Pexels · Pixabay',
+    sourceAi: 'Génération IA',
+    sourceAiSub: 'Images IA · Vidéo IA',
+    stockKeySaved: 'Clé API enregistrée dans le trousseau système',
+    stockKeyChange: 'Modifier',
+    stockKeyPlaceholder: 'Coller la clé API {provider}',
+    stockGetKey: 'Obtenir une clé gratuite',
+    stockLicenseNote: 'Médias libres de droits Pexels / Pixabay téléchargés directement dans le dossier du projet.',
+    noAiHintNote: 'Les plans sans média resteront vides pour l’instant et pourront être complétés dans l’éditeur.',
     enterEditor: 'Ouvrir dans l’éditeur'
 };
 
@@ -628,6 +749,21 @@ const de: StudioModalCopyTable = {
     revealInFolder: 'Im Ordner anzeigen',
     revealVideoInFolder: 'Video im Ordner anzeigen',
     revealAudioInFolder: 'Audio im Ordner anzeigen',
+    revealImageInFolder: 'Bild im Ordner anzeigen',
+    voiceModel: 'Sprachmodell',
+    visualSources: 'Bildquellen (Mehrfachauswahl)',
+    sourceOwn: 'Eigene Medien',
+    sourceOwnSub: 'Lokale Bilder & Clips',
+    sourceStock: 'Stock-Medien',
+    sourceStockSub: 'Pexels · Pixabay',
+    sourceAi: 'KI-Generierung',
+    sourceAiSub: 'KI-Bilder · KI-Video',
+    stockKeySaved: 'API-Schlüssel im System-Schlüsselbund gespeichert',
+    stockKeyChange: 'Ändern',
+    stockKeyPlaceholder: '{provider} API-Schlüssel einfügen',
+    stockGetKey: 'Kostenlosen Key holen',
+    stockLicenseNote: 'Lizenzfreie Medien von Pexels / Pixabay werden direkt in den Projektordner geladen.',
+    noAiHintNote: 'Einstellungen ohne passendes Material bleiben vorerst leer und können im Schnitt ergänzt werden.',
     enterEditor: 'Zum Schnitt'
 };
 
@@ -676,6 +812,21 @@ const ptBR: StudioModalCopyTable = {
     revealInFolder: 'Mostrar na pasta',
     revealVideoInFolder: 'Mostrar vídeo na pasta',
     revealAudioInFolder: 'Mostrar áudio na pasta',
+    revealImageInFolder: 'Mostrar imagem na pasta',
+    voiceModel: 'Modelo de voz',
+    visualSources: 'Fontes visuais (múltipla escolha)',
+    sourceOwn: 'Meus arquivos',
+    sourceOwnSub: 'Fotos e clipes locais',
+    sourceStock: 'Banco de mídia',
+    sourceStockSub: 'Pexels · Pixabay',
+    sourceAi: 'Gerado por IA',
+    sourceAiSub: 'Imagens IA · Vídeo IA',
+    stockKeySaved: 'Chave de API salva nas chaves do sistema',
+    stockKeyChange: 'Alterar',
+    stockKeyPlaceholder: 'Colar chave de API {provider}',
+    stockGetKey: 'Obter chave grátis',
+    stockLicenseNote: 'Mídias gratuitas para uso comercial de Pexels / Pixabay baixadas na pasta do projeto.',
+    noAiHintNote: 'Cenas sem mídia ficarão vazias por enquanto e poderão ser preenchidas na edição.',
     enterEditor: 'Ir para edição'
 };
 
@@ -724,6 +875,21 @@ const ru: StudioModalCopyTable = {
     revealInFolder: 'Показать в папке',
     revealVideoInFolder: 'Показать видео в папке',
     revealAudioInFolder: 'Показать аудио в папке',
+    revealImageInFolder: 'Показать изображение в папке',
+    voiceModel: 'Голосовая модель',
+    visualSources: 'Источники кадров (мультивыбор)',
+    sourceOwn: 'Мои материалы',
+    sourceOwnSub: 'Локальные фото и видео',
+    sourceStock: 'Стоковые медиа',
+    sourceStockSub: 'Pexels · Pixabay',
+    sourceAi: 'ИИ-генерация',
+    sourceAiSub: 'ИИ-фото · ИИ-видео',
+    stockKeySaved: 'API-ключ сохранён в системной связке ключей',
+    stockKeyChange: 'Сменить',
+    stockKeyPlaceholder: 'Вставьте API Key {provider}',
+    stockGetKey: 'Получить ключ бесплатно',
+    stockLicenseNote: 'Бесплатные материалы Pexels / Pixabay скачиваются прямо в папку проекта.',
+    noAiHintNote: 'Кадры без материалов пока останутся пустыми — их можно дополнить при монтаже.',
     enterEditor: 'Перейти к монтажу'
 };
 
@@ -770,6 +936,21 @@ const ar: StudioModalCopyTable = {
     revealInFolder: 'إظهار في المجلد',
     revealVideoInFolder: 'إظهار الفيديو في المجلد',
     revealAudioInFolder: 'إظهار الصوت في المجلد',
+    revealImageInFolder: 'إظهار الصورة في المجلد',
+    voiceModel: 'نموذج الصوت',
+    visualSources: 'مصادر المشاهد (متعدد)',
+    sourceOwn: 'وسائطي',
+    sourceOwnSub: 'صور ومقاطع محلية',
+    sourceStock: 'مكتبة مجانية',
+    sourceStockSub: 'Pexels · Pixabay',
+    sourceAi: 'توليد بالذكاء الاصطناعي',
+    sourceAiSub: 'صور ذكية · فيديو ذكي',
+    stockKeySaved: 'تم حفظ مفتاح API في سلسلة مفاتيح النظام',
+    stockKeyChange: 'تغيير',
+    stockKeyPlaceholder: 'الصق مفتاح API لـ {provider}',
+    stockGetKey: 'احصل على مفتاح مجاني',
+    stockLicenseNote: 'تُحمَّل الوسائط المجانية من Pexels / Pixabay مباشرة إلى مجلد المشروع.',
+    noAiHintNote: 'المشاهد التي بلا وسائط ستبقى فارغة مؤقتاً ويمكن إكمالها في المونتاج.',
     enterEditor: 'الدخول إلى المونتاج'
 };
 
@@ -816,6 +997,21 @@ const hi: StudioModalCopyTable = {
     revealInFolder: 'फ़ोल्डर में दिखाएँ',
     revealVideoInFolder: 'वीडियो का फ़ोल्डर खोलें',
     revealAudioInFolder: 'ऑडियो का फ़ोल्डर खोलें',
+    revealImageInFolder: 'चित्र का फ़ोल्डर खोलें',
+    voiceModel: 'वॉइस मॉडल',
+    visualSources: 'दृश्य स्रोत (एकाधिक चयन)',
+    sourceOwn: 'मेरी सामग्री',
+    sourceOwnSub: 'लोकल फ़ोटो और क्लिप',
+    sourceStock: 'वेब स्टॉक मीडिया',
+    sourceStockSub: 'Pexels · Pixabay',
+    sourceAi: 'AI जनरेटेड',
+    sourceAiSub: 'AI चित्र · AI वीडियो',
+    stockKeySaved: 'API कुंजी सिस्टम कीचेन में सहेजी गई है',
+    stockKeyChange: 'बदलें',
+    stockKeyPlaceholder: '{provider} API Key पेस्ट करें',
+    stockGetKey: 'मुफ़्त Key प्राप्त करें',
+    stockLicenseNote: 'Pexels / Pixabay से निःशुल्क व्यावसायिक मीडिया सीधे आपके प्रोजेक्ट फ़ोल्डर में डाउनलोड होता है।',
+    noAiHintNote: 'बिना मीडिया वाले शॉट अभी खाली रहेंगे और बाद में एडिटर में भरे जा सकते हैं।',
     enterEditor: 'एडिटर में खोलें'
 };
 
@@ -863,7 +1059,7 @@ interface StudioContextMenuState {
     readonly y: number;
     readonly takeId: string;
     readonly filePath: string;
-    readonly mediaKind: 'video' | 'audio';
+    readonly mediaKind: 'video' | 'audio' | 'image';
 }
 
 export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.ReactElement | null {
@@ -892,6 +1088,10 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
     // Media playback state for active take
     const videoRef = React.useRef<HTMLVideoElement | null>(null);
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
+    const lightboxVideoRef = React.useRef<HTMLVideoElement | null>(null);
+    const lightboxAudioRef = React.useRef<HTMLAudioElement | null>(null);
+    const stageResumeTimeRef = React.useRef<number>(0);
+    const pendingAutoPlayTakeIdRef = React.useRef<string | undefined>(undefined);
     const fileInputRef = React.useRef<HTMLInputElement | null>(null);
     const filmstripRef = React.useRef<HTMLDivElement | null>(null);
     const wheelAccumRef = React.useRef<number>(0);
@@ -913,11 +1113,80 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                 return idx;
             }
         }
-        return props.takes.length - 1;
+        return 0;
     }, [props.takes, props.activeTakeId]);
 
     const activeTake: ComicStudioGeneratedTake | undefined =
         activeIndex >= 0 ? props.takes[activeIndex] : undefined;
+
+    const isImageStage = activeTake?.kind === 'image';
+    const isAudioStage =
+        !isImageStage && (activeTake?.kind === 'audio' || (props.kind === 'music' && activeTake?.kind !== 'video'));
+    const isVideoStage = Boolean(activeTake && !isImageStage && !isAudioStage);
+
+    const effectiveTopicSources = React.useMemo(() => {
+        if (props.topicSources) {
+            return props.topicSources;
+        }
+        return {
+            own: props.sourceFiles.length > 0 || showTopicAssets,
+            stock: false,
+            ai: true
+        };
+    }, [props.topicSources, props.sourceFiles.length, showTopicAssets]);
+
+    const openLightbox = React.useCallback(
+        (targetTakeId?: string): void => {
+            const switching = Boolean(targetTakeId && targetTakeId !== activeTake?.id);
+            if (switching && targetTakeId) {
+                stageResumeTimeRef.current = 0;
+                props.onSelectTake(targetTakeId);
+            } else {
+                const stageTime = isAudioStage
+                    ? audioRef.current?.currentTime
+                    : isVideoStage
+                      ? videoRef.current?.currentTime
+                      : 0;
+                stageResumeTimeRef.current =
+                    typeof stageTime === 'number' && Number.isFinite(stageTime) && stageTime > 0 ? stageTime : 0;
+            }
+            if (videoRef.current && !videoRef.current.paused) {
+                videoRef.current.pause();
+            }
+            if (audioRef.current && !audioRef.current.paused) {
+                audioRef.current.pause();
+            }
+            setIsPlaying(false);
+            setLightboxOpen(true);
+        },
+        [activeTake?.id, isAudioStage, isVideoStage, props.onSelectTake]
+    );
+
+    const closeLightbox = React.useCallback((): void => {
+        const latestTime =
+            lightboxAudioRef.current?.currentTime ??
+            lightboxVideoRef.current?.currentTime ??
+            stageResumeTimeRef.current;
+        if (lightboxVideoRef.current && !lightboxVideoRef.current.paused) {
+            lightboxVideoRef.current.pause();
+        }
+        if (lightboxAudioRef.current && !lightboxAudioRef.current.paused) {
+            lightboxAudioRef.current.pause();
+        }
+        setLightboxOpen(false);
+        if (typeof latestTime === 'number' && Number.isFinite(latestTime) && latestTime >= 0) {
+            stageResumeTimeRef.current = latestTime;
+            setCurrentTime(latestTime);
+            const targetMedia = isAudioStage ? audioRef.current : isVideoStage ? videoRef.current : null;
+            if (targetMedia) {
+                try {
+                    targetMedia.currentTime = latestTime;
+                } catch {
+                    // Ignore seek error when stage media metadata has not loaded yet
+                }
+            }
+        }
+    }, [isAudioStage, isVideoStage]);
 
     React.useEffect(() => {
         if (!props.open) {
@@ -975,6 +1244,33 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
         setDuration(activeTake?.durationSeconds ?? 0);
     }, [activeTake?.id, activeTake?.mediaUrl, activeTake?.durationSeconds]);
 
+    // Keep <audio> element volume and mute state synchronized with React state
+    React.useEffect(() => {
+        if (audioRef.current) {
+            audioRef.current.volume = muted ? 0 : volume;
+            audioRef.current.muted = muted;
+        }
+        if (lightboxAudioRef.current) {
+            lightboxAudioRef.current.volume = muted ? 0 : volume;
+            lightboxAudioRef.current.muted = muted;
+        }
+    }, [activeTake?.id, activeTake?.mediaUrl, volume, muted, lightboxOpen]);
+
+    // Honor pending play triggered from context menu on a non-active take
+    React.useEffect(() => {
+        if (!activeTake || pendingAutoPlayTakeIdRef.current !== activeTake.id) {
+            return;
+        }
+        pendingAutoPlayTakeIdRef.current = undefined;
+        const media = isAudioStage ? audioRef.current : isVideoStage ? videoRef.current : null;
+        if (media) {
+            const promise = media.play();
+            if (promise && typeof promise.catch === 'function') {
+                promise.catch(() => undefined);
+            }
+        }
+    }, [activeTake?.id, isAudioStage, isVideoStage]);
+
     // Scroll active take card smoothly into view in filmstrip
     React.useEffect(() => {
         if (!props.open || !activeTake || !filmstripRef.current) {
@@ -987,7 +1283,7 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
         }
     }, [props.open, activeTake?.id]);
 
-    // Close context menu on outside pointerdown or scroll; handle Escape hierarchy cleanly
+    // Close context menu on outside pointerdown or scroll; handle Escape hierarchy cleanly in capture phase
     React.useEffect(() => {
         if (!props.open || typeof document === 'undefined') {
             return;
@@ -1008,29 +1304,40 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
             if (contextMenu) {
                 event.preventDefault();
                 event.stopPropagation();
+                event.stopImmediatePropagation();
                 setContextMenu(undefined);
                 return;
             }
             if (lightboxOpen) {
                 event.preventDefault();
                 event.stopPropagation();
-                setLightboxOpen(false);
+                event.stopImmediatePropagation();
+                closeLightbox();
                 return;
             }
             // Do not hijack Escape if an open model/relay popover exists in the document
-            if (document.querySelector('.nmx-model-picker-popover, .nmx-relay-popover, .nmx-comic-chat-popover')) {
+            if (
+                document.querySelector(
+                    '.nmx-studio-isolated-picker-portal, .nmx-model-picker-popover, .nmx-relay-popover, .nmx-comic-chat-popover'
+                )
+            ) {
+                return;
+            }
+            if (props.generating) {
                 return;
             }
             event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
             props.onClose();
         };
         document.addEventListener('pointerdown', onPointerDown, true);
-        window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('keydown', onKeyDown, true);
         return () => {
             document.removeEventListener('pointerdown', onPointerDown, true);
-            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('keydown', onKeyDown, true);
         };
-    }, [props.open, props.onClose, contextMenu, lightboxOpen]);
+    }, [props.open, props.generating, props.onClose, contextMenu, lightboxOpen, closeLightbox]);
 
     if (!props.open) {
         return null;
@@ -1119,8 +1426,12 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
         const maxH = typeof window !== 'undefined' ? window.innerHeight : 800;
         const x = Math.max(8, Math.min(event.clientX, maxW - 228));
         const y = Math.max(8, Math.min(event.clientY, maxH - 148));
-        const mediaKind: 'video' | 'audio' =
-            props.kind === 'music' || take.kind === 'audio' ? 'audio' : 'video';
+        const mediaKind: 'video' | 'audio' | 'image' =
+            take.kind === 'image'
+                ? 'image'
+                : take.kind === 'audio' || (props.kind === 'music' && take.kind !== 'video')
+                  ? 'audio'
+                  : 'video';
         setContextMenu({
             x,
             y,
@@ -1131,11 +1442,10 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
     };
 
     const toggleActivePlayback = (): void => {
-        if (!activeTake) {
+        if (!activeTake || isImageStage) {
             return;
         }
-        const isAudio = props.kind === 'music' || activeTake.kind === 'audio';
-        const media = isAudio ? audioRef.current : videoRef.current;
+        const media = isAudioStage ? audioRef.current : videoRef.current;
         if (!media) {
             return;
         }
@@ -1155,6 +1465,9 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
         if (audioRef.current) {
             audioRef.current.muted = nextMuted;
         }
+        if (lightboxAudioRef.current) {
+            lightboxAudioRef.current.muted = nextMuted;
+        }
     };
 
     const changeAudioVolume = (nextVolume: number): void => {
@@ -1169,11 +1482,30 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                 audioRef.current.muted = false;
             }
         }
+        if (lightboxAudioRef.current) {
+            lightboxAudioRef.current.volume = clamped;
+            if (clamped > 0) {
+                lightboxAudioRef.current.muted = false;
+            }
+        }
     };
 
+    const knownAudioDuration =
+        duration > 0
+            ? duration
+            : activeTake?.durationSeconds && activeTake.durationSeconds > 0
+              ? activeTake.durationSeconds
+              : 0;
+    const sliderMaxDuration = knownAudioDuration > 0 ? knownAudioDuration : Math.max(1, Math.ceil(currentTime));
+
     const seekAudio = (nextTime: number): void => {
-        const total = duration > 0 ? duration : activeTake?.durationSeconds ?? 30;
-        const clamped = Math.max(0, Math.min(total, nextTime));
+        const liveDur =
+            knownAudioDuration > 0
+                ? knownAudioDuration
+                : audioRef.current?.duration && Number.isFinite(audioRef.current.duration) && audioRef.current.duration > 0
+                  ? audioRef.current.duration
+                  : Math.max(nextTime, 1);
+        const clamped = Math.max(0, Math.min(liveDur, nextTime));
         setCurrentTime(clamped);
         if (audioRef.current) {
             try {
@@ -1183,6 +1515,82 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
             }
         }
     };
+
+    const renderSourceActionsAndLibrary = (closeLibraryOnPick: boolean): React.ReactElement => (
+        <>
+            <div className='nmx-comic-studio-source-actions'>
+                <button
+                    type='button'
+                    className='nmx-comic-studio-ghost-btn'
+                    disabled={props.generating}
+                    onClick={triggerLocalPick}
+                >
+                    <i className='codicon codicon-folder-opened' aria-hidden='true' />
+                    <span>{t('localUpload')}</span>
+                </button>
+                {(props.libraryItems !== undefined || props.onToggleLibraryItem !== undefined) && (
+                    <button
+                        type='button'
+                        className={`nmx-comic-studio-ghost-btn${showLibrary ? ' is-active' : ''}`}
+                        disabled={props.generating}
+                        aria-expanded={showLibrary}
+                        onClick={() => setShowLibrary(current => !current)}
+                    >
+                        <i className='codicon codicon-library' aria-hidden='true' />
+                        <span>{t('assetLibrary')}</span>
+                        {filteredLibraryItems.length > 0 && <b data-nmx-literal>{filteredLibraryItems.length}</b>}
+                    </button>
+                )}
+            </div>
+            {showLibrary && (
+                <div className='nmx-comic-studio-lib-drawer'>
+                    {filteredLibraryItems.length === 0 ? (
+                        <p className='nmx-comic-studio-lib-empty'>{t('libraryEmpty')}</p>
+                    ) : (
+                        <div className='nmx-comic-studio-lib-grid' role='list'>
+                            {filteredLibraryItems.map(item => {
+                                const selected = isLibraryItemSelected(item);
+                                return (
+                                    <button
+                                        key={item.id}
+                                        type='button'
+                                        role='listitem'
+                                        className={`nmx-comic-studio-lib-item${selected ? ' is-selected' : ''}`}
+                                        title={item.name}
+                                        onClick={() => {
+                                            props.onToggleLibraryItem?.(item);
+                                            if (closeLibraryOnPick) {
+                                                setShowLibrary(false);
+                                            }
+                                        }}
+                                    >
+                                        <span className='nmx-comic-studio-lib-thumb'>
+                                            {item.kind === 'image' && item.previewUrl ? (
+                                                <img src={item.previewUrl} alt='' loading='lazy' draggable={false} />
+                                            ) : item.kind === 'video' && item.previewUrl ? (
+                                                <video src={item.previewUrl} muted preload='metadata' />
+                                            ) : (
+                                                <i
+                                                    className={`codicon codicon-${item.kind === 'video' ? 'device-camera-video' : 'file-media'}`}
+                                                    aria-hidden='true'
+                                                />
+                                            )}
+                                            {selected && (
+                                                <em className='nmx-comic-studio-lib-check' aria-hidden='true'>
+                                                    <i className='codicon codicon-check' />
+                                                </em>
+                                            )}
+                                        </span>
+                                        <small data-nmx-literal>{item.name}</small>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+        </>
+    );
 
     const renderSourcePickerBlock = (mode: 'image' | 'topic'): React.ReactElement => {
         const accept = mode === 'image' ? 'image/png,image/jpeg,image/webp,image/bmp' : 'image/*,video/*';
@@ -1225,77 +1633,7 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                             <i className='codicon codicon-cloud-upload' aria-hidden='true' />
                             <span>{mode === 'image' ? t('dropImagesHint') : t('dropTopicFilesHint')}</span>
                         </div>
-                        <div className='nmx-comic-studio-source-actions'>
-                            <button
-                                type='button'
-                                className='nmx-comic-studio-ghost-btn'
-                                disabled={props.generating}
-                                onClick={triggerLocalPick}
-                            >
-                                <i className='codicon codicon-folder-opened' aria-hidden='true' />
-                                <span>{t('localUpload')}</span>
-                            </button>
-                            {(props.libraryItems !== undefined || props.onToggleLibraryItem !== undefined) && (
-                                <button
-                                    type='button'
-                                    className={`nmx-comic-studio-ghost-btn${showLibrary ? ' is-active' : ''}`}
-                                    disabled={props.generating}
-                                    aria-expanded={showLibrary}
-                                    onClick={() => setShowLibrary(current => !current)}
-                                >
-                                    <i className='codicon codicon-library' aria-hidden='true' />
-                                    <span>{t('assetLibrary')}</span>
-                                    {filteredLibraryItems.length > 0 && (
-                                        <b data-nmx-literal>{filteredLibraryItems.length}</b>
-                                    )}
-                                </button>
-                            )}
-                        </div>
-                        {showLibrary && (
-                            <div className='nmx-comic-studio-lib-drawer'>
-                                {filteredLibraryItems.length === 0 ? (
-                                    <p className='nmx-comic-studio-lib-empty'>{t('libraryEmpty')}</p>
-                                ) : (
-                                    <div className='nmx-comic-studio-lib-grid' role='list'>
-                                        {filteredLibraryItems.map(item => {
-                                            const selected = isLibraryItemSelected(item);
-                                            return (
-                                                <button
-                                                    key={item.id}
-                                                    type='button'
-                                                    role='listitem'
-                                                    className={`nmx-comic-studio-lib-item${selected ? ' is-selected' : ''}`}
-                                                    title={item.name}
-                                                    onClick={() => {
-                                                        props.onToggleLibraryItem?.(item);
-                                                        setShowLibrary(false);
-                                                    }}
-                                                >
-                                                    <span className='nmx-comic-studio-lib-thumb'>
-                                                        {item.kind === 'image' && item.previewUrl ? (
-                                                            <img src={item.previewUrl} alt='' loading='lazy' draggable={false} />
-                                                        ) : item.kind === 'video' && item.previewUrl ? (
-                                                            <video src={item.previewUrl} muted preload='metadata' />
-                                                        ) : (
-                                                            <i
-                                                                className={`codicon codicon-${item.kind === 'video' ? 'device-camera-video' : 'file-media'}`}
-                                                                aria-hidden='true'
-                                                            />
-                                                        )}
-                                                        {selected && (
-                                                            <em className='nmx-comic-studio-lib-check' aria-hidden='true'>
-                                                                <i className='codicon codicon-check' />
-                                                            </em>
-                                                        )}
-                                                    </span>
-                                                    <small data-nmx-literal>{item.name}</small>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                        {renderSourceActionsAndLibrary(true)}
                     </>
                 ) : (
                     <div className='nmx-comic-studio-dropzone-preview' data-source-kind={activeSource.kind}>
@@ -1444,18 +1782,37 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
             ? t('generateMusic')
             : t('generateVideo');
 
-    const isAudioStage = props.kind === 'music' || activeTake?.kind === 'audio';
-    const effectiveAudioDuration =
-        duration > 0 ? duration : activeTake?.durationSeconds && activeTake.durationSeconds > 0 ? activeTake.durationSeconds : 30;
     const effectiveLightTheme = typeof props.isLightTheme === 'boolean' ? props.isLightTheme : isLightTheme;
+    const safeErrorMessage = typeof props.errorMessage === 'string' ? props.errorMessage.trim() : '';
+    const safeBlockedReason = typeof props.blockedReason === 'string' ? props.blockedReason.trim() : '';
+
+    const activeStockProvider = props.topicStockProvider ?? 'pexels';
+    const activeStockProviderLabel = activeStockProvider === 'pixabay' ? 'Pixabay' : 'Pexels';
+
+    const handleTopicToggleSource = (key: 'own' | 'stock' | 'ai'): void => {
+        const current = effectiveTopicSources;
+        const activeCount = (current.own ? 1 : 0) + (current.stock ? 1 : 0) + (current.ai ? 1 : 0);
+        if (current[key] && activeCount <= 1) {
+            return;
+        }
+        if (props.onTopicToggleSource) {
+            props.onTopicToggleSource(key);
+            return;
+        }
+        if (key === 'own') {
+            setShowTopicAssets(!current.own);
+        }
+    };
 
     return (
         <div
             className={`nmx-comic-studio-modal-backdrop is-${props.kind}${effectiveLightTheme ? ' nmx-theme-light' : ''}`}
             dir={props.locale === 'ar' ? 'rtl' : undefined}
+            data-lightbox-open={lightboxOpen ? 'true' : undefined}
+            data-context-menu-open={contextMenu ? 'true' : undefined}
             onMouseDown={event => {
-                if (event.target === event.currentTarget && !props.generating) {
-                    props.onClose();
+                if (event.target === event.currentTarget) {
+                    props.onDismissTransientOverlay?.();
                 }
             }}
         >
@@ -1507,7 +1864,7 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                 <div className='nmx-comic-studio-body'>
                     {/* Left Column: Compact Scrollable Parameters + Sticky Pricing/Generate Footer */}
                     <div className='nmx-comic-studio-left'>
-                        <div className='nmx-comic-studio-form'>
+                        <div className='nmx-comic-studio-form' onScroll={() => props.onFormScroll?.()}>
                             <ComicProjectLocationField
                                 locale={props.locale}
                                 parentDirectory={props.parentDirectory}
@@ -1515,6 +1872,7 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                 previewPath={props.boundProjectPath || props.previewFolderPath}
                                 disabled={props.generating}
                                 readOnly={Boolean(props.boundProjectPath)}
+                                canOpenDirectory={props.canOpenDirectory}
                                 onChooseDirectory={props.onChooseDirectory}
                                 onResetDirectory={props.onResetDirectory}
                                 onOpenDirectory={props.onOpenDirectory}
@@ -1586,24 +1944,129 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                         />
                                     </div>
 
-                                    <div className='nmx-comic-studio-collapsible'>
-                                        <button
-                                            type='button'
-                                            className='nmx-comic-studio-collapse-trigger'
-                                            aria-expanded={showTopicAssets}
-                                            onClick={() => setShowTopicAssets(current => !current)}
+                                    <div className='nmx-comic-studio-field'>
+                                        <span className='nmx-comic-studio-label'>{t('visualSources')}</span>
+                                        <div
+                                            className='nmx-comic-studio-source-modes'
+                                            role='group'
+                                            aria-label={t('visualSources')}
                                         >
-                                            <i
-                                                className={`codicon codicon-chevron-${showTopicAssets ? 'down' : 'right'}`}
-                                                aria-hidden='true'
-                                            />
-                                            <span>{t('referenceAssetsOptional')}</span>
-                                            {props.sourceFiles.length > 0 && (
-                                                <b data-nmx-literal>{props.sourceFiles.length}</b>
-                                            )}
-                                        </button>
-                                        {showTopicAssets && renderSourcePickerBlock('topic')}
+                                            <button
+                                                type='button'
+                                                aria-pressed={effectiveTopicSources.own}
+                                                disabled={props.generating}
+                                                title={`${t('sourceOwn')} · ${t('sourceOwnSub')}`}
+                                                className={`nmx-comic-studio-source-mode-btn${effectiveTopicSources.own ? ' is-active' : ''}`}
+                                                onClick={() => handleTopicToggleSource('own')}
+                                            >
+                                                <i className='codicon codicon-folder-library' aria-hidden='true' />
+                                                <span>{t('sourceOwn')}</span>
+                                            </button>
+                                            <button
+                                                type='button'
+                                                aria-pressed={effectiveTopicSources.stock}
+                                                disabled={props.generating}
+                                                title={`${t('sourceStock')} · ${t('sourceStockSub')}`}
+                                                className={`nmx-comic-studio-source-mode-btn${effectiveTopicSources.stock ? ' is-active' : ''}`}
+                                                onClick={() => handleTopicToggleSource('stock')}
+                                            >
+                                                <i className='codicon codicon-globe' aria-hidden='true' />
+                                                <span>{t('sourceStock')}</span>
+                                            </button>
+                                            <button
+                                                type='button'
+                                                aria-pressed={effectiveTopicSources.ai}
+                                                disabled={props.generating}
+                                                title={`${t('sourceAi')} · ${t('sourceAiSub')}`}
+                                                className={`nmx-comic-studio-source-mode-btn${effectiveTopicSources.ai ? ' is-active' : ''}`}
+                                                onClick={() => handleTopicToggleSource('ai')}
+                                            >
+                                                <i className='codicon codicon-sparkle' aria-hidden='true' />
+                                                <span>{t('sourceAi')}</span>
+                                            </button>
+                                        </div>
                                     </div>
+
+                                    {effectiveTopicSources.own && (
+                                        <div className='nmx-comic-studio-field nmx-comic-studio-collapsible'>
+                                            <span className='nmx-comic-studio-label'>{t('sourceOwn')}</span>
+                                            {renderSourcePickerBlock('topic')}
+                                        </div>
+                                    )}
+
+                                    {effectiveTopicSources.stock && (
+                                        <div className='nmx-comic-studio-stock-panel'>
+                                            <div
+                                                className='nmx-comic-studio-segmented nmx-comic-studio-segment'
+                                                role='radiogroup'
+                                                aria-label={t('sourceStock')}
+                                            >
+                                                <button
+                                                    type='button'
+                                                    role='radio'
+                                                    aria-checked={activeStockProvider === 'pexels'}
+                                                    disabled={props.generating}
+                                                    className={`nmx-comic-studio-seg-btn${activeStockProvider === 'pexels' ? ' is-active' : ''}`}
+                                                    onClick={() => props.onTopicStockProviderChange?.('pexels')}
+                                                >
+                                                    <span data-nmx-literal>Pexels</span>
+                                                </button>
+                                                <button
+                                                    type='button'
+                                                    role='radio'
+                                                    aria-checked={activeStockProvider === 'pixabay'}
+                                                    disabled={props.generating}
+                                                    className={`nmx-comic-studio-seg-btn${activeStockProvider === 'pixabay' ? ' is-active' : ''}`}
+                                                    onClick={() => props.onTopicStockProviderChange?.('pixabay')}
+                                                >
+                                                    <span data-nmx-literal>Pixabay</span>
+                                                </button>
+                                            </div>
+
+                                            {props.topicStockKeySaved && !props.topicStockEditingKey ? (
+                                                <div className='nmx-comic-studio-stock-saved'>
+                                                    <i className='codicon codicon-pass-filled' aria-hidden='true' />
+                                                    <span>{t('stockKeySaved')}</span>
+                                                    <button
+                                                        type='button'
+                                                        className='nmx-comic-studio-stage-btn'
+                                                        disabled={props.generating}
+                                                        onClick={() => props.onTopicStockEditingKeyChange?.(true)}
+                                                    >
+                                                        {t('stockKeyChange')}
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className='nmx-comic-studio-stock-key-row'>
+                                                    <ImeInput
+                                                        type='password'
+                                                        className='nmx-comic-studio-input'
+                                                        value={props.topicStockKeyInput ?? ''}
+                                                        disabled={props.generating}
+                                                        placeholder={t('stockKeyPlaceholder', {
+                                                            provider: activeStockProviderLabel
+                                                        })}
+                                                        aria-label={t('stockKeyPlaceholder', {
+                                                            provider: activeStockProviderLabel
+                                                        })}
+                                                        onChange={event =>
+                                                            props.onTopicStockKeyInputChange?.(event.currentTarget.value)
+                                                        }
+                                                    />
+                                                    <button
+                                                        type='button'
+                                                        className='nmx-comic-studio-stock-link'
+                                                        onClick={() => props.onOpenStockKeyPage?.(activeStockProvider)}
+                                                    >
+                                                        <span>{t('stockGetKey')}</span>
+                                                        <i className='codicon codicon-link-external' aria-hidden='true' />
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            <p className='nmx-comic-studio-hint-note'>{t('stockLicenseNote')}</p>
+                                        </div>
+                                    )}
 
                                     <div className='nmx-comic-studio-field'>
                                         <span className='nmx-comic-studio-label'>{t('modelSelection')}</span>
@@ -1616,47 +2079,64 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                                     </div>
                                                 </div>
                                             )}
-                                            <div className='nmx-comic-studio-model-row'>
-                                                <small className='nmx-comic-studio-sublabel'>{t('visualModel')}</small>
-                                                <div className='nmx-comic-studio-model-slot'>
-                                                    {props.primaryModelPickerSlot}
+                                            {effectiveTopicSources.ai && props.primaryModelPickerSlot && (
+                                                <div className='nmx-comic-studio-model-row'>
+                                                    <small className='nmx-comic-studio-sublabel'>{t('visualModel')}</small>
+                                                    <div className='nmx-comic-studio-model-slot'>
+                                                        {props.primaryModelPickerSlot}
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )}
+                                            {(props.topicVoiceSubtitles ?? true) && props.tertiaryModelPickerSlot && (
+                                                <div className='nmx-comic-studio-model-row'>
+                                                    <small className='nmx-comic-studio-sublabel'>{t('voiceModel')}</small>
+                                                    <div className='nmx-comic-studio-model-slot'>
+                                                        {props.tertiaryModelPickerSlot}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
-                                    <div className='nmx-comic-studio-grid-2'>
-                                        <div className='nmx-comic-studio-field'>
-                                            <span className='nmx-comic-studio-label'>{t('topicVisualType')}</span>
-                                            <div
-                                                className='nmx-comic-studio-segmented'
-                                                role='radiogroup'
-                                                aria-label={t('topicVisualType')}
-                                            >
-                                                <button
-                                                    type='button'
-                                                    role='radio'
-                                                    aria-checked={(props.topicVisualMode ?? 'videos') === 'videos'}
-                                                    disabled={props.generating}
-                                                    className={`nmx-comic-studio-seg-btn${(props.topicVisualMode ?? 'videos') === 'videos' ? ' is-active' : ''}`}
-                                                    onClick={() => props.onTopicVisualModeChange?.('videos')}
+                                    {effectiveTopicSources.ai ? (
+                                        <div className='nmx-comic-studio-grid-2'>
+                                            <div className='nmx-comic-studio-field'>
+                                                <span className='nmx-comic-studio-label'>{t('topicVisualType')}</span>
+                                                <div
+                                                    className='nmx-comic-studio-segmented'
+                                                    role='radiogroup'
+                                                    aria-label={t('topicVisualType')}
                                                 >
-                                                    {t('topicVisualVideos')}
-                                                </button>
-                                                <button
-                                                    type='button'
-                                                    role='radio'
-                                                    aria-checked={props.topicVisualMode === 'images'}
-                                                    disabled={props.generating}
-                                                    className={`nmx-comic-studio-seg-btn${props.topicVisualMode === 'images' ? ' is-active' : ''}`}
-                                                    onClick={() => props.onTopicVisualModeChange?.('images')}
-                                                >
-                                                    {t('topicVisualImages')}
-                                                </button>
+                                                    <button
+                                                        type='button'
+                                                        role='radio'
+                                                        aria-checked={(props.topicVisualMode ?? 'videos') === 'videos'}
+                                                        disabled={props.generating}
+                                                        className={`nmx-comic-studio-seg-btn${(props.topicVisualMode ?? 'videos') === 'videos' ? ' is-active' : ''}`}
+                                                        onClick={() => props.onTopicVisualModeChange?.('videos')}
+                                                    >
+                                                        {t('topicVisualVideos')}
+                                                    </button>
+                                                    <button
+                                                        type='button'
+                                                        role='radio'
+                                                        aria-checked={props.topicVisualMode === 'images'}
+                                                        disabled={props.generating}
+                                                        className={`nmx-comic-studio-seg-btn${props.topicVisualMode === 'images' ? ' is-active' : ''}`}
+                                                        onClick={() => props.onTopicVisualModeChange?.('images')}
+                                                    >
+                                                        {t('topicVisualImages')}
+                                                    </button>
+                                                </div>
                                             </div>
+                                            {renderDurationControl(t('targetDuration'))}
                                         </div>
-                                        {renderDurationControl(t('targetDuration'))}
-                                    </div>
+                                    ) : (
+                                        <>
+                                            <p className='nmx-comic-studio-hint-note'>{t('noAiHintNote')}</p>
+                                            {renderDurationControl(t('targetDuration'))}
+                                        </>
+                                    )}
 
                                     {renderAspectRatioControl()}
                                     {renderStyleSelect('visual')}
@@ -1784,21 +2264,21 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                 </>
                             )}
 
-                            {props.errorMessage && (
+                            {safeErrorMessage && (
                                 <div className='nmx-comic-studio-error' role='alert'>
                                     <i className='codicon codicon-error' aria-hidden='true' />
-                                    <span data-nmx-literal>{props.errorMessage}</span>
+                                    <span data-nmx-literal>{safeErrorMessage}</span>
                                 </div>
                             )}
                         </div>
 
                         {/* Sticky Left Footer */}
                         <footer className='nmx-comic-studio-left-footer'>
-                            {props.blockedReason && (
+                            {safeBlockedReason && (
                                 <div className='nmx-comic-studio-blocked-bar' role='status'>
                                     <i className='codicon codicon-warning' aria-hidden='true' />
-                                    <span data-nmx-literal title={props.blockedReason}>
-                                        {props.blockedReason}
+                                    <span data-nmx-literal title={safeBlockedReason}>
+                                        {safeBlockedReason}
                                     </span>
                                     {props.onBlockedAction && (
                                         <button
@@ -1832,7 +2312,7 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                     <button
                                         type='button'
                                         className='nmx-comic-studio-cta is-primary'
-                                        disabled={props.generating || Boolean(props.blockedReason)}
+                                        disabled={props.generating || Boolean(safeBlockedReason)}
                                         onClick={props.onGenerate}
                                     >
                                         {props.generating ? (
@@ -1884,7 +2364,7 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                         type='button'
                                         className='nmx-comic-studio-stage-btn'
                                         title={isAudioStage ? t('zoomDetails') : t('zoomPreview')}
-                                        onClick={() => setLightboxOpen(true)}
+                                        onClick={() => openLightbox()}
                                     >
                                         <i className='codicon codicon-screen-full' aria-hidden='true' />
                                         <span>{isAudioStage ? t('zoomDetails') : t('zoomPreview')}</span>
@@ -1952,11 +2432,34 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                 </div>
                             )}
 
-                            {activeTake && !isAudioStage && (
+                            {activeTake && isImageStage && (
                                 <div
                                     className='nmx-comic-studio-video-wrap'
                                     onContextMenu={event => openTakeContextMenu(event, activeTake)}
-                                    onDoubleClick={() => setLightboxOpen(true)}
+                                >
+                                    <img
+                                        key={activeTake.id}
+                                        className='nmx-comic-studio-image'
+                                        src={activeTake.mediaUrl}
+                                        alt={activeTake.title}
+                                        draggable={false}
+                                    />
+                                    <button
+                                        type='button'
+                                        className='nmx-comic-studio-stage-zoom-fab'
+                                        aria-label={t('zoomPreview')}
+                                        title={t('zoomPreview')}
+                                        onClick={() => openLightbox()}
+                                    >
+                                        <i className='codicon codicon-screen-full' aria-hidden='true' />
+                                    </button>
+                                </div>
+                            )}
+
+                            {activeTake && isVideoStage && (
+                                <div
+                                    className='nmx-comic-studio-video-wrap'
+                                    onContextMenu={event => openTakeContextMenu(event, activeTake)}
                                 >
                                     <video
                                         key={activeTake.id}
@@ -1969,18 +2472,13 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                         onPlay={() => setIsPlaying(true)}
                                         onPause={() => setIsPlaying(false)}
                                         onEnded={() => setIsPlaying(false)}
-                                        onClick={event => {
-                                            if (!event.isTrusted) {
-                                                toggleActivePlayback();
-                                            }
-                                        }}
                                     />
                                     <button
                                         type='button'
                                         className='nmx-comic-studio-stage-zoom-fab'
                                         aria-label={t('zoomPreview')}
                                         title={t('zoomPreview')}
-                                        onClick={() => setLightboxOpen(true)}
+                                        onClick={() => openLightbox()}
                                     >
                                         <i className='codicon codicon-screen-full' aria-hidden='true' />
                                     </button>
@@ -1998,6 +2496,8 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                         src={activeTake.mediaUrl}
                                         preload='metadata'
                                         onLoadedMetadata={event => {
+                                            event.currentTarget.volume = muted ? 0 : volume;
+                                            event.currentTarget.muted = muted;
                                             const dur = event.currentTarget.duration;
                                             if (Number.isFinite(dur) && dur > 0) {
                                                 setDuration(dur);
@@ -2065,15 +2565,15 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                             <input
                                                 type='range'
                                                 min={0}
-                                                max={effectiveAudioDuration}
+                                                max={sliderMaxDuration}
                                                 step={0.1}
-                                                value={Math.min(currentTime, effectiveAudioDuration)}
+                                                value={Math.min(currentTime, sliderMaxDuration)}
                                                 aria-label={modalTitle}
                                                 onChange={event => seekAudio(Number(event.currentTarget.value))}
                                             />
                                             <div className='nmx-comic-studio-audio-clock' data-nmx-literal>
                                                 <span>{formatMediaClock(currentTime)}</span>
-                                                <span>{formatMediaClock(effectiveAudioDuration)}</span>
+                                                <span>{knownAudioDuration > 0 ? formatMediaClock(knownAudioDuration) : '--:--'}</span>
                                             </div>
                                         </div>
 
@@ -2106,7 +2606,7 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                             className='nmx-comic-studio-vol-btn'
                                             aria-label={t('zoomDetails')}
                                             title={t('zoomDetails')}
-                                            onClick={() => setLightboxOpen(true)}
+                                            onClick={() => openLightbox()}
                                         >
                                             <i className='codicon codicon-screen-full' aria-hidden='true' />
                                         </button>
@@ -2138,7 +2638,10 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                 >
                                     {props.takes.map((take, idx) => {
                                         const selected = take.id === activeTake?.id;
-                                        const takeIsAudio = props.kind === 'music' || take.kind === 'audio';
+                                        const takeIsImage = take.kind === 'image';
+                                        const takeIsAudio =
+                                            !takeIsImage &&
+                                            (take.kind === 'audio' || (props.kind === 'music' && take.kind !== 'video'));
                                         return (
                                             <button
                                                 key={take.id}
@@ -2152,7 +2655,14 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                                 onContextMenu={event => openTakeContextMenu(event, take)}
                                             >
                                                 <span className='nmx-comic-studio-take-thumb'>
-                                                    {take.thumbnailUrl ? (
+                                                    {takeIsImage ? (
+                                                        <img
+                                                            src={take.thumbnailUrl || take.mediaUrl}
+                                                            alt=''
+                                                            loading='lazy'
+                                                            draggable={false}
+                                                        />
+                                                    ) : take.thumbnailUrl ? (
                                                         <img src={take.thumbnailUrl} alt='' loading='lazy' draggable={false} />
                                                     ) : !takeIsAudio ? (
                                                         <video
@@ -2217,34 +2727,45 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                         <span>
                             {contextMenu.mediaKind === 'audio'
                                 ? t('revealAudioInFolder')
-                                : t('revealVideoInFolder')}
+                                : contextMenu.mediaKind === 'image'
+                                  ? t('revealImageInFolder')
+                                  : t('revealVideoInFolder')}
                         </span>
                     </button>
                     <button
                         type='button'
                         role='menuitem'
                         onClick={() => {
-                            if (contextMenu.takeId !== activeTake?.id) {
-                                props.onSelectTake(contextMenu.takeId);
-                            }
+                            const targetTakeId = contextMenu.takeId;
                             setContextMenu(undefined);
-                            setLightboxOpen(true);
+                            openLightbox(targetTakeId);
                         }}
                     >
                         <i className='codicon codicon-screen-full' aria-hidden='true' />
                         <span>{contextMenu.mediaKind === 'audio' ? t('zoomDetails') : t('zoomPreview')}</span>
                     </button>
-                    <button
-                        type='button'
-                        role='menuitem'
-                        onClick={() => {
-                            setContextMenu(undefined);
-                            toggleActivePlayback();
-                        }}
-                    >
-                        <i className={`codicon codicon-${isPlaying ? 'debug-pause' : 'play'}`} aria-hidden='true' />
-                        <span>{t('playPause')}</span>
-                    </button>
+                    {contextMenu.mediaKind !== 'image' && (
+                        <button
+                            type='button'
+                            role='menuitem'
+                            onClick={() => {
+                                const targetTakeId = contextMenu.takeId;
+                                setContextMenu(undefined);
+                                if (targetTakeId !== activeTake?.id) {
+                                    pendingAutoPlayTakeIdRef.current = targetTakeId;
+                                    props.onSelectTake(targetTakeId);
+                                } else {
+                                    toggleActivePlayback();
+                                }
+                            }}
+                        >
+                            <i
+                                className={`codicon codicon-${contextMenu.takeId === activeTake?.id && isPlaying ? 'debug-pause' : 'play'}`}
+                                aria-hidden='true'
+                            />
+                            <span>{t('playPause')}</span>
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -2257,11 +2778,20 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                     aria-label={activeTake.title}
                     onMouseDown={event => {
                         if (event.target === event.currentTarget) {
-                            setLightboxOpen(false);
+                            closeLightbox();
+                        }
+                    }}
+                    onClick={event => {
+                        if (event.target === event.currentTarget) {
+                            closeLightbox();
                         }
                     }}
                 >
-                    <header className='nmx-comic-studio-lightbox-bar'>
+                    <header
+                        className='nmx-comic-studio-lightbox-bar'
+                        onMouseDown={event => event.stopPropagation()}
+                        onClick={event => event.stopPropagation()}
+                    >
                         <strong data-nmx-literal>{activeTake.title}</strong>
                         <div className='nmx-comic-studio-lightbox-actions'>
                             <button
@@ -2276,7 +2806,7 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                 type='button'
                                 className='nmx-comic-studio-enter-btn is-primary'
                                 onClick={() => {
-                                    setLightboxOpen(false);
+                                    closeLightbox();
                                     props.onEnterEditor();
                                 }}
                             >
@@ -2287,7 +2817,8 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                 type='button'
                                 className='nmx-comic-studio-close-btn'
                                 aria-label={t('close')}
-                                onClick={() => setLightboxOpen(false)}
+                                title={t('close')}
+                                onClick={() => closeLightbox()}
                             >
                                 <i className='codicon codicon-close' aria-hidden='true' />
                             </button>
@@ -2295,10 +2826,33 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                     </header>
                     <div
                         className='nmx-comic-studio-lightbox-body'
+                        onMouseDown={event => {
+                            if (event.target === event.currentTarget) {
+                                closeLightbox();
+                            }
+                        }}
+                        onClick={event => {
+                            if (event.target === event.currentTarget) {
+                                closeLightbox();
+                            }
+                        }}
                         onContextMenu={event => openTakeContextMenu(event, activeTake)}
                     >
-                        {isAudioStage ? (
-                            <div className='nmx-comic-studio-lightbox-audio'>
+                        {isImageStage ? (
+                            <img
+                                className='nmx-comic-studio-lightbox-image'
+                                src={activeTake.mediaUrl}
+                                alt={activeTake.title}
+                                draggable={false}
+                                onMouseDown={event => event.stopPropagation()}
+                                onClick={event => event.stopPropagation()}
+                            />
+                        ) : isAudioStage ? (
+                            <div
+                                className='nmx-comic-studio-lightbox-audio'
+                                onMouseDown={event => event.stopPropagation()}
+                                onClick={event => event.stopPropagation()}
+                            >
                                 <div className='nmx-comic-studio-audio-disc is-large'>
                                     {activeTake.thumbnailUrl ? (
                                         <img src={activeTake.thumbnailUrl} alt='' draggable={false} />
@@ -2309,16 +2863,60 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                 </div>
                                 <h3 data-nmx-literal>{activeTake.title}</h3>
                                 {activeTake.prompt && <p data-nmx-literal>{activeTake.prompt}</p>}
-                                <audio src={activeTake.mediaUrl} controls autoPlay />
+                                <audio
+                                    ref={lightboxAudioRef}
+                                    src={activeTake.mediaUrl}
+                                    controls
+                                    autoPlay
+                                    onLoadedMetadata={event => {
+                                        event.currentTarget.volume = muted ? 0 : volume;
+                                        event.currentTarget.muted = muted;
+                                        const resume = stageResumeTimeRef.current;
+                                        if (
+                                            resume > 0 &&
+                                            Number.isFinite(event.currentTarget.duration) &&
+                                            resume < event.currentTarget.duration
+                                        ) {
+                                            try {
+                                                event.currentTarget.currentTime = resume;
+                                            } catch {
+                                                // Ignore seek error
+                                            }
+                                        }
+                                    }}
+                                    onTimeUpdate={event => {
+                                        stageResumeTimeRef.current = event.currentTarget.currentTime;
+                                    }}
+                                />
                             </div>
                         ) : (
                             <video
+                                ref={lightboxVideoRef}
                                 className='nmx-comic-studio-lightbox-video'
                                 src={activeTake.mediaUrl}
                                 poster={activeTake.thumbnailUrl}
                                 controls
                                 autoPlay
                                 playsInline
+                                onMouseDown={event => event.stopPropagation()}
+                                onClick={event => event.stopPropagation()}
+                                onLoadedMetadata={event => {
+                                    const resume = stageResumeTimeRef.current;
+                                    if (
+                                        resume > 0 &&
+                                        Number.isFinite(event.currentTarget.duration) &&
+                                        resume < event.currentTarget.duration
+                                    ) {
+                                        try {
+                                            event.currentTarget.currentTime = resume;
+                                        } catch {
+                                            // Ignore seek error
+                                        }
+                                    }
+                                }}
+                                onTimeUpdate={event => {
+                                    stageResumeTimeRef.current = event.currentTarget.currentTime;
+                                }}
                             />
                         )}
                     </div>

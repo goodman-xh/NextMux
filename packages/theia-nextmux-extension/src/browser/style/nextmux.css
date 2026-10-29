@@ -17636,23 +17636,32 @@ time {
     text-shadow: 0 1px 8px rgba(0, 0, 0, .72);
 }
 
+.nmx-attachment-lightbox :is(header, footer, button) {
+    -webkit-app-region: no-drag;
+}
+
 .nmx-attachment-lightbox button {
     width: 36px;
     height: 36px;
     display: grid;
     place-items: center;
     padding: 0;
-    border: 1px solid rgba(255, 255, 255, .14);
+    border: 1px solid rgba(255, 255, 255, .18) !important;
     border-radius: 999px;
-    color: #f7f7f8;
-    background: rgba(27, 27, 29, .78);
+    color: #f7f7f8 !important;
+    background: rgba(27, 27, 29, .78) !important;
     cursor: pointer;
     pointer-events: auto;
 }
 
+.nmx-attachment-lightbox button > :is(i, .codicon) {
+    color: inherit !important;
+}
+
 .nmx-attachment-lightbox button:hover:not(:disabled) {
-    color: #fff;
-    background: rgba(48, 48, 52, .94);
+    color: #fff !important;
+    background: rgba(48, 48, 52, .94) !important;
+    border-color: rgba(255, 255, 255, .34) !important;
 }
 
 .nmx-attachment-lightbox button:disabled {
@@ -18441,8 +18450,26 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
    coordinates and must not be offset by the transformed Theia workbench. The
    layers still provide the normal desktop/theme selector ancestry. */
 .nmx-model-picker-portal,
+.nmx-studio-isolated-picker-portal,
 .nmx-model-picker-surface {
     display: contents !important;
+    -webkit-app-region: no-drag;
+}
+
+/* Note: `display: contents` wrappers generate no layout box in Chromium/Electron,
+   so fixed popovers and modal layers must also opt out of the top 40px OS drag strip directly. */
+.nmx-model-picker-popover,
+.nmx-relay-picker-popover,
+.nmx-composer-popover,
+.nmx-model-effort-portal,
+.nmx-comic-model-effort-portal,
+.nmx-model-effort-menu,
+.nmx-offering-price-pop,
+.nmx-relay-metric-tooltip,
+.nmx-model-price-overlay-drawer,
+.nmx-board-modal-layer,
+.nmx-board-modal-layer .nmx-board-modal {
+    -webkit-app-region: no-drag;
 }
 
 .nmx-model-effort-menu > header {
@@ -18492,13 +18519,29 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     background: #302d2f;
 }
 
-.nmx-model-effort-menu.nmx-model-evidence-menu { width: 264px; overflow: auto; }
-.nmx-model-evidence { margin: 7px; font-size: 11px; }
-.nmx-model-evidence > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-block: 5px; }
+.nmx-model-effort-menu.nmx-model-evidence-menu,
+.nmx-model-effort-portal .nmx-model-effort-menu.nmx-model-evidence-menu {
+    width: 264px;
+    overflow-x: hidden !important;
+    overflow-y: auto;
+}
+.nmx-model-evidence { margin: 7px; font-size: 11px; min-width: 0; }
+.nmx-model-evidence > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-block: 5px; min-width: 0; }
 .nmx-model-evidence dt { min-width: 0; color: var(--nmx-muted, #a9a2a5); }
-.nmx-model-evidence dd { margin: 0; color: var(--nmx-text, #ddd9db); font-variant-numeric: tabular-nums; }
-/* Not measured yet ("—"): as quiet as its label, so it never reads like a score. */
+.nmx-model-evidence dd { margin: 0; min-width: 0; text-align: end; overflow-wrap: anywhere; color: var(--nmx-text, #ddd9db); font-variant-numeric: tabular-nums; }
+/* Not measured yet ("—" or pending authenticity check): quiet muted tone, never reading as a verified score. */
 .nmx-model-evidence dd[data-unmeasured] { color: var(--nmx-muted, #a9a2a5); }
+.nmx-model-evidence [data-unmeasured='true'],
+.nmx-evidence-pending {
+    color: var(--nmx-muted, #a9a2a5);
+    font-weight: 500;
+    border-bottom: 1px dashed color-mix(in srgb, var(--nmx-muted, #a9a2a5) 55%, transparent);
+    cursor: help;
+}
+:is(.nmx-theme-light, .nmx-model-effort-portal.nmx-theme-light) :is(.nmx-model-evidence [data-unmeasured='true'], .nmx-evidence-pending) {
+    color: #655f68;
+    border-bottom-color: color-mix(in srgb, #655f68 52%, transparent);
+}
 .nmx-model-evidence-note, .nmx-model-effort-caption { margin: 7px; color: var(--nmx-muted, #a9a2a5); font-size: 11px; overflow-wrap: anywhere; }
 
 .nmx-model-context-readonly,
@@ -18751,7 +18794,7 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
 }
 
 /* Filled buttons (primary, danger, send) keep their own hover fill; see nextmux-light-contrast.css. */
-.nmx-theme-light :is(button:hover:not(.nmx-primary-button, .is-primary, .is-danger, .nmx-send-button, .nmx-comic-editor-mic.is-active, .nmx-zoom-button, .nmx-board-chips button.is-active, .nmx-board-marks-group button.is-on, .nmx-canvas-tabs-dialog button:last-child, .nmx-camera-confirm, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate, .nmx-comic-setup-toggle, [role='switch'], .nmx-library-upload-btn, .nmx-library-use-btn, .nmx-cut-export, .nmx-comic-export-start, .nmx-account-update, .nmx-director-stage button[aria-pressed='true'], .nmx-director-stage .nmx-director-modes > button.is-active, .nmx-director-stage .nmx-director-Play, .nmx-director-stage .nmx-director-Generate, .nmx-director-stage .nmx-director-Primary, .nmx-director-stage .nmx-director-inspector nav button, .nmx-director-stage .nmx-director-catalogue nav button, .nmx-director-stage .nmx-director-colors button, .nmx-director-stage .nmx-director-track button, .nmx-comic-studio-modal button, .nmx-comic-studio-context-menu button, .nmx-comic-studio-lightbox button), button.is-active:not(.nmx-primary-button, .is-primary, .is-danger, .nmx-send-button, .nmx-comic-editor-mic, .nmx-zoom-button, .nmx-board-chips button, .nmx-board-marks-group button.is-on, .nmx-canvas-tabs-dialog button:last-child, .nmx-camera-confirm, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate, .nmx-comic-setup-toggle, [role='switch'], .nmx-library-upload-btn, .nmx-library-use-btn, .nmx-cut-export, .nmx-comic-export-start, .nmx-account-update, .nmx-director-stage button[aria-pressed='true'], .nmx-director-stage .nmx-director-modes > button.is-active, .nmx-director-stage .nmx-director-Play, .nmx-director-stage .nmx-director-Generate, .nmx-director-stage .nmx-director-Primary, .nmx-director-stage .nmx-director-inspector nav button, .nmx-director-stage .nmx-director-catalogue nav button, .nmx-director-stage .nmx-director-colors button, .nmx-director-stage .nmx-director-track button, .nmx-comic-studio-modal button, .nmx-comic-studio-context-menu button, .nmx-comic-studio-lightbox button), .nmx-session-row:hover, .nmx-session-row.is-current, .nmx-model-option.is-selected > button) {
+.nmx-theme-light :is(button:hover:not(.nmx-primary-button, .is-primary, .is-danger, .nmx-send-button, .nmx-comic-editor-mic.is-active, .nmx-zoom-button, .nmx-board-chips button.is-active, .nmx-board-marks-group button.is-on, .nmx-canvas-tabs-dialog button:last-child, .nmx-camera-confirm, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate, .nmx-comic-setup-toggle, .nmx-comic-chat-recommend.is-on, [role='switch'], .nmx-library-upload-btn, .nmx-library-use-btn, .nmx-library-video-zoom-hit, .nmx-library-zoom-btn, .nmx-library-lightbox-close, .nmx-library-delete-ok, .nmx-library-toolbar button[aria-pressed='true'], .nmx-cut-export, .nmx-comic-export-start, .nmx-account-update, .nmx-director-stage button[aria-pressed='true'], .nmx-director-stage .nmx-director-modes > button.is-active, .nmx-director-stage .nmx-director-Play, .nmx-director-stage .nmx-director-Generate, .nmx-director-stage .nmx-director-Primary, .nmx-director-stage .nmx-director-inspector nav button, .nmx-director-stage .nmx-director-catalogue nav button, .nmx-director-stage .nmx-director-colors button, .nmx-director-stage .nmx-director-track button, .nmx-comic-studio-modal button, .nmx-comic-studio-context-menu button, .nmx-comic-studio-lightbox button, .nmx-attachment-lightbox button), button.is-active:not(.nmx-primary-button, .is-primary, .is-danger, .nmx-send-button, .nmx-comic-editor-mic, .nmx-zoom-button, .nmx-board-chips button, .nmx-board-marks-group button.is-on, .nmx-canvas-tabs-dialog button:last-child, .nmx-camera-confirm, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate, .nmx-comic-setup-toggle, .nmx-comic-chat-recommend.is-on, [role='switch'], .nmx-library-upload-btn, .nmx-library-use-btn, .nmx-library-video-zoom-hit, .nmx-library-zoom-btn, .nmx-library-lightbox-close, .nmx-library-delete-ok, .nmx-library-toolbar button[aria-pressed='true'], .nmx-cut-export, .nmx-comic-export-start, .nmx-account-update, .nmx-director-stage button[aria-pressed='true'], .nmx-director-stage .nmx-director-modes > button.is-active, .nmx-director-stage .nmx-director-Play, .nmx-director-stage .nmx-director-Generate, .nmx-director-stage .nmx-director-Primary, .nmx-director-stage .nmx-director-inspector nav button, .nmx-director-stage .nmx-director-catalogue nav button, .nmx-director-stage .nmx-director-colors button, .nmx-director-stage .nmx-director-track button, .nmx-comic-studio-modal button, .nmx-comic-studio-context-menu button, .nmx-comic-studio-lightbox button, .nmx-attachment-lightbox button), .nmx-session-row:hover, .nmx-session-row.is-current, .nmx-model-option.is-selected > button) {
     background-color: #ddd9d6 !important;
 }
 
@@ -19425,7 +19468,8 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
 
 .nmx-model-effort-menu {
     max-width: calc(100dvw - 16px);
-    overflow: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: thin;
     transform: none;
@@ -20714,8 +20758,6 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item + .lm-Menu
     .nmx-composer-tool,
     .nmx-mic-button,
     .nmx-permission-button,
-    .nmx-composer-relay-button,
-    .nmx-route-button,
     .nmx-account-trigger,
     .nmx-account-trigger > i,
     .nmx-work-context button,
@@ -20724,13 +20766,27 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item + .lm-Menu
     color: #5f585c !important;
 }
 
-.nmx-theme-light .nmx-composer .nmx-composer-relay-button,
-.nmx-theme-light .nmx-composer .nmx-composer-relay-button > span {
-    color: #3e383c !important;
+/* Broadened light-theme contrast for ALL relay & model route triggers (inside or outside `.nmx-composer`) */
+.nmx-theme-light :is(.nmx-composer-relay-button, .nmx-route-button),
+.nmx-theme-light :is(.nmx-composer-relay-button, .nmx-route-button) > span:not(.codicon) {
+    color: #1f1c1e !important;
 }
 
-.nmx-theme-light .nmx-composer .nmx-composer-relay-button > i:last-child {
-    color: #6e676b !important;
+.nmx-theme-light :is(.nmx-composer-relay-button, .nmx-route-button) > :is(i, .codicon) {
+    color: #575256 !important;
+}
+
+.nmx-theme-light .nmx-composer-relay-button.is-unavailable > :is(i, .codicon):first-child {
+    color: #b45309 !important;
+}
+
+.nmx-theme-light .nmx-route-button.is-empty > span:not(.codicon) {
+    color: #5b5b64 !important;
+}
+
+.nmx-theme-light :is(.nmx-composer-relay-button, .nmx-route-button):is(:hover:not(:disabled), .is-open, .is-active, [aria-expanded='true']),
+.nmx-theme-light :is(.nmx-composer-relay-button, .nmx-route-button):is(:hover:not(:disabled), .is-open, .is-active, [aria-expanded='true']) > :is(span:not(.codicon), i, .codicon) {
+    color: #141213 !important;
 }
 
 .nmx-theme-light :is(
@@ -21790,7 +21846,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
 
 .nmx-relay-metric-tooltip {
     position: fixed;
-    z-index: 570;
+    z-index: 12200 !important;
     box-sizing: border-box;
     max-width: calc(100vw - 16px);
     padding: 8px 10px;
@@ -21804,13 +21860,26 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     overflow-wrap: anywhere;
     pointer-events: none;
 }
-.nmx-relay-metric-tooltip.nmx-theme-light { background: #fbfaf8; color: #28272b; border-color: #d8d4d0; }
+.nmx-relay-metric-tooltip.nmx-theme-light,
+.nmx-theme-light .nmx-relay-metric-tooltip {
+    background: #fbfaf8;
+    color: #28272b;
+    border-color: #d8d4d0;
+    box-shadow: 0 8px 22px rgba(40, 24, 32, .14);
+}
 
 .nmx-same-model-switch { display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 34px; padding: 4px 8px; box-sizing: border-box; cursor: pointer; }
 .nmx-same-model-switch > input { flex: 0 0 auto; margin: 0; accent-color: var(--nmx-picker-accent); }
 .nmx-same-model-switch > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
 .nmx-same-model-switch:focus-within { outline: 1px solid var(--nmx-picker-accent); outline-offset: -2px; border-radius: 5px; }
-.nmx-same-model-switch-tooltip { position: fixed; z-index: 580; box-sizing: border-box; padding: 9px 11px; border: 1px solid #595259; border-radius: 7px; background: #252427; color: #f0edf0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; pointer-events: none; max-height: calc(100vh - 16px); overflow: auto; box-shadow: 0 8px 24px #0004; }
+.nmx-same-model-switch-tooltip { position: fixed; z-index: 12200 !important; box-sizing: border-box; padding: 9px 11px; border: 1px solid #595259; border-radius: 7px; background: #252427; color: #f0edf0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; pointer-events: none; max-height: calc(100vh - 16px); overflow: auto; box-shadow: 0 8px 24px #0004; }
+.nmx-same-model-switch-tooltip.nmx-theme-light,
+.nmx-theme-light .nmx-same-model-switch-tooltip {
+    background: #fbfaf8;
+    color: #28272b;
+    border-color: #d8d4d0;
+    box-shadow: 0 8px 24px rgba(40, 24, 32, .14);
+}
 
 .nmx-empty-brand-mark {
     width: 88px;

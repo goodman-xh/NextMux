@@ -249,7 +249,7 @@
 .nmx-lightbox figcaption { color: rgb(255 255 255 / 86%); font-size: 13px; }
 /* Full-window: the top strip is the macOS window-drag region, which would swallow the close button's clicks. */
 .nmx-lightbox, .nmx-lightbox-close { -webkit-app-region: no-drag; }
-.nmx-lightbox-close { position: absolute; top: 16px; right: 18px; width: 36px; height: 36px; border: 0; border-radius: 999px; color: #fff; background: rgb(255 255 255 / 14%); font-size: 22px; cursor: pointer; }
+.nmx-lightbox > .nmx-lightbox-close { position: absolute; top: 16px; right: 18px; width: 36px; height: 36px; border: 0; border-radius: 999px; color: #fff; background: rgb(255 255 255 / 14%); font-size: 22px; cursor: pointer; }
 
 /* A clip's lines are its player's own subtitle track: bottom, small, no speaker names — in full screen too. */
 .nmx-desk-card video::cue { font-size: clamp(11px, 1.5vw, 15px); line-height: 1.35; color: #fff; background: rgba(0, 0, 0, 0.45); }
@@ -404,6 +404,10 @@
 .nmx-desk-card-flag { position: absolute; top: 8px; inset-inline-start: 8px; padding: 1px 7px; border-radius: 999px; color: #fff; background: rgb(0 0 0 / 55%); font-size: 11px; font-style: normal; }
 
 /* ── A question over the desk ── */
+.nmx-desk-backdrop,
+.nmx-desk-header,
+.nmx-desk-confirm-backdrop,
+.nmx-desk-confirm { -webkit-app-region: no-drag; }
 .nmx-desk-confirm-backdrop { position: fixed; inset: 0; z-index: 1600; display: grid; place-items: center; padding: 24px; background: rgb(0 0 0 / 42%); animation: nmx-desk-fade 140ms ease-out; }
 .nmx-desk-confirm { width: min(460px, 100%); padding: 18px 18px 14px; border: 1px solid var(--nmx-border); border-radius: 16px; background: var(--nmx-panel); box-shadow: 0 24px 70px rgb(0 0 0 / 35%); outline: none; }
 .nmx-desk-confirm > h3 { margin: 0 0 8px; color: var(--nmx-text); font-size: 15px; }

@@ -68,13 +68,13 @@
     --st-border: rgba(20, 20, 28, 0.10);
     --st-border-strong: rgba(20, 20, 28, 0.20);
     --st-text: #18181b;
-    --st-muted: #64636c;
+    --st-muted: #5b5b64;
     --st-hover: rgba(20, 20, 28, 0.05);
     --st-active-bg: #1c1b1e;
     --st-active-bg-hover: #2c2a30;
     --st-active-fg: #ffffff;
     --st-active-border: #1c1b1e;
-    --st-inactive-fg: #5e5c64;
+    --st-inactive-fg: #52525b;
     --st-accent: #5b3df5;
     --st-accent-hover: #4d2fe6;
     --st-accent-soft: rgba(91, 61, 245, 0.11);
@@ -82,6 +82,26 @@
     --st-warn: #d97706;
     background: rgba(18, 18, 24, 0.36);
     color-scheme: light;
+}
+
+/* Opt out of Electron's top 40px OS title-bar drag region across all fixed studio layers, top bars, and portaled menus */
+.nmx-comic-studio-modal-backdrop,
+.nmx-comic-studio-modal,
+.nmx-comic-studio-header,
+.nmx-comic-studio-modal-topbar,
+.nmx-comic-studio-stage-bar,
+.nmx-comic-studio-lightbox,
+.nmx-comic-studio-lightbox-bar,
+.nmx-comic-studio-lightbox button,
+.nmx-comic-studio-context-menu,
+.nmx-comic-studio-context-menu button,
+.nmx-studio-isolated-picker-portal,
+.nmx-studio-isolated-picker-portal .nmx-model-picker-popover,
+.nmx-studio-isolated-picker-portal .nmx-relay-picker-popover,
+.nmx-model-picker-portal,
+.nmx-model-picker-portal .nmx-model-picker-popover,
+.nmx-model-picker-portal .nmx-relay-picker-popover {
+    -webkit-app-region: no-drag;
 }
 
 @keyframes nmx-studio-backdrop-in {
@@ -481,21 +501,255 @@
     min-width: 0;
 }
 
-.nmx-comic-studio-model-slot .nmx-comic-model-controls {
-    display: flex;
+/* Studio Isolated Relay & Model Trigger Slot (`renderComicStudioIsolatedModelSlot`) */
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot :is(.nmx-studio-isolated-drawers, .nmx-comic-chat-drawers),
+.nmx-comic-studio-model-slot :is(.nmx-studio-isolated-drawers, .nmx-comic-chat-drawers) {
+    display: grid;
+    grid-template-columns: minmax(116px, 0.88fr) minmax(0, 1.12fr);
+    gap: 6px;
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    border: 1px solid var(--st-border-strong);
-    border-radius: 8px;
-    background: var(--st-panel-2);
-    overflow: hidden;
+    align-items: stretch;
+    overflow: visible;
 }
 
-.nmx-comic-studio-model-slot .nmx-comic-model-controls > button {
-    height: 32px;
-    min-height: 32px;
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button),
+.nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    height: 34px;
+    min-height: 34px;
+    width: 100%;
+    max-width: none !important;
     min-width: 0;
+    margin: 0;
+    padding: 0 10px;
+    gap: 6px;
+    box-sizing: border-box;
+    border: 1px solid var(--st-border-strong) !important;
+    border-radius: 8px;
+    background: var(--st-input-bg) !important;
+    background-color: var(--st-input-bg) !important;
+    color: var(--st-text) !important;
+    font-size: 12.5px !important;
+    line-height: 18px !important;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button) > span:not(.codicon),
+.nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button) > span:not(.codicon) {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: none !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: start;
+    font-size: 12.5px !important;
+    font-weight: 600;
+    color: var(--st-text) !important;
+}
+
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button) > :is(.codicon, i),
+.nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button) > :is(.codicon, i) {
+    flex: 0 0 auto;
+    font-size: 13px !important;
+    color: var(--st-muted) !important;
+}
+
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot .nmx-composer-relay-button.is-unavailable > :is(.codicon, i):first-child,
+.nmx-comic-studio-model-slot .nmx-composer-relay-button.is-unavailable > :is(.codicon, i):first-child {
+    color: var(--st-warn) !important;
+}
+
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button) > :is(.codicon, i):last-child,
+.nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button) > :is(.codicon, i):last-child {
+    font-size: 12px !important;
+}
+
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot .nmx-route-button.is-empty > span:not(.codicon),
+.nmx-comic-studio-model-slot .nmx-route-button.is-empty > span:not(.codicon) {
+    color: var(--st-muted) !important;
+    font-weight: 500;
+}
+
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button):hover:not(:disabled),
+.nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button):hover:not(:disabled) {
+    background: var(--st-panel-2) !important;
+    background-color: var(--st-panel-2) !important;
+    border-color: color-mix(in srgb, var(--st-text) 38%, var(--st-border-strong)) !important;
+    color: var(--st-text) !important;
+}
+
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button):hover:not(:disabled) > :is(.codicon, i),
+.nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button):hover:not(:disabled) > :is(.codicon, i) {
+    color: var(--st-text) !important;
+}
+
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button):is(.is-open, .is-active, [aria-expanded='true']),
+.nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button):is(.is-open, .is-active, [aria-expanded='true']) {
+    background: var(--st-panel-2) !important;
+    background-color: var(--st-panel-2) !important;
+    border-color: var(--st-text) !important;
+    color: var(--st-text) !important;
+}
+
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button):is(.is-open, .is-active, [aria-expanded='true']) > :is(span:not(.codicon), .codicon, i),
+.nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button):is(.is-open, .is-active, [aria-expanded='true']) > :is(span:not(.codicon), .codicon, i) {
+    color: var(--st-text) !important;
+}
+
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button):disabled,
+.nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button):disabled {
+    opacity: 0.52;
+    cursor: not-allowed;
+}
+
+/* Topic Multi-Source Modes & Stock Panel (`主题一键成片`) */
+.nmx-comic-studio-source-modes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-source-mode-btn,
+.nmx-comic-studio-source-mode-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 34px;
+    min-height: 34px;
+    min-width: 0;
+    margin: 0;
+    padding: 0 10px;
+    border: 1px solid var(--st-border-strong) !important;
+    border-radius: 8px;
+    background: var(--st-input-bg);
+    color: var(--st-inactive-fg);
+    font-size: 12.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-source-mode-btn > :is(.codicon, i),
+.nmx-comic-studio-source-mode-btn > :is(.codicon, i) {
+    flex: 0 0 auto;
+    font-size: 13px;
+    color: currentColor;
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-source-mode-btn > span:not(.codicon),
+.nmx-comic-studio-source-mode-btn > span:not(.codicon) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-source-mode-btn:hover:not(:disabled):not(.is-active):not([aria-pressed='true']):not([aria-checked='true']),
+.nmx-comic-studio-source-mode-btn:hover:not(:disabled):not(.is-active):not([aria-pressed='true']):not([aria-checked='true']) {
+    background: var(--st-panel-2);
+    border-color: color-mix(in srgb, var(--st-text) 34%, var(--st-border-strong)) !important;
+    color: var(--st-text);
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-source-mode-btn:is(.is-active, [aria-pressed='true'], [aria-checked='true']),
+.nmx-comic-studio-source-mode-btn:is(.is-active, [aria-pressed='true'], [aria-checked='true']) {
+    background: var(--st-active-bg) !important;
+    background-color: var(--st-active-bg) !important;
+    border-color: var(--st-active-border) !important;
+    color: var(--st-active-fg) !important;
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-source-mode-btn:is(.is-active, [aria-pressed='true'], [aria-checked='true']):hover:not(:disabled),
+.nmx-comic-studio-source-mode-btn:is(.is-active, [aria-pressed='true'], [aria-checked='true']):hover:not(:disabled) {
+    background: var(--st-active-bg-hover) !important;
+    background-color: var(--st-active-bg-hover) !important;
+    border-color: var(--st-active-bg-hover) !important;
+    color: var(--st-active-fg) !important;
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-source-mode-btn:is(.is-active, [aria-pressed='true'], [aria-checked='true']) > :is(.codicon, i, span),
+.nmx-comic-studio-source-mode-btn:is(.is-active, [aria-pressed='true'], [aria-checked='true']) > :is(.codicon, i, span) {
+    color: var(--st-active-fg) !important;
+}
+
+.nmx-comic-studio-stock-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--st-border);
+    border-radius: 10px;
+    background: var(--st-panel-2);
+    min-width: 0;
+}
+
+.nmx-comic-studio-stock-saved {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--st-text);
+    min-width: 0;
+}
+
+.nmx-comic-studio-stock-key-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.nmx-comic-studio-stock-key-row > input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-stock-link,
+.nmx-comic-studio-stock-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    padding: 0 2px;
+    border: 0 !important;
+    border-radius: 4px;
+    background: transparent !important;
+    color: var(--st-accent) !important;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-stock-link:hover:not(:disabled),
+.nmx-comic-studio-stock-link:hover:not(:disabled) {
+    color: var(--st-accent-hover) !important;
+    background: transparent !important;
+}
+
+.nmx-comic-studio-hint-note {
+    margin: 0;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--st-muted);
 }
 
 /* Source Upload & Asset Library */
@@ -798,7 +1052,7 @@
     height: 17px;
     border-radius: 50%;
     background: var(--st-active-bg);
-    color: var(--st-active-fg);
+    color: var(--st-active-fg) !important;
     font-size: 10px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.34);
 }
@@ -1527,6 +1781,19 @@
     box-shadow: 0 18px 46px rgba(0, 0, 0, 0.36);
 }
 
+.nmx-comic-studio-image {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 10px;
+    user-select: none;
+    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.32);
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-stage-zoom-fab,
 .nmx-comic-studio-stage-zoom-fab {
     position: absolute;
     top: 10px;
@@ -1537,15 +1804,23 @@
     width: 32px;
     height: 32px;
     padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.22) !important;
     border-radius: 9px;
-    background: rgba(12, 12, 18, 0.62);
+    background: rgba(12, 12, 18, 0.66) !important;
     color: #ffffff !important;
     opacity: 0;
     cursor: pointer;
-    transition: opacity 130ms ease, background-color 130ms ease;
+    transition: opacity 130ms ease, background-color 130ms ease, border-color 130ms ease;
 }
 
+.nmx-comic-studio-modal .nmx-comic-studio-stage-zoom-fab:hover:not(:disabled),
+.nmx-comic-studio-stage-zoom-fab:hover:not(:disabled) {
+    background: rgba(12, 12, 18, 0.86) !important;
+    border-color: rgba(255, 255, 255, 0.42) !important;
+    color: #ffffff !important;
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-stage-zoom-fab > .codicon,
 .nmx-comic-studio-stage-zoom-fab > .codicon {
     color: #ffffff !important;
 }
@@ -1844,7 +2119,8 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--st-active-bg) 24%, transparent);
 }
 
-.nmx-comic-studio-take-thumb {
+.nmx-comic-studio-take-thumb,
+.nmx-comic-studio-filmstrip-thumb {
     position: relative;
     display: grid;
     place-items: center;
@@ -1855,7 +2131,9 @@
     background: #0d0d11;
 }
 
-.nmx-comic-studio-take-thumb > :is(img, video) {
+.nmx-comic-studio-take-thumb > :is(img, video),
+.nmx-comic-studio-filmstrip-thumb > :is(img, video) {
+    display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
@@ -1952,17 +2230,19 @@
     color: var(--st-accent);
 }
 
-/* ── Zoom Lightbox Overlay ─────────────────────────────────────────────────── */
+/* ── Zoom Lightbox Overlay (Isolated Dark-Cinema Theme Regardless of Light/Dark Mode) ── */
 .nmx-comic-studio-lightbox {
     position: fixed;
     inset: 0;
-    z-index: 2480;
+    z-index: 3200;
     display: flex;
     flex-direction: column;
     background: rgba(8, 8, 12, 0.92);
     -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
-    color: #f3f3f7;
+    color: #f4f4f6;
+    color-scheme: dark;
+    cursor: zoom-out;
 }
 
 .nmx-comic-studio-lightbox-bar {
@@ -1972,10 +2252,14 @@
     justify-content: space-between;
     gap: 12px;
     padding: 0 18px;
+    background: rgba(14, 14, 20, 0.88);
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    cursor: default;
 }
 
-.nmx-comic-studio-lightbox-bar > strong {
+.nmx-comic-studio-lightbox-bar > strong,
+.nmx-comic-studio-lightbox-bar strong {
+    color: #f4f4f6 !important;
     font-size: 14px;
     font-weight: 700;
     overflow: hidden;
@@ -1989,6 +2273,77 @@
     gap: 8px;
 }
 
+.nmx-comic-studio-lightbox .nmx-comic-studio-close-btn {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    border-radius: 9px;
+    border: 1px solid rgba(255, 255, 255, 0.24) !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    background-color: rgba(255, 255, 255, 0.12) !important;
+    color: #ffffff !important;
+}
+
+.nmx-comic-studio-lightbox .nmx-comic-studio-close-btn > :is(.codicon, i) {
+    color: #ffffff !important;
+}
+
+.nmx-comic-studio-lightbox .nmx-comic-studio-close-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.24) !important;
+    background-color: rgba(255, 255, 255, 0.24) !important;
+    border-color: rgba(255, 255, 255, 0.45) !important;
+    color: #ffffff !important;
+}
+
+.nmx-comic-studio-lightbox .nmx-comic-studio-close-btn:hover:not(:disabled) > :is(.codicon, i) {
+    color: #ffffff !important;
+}
+
+.nmx-comic-studio-lightbox .nmx-comic-studio-stage-btn {
+    border: 1px solid rgba(255, 255, 255, 0.22) !important;
+    background: rgba(255, 255, 255, 0.10) !important;
+    background-color: rgba(255, 255, 255, 0.10) !important;
+    color: #f4f4f6 !important;
+}
+
+.nmx-comic-studio-lightbox .nmx-comic-studio-stage-btn > :is(.codicon, i, span) {
+    color: #f4f4f6 !important;
+}
+
+.nmx-comic-studio-lightbox .nmx-comic-studio-stage-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.20) !important;
+    background-color: rgba(255, 255, 255, 0.20) !important;
+    border-color: rgba(255, 255, 255, 0.38) !important;
+    color: #ffffff !important;
+}
+
+.nmx-comic-studio-lightbox .nmx-comic-studio-stage-btn:hover:not(:disabled) > :is(.codicon, i, span) {
+    color: #ffffff !important;
+}
+
+.nmx-comic-studio-lightbox .nmx-comic-studio-enter-btn.is-primary {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    border: 1px solid #ffffff !important;
+    color: #111114 !important;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.nmx-comic-studio-lightbox .nmx-comic-studio-enter-btn.is-primary > :is(.codicon, i, span) {
+    color: #111114 !important;
+}
+
+.nmx-comic-studio-lightbox .nmx-comic-studio-enter-btn.is-primary:hover:not(:disabled) {
+    background: #e4e4ea !important;
+    background-color: #e4e4ea !important;
+    border-color: #e4e4ea !important;
+    color: #111114 !important;
+}
+
+.nmx-comic-studio-lightbox .nmx-comic-studio-enter-btn.is-primary:hover:not(:disabled) > :is(.codicon, i, span) {
+    color: #111114 !important;
+}
+
 .nmx-comic-studio-lightbox-body {
     flex: 1 1 auto;
     min-height: 0;
@@ -1997,14 +2352,26 @@
     justify-content: center;
     padding: 20px;
     overflow: hidden;
+    cursor: zoom-out;
+}
+
+.nmx-comic-studio-lightbox-video,
+.nmx-comic-studio-lightbox-image {
+    display: block;
+    max-width: min(1240px, 94vw);
+    max-height: calc(100vh - 96px);
+    width: auto;
+    height: auto;
+    min-width: 0;
+    min-height: 0;
+    object-fit: contain;
+    border-radius: 12px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
+    cursor: default;
 }
 
 .nmx-comic-studio-lightbox-video {
-    max-width: 100%;
-    max-height: 100%;
-    border-radius: 12px;
     background: #000000;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
 }
 
 .nmx-comic-studio-lightbox-audio {
@@ -2013,15 +2380,23 @@
     align-items: center;
     gap: 16px;
     width: min(520px, 94vw);
+    max-width: min(1240px, 94vw);
+    max-height: calc(100vh - 96px);
+    min-width: 0;
+    min-height: 0;
     padding: 28px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
     border-radius: 20px;
-    background: rgba(24, 24, 32, 0.92);
+    background: #18181d !important;
+    color: #f4f4f6 !important;
     text-align: center;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65);
+    cursor: default;
 }
 
 .nmx-comic-studio-lightbox-audio > h3 {
     margin: 0;
+    color: #f4f4f6 !important;
     font-size: 18px;
 }
 
@@ -2029,7 +2404,7 @@
     margin: 0;
     max-height: 160px;
     overflow-y: auto;
-    color: #b4b4c4;
+    color: #b8b8c6 !important;
     font-size: 13px;
     line-height: 1.6;
     white-space: pre-wrap;
@@ -2037,6 +2412,7 @@
 
 .nmx-comic-studio-lightbox-audio > audio {
     width: 100%;
+    cursor: default;
 }
 
 /* Responsive Two-Column Collapse below 860px */

@@ -161,8 +161,8 @@ export function OfferingPriceCard(props: OfferingPriceCardProps): React.ReactEle
         readonly left: number;
         readonly top: number;
         readonly width: number;
-        readonly minHeight: number;
         readonly maxHeight: number;
+        readonly zIndex: number;
         readonly side: 'left' | 'right';
     }>();
     const cancelPullOutClose = React.useCallback((): void => {
@@ -175,36 +175,70 @@ export function OfferingPriceCard(props: OfferingPriceCardProps): React.ReactEle
         if (typeof window === 'undefined' || typeof document === 'undefined') return;
         const edge = 8;
         const gap = 7;
-        const pickerEl = document.querySelector<HTMLElement>('.nmx-model-picker-popover, .nmx-council-model-dropdown, [data-comic-model-panel], .nmx-comic-setup');
+        const pickerCandidates = Array.from(
+            document.querySelectorAll<HTMLElement>(
+                '.nmx-model-picker-popover, .nmx-council-model-dropdown, [data-comic-model-panel], .nmx-comic-setup'
+            )
+        ).filter(el => el.offsetWidth > 0 && el.offsetHeight > 0);
+        let pickerEl: HTMLElement | undefined;
+        let highestPickerZ = -Infinity;
+        for (const candidate of pickerCandidates) {
+            const z = Number.parseInt(window.getComputedStyle(candidate).zIndex, 10) || 0;
+            if (z >= highestPickerZ) {
+                highestPickerZ = z;
+                pickerEl = candidate;
+            }
+        }
         const detailEl = triggerRef.current?.closest<HTMLElement>('.nmx-model-effort-menu:not(.nmx-model-price-overlay-drawer)');
         const pickerBox = pickerEl?.getBoundingClientRect();
         const detailBox = detailEl?.getBoundingClientRect();
-        let left = edge;
-        let width = 264;
+        const maxViewportWidth = Math.max(120, window.innerWidth - edge * 2);
+        let width = Math.min(240, maxViewportWidth);
         if (pickerBox && pickerBox.width > 0) {
-            left = pickerBox.left;
-            width = pickerBox.width;
+            const rawWidth = pickerBox.width > 232
+                ? Math.max(216, Math.min(Math.round(pickerBox.width - 24), Math.floor(pickerBox.width - 16)))
+                : Math.max(120, Math.floor(pickerBox.width - 12));
+            width = Math.min(rawWidth, maxViewportWidth);
         } else if (detailBox && detailBox.width > 0) {
-            width = detailBox.width;
-            left = detailEl?.classList.contains('is-left')
-                ? Math.min(window.innerWidth - edge - width, detailBox.right + gap)
-                : Math.max(edge, detailBox.left - gap - width);
+            const rawWidth = detailBox.width > 232
+                ? Math.max(216, Math.round(detailBox.width - 24))
+                : Math.max(120, Math.floor(detailBox.width - 12));
+            width = Math.min(rawWidth, maxViewportWidth);
         }
-        const desiredHeight = Math.max(pickerBox?.height ?? 0, overlayRef.current?.scrollHeight ?? 0, 220);
-        const baseTop = pickerBox && pickerBox.height > 0 ? pickerBox.top : (detailBox?.top ?? edge);
-        const top = Math.max(edge, Math.min(baseTop, window.innerHeight - edge - desiredHeight));
-        const maxHeight = Math.max(160, window.innerHeight - top - edge);
-        const minHeight = pickerBox && pickerBox.height > 0 ? Math.min(pickerBox.height, maxHeight) : 0;
+        let left = edge;
+        if (detailBox && detailBox.width > 0) {
+            if (pickerBox && pickerBox.width > 0) {
+                const placeLeftOfDetail = detailBox.left >= pickerBox.left;
+                left = placeLeftOfDetail
+                    ? Math.max(edge, detailBox.left - gap - width)
+                    : Math.min(window.innerWidth - edge - width, detailBox.right + gap);
+            } else {
+                left = detailEl?.classList.contains('is-left')
+                    ? Math.min(window.innerWidth - edge - width, detailBox.right + gap)
+                    : Math.max(edge, detailBox.left - gap - width);
+            }
+        } else if (pickerBox && pickerBox.width > 0) {
+            left = pickerBox.left;
+        }
+        left = Math.max(edge, Math.min(left, window.innerWidth - edge - width));
+        const baseTop = detailBox && detailBox.height > 0 ? detailBox.top : (pickerBox?.top ?? edge);
+        const contentHeight = overlayRef.current?.scrollHeight || 0;
+        const top = contentHeight > 0
+            ? Math.max(edge, Math.min(baseTop, window.innerHeight - edge - contentHeight))
+            : Math.max(edge, Math.min(baseTop, window.innerHeight - edge - 120));
+        const maxHeight = Math.max(120, window.innerHeight - top - edge);
+        const detailZ = detailEl ? (Number.parseInt(window.getComputedStyle(detailEl).zIndex, 10) || 0) : 0;
+        const zIndex = Math.max(2210, detailZ + 10);
         const side: 'left' | 'right' = detailBox && left > detailBox.left ? 'right' : 'left';
         setOverlayRect(prev => prev
             && Math.abs(prev.left - left) < 1
             && Math.abs(prev.top - top) < 1
             && Math.abs(prev.width - width) < 1
-            && Math.abs(prev.minHeight - minHeight) < 1
             && Math.abs(prev.maxHeight - maxHeight) < 1
+            && prev.zIndex === zIndex
             && prev.side === side
             ? prev
-            : { left, top, width, minHeight, maxHeight, side });
+            : { left, top, width, maxHeight, zIndex, side });
     }, []);
     const openPullOut = React.useCallback((): void => {
         cancelPullOutClose();
@@ -228,27 +262,35 @@ export function OfferingPriceCard(props: OfferingPriceCardProps): React.ReactEle
             setPullOutOpen(false);
         }
     }, [pullOutDrawer, offering.id, cancelPullOutClose]);
-    React.useEffect(() => {
+    const useLayoutEffectSafe = typeof window !== 'undefined' && React.useLayoutEffect ? React.useLayoutEffect : React.useEffect;
+    useLayoutEffectSafe(() => {
         if (!pullOutDrawer || !pullOutOpen) return;
         measureOverlayRect();
         if (typeof window === 'undefined') return;
         const onResize = (): void => measureOverlayRect();
         window.addEventListener('resize', onResize);
-        return () => window.removeEventListener('resize', onResize);
+        const observer = typeof ResizeObserver !== 'undefined' && overlayRef.current
+            ? new ResizeObserver(() => measureOverlayRect())
+            : undefined;
+        if (observer && overlayRef.current) {
+            observer.observe(overlayRef.current);
+        }
+        return () => {
+            window.removeEventListener('resize', onResize);
+            observer?.disconnect();
+        };
     }, [pullOutDrawer, pullOutOpen, offering.id, offering.keyPriceQuoteId, measureOverlayRect]);
     const open = !collapsible || expanded.official || expanded.user;
     const official: PriceLike = offeringOfficialPrice(offering);
     const user = offering.price as PriceLike;
     const bps = offeringMultiplierBps(offering);
     if (pullOutDrawer) {
-        const rateBadge = officialOnly
-            ? undefined
-            : bps === null
-                ? offeringPriceText(locale, 'ownTag')
-                : `${offeringMultiplierText(locale, bps)}x`;
+        const rateBadge: string | undefined = undefined;
         const summaryLabel = officialOnly
             ? offeringPriceText(locale, 'official')
-            : `${offeringPriceText(locale, 'official')} · ${offeringPriceText(locale, 'multiplierShort')} · ${offeringPriceText(locale, 'relay')}`;
+            : bps !== null
+                ? `${offeringPriceText(locale, 'relay')} ${offeringMultiplierText(locale, bps)}x`
+                : `${offeringPriceText(locale, 'relay')} · ${offeringPriceText(locale, 'ownTag')}`;
         const portalHost = triggerRef.current?.closest('.nmx-model-effort-portal') || (typeof document !== 'undefined' ? document.body : null);
         return <div ref={triggerRef}
             className={`nmx-offering-price is-pullout-trigger${props.className ? ` ${props.className}` : ''}${officialOnly ? ' is-official-only' : ''}${pullOutOpen ? ' is-open' : ''}`}
@@ -282,16 +324,15 @@ export function OfferingPriceCard(props: OfferingPriceCardProps): React.ReactEle
             {pullOutOpen && overlayRect && portalHost && ReactDOM.createPortal(
                 <section ref={overlayRef}
                     className={`nmx-model-effort-menu nmx-model-evidence-menu nmx-model-price-overlay-drawer is-${overlayRect.side}`}
-                    data-compact={overlayRect.width < 240 || undefined}
+                    data-compact={overlayRect.width < 216 || undefined}
                     aria-label={summaryLabel}
                     style={{
                         position: 'fixed',
                         top: `${overlayRect.top}px`,
                         left: `${overlayRect.left}px`,
                         width: `${overlayRect.width}px`,
-                        minHeight: overlayRect.minHeight ? `${overlayRect.minHeight}px` : undefined,
                         maxHeight: `${overlayRect.maxHeight}px`,
-                        zIndex: 2210
+                        zIndex: overlayRect.zIndex
                     }}
                     onPointerEnter={cancelPullOutClose}
                     onPointerLeave={schedulePullOutClose}

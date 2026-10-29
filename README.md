@@ -5,7 +5,7 @@
 **Open-Source AI Coding, Multi-Agent Council, Desktop App Automation & Comic/Video Studio**
 
 [![License: Apache-2.0 with Commons Clause](https://img.shields.io/badge/License-Apache%202.0%20%2B%20Commons%20Clause-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.1.1-1263db)](https://github.com/goodman-xh/NextMux/releases/tag/v0.1.1)
+[![Release](https://img.shields.io/badge/Release-v0.1.5-1263db)](https://github.com/goodman-xh/NextMux/releases/tag/v0.1.5)
 [![Website](https://img.shields.io/badge/Website-nextmux.app-111111)](https://nextmux.app)
 
 **English** | [简体中文](./README.zh-CN.md)
@@ -103,16 +103,16 @@ Send generated canvas shots straight to the built-in multitrack timeline editor 
 
 ---
 
-## Download Installers (`v0.1.1`)
+## Download Installers (`v0.1.5`)
 
 Every release is built and verified independently for all 4 OS/CPU targets (no foreign-architecture binaries mixed into native bundles). You can download directly from **[nextmux.app/download](https://nextmux.app/download)** or **GitHub Releases**:
 
 | Operating System | CPU Architecture | GitHub Release Installer | Official Website Mirror (`nextmux.app`) |
 | :--- | :--- | :--- | :--- |
-| **macOS** (`12.0+`) | Apple Silicon (`darwin-arm64`) | [`NextMux-0.1.1-arm64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.1/NextMux-0.1.1-arm64.dmg) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.1/macos/arm64/NextMux-0.1.1-arm64.dmg) |
-| **macOS** (`12.0+`) | Intel (`darwin-x64`) | [`NextMux-0.1.1-x64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.1/NextMux-0.1.1-x64.dmg) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.1/macos/x64/NextMux-0.1.1-x64.dmg) |
-| **Windows** (`10 / 11`) | x64 (`win32-x64`) | [`NextMux-0.1.1-x64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.1/NextMux-0.1.1-x64-setup.exe) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.1/windows/x64/NextMux-0.1.1-x64-setup.exe) |
-| **Windows** (`11`) | ARM64 (`win32-arm64`) | [`NextMux-0.1.1-arm64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.1/NextMux-0.1.1-arm64-setup.exe) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.1/windows/arm64/NextMux-0.1.1-arm64-setup.exe) |
+| **macOS** (`12.0+`) | Apple Silicon (`darwin-arm64`) | [`NextMux-0.1.5-arm64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.5/NextMux-0.1.5-arm64.dmg) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.5/macos/arm64/NextMux-0.1.5-arm64.dmg) |
+| **macOS** (`12.0+`) | Intel (`darwin-x64`) | [`NextMux-0.1.5-x64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.5/NextMux-0.1.5-x64.dmg) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.5/macos/x64/NextMux-0.1.5-x64.dmg) |
+| **Windows** (`10 / 11`) | x64 (`win32-x64`) | [`NextMux-0.1.5-x64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.5/NextMux-0.1.5-x64-setup.exe) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.5/windows/x64/NextMux-0.1.5-x64-setup.exe) |
+| **Windows** (`11`) | ARM64 (`win32-arm64`) | [`NextMux-0.1.5-arm64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.5/NextMux-0.1.5-arm64-setup.exe) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.5/windows/arm64/NextMux-0.1.5-arm64-setup.exe) |
 
 >Installed clients check `https://nextmux.app/updates` in the background and display a one-click **Update (`更新`)** button in the bottom-left account dock when a newer build is ready.
 

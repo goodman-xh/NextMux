@@ -181,6 +181,7 @@ export interface ComicCanvasProps {
     readonly onCancelStartFrame?: (nodeId: string) => void;
     readonly assetLibraryCategories: () => Promise<readonly ComicAssetCategoryOption[]>;
     readonly assetLibraryEntries: () => Promise<readonly ComicAssetLibraryEntry[]>;
+    readonly preparePlaybackFiles?: (filePaths: readonly string[]) => Promise<Record<string, string>>;
     readonly loadHistoryCanvases?: () => Promise<readonly CanvasDocument[]>;
     readonly onSelectHistoryVersion?: (canvasId: string, nodeId: string, versionId: string) => Promise<void>;
     readonly onSaveLibraryAsset: (input: CanvasAssetLibrarySaveInput) => Promise<ComicAssetLibraryEntry>;
@@ -1700,6 +1701,7 @@ function Board(props: ComicCanvasProps): React.ReactElement {
             })()}
 
             {libraryOpen?.scope === libraryScope && <CanvasModalLayer locale={props.locale}><CanvasAssetLibraryDialog locale={props.locale} load={props.assetLibraryEntries}
+                preparePlaybackFiles={props.preparePlaybackFiles}
                 operationScope={`${props.libraryScope ?? canvas.id}:${libraryOpen.target ? `${libraryOpen.target.nodeId}:${libraryOpen.target.role}` : 'canvas'}`}
                 {...(libraryOpen.target ? { useLabel: `${comicAssetLibraryText(props.locale, 'useInput')} · ${t(`role.${libraryOpen.target.role}` as CanvasTextKey)}`, initialFilter: libraryOpen.target.role === 'referenceAudio' ? 'audio' as const : libraryOpen.target.role === 'referenceVideo' ? 'video' as const : 'image' as const,
                     selectTypes: [libraryOpen.target.role === 'referenceAudio' ? 'audio' as const : libraryOpen.target.role === 'referenceVideo' ? 'video' as const : 'image' as const] } : {})}
