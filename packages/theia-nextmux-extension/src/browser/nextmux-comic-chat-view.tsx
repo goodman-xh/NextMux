@@ -40,8 +40,7 @@ export interface ComicChatSkill {
 
 /** The functions the conversation offers: every one makes its output from the prompt (pictures optional). */
 export const COMIC_CHAT_UI_MODES: readonly ComicChatMode[] = ['image', 'video', 'music'];
-/** The model drawer also chooses the voice model: 配音 is reached through its skill card, not a tab of its own. */
-export const COMIC_CHAT_DRAWER_MODES: readonly ComicChatMode[] = ['image', 'video', 'music', 'speech'];
+export const COMIC_CHAT_DRAWER_MODES: readonly ComicChatMode[] = ['image', 'video', 'music'];
 
 /** Designed for comics rather than copied: every card is a mode, a starting prompt and the settings it needs. */
 export const COMIC_CHAT_SKILLS: readonly ComicChatSkill[] = [
@@ -437,6 +436,9 @@ export interface ComicChatComposerProps {
     /** Opens the relay drawer (the coding composer's own, rendered by the widget next to this button). */
     readonly onOpenRelay: () => void;
     readonly relayOpen: boolean;
+    readonly onOpenModel?: () => void;
+    readonly modelOpen?: boolean;
+    readonly onSignIn?: () => void;
     readonly onModel: (mode: ComicChatMode, key: string) => void;
     readonly onModels: (keys: Partial<Record<ComicChatMode, string>>) => void;
     /** Pictures (references) and videos (kept as materials) from disk. */
@@ -489,7 +491,7 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
             <select value={value} aria-label={label} onChange={event => change(event.currentTarget.value)}>{options.map(([id, text]) => <option key={id} value={id}>{text}</option>)}</select>
             <i className='codicon codicon-chevron-down' aria-hidden='true'></i></label>;
     const relayIcon = (kind: string | undefined): string => kind === 'official' ? 'verified-filled' : kind === 'automatic' ? 'sparkle' : kind === 'local' ? 'vm' : 'server-environment';
-    const chosen = picker.tabs.filter(item => item.selected).length;
+    const isModelOpen = props.onOpenModel ? Boolean(props.modelOpen) : popover === 'models';
     return <div className='nmx-comic-chat-dock'>
         <div className={`nmx-composer-wrap is-rows-${rows > 4 ? 'many' : 'few'}`} ref={box}>
             <div className='nmx-comic-chat-modes'>
@@ -508,6 +510,22 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                         title={t('leaveVoice')} aria-label={`${t('speech')} · ${t('leaveVoice')}`} onClick={() => props.onMode('image')}>
                         <i className={`codicon codicon-${COMIC_CHAT_MODE_ICONS.speech}`} aria-hidden='true'></i><span>{t('speech')}</span>
                         <i className='codicon codicon-close' aria-hidden='true'></i></button>}
+                </div>
+                <div className='nmx-comic-chat-mode-params'>
+                    {(props.mode === 'image' || props.mode === 'video') && props.aspects.length > 0 && select(t('aspect'), props.params.aspect || props.aspects[0],
+                        props.aspects.map(aspect => [aspect, aspect] as const), value => props.onParams({ aspect: value as ComicChatAspect }))}
+                    {props.mode === 'image' && select(t('count', { n: props.params.count || 1 }), String(props.params.count || 1), [1, 2, 3, 4].map(n => [String(n), t('count', { n })] as const),
+                        value => props.onParams({ count: Number(value) }))}
+                    {props.mode === 'video' && props.secondsChoices.length > 0 && select(t('seconds', { n: '' }).trim(), String(props.params.seconds || props.secondsChoices[0]),
+                        props.secondsChoices.map(n => [String(n), t('seconds', { n })] as const), value => props.onParams({ seconds: Number(value) }))}
+                    {props.mode === 'video' && props.soundChoice && select(props.params.sound === false ? t('noSound') : t('sound'), props.params.sound === false ? 'off' : 'on',
+                        [['on', t('sound')], ['off', t('noSound')]], value => props.onParams({ sound: value === 'on' }))}
+                    {props.mode === 'music' && select(props.params.instrumental === false ? t('withVocals') : t('instrumental'), props.params.instrumental === false ? 'vocals' : 'instrumental',
+                        [['instrumental', t('instrumental')], ['vocals', t('withVocals')]], value => props.onParams({ instrumental: value === 'instrumental' }))}
+                    {props.mode === 'music' && select(props.params.seconds === 180 ? t('songFull') : t('songClip'), String(props.params.seconds === 180 ? 180 : 30),
+                        [['30', t('songClip')], ['180', t('songFull')]], value => props.onParams({ seconds: Number(value) }))}
+                    {props.mode === 'speech' && props.voices.length > 0 && select(t('voice'), props.params.voice || props.voices[0],
+                        props.voices.map(voice => [voice, voice] as const), value => props.onParams({ voice: value }))}
                 </div>
             </div>
             <div className={`nmx-composer ${dragging ? 'is-dragging' : ''}`}
@@ -546,7 +564,7 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                             if (canSend && !props.running) props.onSend();
                         }} />
                 </div>
-                <div>
+                <div className='nmx-comic-chat-toolbar'>
                     <span className='nmx-comic-chat-add'>
                         <button type='button' data-nmx-chat-toggle className={`nmx-composer-tool ${popover === 'add' ? 'is-active' : ''}`}
                             title={localizeDesktopSurface(props.locale, '添加内容')} aria-label={localizeDesktopSurface(props.locale, '添加内容')}
@@ -559,50 +577,32 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                         <input ref={fileInput} type='file' hidden multiple accept='image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm'
                             onChange={event => { const files = media(event.currentTarget.files); event.currentTarget.value = ''; if (files.length) props.onFiles(files); }} />
                     </span>
-                    {(props.mode === 'image' || props.mode === 'video') && props.aspects.length > 0 && select(t('aspect'), props.params.aspect || props.aspects[0],
-                        props.aspects.map(aspect => [aspect, aspect] as const), value => props.onParams({ aspect: value as ComicChatAspect }))}
-                    {props.mode === 'image' && select(t('count', { n: props.params.count || 1 }), String(props.params.count || 1), [1, 2, 3, 4].map(n => [String(n), t('count', { n })] as const),
-                        value => props.onParams({ count: Number(value) }))}
-                    {props.mode === 'video' && props.secondsChoices.length > 0 && select(t('seconds', { n: '' }).trim(), String(props.params.seconds || props.secondsChoices[0]),
-                        props.secondsChoices.map(n => [String(n), t('seconds', { n })] as const), value => props.onParams({ seconds: Number(value) }))}
-                    {props.mode === 'video' && props.soundChoice && select(props.params.sound === false ? t('noSound') : t('sound'), props.params.sound === false ? 'off' : 'on',
-                        [['on', t('sound')], ['off', t('noSound')]], value => props.onParams({ sound: value === 'on' }))}
-                    {props.mode === 'music' && select(props.params.instrumental === false ? t('withVocals') : t('instrumental'), props.params.instrumental === false ? 'vocals' : 'instrumental',
-                        [['instrumental', t('instrumental')], ['vocals', t('withVocals')]], value => props.onParams({ instrumental: value === 'instrumental' }))}
-                    {props.mode === 'music' && select(props.params.seconds === 180 ? t('songFull') : t('songClip'), String(props.params.seconds === 180 ? 180 : 30),
-                        [['30', t('songClip')], ['180', t('songFull')]], value => props.onParams({ seconds: Number(value) }))}
-                    {props.mode === 'speech' && props.voices.length > 0 && select(t('voice'), props.params.voice || props.voices[0],
-                        props.voices.map(voice => [voice, voice] as const), value => props.onParams({ voice: value }))}
                     <span className='nmx-composer-spacer'></span>
-                    <span className={`nmx-comic-chat-pickers ${picker.recommended ? '' : 'is-open'}`}>
-                        {/* 推荐模型 off: the relay and the model panel slide out to the left of the switch. */}
-                        <span className='nmx-comic-chat-drawers' aria-hidden={picker.recommended || undefined}>
-                            <button type='button' className={`nmx-composer-relay-button ${props.relayOpen ? 'is-active' : ''}`} aria-expanded={props.relayOpen} tabIndex={picker.recommended ? -1 : undefined}
+                    <span className='nmx-comic-chat-pickers is-open'>
+                        <span className='nmx-comic-chat-drawers'>
+                            <button type='button' className={`nmx-composer-relay-button ${props.relayOpen ? 'is-active' : ''}`} aria-expanded={props.relayOpen}
                                 title={picker.relay?.label || relayText(props.locale, 'selectRelay')} aria-label={relayText(props.locale, 'selectRelay')}
-                                disabled={picker.recommended} onClick={() => { setPopover(undefined); props.onOpenRelay(); }}>
+                                onClick={() => { setPopover(undefined); props.onOpenRelay(); }}>
                                 <i className={`codicon codicon-${relayIcon(picker.relay?.kind)}`} aria-hidden='true'></i>
                                 <span data-nmx-literal={Boolean(picker.relay) || undefined}>{picker.relay?.label || relayText(props.locale, 'selectRelay')}</span><i className='codicon codicon-chevron-down' aria-hidden='true'></i></button>
-                            <button type='button' data-nmx-chat-toggle className={`nmx-route-button ${popover === 'models' ? 'is-active' : ''}`} aria-expanded={popover === 'models'} tabIndex={picker.recommended ? -1 : undefined}
-                                disabled={picker.recommended || !picker.relay} onClick={() => setPopover(popover === 'models' ? undefined : 'models')}>
+                            <button type='button' data-nmx-chat-toggle className={`nmx-route-button ${isModelOpen ? 'is-active' : ''}`} aria-expanded={isModelOpen}
+                                title={props.model?.label || t('selectModel')}
+                                disabled={!picker.relay && !props.model}
+                                onClick={() => { if (props.onOpenModel) { setPopover(undefined); props.onOpenModel(); } else { setPopover(popover === 'models' ? undefined : 'models'); } }}>
                                 <i className='codicon codicon-zap' aria-hidden='true'></i>
                                 <span data-nmx-literal={Boolean(props.model) || undefined}>{props.model?.label || t('selectModel')}</span>
-                                {chosen > 1 && <small data-nmx-literal>+{chosen - 1}</small>}
                                 <i className='codicon codicon-chevron-down' aria-hidden='true'></i></button>
                         </span>
-                        <button type='button' role='switch' aria-checked={picker.recommended} className={`nmx-comic-chat-recommend ${picker.recommended ? 'is-on' : ''}`}
-                            title={picker.recommended ? `${t('recommendedOn')}\n${picker.summary}` : t('recommendedOff')} onClick={() => { setPopover(undefined); props.onRecommended(!picker.recommended); }}>
-                            <i className='codicon codicon-sparkle' aria-hidden='true'></i><span>{t('recommended')}</span><b aria-hidden='true'></b></button>
-                        {popover === 'models' && current && <div className='nmx-comic-chat-popover is-models' data-comic-model-panel role='dialog' aria-label={t('selectModel')}>
+                        {!props.onOpenModel && popover === 'models' && current && <div className='nmx-comic-chat-popover is-models' data-comic-model-panel role='dialog' aria-label={t('selectModel')}>
                             <header><span data-nmx-literal={Boolean(picker.relay) || undefined}>{picker.relay?.label || t('selectModel')}</span>
                                 <button type='button' className='nmx-link-button' onClick={() => { setPopover(undefined); props.onOpenRelay(); }}>{t('changeRelay')}</button></header>
                             <div className='nmx-comic-chat-model-tabs' role='tablist'>
                                 {picker.tabs.map(item => <button key={item.mode} type='button' role='tab' aria-selected={item.mode === current.mode}
                                     className={`${item.mode === current.mode ? 'is-active' : ''} ${item.selected ? 'is-set' : ''}`}
-                                    onClick={() => setTab(item.mode)}>
+                                    onClick={() => { setTab(item.mode); props.onMode(item.mode); }}>
                                     <i className={`codicon codicon-${COMIC_CHAT_MODE_ICONS[item.mode]}`} aria-hidden='true'></i><strong>{modeLabel(item.mode)}</strong>
                                     <small data-nmx-literal={Boolean(item.selected) || undefined}>{item.selected?.label || t('noModelFor')}</small></button>)}
                             </div>
-                            <p className='nmx-comic-chat-model-lead'>{t('textModelsOnly')}</p>
                             {current.options.length ? <div className='nmx-comic-chat-model-list' role='listbox' aria-label={modeLabel(current.mode)}>
                                 {current.options.map(option => {
                                     const selected = option.key === current.selected?.key;
@@ -639,9 +639,12 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                     const text = props.error || props.notice || (!props.model ? t('noModel') : props.blocked || '');
                     if (!text) return null;
                     const tone = props.error ? 'is-error' : props.notice ? 'is-info' : 'is-warning';
+                    const needsSignIn = text === t('signInNeeded') || text === t('signIn') || text === relayText(props.locale, 'signInRequired');
                     return <div className={`nmx-route-price-notice nmx-council-below-notice ${tone}`} role='status' title={text}>
                         <i className={`codicon codicon-${props.error ? 'error' : props.notice ? 'info' : 'warning'}`} aria-hidden='true' /><span data-nmx-literal>{text}</span>
-                        {!props.error && !props.notice && !props.model && <button type='button' className='nmx-council-below-action' onClick={props.onSetUpModels}>{t('setUpModels')}</button>}
+                        {needsSignIn && props.onSignIn
+                            ? <button type='button' className='nmx-council-below-action' onClick={props.onSignIn}>{t('signIn')}</button>
+                            : !props.error && !props.notice && !props.model && <button type='button' className='nmx-council-below-action' onClick={props.onSetUpModels}>{t('setUpModels')}</button>}
                     </div>;
                 })()}
             </div>

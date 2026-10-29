@@ -122,6 +122,7 @@ import { MODEL_CENTER_CATEGORIES, ModelCenterMerchants, modelCenterFilterLabel }
 import { ModelTaxonomyTags } from './nextmux-model-taxonomy-tags';
 import { modelCenterText } from './nextmux-model-center-locale';
 import '../../src/browser/style/nextmux-model-center.css';
+import '../../src/browser/style/nextmux-comic-studio-modals.css';
 import { modelUsageText } from './nextmux-model-usage-locale';
 import { UsageAnalytics } from './nextmux-usage-analytics';
 import { CitationList, ArchivedChildCitations, answerCitations } from './nextmux-citations';
@@ -135,7 +136,6 @@ import { modelFailure, modelFailureText, modelFailureSource } from './nextmux-mo
 import { CommunitySkillCard } from './nextmux-community-skill-card';
 import { ProjectMemoryPanel } from './nextmux-project-memory-panel';
 import { installModalChrome } from './nextmux-modal-chrome';
-import { comicChatLooksConversational } from './nextmux-comic-chat-intent';
 import { installInactiveWindowButtons } from './nextmux-inactive-window-buttons';
 import { AgentInstructionsSettings, agentInstructionsText } from './nextmux-agent-instructions-panel';
 import { projectMemoryText } from './nextmux-project-memory-locale';
@@ -255,7 +255,7 @@ import {
     COMIC_STEP_CAPABILITIES, COMIC_STEP_ICONS, COMIC_STEP_PREFS_KEY, comicStepSourceLabel, comicStepText, dedupeComicPriceVariants, parseComicStepPrefs, recommendedComicStepCandidate, resolveComicStep,
     type ComicStepCandidate, type ComicStepCapability, type ComicStepPrefs, type ComicStepRelay, type ComicStepResolution, type ComicStepSource
 } from './nextmux-comic-step-models';
-import { ComicModelButton, ComicModelSetup, comicModelPanelText, comicModelSetupSummary, comicStepName, type ComicModelSetupStep } from './nextmux-comic-model-setup';
+import { ComicModelSetup, comicModelPanelText, comicStepName, type ComicModelSetupStep } from './nextmux-comic-model-setup';
 import { videoModelMakesSound } from '../common/nextmux-model-sound';
 import { mcpRegistryText } from './nextmux-mcp-registry-browser';
 import { DownloadsPanel, voicePreviewSentence } from './nextmux-downloads-panel';
@@ -294,9 +294,17 @@ import { ComicCharacterLibrarySheet, characterLibraryText } from './nextmux-comi
 import { MediaTemplateAdvanced, mediaTemplateFromPreset, mediaTemplatePresetLabel, mediaTemplateProblem, type MediaTemplateDraft } from './nextmux-media-template-fields';
 import { NativeWebResearchFields, nativeWebResearchDraft, type NativeWebResearchSetting } from './nextmux-native-web-research-fields';
 import { mediaTemplatePresetForUrl } from '@nextmux/model-runtime/media-template';
-import { defaultMusicSettings, musicCoverPrompt, MusicCreateSheet, MusicLyricsView, MusicOutputView, musicLyricsInstructions, musicSongPrompt, MusicSongView, musicText, type MusicCreateRequest } from './nextmux-music-studio';
+import { defaultMusicSettings, musicCoverPrompt, MusicLyricsView, MusicOutputView, musicLyricsInstructions, musicSongPrompt, MusicSongView, musicText, type MusicCreateRequest } from './nextmux-music-studio';
 import { MusicReferenceFields, musicReferenceProblem, musicReferenceSupport, musicReferenceText } from './nextmux-music-reference';
-import { COMIC_HOME_ALL_FOLDERS, COMIC_KIND_ICONS, COMIC_PROJECT_KINDS, ComicHomeCategories, ComicImageCreateSheet, type ComicCreationLibraryItem, type ComicHomeProject, type ComicHomeStatus, ComicProjectLocationField, ComicTopicCreateSheet, comicKindText, comicProjectKindOf, comicProjectText, comicSheetText, previewComicProjectFolderPath, type ComicImageCreateItem, type ComicProjectKind, type ComicTopicCreateRequest, type ComicTopicSources } from './nextmux-comic-kinds';
+import { COMIC_HOME_ALL_FOLDERS, COMIC_KIND_ICONS, COMIC_PROJECT_KINDS, ComicHomeCategories, type ComicCreationLibraryItem, type ComicHomeProject, type ComicHomeStatus, ComicProjectLocationField, comicKindText, comicProjectKindOf, comicProjectText, comicSheetText, previewComicProjectFolderPath, type ComicImageCreateItem, type ComicProjectKind, type ComicTopicCreateRequest, type ComicTopicSources } from './nextmux-comic-kinds';
+import { mergeComicPromptWithStylePreset } from './nextmux-comic-style-presets';
+import {
+    ComicMediaStudioModal,
+    type ComicStudioGeneratedTake,
+    type ComicStudioModalKind,
+    type ComicStudioSourceFile
+} from './nextmux-comic-studio-modals';
+import type { DesktopComicProjectDiskStatus } from '../common/nextmux-platform-protocol';
 import { stockQueryFromShot, type StockMediaProvider, type StockMediaState } from '../common/nextmux-stock-media';
 import type { MediaJob, MediaJobKind, MediaVideoJobInput } from '@nextmux/media-core';
 import { inferModelCapabilityEvidence, mergeModelCapabilityEvidence, modelCapabilitySupport, protocolSupportsReasoningEffort } from '@nextmux/model-runtime/capabilities';
@@ -4610,34 +4618,130 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected comicModelSetupCloseRequest = 0;
     protected comicLibrary: DesktopComicLibraryState = { root: '', projects: [] };
     protected comicLibraryLoaded = false;
-    protected comicTextRouteId = (() => { try { return window.localStorage.getItem('nextmux.desktop.comicTextRoute.v1') || ''; } catch { return ''; } })();
-    /** Model per comic step (nextmux-comic-step-models.tsx): the choice, advanced mode and relay. */
+    protected comicDeletedProjectPaths = new Set<string>();
+    protected comicStudioModalState: {
+        open: boolean;
+        kind: ComicStudioModalKind;
+        boundProjectPath?: string;
+        title: string;
+        parentDirectory?: string;
+        sourceFiles: ComicStudioSourceFile[];
+        selectedLibraryIds: Set<string>;
+        prompt: string;
+        stylePresetId: string;
+        seconds: number;
+        aspectRatio: '16:9' | '9:16' | '1:1' | '4:3' | '3:4';
+        soundEnabled: boolean;
+        topicVisualMode: 'videos' | 'images';
+        topicVoiceSubtitles: boolean;
+        musicInstrumental: boolean;
+        musicFullTrack: boolean;
+        generating: boolean;
+        generatingStageLabel?: string;
+        takes: ComicStudioGeneratedTake[];
+        activeTakeId?: string;
+        activeRun?: {
+            runId: string;
+            cancelled: boolean;
+            workspaceRoot?: string;
+            mediaJobIds: string[];
+            agentRunId?: string;
+            exportId?: string;
+        };
+    } | undefined;
+    protected comicStudioIsolatedPicker: {
+        readonly kind: ComicStudioModalKind;
+        readonly capability: ComicStepCapability;
+        readonly mode: 'relay' | 'model';
+        readonly anchorSelector: string;
+    } | undefined;
+    protected comicStudioModelQuery = '';
+    protected comicTextRouteIdsByKind: Partial<Record<ComicProjectKind, string>> = {};
+    protected comicTextRouteStorageKey(kind: ComicProjectKind): string {
+        return `nextmux.desktop.comicTextRoute.${kind}.v1`;
+    }
+    protected comicTextRouteIdForKind(kind: ComicProjectKind = this.comicModelKind()): string {
+        if (kind === 'image' || kind === 'music') return '';
+        if (Object.prototype.hasOwnProperty.call(this, 'comicTextRouteId')) {
+            const direct = (this as unknown as { comicTextRouteId?: string }).comicTextRouteId;
+            if (typeof direct === 'string' && !this.comicTextRouteIdsByKind?.[kind] && kind === (this.comicModelKind?.() ?? 'novel')) {
+                return direct;
+            }
+        }
+        const byKind = this.comicTextRouteIdsByKind ??= {};
+        const cached = byKind[kind];
+        if (cached !== undefined) return cached;
+        let stored = '';
+        try {
+            const own = window.localStorage.getItem(this.comicTextRouteStorageKey(kind));
+            stored = (own !== null ? own : kind === 'novel' ? window.localStorage.getItem('nextmux.desktop.comicTextRoute.v1') : '') || '';
+        } catch {
+            stored = '';
+        }
+        this.comicTextRouteIdsByKind = { ...byKind, [kind]: stored };
+        return stored;
+    }
+    protected setComicTextRouteForKind(kind: ComicProjectKind, value: string): void {
+        if (kind === 'image' || kind === 'music') return;
+        const byKind = this.comicTextRouteIdsByKind ??= {};
+        this.comicTextRouteIdsByKind = { ...byKind, [kind]: value };
+        try {
+            if (value) window.localStorage.setItem(this.comicTextRouteStorageKey(kind), value);
+            else window.localStorage.removeItem(this.comicTextRouteStorageKey(kind));
+        } catch { /* keep in memory */ }
+    }
+    protected get comicTextRouteId(): string {
+        return this.comicTextRouteIdForKind(this.comicModelKind());
+    }
+    protected set comicTextRouteId(value: string) {
+        this.setComicTextRouteForKind(this.comicModelKind?.() ?? 'novel', value);
+    }
     /**
-     * The four kinds keep their own AI 模型 choices (a song's models never change a comic's). Each is stored under
-     * its own key; the older shared setting is where each kind starts until it is changed there.
+     * Strict 4-way model preference isolation (`novel`, `image`, `topic`, `music`).
+     * Each kind persists strictly under `nextmux.desktop.comicStepModels.${kind}.v1`;
+     * only `novel` may migrate from the legacy shared `COMIC_STEP_PREFS_KEY` once.
      */
     protected comicStepPrefsByKind: Partial<Record<ComicProjectKind, ComicStepPrefs>> = {};
+    protected comicStepPrefsStorageKey(kind: ComicProjectKind): string {
+        return `nextmux.desktop.comicStepModels.${kind}.v1`;
+    }
     protected comicStepPrefsFor(kind: ComicProjectKind): ComicStepPrefs {
-        const cached = this.comicStepPrefsByKind[kind];
+        if (Object.prototype.hasOwnProperty.call(this, 'comicStepPrefs')) {
+            const direct = (this as unknown as { comicStepPrefs?: ComicStepPrefs }).comicStepPrefs;
+            if (direct && !this.comicStepPrefsByKind?.[kind] && kind === (this.comicModelKind?.() ?? 'novel')) {
+                return direct;
+            }
+        }
+        const byKind = this.comicStepPrefsByKind ??= {};
+        const cached = byKind[kind];
         if (cached) return cached;
         let prefs: ComicStepPrefs;
         try {
-            const own = window.localStorage.getItem(`${COMIC_STEP_PREFS_KEY}.${kind}`);
-            prefs = parseComicStepPrefs(own ?? window.localStorage.getItem(COMIC_STEP_PREFS_KEY));
-        } catch { prefs = parseComicStepPrefs(''); }
-        this.comicStepPrefsByKind = { ...this.comicStepPrefsByKind, [kind]: prefs };
+            const v1 = window.localStorage.getItem(this.comicStepPrefsStorageKey(kind));
+            const legacyPerKind = v1 === null ? window.localStorage.getItem(`${COMIC_STEP_PREFS_KEY}.${kind}`) : null;
+            const raw = v1 ?? legacyPerKind ?? (kind === 'novel' ? window.localStorage.getItem(COMIC_STEP_PREFS_KEY) : null);
+            prefs = parseComicStepPrefs(raw);
+        } catch {
+            prefs = parseComicStepPrefs('');
+        }
+        this.comicStepPrefsByKind = { ...byKind, [kind]: prefs };
         return prefs;
     }
-    /** The kind the AI 模型 panel is set for now: the open project's, the one being created, else the home page's. */
+    /** Active model isolation scope: active studio modal or creation sheet takes priority over any background loaded project. */
     protected comicModelKind(): ComicProjectKind {
-        const project = this.comicProject();
-        if (project && this.activeComicWorkspaceRoot) return this.comicProjectKind(project);
+        if (this.comicStudioModalState?.open) return this.comicStudioModalState.kind;
         if (this.comicKindSheet) return this.comicKindSheet;
         if (this.comicCreateSheetOpen) return 'novel';
-        return this.comicHomeKind;
+        const project = this.comicProject?.();
+        if (project && this.activeComicWorkspaceRoot) return this.comicProjectKind(project);
+        return this.comicHomeKind || 'novel';
     }
     protected get comicStepPrefs(): ComicStepPrefs {
         return this.comicStepPrefsFor(this.comicModelKind());
+    }
+    protected set comicStepPrefs(value: ComicStepPrefs) {
+        const kind = this.comicModelKind?.() ?? 'novel';
+        this.comicStepPrefsByKind = { ...(this.comicStepPrefsByKind || {}), [kind]: value };
     }
     /** Relays the capability-filtered directory lists for advanced mode (models load on demand). */
     protected comicStepDirectory = new Map<ComicStepCapability, { readonly loading: boolean; readonly relays: readonly ComicStepRelay[]; readonly revision?: number }>();
@@ -12076,6 +12180,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected comicViewFor(project: ComicProject | undefined): ComicWorkbenchView {
         const kind = this.comicProjectKind(project);
         if (this.comicView === 'assets') return 'assets';
+        if (this.comicView === 'timeline' && !this.comicUsesDesk(project)) return 'timeline';
         // A desk novel has no separate 原文 page (its story is the desk's 剧本 step) and edits in the desk's 剪辑.
         if ((this.comicView === 'timeline' || this.comicView === 'script') && this.comicUsesDesk(project)) return 'storyboard';
         const steps = this.comicStepsFor(kind).map(([view]) => view);
@@ -12099,7 +12204,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected openComicKindSheet(kind: ComicProjectKind): void {
-        if (this.comicStage !== 'idle' || this.comicKindBusy) return;
+        if (this.comicStage !== 'idle' || this.comicKindBusy || this.comicStudioModalState?.generating) return;
         this.comicChatUi().surface = 'studio';
         this.comicCreateExistingChildren.clear();
         if (kind === 'novel') { this.openComicCreateSheet(); return; }
@@ -12107,12 +12212,196 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.clearNavigationSurfaces();
         this.comicKindSheet = kind;
         this.comicCreateParentDirectory = undefined;
-        if (kind === 'topic') void this.loadStockMediaState();
         this.comicKindError = '';
-        this.comicKindRatio = '9:16';
+        this.comicKindRatio = '16:9';
+        this.initComicStudioModalState(kind);
+        this.ensureComicChatDirectories?.();
+        if (kind === 'topic') void this.loadStockMediaState?.();
         void this.loadComicLibrary?.();
         void this.refreshComicAssetLibrary?.();
         void this.loadVideoProfiles?.();
+        this.update();
+    }
+
+    protected initComicStudioModalState(kind: ComicStudioModalKind, boundProjectPath?: string, initialTitle = ''): void {
+        this.comicStudioIsolatedPicker = undefined;
+        this.comicStudioModelQuery = '';
+        this.closeComicModelHoverImmediately?.();
+        this.comicStudioModalState = {
+            open: true,
+            kind,
+            ...(boundProjectPath ? { boundProjectPath } : {}),
+            title: initialTitle,
+            parentDirectory: undefined,
+            sourceFiles: [],
+            selectedLibraryIds: new Set<string>(),
+            prompt: '',
+            stylePresetId: 'none',
+            seconds: kind === 'topic' ? 30 : 8,
+            aspectRatio: kind === 'music' ? '1:1' : '16:9',
+            soundEnabled: true,
+            topicVisualMode: 'videos',
+            topicVoiceSubtitles: true,
+            musicInstrumental: false,
+            musicFullTrack: true,
+            generating: false,
+            takes: []
+        };
+    }
+
+    protected closeComicStudioModalState(): void {
+        if (this.comicStudioModalState?.generating) return;
+        this.comicStudioIsolatedPicker = undefined;
+        this.comicStudioModelQuery = '';
+        this.relayMetricTooltip = undefined;
+        this.closeComicModelHoverImmediately?.();
+        if (this.comicStudioModalState) {
+            this.comicStudioModalState.open = false;
+        }
+        this.comicKindSheet = undefined;
+    }
+
+    protected closeComicStudioIsolatedPicker(restoreFocus = false): void {
+        const current = this.comicStudioIsolatedPicker;
+        if (!current) return;
+        const trigger = restoreFocus
+            ? (this.node?.querySelector<HTMLElement>(current.anchorSelector)
+                || (typeof document !== 'undefined' ? document.querySelector<HTMLElement>(current.anchorSelector) : null))
+            : undefined;
+        this.comicStudioIsolatedPicker = undefined;
+        this.comicStudioModelQuery = '';
+        this.relayMetricTooltip = undefined;
+        this.closeComicModelHoverImmediately?.();
+        this.update();
+        if (trigger && trigger.isConnected) {
+            window.requestAnimationFrame(() => {
+                if (trigger.isConnected) trigger.focus();
+            });
+        }
+    }
+
+    protected async handleComicHomeProjectOpen(project: ComicHomeProject): Promise<void> {
+        if (!project.path) return;
+        let disk: DesktopComicProjectDiskStatus | undefined;
+        if (this.platformService?.inspectComicProjectDiskStatus) {
+            try {
+                disk = await this.platformService.inspectComicProjectDiskStatus(project.path);
+            } catch {
+                disk = undefined;
+            }
+        }
+        if (disk?.deleted) {
+            const next = new Set(this.comicDeletedProjectPaths);
+            next.add(project.path);
+            this.comicDeletedProjectPaths = next;
+            this.update();
+            return;
+        }
+        if (this.comicDeletedProjectPaths.has(project.path)) {
+            const next = new Set(this.comicDeletedProjectPaths);
+            next.delete(project.path);
+            this.comicDeletedProjectPaths = next;
+        }
+        if (project.kind === 'novel') {
+            this.openComicStudio(project.path, project.title);
+            return;
+        }
+        await this.openBoundComicStudioModal(project.kind, project.path, project.title, disk);
+    }
+
+    protected async openBoundComicStudioModal(
+        kind: ComicStudioModalKind,
+        projectPath: string,
+        fallbackTitle: string,
+        disk?: DesktopComicProjectDiskStatus
+    ): Promise<void> {
+        if (this.comicStage !== 'idle' || this.comicKindBusy || this.comicStudioModalState?.generating) return;
+        this.comicChatUi().surface = 'studio';
+        this.rememberNavigation();
+        this.clearNavigationSurfaces();
+        this.comicKindSheet = kind;
+        this.comicKindError = '';
+        this.initComicStudioModalState(kind, projectPath, fallbackTitle);
+        this.ensureComicChatDirectories?.();
+        void this.loadComicLibrary?.();
+        void this.refreshComicAssetLibrary?.();
+        void this.loadVideoProfiles?.();
+        this.update();
+
+        const [resolvedDisk, projectState] = await Promise.all([
+            disk ? Promise.resolve(disk) : this.platformService.inspectComicProjectDiskStatus(projectPath).catch(() => undefined),
+            this.platformService.getComicProject(projectPath).catch(() => undefined)
+        ]);
+        const modal = this.comicStudioModalState;
+        if (!modal || !modal.open || modal.boundProjectPath !== projectPath || modal.kind !== kind) return;
+
+        const loadedProject = projectState?.project;
+        if (loadedProject?.title) {
+            modal.title = loadedProject.title;
+        }
+        const ratio = loadedProject?.canvas?.aspectRatio;
+        if (ratio === '16:9' || ratio === '9:16' || ratio === '1:1' || ratio === '4:3' || ratio === '3:4') {
+            modal.aspectRatio = ratio;
+        }
+        if (kind === 'topic') {
+            const savedTopic = this.comicTopicSettings(projectPath);
+            if (savedTopic) {
+                if (savedTopic.topic && !modal.prompt) modal.prompt = savedTopic.topic;
+                if (savedTopic.seconds) modal.seconds = savedTopic.seconds;
+                modal.topicVisualMode = savedTopic.visual === 'image' ? 'images' : 'videos';
+                modal.topicVoiceSubtitles = savedTopic.voice !== false;
+            } else if (projectState?.production?.script?.text && !modal.prompt) {
+                modal.prompt = projectState.production.script.text;
+            }
+        }
+
+        const assetsByPath = new Map<string, ComicProject['assets'][number]>();
+        for (const asset of loadedProject?.assets ?? []) {
+            if (!asset.uri) continue;
+            try {
+                const abs = URI.fromFilePath(projectPath).resolve(asset.uri).path.fsPath();
+                assetsByPath.set(abs, asset);
+            } catch { /* ignore invalid uri */ }
+        }
+
+        if (kind === 'image' && modal.sourceFiles.length === 0) {
+            const importedImages: ComicStudioSourceFile[] = [];
+            for (const [absPath, asset] of assetsByPath.entries()) {
+                if (asset.kind === 'image' && asset.source === 'imported' && asset.status === 'ready') {
+                    importedImages.push({
+                        id: `asset:${asset.id}`,
+                        name: asset.uri.split('/').pop() || asset.id,
+                        kind: 'image',
+                        path: absPath,
+                        previewUrl: URI.fromFilePath(absPath).toString()
+                    });
+                }
+            }
+            if (importedImages.length > 0) {
+                modal.sourceFiles = importedImages;
+            }
+        }
+
+        const existingFiles = resolvedDisk?.existingMediaFiles ?? [];
+        const takes: ComicStudioGeneratedTake[] = existingFiles.map(entry => {
+            const matchedAsset = assetsByPath.get(entry.filePath);
+            const aspect = matchedAsset?.width && matchedAsset?.height
+                ? comicChatAspectOf(matchedAsset.width, matchedAsset.height)
+                : modal.aspectRatio;
+            return {
+                id: entry.id,
+                kind: entry.kind,
+                title: entry.title || (entry.filePath.split(/[\\/]/).pop() || fallbackTitle).replace(/\.[^.]+$/, ''),
+                mediaUrl: URI.fromFilePath(entry.filePath).toString(),
+                filePath: entry.filePath,
+                ...(entry.durationSeconds ? { durationSeconds: entry.durationSeconds } : matchedAsset?.durationMs ? { durationSeconds: Math.round(matchedAsset.durationMs / 1000) } : {}),
+                ...(entry.kind === 'video' && aspect ? { aspectRatio: aspect } : {}),
+                ...(matchedAsset?.provider && matchedAsset.source !== 'imported' ? { modelLabel: matchedAsset.provider } : {}),
+                ...(matchedAsset?.prompt ? { prompt: matchedAsset.prompt } : {})
+            };
+        });
+        modal.takes = takes;
+        modal.activeTakeId = takes[0]?.id;
         this.update();
     }
 
@@ -12130,6 +12419,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const fsPath = resource.path?.fsPath?.() || String(resource);
         if (fsPath) {
             this.comicCreateParentDirectory = fsPath;
+            if (this.comicStudioModalState?.open && !this.comicStudioModalState.boundProjectPath) {
+                this.comicStudioModalState.parentDirectory = fsPath;
+            }
             this.comicCreateExistingChildren.delete(fsPath);
             this.update();
         }
@@ -12147,49 +12439,1597 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }));
     }
 
+    protected async pickComicStudioLocalFiles(): Promise<void> {
+        const modal = this.comicStudioModalState;
+        if (!modal || modal.generating) return;
+        const imageOnly = modal.kind === 'image';
+        const filters: Record<string, string[]> = imageOnly
+            ? { Images: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }
+            : { Media: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'mp4', 'mov', 'webm', 'm4v'] };
+        const title = comicSheetText(this.desktopLocale, imageOnly ? 'images' : 'chooseFolder');
+        const selected = await this.fileDialogService?.showOpenDialog?.({
+            title,
+            openLabel: title,
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: true,
+            filters
+        });
+        const resources = Array.isArray(selected) ? selected : selected ? [selected] : [];
+        if (!resources.length) return;
+        this.addComicStudioLocalPaths(resources.map(res => res.path?.fsPath?.() || String(res)).filter(Boolean));
+    }
+
+    protected addComicStudioDroppedFiles(files: FileList): void {
+        const modal = this.comicStudioModalState;
+        if (!modal || modal.generating || !files.length) return;
+        const paths: string[] = [];
+        for (const file of Array.from(files)) {
+            const p = window.nextmuxDesktop?.getPathForFile?.(file) || (file as File & { readonly path?: string }).path || '';
+            if (p) paths.push(p);
+        }
+        if (paths.length) this.addComicStudioLocalPaths(paths);
+    }
+
+    protected addComicStudioLocalPaths(paths: readonly string[]): void {
+        const modal = this.comicStudioModalState;
+        if (!modal) return;
+        const imageOnly = modal.kind === 'image';
+        const existingPaths = new Set(modal.sourceFiles.map(item => item.path).filter(Boolean));
+        const next = [...modal.sourceFiles];
+        for (const fsPath of paths) {
+            if (!fsPath || existingPaths.has(fsPath)) continue;
+            const ext = /\.([^./\\]+)$/.exec(fsPath)?.[1]?.toLowerCase() || '';
+            const isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext);
+            const isVideo = ['mp4', 'mov', 'webm', 'm4v'].includes(ext);
+            if (imageOnly && !isImage) continue;
+            if (!isImage && !isVideo) continue;
+            existingPaths.add(fsPath);
+            next.push({
+                id: `local:${fsPath}`,
+                name: fsPath.split(/[\\/]/).pop() || fsPath,
+                kind: isVideo ? 'video' : 'image',
+                path: fsPath,
+                previewUrl: URI.fromFilePath(fsPath).toString()
+            });
+        }
+        modal.sourceFiles = next;
+        this.comicKindError = '';
+        this.update();
+    }
+
+    protected toggleComicStudioLibraryItem(item: ComicCreationLibraryItem): void {
+        const modal = this.comicStudioModalState;
+        if (!modal || modal.generating) return;
+        if (modal.kind === 'image' && item.kind !== 'image') return;
+        const selected = new Set(modal.selectedLibraryIds);
+        if (selected.has(item.id)) {
+            selected.delete(item.id);
+            modal.sourceFiles = modal.sourceFiles.filter(entry => entry.id !== `lib:${item.id}` && entry.path !== item.path);
+        } else {
+            selected.add(item.id);
+            if (!modal.sourceFiles.some(entry => entry.path === item.path)) {
+                modal.sourceFiles = [
+                    ...modal.sourceFiles,
+                    {
+                        id: `lib:${item.id}`,
+                        name: item.name,
+                        kind: item.kind,
+                        path: item.path,
+                        previewUrl: item.previewUrl || URI.fromFilePath(item.path).toString()
+                    }
+                ];
+            }
+        }
+        modal.selectedLibraryIds = selected;
+        this.comicKindError = '';
+        this.update();
+    }
+
+    protected removeComicStudioSourceFile(id: string): void {
+        const modal = this.comicStudioModalState;
+        if (!modal || modal.generating) return;
+        const target = modal.sourceFiles.find(item => item.id === id);
+        modal.sourceFiles = modal.sourceFiles.filter(item => item.id !== id);
+        if (id.startsWith('lib:')) {
+            const libId = id.slice('lib:'.length);
+            const selected = new Set(modal.selectedLibraryIds);
+            selected.delete(libId);
+            modal.selectedLibraryIds = selected;
+        } else if (target?.path) {
+            const matchedLib = this.comicCreationLibraryItems().find(item => item.path === target.path);
+            if (matchedLib && modal.selectedLibraryIds.has(matchedLib.id)) {
+                const selected = new Set(modal.selectedLibraryIds);
+                selected.delete(matchedLib.id);
+                modal.selectedLibraryIds = selected;
+            }
+        }
+        this.update();
+    }
+
+    protected comicStudioRelayKeyFor(kind: ComicStudioModalKind, capability: ComicStepCapability): string {
+        const prefs = this.comicStepPrefsFor(kind);
+        const explicit = prefs.relays?.[capability];
+        if (explicit) return explicit;
+        const candidate = this.comicStepChoiceForKind(kind, capability);
+        return candidate?.source.key || '';
+    }
+
+    protected comicStudioRelayLabelFor(kind: ComicStudioModalKind, capability: ComicStepCapability): string {
+        const prefs = this.comicStepPrefsFor(kind);
+        const candidate = this.comicStepChoiceForKind(kind, capability);
+        const explicitRelay = prefs.relays?.[capability];
+        if (explicitRelay) {
+            if (candidate && candidate.source.key === explicitRelay) {
+                return candidate.offering?.providerName || comicStepSourceLabel(this.desktopLocale, candidate.source);
+            }
+            if (explicitRelay.startsWith('managed:')) {
+                return this.comicChatRelayLabel(explicitRelay);
+            }
+            const option = this.relayPickerOptions?.().find(item => item.key === explicitRelay);
+            if (option) return option.label;
+        }
+        if (candidate) {
+            return candidate.offering?.providerName || comicStepSourceLabel(this.desktopLocale, candidate.source);
+        }
+        return relayText(this.desktopLocale, 'selectRelay');
+    }
+
+    protected toggleComicStudioIsolatedPicker(
+        kind: ComicStudioModalKind,
+        capability: ComicStepCapability,
+        mode: 'relay' | 'model',
+        anchorSelector: string
+    ): void {
+        const current = this.comicStudioIsolatedPicker;
+        if (current && current.kind === kind && current.capability === capability && current.mode === mode) {
+            this.closeComicStudioIsolatedPicker(true);
+            return;
+        }
+        if (this.codingPopover === 'routes') {
+            this.codingPopover = '';
+            this.modelPickerRelayOpen = false;
+        }
+        if (this.comicRelayPickerOpen) this.comicRelayPickerOpen = false;
+        if (this.comicModelPickerOpen) this.comicModelPickerOpen = false;
+        this.comicStudioIsolatedPicker = { kind, capability, mode, anchorSelector };
+        this.comicStudioModelQuery = '';
+        this.relayMetricTooltip = undefined;
+        this.closeComicModelHoverImmediately?.();
+        if (mode === 'relay') {
+            if (this.relaySourceTab !== 'my-api' && !this.publicMerchantPage && !this.publicMerchantPageLoading) {
+                void this.loadPublicMerchantPage?.();
+            }
+        } else {
+            const relayKey = this.comicStudioRelayKeyFor(kind, capability);
+            if (relayKey.startsWith('managed:')) {
+                const merchantId = relayKey.slice('managed:'.length);
+                if (!this.merchantPickerSnapshots.has(merchantId)) {
+                    void this.loadComicChatRelayCatalog(merchantId);
+                }
+            }
+        }
+        this.update();
+    }
+
+    protected renderComicStudioIsolatedModelSlot(kind: ComicStudioModalKind, capability: ComicStepCapability): React.ReactNode {
+        const relayAnchor = `${kind}:${capability}:relay`;
+        const modelAnchor = `${kind}:${capability}:model`;
+        const relaySelector = `[data-studio-picker-anchor="${relayAnchor}"]`;
+        const modelSelector = `[data-studio-picker-anchor="${modelAnchor}"]`;
+        const picker = this.comicStudioIsolatedPicker;
+        const relayOpen = Boolean(picker && picker.kind === kind && picker.capability === capability && picker.mode === 'relay');
+        const modelOpen = Boolean(picker && picker.kind === kind && picker.capability === capability && picker.mode === 'model');
+        const relayLabel = this.comicStudioRelayLabelFor(kind, capability);
+        const candidate = this.comicStepChoiceForKind(kind, capability);
+        const modelLabel = candidate?.label || comicStepText(this.desktopLocale, 'none');
+        const disabled = Boolean(this.comicStudioModalState?.generating);
+        return (
+            <div className='nmx-comic-chat-drawers nmx-studio-isolated-drawers'>
+                <button
+                    type='button'
+                    data-studio-picker-anchor={relayAnchor}
+                    disabled={disabled}
+                    aria-haspopup='dialog'
+                    aria-expanded={relayOpen}
+                    className={`nmx-composer-relay-button${relayOpen ? ' is-open' : ''}`}
+                    title={relayLabel}
+                    onClick={() => this.toggleComicStudioIsolatedPicker(kind, capability, 'relay', relaySelector)}
+                >
+                    <i className='codicon codicon-globe' aria-hidden='true' />
+                    <span data-nmx-literal>{relayLabel}</span>
+                    <i className='codicon codicon-chevron-down' aria-hidden='true' />
+                </button>
+                <button
+                    type='button'
+                    data-studio-picker-anchor={modelAnchor}
+                    disabled={disabled}
+                    aria-haspopup='listbox'
+                    aria-expanded={modelOpen}
+                    className={`nmx-route-button${modelOpen ? ' is-open' : ''}${!candidate ? ' is-empty' : ''}`}
+                    title={modelLabel}
+                    onClick={() => this.toggleComicStudioIsolatedPicker(kind, capability, 'model', modelSelector)}
+                >
+                    <span data-nmx-literal>{modelLabel}</span>
+                    <i className='codicon codicon-chevron-down' aria-hidden='true' />
+                </button>
+            </div>
+        );
+    }
+
+    protected renderComicStudioIsolatedPickerPortal(): React.ReactNode {
+        const picker = this.comicStudioIsolatedPicker;
+        if (!picker || !this.comicStudioModalState?.open) return undefined;
+        const { kind, capability, mode, anchorSelector } = picker;
+        const activeRelayKey = this.comicStudioRelayKeyFor(kind, capability);
+
+        if (mode === 'relay') {
+            const rows = Math.max(2, this.relayPickerOptions().length);
+            const directoryPage = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage;
+            const loading = this.relaySourceTab !== 'my-api' && (this.publicMerchantPageLoading || !directoryPage || this.publicMerchantPageError);
+            const chromeHeight = this.relaySourceTab === 'merchant' ? 132 : 91;
+            const footerHeight = loading || (this.relaySourceTab === 'merchant' && this.publicMerchantPage?.nextCursor) ? 30 : 0;
+            const placement = this.calculateModelPickerPlacement(Math.max(300, chromeHeight + rows * 32 + footerHeight), 264, anchorSelector);
+            return ReactDOM.createPortal(
+                <div
+                    className='nmx-model-picker-portal nmx-desktop-widget nmx-studio-isolated-picker-portal'
+                    dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'}
+                    lang={this.desktopLocale}
+                    onKeyDown={event => {
+                        if (event.key === 'Escape' && !event.defaultPrevented && !event.nativeEvent.isComposing) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            this.closeComicStudioIsolatedPicker(true);
+                        }
+                    }}
+                >
+                    <div className={`nmx-model-picker-surface nmx-shell nmx-theme-${this.resolvedDesktopTheme()}`}>
+                        <section
+                            className='nmx-composer-popover nmx-route-popover nmx-model-picker-popover nmx-relay-picker-popover'
+                            data-side={placement.side}
+                            aria-label={localizeDesktopSurface(this.desktopLocale, '选择中转商')}
+                            style={{
+                                '--nmx-model-picker-max-height': `${placement.maxHeight}px`,
+                                top: `${placement.top}px`,
+                                left: `${placement.left}px`,
+                                width: `${placement.width}px`,
+                                height: `${placement.height}px`,
+                                maxHeight: `${placement.maxHeight}px`,
+                                zIndex: 12000
+                            } as React.CSSProperties}
+                        >
+                            <div className='nmx-model-picker-relay-view'>
+                                {this.renderRelayPopover({
+                                    selectedKey: activeRelayKey,
+                                    onSelect: key => {
+                                        this.selectComicStepRelayForKind(kind, capability, key);
+                                        this.closeComicStudioIsolatedPicker(true);
+                                    }
+                                })}
+                            </div>
+                        </section>
+                    </div>
+                </div>,
+                document.body
+            );
+        }
+
+        if (activeRelayKey.startsWith('managed:')) {
+            const merchantId = activeRelayKey.slice('managed:'.length);
+            if (!this.merchantPickerSnapshots.has(merchantId)) {
+                void this.loadComicChatRelayCatalog(merchantId);
+            }
+        }
+        const prefs = this.comicStepPrefsFor(kind);
+        const explicitRelay = prefs.relays?.[capability];
+        const allCandidates = [...this.comicStepCandidatesForKind(kind, capability)]
+            .sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label));
+        const relayMatched = activeRelayKey && activeRelayKey !== 'automatic'
+            ? allCandidates.filter(item => item.source.key === activeRelayKey)
+            : allCandidates;
+        const allOptions = explicitRelay ? relayMatched : (relayMatched.length > 0 ? relayMatched : allCandidates);
+        const query = this.comicStudioModelQuery.trim().toLowerCase();
+        const filtered = query
+            ? allOptions.filter(item =>
+                item.label.toLowerCase().includes(query)
+                || item.model.toLowerCase().includes(query)
+                || Boolean(item.offering?.providerName?.toLowerCase().includes(query)))
+            : allOptions;
+        const selectedCandidate = this.comicStepChoiceForKind(kind, capability);
+        const basePlacement = this.calculateModelPickerPlacement(
+            Math.max(240, 96 + (allOptions.length > 5 ? 36 : 0) + Math.max(2, filtered.length) * 32),
+            264,
+            anchorSelector
+        );
+        const viewport = { width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) };
+        const layout = placeModelPickerPanels(basePlacement, viewport);
+        const placement = layout.picker;
+        const detailGeometry = layout.detail;
+        const relayLoading = Boolean(
+            activeRelayKey.startsWith('managed:')
+            && (this as unknown as { comicChatRelayLoading?: Set<string> }).comicChatRelayLoading?.has(activeRelayKey.slice('managed:'.length))
+        );
+        const modalRefCount = this.comicStudioModalState.sourceFiles.length;
+
+        return ReactDOM.createPortal(
+            <div
+                className='nmx-model-picker-portal nmx-desktop-widget nmx-studio-isolated-picker-portal'
+                dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'}
+                lang={this.desktopLocale}
+                onKeyDown={event => {
+                    if (event.key === 'Escape' && !event.defaultPrevented && !event.nativeEvent.isComposing) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        this.closeComicStudioIsolatedPicker(true);
+                    }
+                }}
+            >
+                <div className={`nmx-model-picker-surface nmx-shell nmx-theme-${this.resolvedDesktopTheme()}`}>
+                    <section
+                        className='nmx-composer-popover nmx-route-popover nmx-model-picker-popover nmx-model-only-popover'
+                        data-side={placement.side}
+                        aria-label={localizeDesktopSurface(this.desktopLocale, '选择模型')}
+                        style={{
+                            '--nmx-model-picker-max-height': `${placement.maxHeight}px`,
+                            top: `${placement.top}px`,
+                            left: `${placement.left}px`,
+                            width: `${placement.width}px`,
+                            height: `${placement.height}px`,
+                            maxHeight: `${placement.maxHeight}px`,
+                            zIndex: 12000
+                        } as React.CSSProperties}
+                    >
+                        <header>
+                            <strong>{comicStepName(this.desktopLocale, capability)}</strong>
+                            <button
+                                type='button'
+                                disabled={this.catalogLoading || relayLoading}
+                                aria-label={localizeDesktopSurface(this.desktopLocale, '刷新')}
+                                title={localizeDesktopSurface(this.desktopLocale, '刷新')}
+                                onClick={() => void (activeRelayKey.startsWith('managed:')
+                                    ? this.loadComicChatRelayCatalog(activeRelayKey.slice('managed:'.length))
+                                    : this.loadCatalog())}
+                            >
+                                <i className='codicon codicon-refresh' />
+                            </button>
+                        </header>
+                        {allOptions.length > 5 && (
+                            <div className='nmx-model-picker-search'>
+                                <i className='codicon codicon-search' aria-hidden='true' />
+                                <ImeInput
+                                    value={this.comicStudioModelQuery}
+                                    placeholder={modelPickerListText(this.desktopLocale, 'search')}
+                                    aria-label={modelPickerListText(this.desktopLocale, 'search')}
+                                    onChange={event => {
+                                        this.comicStudioModelQuery = event.currentTarget.value;
+                                        this.closeComicModelHoverImmediately();
+                                        this.update();
+                                    }}
+                                />
+                            </div>
+                        )}
+                        {filtered.length > 0 ? (
+                            <div
+                                className='nmx-model-picker-list'
+                                role='listbox'
+                                aria-label={comicStepName(this.desktopLocale, capability)}
+                                onScroll={() => {
+                                    if (this.comicModelHoverKey) {
+                                        this.closeComicModelHoverImmediately();
+                                        this.update();
+                                    }
+                                }}
+                            >
+                                {filtered.map(item => {
+                                    const selected = item.key === selectedCandidate?.key;
+                                    const offering = item.offering;
+                                    const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
+                                    const variantTag = offering
+                                        ? (ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering)))
+                                        : '';
+                                    const hoverOpen = this.comicModelHoverKey === item.key;
+                                    const hoverPlacement = hoverOpen ? this.comicModelHoverPlacement : undefined;
+                                    const evidenceRows: { readonly label: string; readonly value: string }[] = [
+                                        {
+                                            label: item.source.kind === 'official'
+                                                ? relayText(this.desktopLocale, 'apiName')
+                                                : item.source.kind === 'local'
+                                                    ? relayText(this.desktopLocale, 'local')
+                                                    : relayText(this.desktopLocale, 'relayTitle'),
+                                            value: offering?.providerName || comicStepSourceLabel(this.desktopLocale, item.source)
+                                        }
+                                    ];
+                                    if (!offering) {
+                                        evidenceRows.push({
+                                            label: relayText(this.desktopLocale, 'price'),
+                                            value: item.source.kind === 'local' ? this.comicChatT('free') : this.comicChatT('providerBilled')
+                                        });
+                                    }
+                                    if (capability === 'video') {
+                                        const aspects = this.comicChatAspectChoices(item);
+                                        if (aspects.length > 0) evidenceRows.push({ label: this.comicChatT('aspect'), value: aspects.join(' / ') });
+                                        const durations = this.comicChatSecondsChoices(item, modalRefCount);
+                                        if (durations.length > 0) evidenceRows.push({ label: canvasText(this.desktopLocale, 'duration'), value: durations.map(n => `${n}s`).join(' / ') });
+                                        if (videoModelGuide(item.model).nativeAudio) evidenceRows.push({ label: canvasText(this.desktopLocale, 'audio'), value: this.comicChatT('sound') });
+                                    }
+                                    if (capability === 'image' || capability === 'video') {
+                                        const refPolicy = this.comicChatReferencePolicy(capability, item);
+                                        if (refPolicy.limit > 0) {
+                                            evidenceRows.push({
+                                                label: refPolicy.firstFrame ? this.comicChatT('firstFrame') : this.comicChatT('reference'),
+                                                value: refPolicy.firstFrame ? this.comicChatT('count', { n: 1 }) : this.comicChatT('referencesLimit', { n: refPolicy.limit })
+                                            });
+                                        }
+                                    }
+                                    const optionTitle = [item.label, ...evidenceRows.map(metric => `${metric.label}: ${metric.value}`)].filter(Boolean).join(' · ');
+                                    return (
+                                        <div
+                                            className={`nmx-model-option ${selected ? 'is-selected' : ''}`}
+                                            key={item.key}
+                                            data-model-id={item.key}
+                                            onPointerEnter={event => this.openComicModelHover(item.key, event.currentTarget, detailGeometry)}
+                                            onFocus={event => this.openComicModelHover(item.key, event.currentTarget, detailGeometry)}
+                                            onBlur={() => this.scheduleComicModelHoverClose()}
+                                            onPointerLeave={() => this.scheduleComicModelHoverClose()}
+                                        >
+                                            <button
+                                                type='button'
+                                                role='option'
+                                                aria-selected={selected}
+                                                aria-label={optionTitle}
+                                                onClick={() => {
+                                                    this.selectComicStepModelForKind(kind, capability, item.key);
+                                                    this.reconcileComicStudioModalParameters();
+                                                    this.closeComicStudioIsolatedPicker(true);
+                                                }}
+                                            >
+                                                <span>
+                                                    <strong data-nmx-literal>{item.label}</strong>
+                                                    {variantTag && <small className='nmx-model-price-variant' dir='ltr'>{variantTag}</small>}
+                                                </span>
+                                                {selected && <i className='codicon codicon-check' />}
+                                            </button>
+                                            {hoverOpen && hoverPlacement && ReactDOM.createPortal(
+                                                <div
+                                                    className={`nmx-model-effort-portal nmx-comic-model-effort-portal nmx-theme-${this.resolvedDesktopTheme()}`}
+                                                    dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'}
+                                                    lang={this.desktopLocale}
+                                                    style={{ display: 'block', position: 'fixed', top: 0, left: 0, width: 0, height: 0, zIndex: 12020 }}
+                                                    onPointerEnter={() => this.cancelComicModelHoverClose()}
+                                                    onPointerLeave={() => this.scheduleComicModelHoverClose()}
+                                                >
+                                                    <section
+                                                        className={`nmx-model-effort-menu nmx-model-evidence-menu is-${hoverPlacement.side}`}
+                                                        data-model-id={item.key}
+                                                        ref={element => { if (element) this.fitComicModelHoverMenu(element, detailGeometry); }}
+                                                        data-compact={(hoverPlacement.width !== undefined && hoverPlacement.width < 240) || undefined}
+                                                        style={{
+                                                            top: `${hoverPlacement.top}px`,
+                                                            left: `${hoverPlacement.left}px`,
+                                                            width: hoverPlacement.width === undefined ? undefined : `${hoverPlacement.width}px`,
+                                                            maxHeight: `${hoverPlacement.maxHeight}px`,
+                                                            zIndex: 2200
+                                                        }}
+                                                        aria-label={optionTitle}
+                                                        onFocus={() => this.cancelComicModelHoverClose()}
+                                                        onBlur={() => this.scheduleComicModelHoverClose()}
+                                                        onPointerEnter={() => this.cancelComicModelHoverClose()}
+                                                        onPointerLeave={() => this.scheduleComicModelHoverClose()}
+                                                    >
+                                                        <header><strong data-nmx-literal>{item.label}</strong></header>
+                                                        <dl className='nmx-model-evidence'>
+                                                            {evidenceRows.map(metric => (
+                                                                <div key={metric.label}>
+                                                                    <dt>{metric.label}</dt>
+                                                                    <dd data-nmx-literal>{metric.value}</dd>
+                                                                </div>
+                                                            ))}
+                                                        </dl>
+                                                        {offering && <OfferingPriceCard locale={this.desktopLocale} offering={offering} collapsible pullOutDrawer />}
+                                                    </section>
+                                                </div>,
+                                                document.body
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className='nmx-model-picker-list nmx-model-picker-empty-list'>
+                                {relayLoading ? (
+                                    <div className='nmx-merchant-catalog-status is-centered' role='status'>
+                                        <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />
+                                        <span>{relayText(this.desktopLocale, 'modelsLoading')}</span>
+                                    </div>
+                                ) : (
+                                    <div className='nmx-route-empty'>
+                                        <span>
+                                            {this.comicStudioModelQuery.trim()
+                                                ? modelPickerListText(this.desktopLocale, 'noMatch')
+                                                : localizeDesktopSurface(this.desktopLocale, '当前渠道下暂无支持该功能的模型')}
+                                        </span>
+                                        {!this.comicStudioModelQuery.trim() && (
+                                            <button
+                                                type='button'
+                                                onClick={() => {
+                                                    const relayAnchor = `[data-studio-picker-anchor="${kind}:${capability}:relay"]`;
+                                                    this.toggleComicStudioIsolatedPicker(kind, capability, 'relay', relayAnchor);
+                                                }}
+                                            >
+                                                {relayText(this.desktopLocale, 'selectRelay')}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </section>
+                </div>
+            </div>,
+            document.body
+        );
+    }
+
+    protected comicStudioModalSecondsOptions(modal: NonNullable<NextMuxDesktopWidget['comicStudioModalState']>): readonly number[] {
+        if (modal.kind === 'topic') return [15, 30, 60, 90];
+        if (modal.kind === 'music') return [30, 180];
+        const candidate = this.comicStepChoiceForKind('image', 'video');
+        const choices = this.comicChatSecondsChoices(candidate, Math.max(1, modal.sourceFiles.length));
+        return choices.length > 0 ? choices : [5, 8, 10];
+    }
+
+    protected comicStudioModalAspectOptions(
+        modal: NonNullable<NextMuxDesktopWidget['comicStudioModalState']>
+    ): readonly ('16:9' | '9:16' | '1:1' | '4:3' | '3:4')[] {
+        if (modal.kind === 'music') return ['1:1', '16:9', '9:16'];
+        if (modal.kind === 'image') {
+            const candidate = this.comicStepChoiceForKind('image', 'video');
+            const supported = this.comicChatAspectChoices(candidate).filter(
+                (ratio): ratio is '16:9' | '9:16' | '1:1' | '4:3' | '3:4' =>
+                    ratio === '16:9' || ratio === '9:16' || ratio === '1:1' || ratio === '4:3' || ratio === '3:4'
+            );
+            if (supported.length > 0) return supported;
+        }
+        return ['16:9', '9:16', '1:1', '4:3', '3:4'];
+    }
+
+    protected reconcileComicStudioModalParameters(): void {
+        const modal = this.comicStudioModalState;
+        if (!modal) return;
+        const secondsOptions = this.comicStudioModalSecondsOptions(modal);
+        if (secondsOptions.length > 0 && !secondsOptions.includes(modal.seconds)) {
+            modal.seconds = secondsOptions.includes(8) ? 8 : secondsOptions[0];
+        }
+        const aspectOptions = this.comicStudioModalAspectOptions(modal);
+        if (aspectOptions.length > 0 && !aspectOptions.includes(modal.aspectRatio)) {
+            modal.aspectRatio = aspectOptions[0];
+        }
+    }
+
+    protected comicStudioModalPriceInfo(modal: NonNullable<NextMuxDesktopWidget['comicStudioModalState']>): {
+        readonly label: string;
+        readonly hint?: string;
+    } {
+        if (modal.kind === 'image') {
+            const candidate = this.comicStepChoiceForKind('image', 'video');
+            if (!candidate) return { label: '—' };
+            return {
+                label: this.comicChatEstimate(
+                    'video',
+                    candidate,
+                    { aspect: modal.aspectRatio, seconds: modal.seconds, sound: modal.soundEnabled },
+                    modal.prompt,
+                    Math.max(1, modal.sourceFiles.length)
+                )
+            };
+        }
+        if (modal.kind === 'music') {
+            const candidate = this.comicStepChoiceForKind('music', 'music');
+            if (!candidate) return { label: '—' };
+            return {
+                label: this.comicChatEstimate(
+                    'music',
+                    candidate,
+                    { instrumental: modal.musicInstrumental, seconds: modal.musicFullTrack ? 180 : 30 },
+                    modal.prompt,
+                    0
+                )
+            };
+        }
+        const visualCap: 'video' | 'image' = modal.topicVisualMode === 'images' ? 'image' : 'video';
+        const visualCandidate = this.comicStepChoiceForKind('topic', visualCap);
+        if (!visualCandidate) return { label: '—' };
+        const shotCount = Math.max(1, Math.round(modal.seconds / (visualCap === 'video' ? 6 : 5)));
+        const label = visualCap === 'video'
+            ? this.comicChatEstimate('video', visualCandidate, { aspect: modal.aspectRatio, seconds: modal.seconds, sound: true }, modal.prompt, 0)
+            : this.comicChatEstimate('image', visualCandidate, { aspect: modal.aspectRatio, count: shotCount }, modal.prompt, 0);
+        return {
+            label,
+            hint: localizeDesktopSurface(this.desktopLocale, '含文案分镜与画面配音合成预估，按实际调用结算')
+        };
+    }
+
+    protected comicStudioModalBlockedInfo(modal: NonNullable<NextMuxDesktopWidget['comicStudioModalState']>): {
+        readonly reason?: string;
+        readonly actionLabel?: string;
+        readonly onAction?: () => void;
+    } {
+        const requiredCapabilities: ComicStepCapability[] = modal.kind === 'image'
+            ? ['video']
+            : modal.kind === 'music'
+                ? ['music']
+                : [
+                    'text',
+                    modal.topicVisualMode === 'images' ? 'image' : 'video',
+                    ...(modal.topicVoiceSubtitles && !this.topicUsesVideoNativeSound(modal.topicVisualMode) ? ['speech' as const] : [])
+                ];
+        const chosen = requiredCapabilities.map(cap => ({ cap, candidate: this.comicStepChoiceForKind(modal.kind, cap) }));
+        if (
+            !this.platformSession?.linked
+            && chosen.some(({ candidate }) => candidate && (candidate.source.kind === 'managed' || candidate.source.kind === 'automatic'))
+        ) {
+            return {
+                reason: localizeDesktopSurface(this.desktopLocale, '请先登录账号，或在模型设置中连接你自己的 API'),
+                actionLabel: localizeDesktopSurface(this.desktopLocale, '登录账号'),
+                onAction: () => { void this.startDeviceLink(); }
+            };
+        }
+        const primaryMissing = chosen.find(({ cap, candidate }) => !candidate && cap !== 'speech');
+        if (primaryMissing) {
+            return {
+                reason: primaryMissing.cap === 'text'
+                    ? this.ct('noTextModel')
+                    : localizeDesktopSurface(this.desktopLocale, '请先在上方选择一个可用模型')
+            };
+        }
+        if (modal.kind === 'image') {
+            const candidate = this.comicStepChoiceForKind('image', 'video');
+            const policy = this.comicChatReferencePolicy('video', candidate);
+            if (candidate && policy.limit === 0) {
+                return { reason: this.comicChatT('noFirstFrame') };
+            }
+        }
+        return {};
+    }
+
+    protected async waitForStudioMediaJob(
+        workspaceRoot: string,
+        jobId: string,
+        run: NonNullable<NonNullable<NextMuxDesktopWidget['comicStudioModalState']>['activeRun']>
+    ): Promise<MediaJob> {
+        for (;;) {
+            if (run.cancelled) {
+                await this.platformService.cancelMediaJob(workspaceRoot, jobId).catch(() => undefined);
+                throw Object.assign(new Error(this.comicChatT('cancelled')), { code: 'AGENT_CANCELLED' });
+            }
+            const state = await this.platformService.getMediaWorkspaceState(workspaceRoot);
+            if (workspaceRoot === this.activeComicWorkspaceRoot) {
+                this.mediaState = state;
+            }
+            const job = state.jobs.find(item => item.id === jobId);
+            if (!job) {
+                throw new Error(localizeDesktopSurface(this.desktopLocale, '未找到对应的生成任务'));
+            }
+            if (job.status === 'succeeded') {
+                if (!job.output?.relativeUri) {
+                    throw new Error(localizeDesktopSurface(this.desktopLocale, '生成完成但未返回媒体文件'));
+                }
+                return job;
+            }
+            if (job.status === 'failed' || job.status === 'interrupted') {
+                if (job.failure) {
+                    throw Object.assign(new Error(modelFailureText(this.desktopLocale, job.failure)), job.failure);
+                }
+                throw new Error(localizeDesktopSurface(this.desktopLocale, '媒体生成失败'));
+            }
+            if (job.status === 'cancelled') {
+                throw Object.assign(new Error(this.comicChatT('cancelled')), { code: 'AGENT_CANCELLED' });
+            }
+            await new Promise<void>(resolve => window.setTimeout(resolve, 1_200));
+        }
+    }
+
+    protected cancelComicStudioModalGenerate(): void {
+        const modal = this.comicStudioModalState;
+        const run = modal?.activeRun;
+        if (!modal || !run) return;
+        run.cancelled = true;
+        if (run.agentRunId) {
+            void this.platformService.cancelAgentRun(run.agentRunId).catch(() => undefined);
+        }
+        if (run.workspaceRoot) {
+            for (const jobId of run.mediaJobIds) {
+                void this.platformService.cancelMediaJob(run.workspaceRoot, jobId).catch(() => undefined);
+            }
+            if (run.exportId) {
+                void this.platformService.cancelComicExport(run.workspaceRoot, run.exportId).catch(() => undefined);
+            }
+        }
+        modal.generatingStageLabel = localizeDesktopSurface(this.desktopLocale, '正在取消…');
+        this.update();
+    }
+
+    protected async runComicStudioModalGenerate(): Promise<void> {
+        const modal = this.comicStudioModalState;
+        if (!modal || modal.generating) return;
+
+        const validSources = modal.sourceFiles.filter(item => Boolean(item.path));
+        if (modal.kind === 'image' && validSources.length === 0) {
+            this.comicKindError = comicSheetText(this.desktopLocale, 'needImages');
+            this.update();
+            return;
+        }
+        if (modal.kind === 'topic' && !modal.prompt.trim()) {
+            this.comicKindError = comicSheetText(this.desktopLocale, 'needTopic');
+            this.update();
+            return;
+        }
+        if (modal.kind === 'music' && !modal.prompt.trim() && !modal.musicInstrumental) {
+            this.comicKindError = localizeDesktopSurface(this.desktopLocale, '请输入歌词或音乐提示词，或切换为纯音乐模式');
+            this.update();
+            return;
+        }
+        const blocked = this.comicStudioModalBlockedInfo(modal);
+        if (blocked.reason) {
+            this.comicKindError = blocked.reason;
+            this.update();
+            return;
+        }
+
+        const run: NonNullable<typeof modal.activeRun> = {
+            runId: window.crypto.randomUUID(),
+            cancelled: false,
+            workspaceRoot: modal.boundProjectPath,
+            mediaJobIds: []
+        };
+        modal.activeRun = run;
+        modal.generating = true;
+        modal.generatingStageLabel = localizeDesktopSurface(this.desktopLocale, '正在准备项目目录…');
+        this.comicKindError = '';
+        this.update();
+
+        try {
+            let workspaceRoot = modal.boundProjectPath;
+            if (!workspaceRoot) {
+                const parentDirectory = modal.parentDirectory || this.comicCreateParentDirectory || this.comicLibrary?.root || undefined;
+                const created = await this.platformService.createComicLibraryProject({
+                    locale: this.desktopLocale,
+                    ...(modal.title.trim() ? { title: modal.title.trim() } : {}),
+                    aspectRatio: modal.aspectRatio as ComicAspectRatio,
+                    frameRate: 24,
+                    starter: 'empty',
+                    projectKind: modal.kind,
+                    ...(parentDirectory ? { parentDirectory } : {})
+                });
+                workspaceRoot = created.path;
+                modal.boundProjectPath = workspaceRoot;
+                run.workspaceRoot = workspaceRoot;
+                if (this.comicDeletedProjectPaths.has(workspaceRoot)) {
+                    const next = new Set(this.comicDeletedProjectPaths);
+                    next.delete(workspaceRoot);
+                    this.comicDeletedProjectPaths = next;
+                }
+                if (!this.comicWorkspaceOptions.some(item => item.path === workspaceRoot)) {
+                    const label = created.state.project?.title || modal.title.trim() || this.comicChatFolderName(workspaceRoot);
+                    this.comicWorkspaceOptions = [...this.comicWorkspaceOptions, { path: workspaceRoot, label }];
+                    this.persistComicWorkspaceSelection?.();
+                }
+            }
+
+            if (run.cancelled) throw Object.assign(new Error(this.comicChatT('cancelled')), { code: 'AGENT_CANCELLED' });
+
+            const mergedPrompt = mergeComicPromptWithStylePreset(
+                modal.prompt,
+                modal.stylePresetId,
+                modal.kind === 'music' ? 'music' : 'visual'
+            );
+
+            if (modal.kind === 'image') {
+                modal.generatingStageLabel = localizeDesktopSurface(this.desktopLocale, '正在导入图片素材…');
+                this.update();
+                const imported = await this.platformService.importComicMedia({
+                    workspaceRoot,
+                    paths: validSources.map(item => item.path!)
+                });
+                const refAssets = imported.sources
+                    .map(id => imported.state.project?.assets.find(candidate => candidate.id === id))
+                    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+                if (!refAssets.length || !imported.state.project) {
+                    throw new Error(this.ct('imageUnsupported'));
+                }
+                await this.platformService.patchComicProjectMetadata?.({
+                    workspaceRoot,
+                    patch: {
+                        ...(modal.title.trim() ? { title: modal.title.trim() } : {}),
+                        coverAssetId: refAssets[0].id
+                    }
+                }).catch(() => undefined);
+
+                const candidate = this.comicStepChoiceForKind('image', 'video');
+                const route = candidate ? this.comicMediaRoute('video', candidate.routeId) : undefined;
+                if (!candidate || !route) throw new Error(this.comicChatT('noModel'));
+
+                const guide = videoModelGuide(route.model);
+                const { width, height } = comicChatSize(modal.aspectRatio);
+                const policy = this.comicChatReferencePolicy('video', candidate);
+                if (policy.limit < 1) throw new Error(this.comicChatT('noFirstFrame'));
+                const firstFrame = policy.firstFrame;
+                const withReferences = !firstFrame;
+                const allowed = comicRouteVideoSeconds(route, withReferences, width >= 1080 && height >= 1080);
+                const seconds = allowed.includes(modal.seconds) ? modal.seconds : (allowed[0] || modal.seconds || 5);
+                const sound = modal.soundEnabled && this.comicVideoMakesSound(route);
+                const visualMotion = mergedPrompt || 'Natural cinematic motion, subtle camera movement, smooth lighting and lifelike details.';
+                const videoPrompt = assembleComicVideoPrompt({
+                    guide,
+                    chinese: comicPromptUsesChinese(guide, visualMotion),
+                    firstFrame,
+                    silent: !sound,
+                    segments: [{ visual: visualMotion, ...(firstFrame ? { motion: visualMotion } : {}), seconds }],
+                    ...(withReferences ? { referenceCaption: 'Keep the people and objects of the provided reference pictures in this clip.' } : {})
+                });
+                const connectionId = route.connection?.id || route.id;
+                const keyPriceQuoteId = route.kind === 'managed' ? optionalKeyPriceQuoteId(route.offering?.keyPriceQuoteId) : undefined;
+                const input: MediaJob['input'] = {
+                    connectionId,
+                    ...(keyPriceQuoteId ? { keyPriceQuoteId } : {}),
+                    model: route.model,
+                    prompt: videoPrompt,
+                    durationSeconds: seconds,
+                    width,
+                    height,
+                    ...(firstFrame ? { referenceAssetUris: [refAssets[0].uri] } : {}),
+                    ...(withReferences ? { characterReferenceUris: refAssets.slice(0, policy.limit).map(a => a.uri) } : {}),
+                    requestAudio: false,
+                    requestSubtitles: false
+                };
+                if (!this.comicMediaInputAllowed('video', input, route)) {
+                    throw new Error(this.comicChatT('noModel'));
+                }
+                const cost: MediaJob['cost'] = route.kind === 'local'
+                    ? { billing: 'free', description: mediaRuntimeText(this.desktopLocale, 'freeBilling') }
+                    : route.kind === 'managed'
+                        ? { billing: 'platform_billed', description: this.managedMediaEstimate(route, 'video', input) }
+                        : { billing: 'provider_billed', description: '由所选官方 API 渠道直接计费' };
+                modal.generatingStageLabel = localizeDesktopSurface(this.desktopLocale, '正在生成视频…');
+                this.update();
+
+                const job = await this.platformService.enqueueMediaJob({
+                    workspaceRoot,
+                    job: {
+                        idempotencyKey: `studio-image-${run.runId}`,
+                        kind: 'video',
+                        projectId: imported.state.project.id,
+                        ...comicChatJobTarget('studio-image', run.runId),
+                        input,
+                        cost
+                    }
+                });
+                run.mediaJobIds.push(job.id);
+                if (route.kind !== 'local') {
+                    await this.platformService.confirmMediaJob(workspaceRoot, job.id);
+                }
+                const completed = await this.waitForStudioMediaJob(workspaceRoot, job.id, run);
+                const sourcePath = URI.fromFilePath(workspaceRoot).resolve(completed.output!.relativeUri).path.fsPath();
+                const baseName = modal.title.trim() || this.comicChatFolderName(workspaceRoot) || '图片转视频';
+                const exported = await this.platformService.exportStudioTakeToProjectFolder({
+                    workspaceRoot,
+                    sourcePathOrDataUrl: sourcePath,
+                    kind: 'video',
+                    title: baseName,
+                    ...(modal.prompt.trim() ? { prompt: modal.prompt.trim() } : {}),
+                    aspectRatio: modal.aspectRatio,
+                    modelLabel: candidate.label,
+                    durationSeconds: seconds
+                });
+                const take: ComicStudioGeneratedTake = {
+                    id: exported.takeId,
+                    kind: 'video',
+                    title: exported.fileName.replace(/\.[^.]+$/, ''),
+                    mediaUrl: URI.fromFilePath(exported.filePath).toString(),
+                    filePath: exported.filePath,
+                    thumbnailUrl: URI.fromFilePath(workspaceRoot).resolve(refAssets[0].uri).toString(),
+                    durationSeconds: seconds,
+                    aspectRatio: modal.aspectRatio,
+                    modelLabel: candidate.label,
+                    ...(modal.prompt.trim() ? { prompt: modal.prompt.trim() } : {})
+                };
+                modal.takes = [take, ...modal.takes.filter(item => item.filePath !== take.filePath)];
+                modal.activeTakeId = take.id;
+            } else if (modal.kind === 'music') {
+                const projectState = await this.platformService.getComicProject(workspaceRoot);
+                const project = projectState.project;
+                if (!project) throw new Error(localizeDesktopSurface(this.desktopLocale, '项目初始化失败'));
+                if (modal.title.trim()) {
+                    await this.platformService.patchComicProjectMetadata?.({
+                        workspaceRoot,
+                        patch: { title: modal.title.trim() }
+                    }).catch(() => undefined);
+                }
+                const candidate = this.comicStepChoiceForKind('music', 'music');
+                const route = candidate ? this.comicMediaRoute('music', candidate.routeId) : undefined;
+                if (!candidate || !route) throw new Error(this.comicChatT('noModel'));
+
+                const durationSeconds = modal.musicFullTrack ? 180 : 30;
+                const musicPrompt = mergedPrompt || (modal.musicInstrumental
+                    ? 'Cinematic instrumental soundtrack, expressive melody, rich arrangement'
+                    : modal.title.trim() || 'Original song');
+                const connectionId = route.connection?.id || route.id;
+                const keyPriceQuoteId = route.kind === 'managed' ? optionalKeyPriceQuoteId(route.offering?.keyPriceQuoteId) : undefined;
+                const input: MediaJob['input'] = {
+                    connectionId,
+                    ...(keyPriceQuoteId ? { keyPriceQuoteId } : {}),
+                    model: route.model,
+                    prompt: musicPrompt,
+                    durationSeconds,
+                    format: 'mp3',
+                    instrumental: Boolean(modal.musicInstrumental),
+                    mode: 'generate'
+                };
+                if (!this.comicMediaInputAllowed('music', input, route)) {
+                    throw new Error(this.comicChatT('noModel'));
+                }
+                const cost: MediaJob['cost'] = route.kind === 'local'
+                    ? { billing: 'free', description: mediaRuntimeText(this.desktopLocale, 'freeBilling') }
+                    : route.kind === 'managed'
+                        ? { billing: 'platform_billed', description: this.managedMediaEstimate(route, 'music', input) }
+                        : { billing: 'provider_billed', description: '由所选官方 API 渠道直接计费' };
+                modal.generatingStageLabel = localizeDesktopSurface(this.desktopLocale, '正在生成音乐…');
+                this.update();
+
+                const job = await this.platformService.enqueueMediaJob({
+                    workspaceRoot,
+                    job: {
+                        idempotencyKey: `studio-music-${run.runId}`,
+                        kind: 'music',
+                        projectId: project.id,
+                        ...comicChatJobTarget('studio-music', run.runId),
+                        input,
+                        cost
+                    }
+                });
+                run.mediaJobIds.push(job.id);
+                if (route.kind !== 'local') {
+                    await this.platformService.confirmMediaJob(workspaceRoot, job.id);
+                }
+                const completed = await this.waitForStudioMediaJob(workspaceRoot, job.id, run);
+                const sourcePath = URI.fromFilePath(workspaceRoot).resolve(completed.output!.relativeUri).path.fsPath();
+                const baseName = modal.title.trim() || this.comicChatFolderName(workspaceRoot) || '音乐作品';
+                const exported = await this.platformService.exportStudioTakeToProjectFolder({
+                    workspaceRoot,
+                    sourcePathOrDataUrl: sourcePath,
+                    kind: 'audio',
+                    title: baseName,
+                    ...(modal.prompt.trim() ? { prompt: modal.prompt.trim() } : {}),
+                    modelLabel: candidate.label,
+                    durationSeconds
+                });
+                const take: ComicStudioGeneratedTake = {
+                    id: exported.takeId,
+                    kind: 'audio',
+                    title: exported.fileName.replace(/\.[^.]+$/, ''),
+                    mediaUrl: URI.fromFilePath(exported.filePath).toString(),
+                    filePath: exported.filePath,
+                    durationSeconds,
+                    modelLabel: candidate.label,
+                    ...(modal.prompt.trim() ? { prompt: modal.prompt.trim() } : {})
+                };
+                modal.takes = [take, ...modal.takes.filter(item => item.filePath !== take.filePath)];
+                modal.activeTakeId = take.id;
+            } else {
+                // Stage 1: Topic script & storyboard adaptation using topic's isolated text model
+                const textChoice = this.comicTextRouteForKind('topic');
+                if (!textChoice) throw new Error(this.ct('noTextModel'));
+                const visualCap: 'video' | 'image' = modal.topicVisualMode === 'images' ? 'image' : 'video';
+                const visualCandidate = this.comicStepChoiceForKind('topic', visualCap);
+                const visualRoute = visualCandidate ? this.comicMediaRoute(visualCap, visualCandidate.routeId) : undefined;
+                if (!visualCandidate || !visualRoute) throw new Error(this.comicChatT('noModel'));
+
+                let projectState = await this.platformService.getComicProject(workspaceRoot);
+                const materials: ComicTopicSettings['materials'][number][] = [];
+                if (validSources.length > 0) {
+                    modal.generatingStageLabel = localizeDesktopSurface(this.desktopLocale, '正在导入参考素材…');
+                    this.update();
+                    const imported = await this.platformService.importComicMedia({
+                        workspaceRoot,
+                        paths: validSources.map(item => item.path!)
+                    });
+                    imported.sources.forEach((assetId, idx) => {
+                        const asset = assetId ? imported.state.project?.assets.find(candidate => candidate.id === assetId) : undefined;
+                        if (asset && (asset.kind === 'image' || asset.kind === 'video')) {
+                            materials.push({ assetId: asset.id, name: validSources[idx].name, kind: asset.kind });
+                        }
+                    });
+                    projectState = imported.state;
+                }
+                this.saveComicTopicSettings(workspaceRoot, {
+                    topic: modal.prompt.trim(),
+                    seconds: modal.seconds,
+                    visual: visualCap === 'video' ? 'video' : 'image',
+                    voice: modal.topicVoiceSubtitles,
+                    style: modal.stylePresetId === 'none' ? '' : modal.stylePresetId,
+                    sources: { own: materials.length > 0, stock: false, ai: true },
+                    stockProvider: 'pexels',
+                    materials
+                });
+                await this.platformService.updateComicScript({
+                    workspaceRoot,
+                    scriptText: mergedPrompt,
+                    language: this.desktopLocale,
+                    expectedRevision: projectState.production?.revision ?? 0
+                }).catch(() => undefined);
+
+                modal.generatingStageLabel = localizeDesktopSurface(this.desktopLocale, '第 1/3 步：正在撰写解说与分镜…');
+                this.update();
+
+                const adaptPrompt = `${comicTopicInstructions({
+                    topic: mergedPrompt,
+                    seconds: modal.seconds,
+                    maxShotSeconds: visualCap === 'video' ? 8 : 6,
+                    aspectRatio: modal.aspectRatio,
+                    language: comicTextLanguage(mergedPrompt, this.comicLanguageName()),
+                    narrator: this.ct('narratorName'),
+                    ...(materials.length ? { materials: materials.map(({ name, kind }) => ({ name, kind })) } : {})
+                })}\n\nCall comic.apply_adaptation with mode "replace".`;
+
+                const conversationId = window.crypto.randomUUID();
+                const agentRoute = this.comicAgentRoute(textChoice, conversationId);
+                if (!agentRoute) throw new Error(this.ct('noTextModel'));
+                const levels = this.reasoningEffortLevels(textChoice.route);
+                const reasoningEffort = levels.includes('medium') ? 'medium' : levels[0];
+                const started = await this.platformService.startAgentRun({
+                    route: agentRoute,
+                    conversationId,
+                    workbench: 'comic',
+                    ...this.reasoningSettingsForRoute(textChoice.route, false),
+                    toolScope: 'comic',
+                    ...(reasoningEffort ? { reasoningEffort } : {}),
+                    prompt: adaptPrompt,
+                    comicMaximumOutputTokens: 16_384,
+                    history: [],
+                    workspaceRoot,
+                    permissionMode: 'workspace_write'
+                });
+                run.agentRunId = started.runId;
+                let cursor = 0;
+                for (;;) {
+                    if (run.cancelled) {
+                        await this.platformService.cancelAgentRun(started.runId).catch(() => undefined);
+                        throw Object.assign(new Error(this.comicChatT('cancelled')), { code: 'AGENT_CANCELLED' });
+                    }
+                    const snapshot = await this.platformService.getAgentRunSnapshot(started.runId, cursor, 8_000);
+                    cursor = snapshot.nextEventIndex;
+                    if (snapshot.status === 'running') continue;
+                    if (snapshot.error) throw Object.assign(new Error(snapshot.error.message), snapshot.error);
+                    if (snapshot.status === 'cancelled') {
+                        throw Object.assign(new Error(this.comicChatT('cancelled')), { code: 'AGENT_CANCELLED' });
+                    }
+                    break;
+                }
+                run.agentRunId = undefined;
+
+                projectState = await this.platformService.getComicProject(workspaceRoot);
+                let project = projectState.project;
+                if (!project) throw new Error(localizeDesktopSurface(this.desktopLocale, '项目读取失败'));
+
+                // Fallback storyboard if the text model responded without calling comic.apply_adaptation
+                const totalExistingShots = project.scenes.reduce((sum, scene) => sum + scene.shots.length, 0);
+                if (totalExistingShots === 0) {
+                    if (project.scenes.length === 0) {
+                        projectState = await this.platformService.applyComicCommand({
+                            locale: this.desktopLocale,
+                            workspaceRoot,
+                            command: {
+                                type: 'scene.add',
+                                expectedRevision: project.revision,
+                                scene: { title: modal.title.trim() || 'Scene 1' }
+                            } as ComicCommand
+                        });
+                        project = projectState.project!;
+                    }
+                    const firstScene = project.scenes[0];
+                    if (firstScene && firstScene.shots.length === 0) {
+                        projectState = await this.platformService.applyComicCommand({
+                            locale: this.desktopLocale,
+                            workspaceRoot,
+                            command: {
+                                type: 'shot.add',
+                                expectedRevision: project.revision,
+                                sceneId: firstScene.id
+                            } as ComicCommand
+                        });
+                        project = projectState.project!;
+                    }
+                    const targetScene = project.scenes[0];
+                    const targetShot = targetScene?.shots[0];
+                    if (targetScene && targetShot) {
+                        const clipFrames = Math.max(24, Math.min(10, modal.seconds) * project.frameRate);
+                        projectState = await this.platformService.applyComicCommand({
+                            locale: this.desktopLocale,
+                            workspaceRoot,
+                            command: {
+                                type: 'shot.update',
+                                expectedRevision: project.revision,
+                                sceneId: targetScene.id,
+                                shotId: targetShot.id,
+                                patch: {
+                                    visualPrompt: mergedPrompt,
+                                    durationFrames: clipFrames,
+                                    dialogueCues: modal.topicVoiceSubtitles
+                                        ? [{
+                                            id: `cue-${window.crypto.randomUUID()}`,
+                                            speaker: this.ct('narratorName'),
+                                            text: modal.prompt.trim().slice(0, 240),
+                                            startFrame: 0,
+                                            durationFrames: clipFrames
+                                        }]
+                                        : []
+                                }
+                            } as ComicCommand
+                        });
+                        project = projectState.project!;
+                    }
+                }
+
+                // Link any user-supplied own materials into the leading shots
+                if (materials.length > 0) {
+                    const openShots = project.scenes.flatMap(scene => scene.shots.map(shot => ({ scene, shot })));
+                    const pairs = openShots.slice(0, materials.length).map((entry, idx) => ({ ...entry, material: materials[idx] }));
+                    if (pairs.length > 0) {
+                        const edited = await this.platformService.applyComicEdits({
+                            locale: this.desktopLocale,
+                            workspaceRoot,
+                            expectedRevision: project.revision,
+                            edits: pairs.flatMap(({ scene, shot, material }) => [
+                                {
+                                    type: 'command' as const,
+                                    command: {
+                                        type: 'media.link' as const,
+                                        sceneId: scene.id,
+                                        shotId: shot.id,
+                                        slot: material.kind === 'video' ? 'video' as const : 'visual' as const,
+                                        assetId: material.assetId
+                                    }
+                                },
+                                {
+                                    type: 'command' as const,
+                                    command: {
+                                        type: 'shot.update' as const,
+                                        sceneId: scene.id,
+                                        shotId: shot.id,
+                                        patch: { mediaFit: 'cover' as const }
+                                    }
+                                }
+                            ])
+                        });
+                        projectState = edited.state;
+                        project = projectState.project!;
+                    }
+                }
+
+                // Stage 2: Generate visuals & optional narration voice-overs across shots
+                modal.generatingStageLabel = localizeDesktopSurface(this.desktopLocale, '第 2/3 步：正在生成画面与配音…');
+                this.update();
+
+                const readyAsset = (assetId: string | undefined): ComicProject['assets'][number] | undefined =>
+                    assetId ? project?.assets.find(a => a.id === assetId && a.status === 'ready') : undefined;
+                const nativeVideoSound = this.topicUsesVideoNativeSound(modal.topicVisualMode);
+                const speechCandidate = modal.topicVoiceSubtitles && !nativeVideoSound
+                    ? this.comicStepChoiceForKind('topic', 'speech')
+                    : undefined;
+                const speechRoute = speechCandidate ? this.comicMediaRoute('speech', speechCandidate.routeId) : undefined;
+                const { width, height } = comicChatSize(modal.aspectRatio);
+
+                const pendingJobs: { readonly jobId: string; readonly sceneId: string; readonly shotId: string; readonly kind: MediaJobKind }[] = [];
+                for (const scene of project.scenes) {
+                    for (const shot of scene.shots) {
+                        const hasReadyVideo = Boolean(readyAsset(shot.videoAssetId));
+                        const readyVisual = readyAsset(shot.visualAssetId);
+                        const needVisual = visualCap === 'video' ? !hasReadyVideo : (!readyVisual && !hasReadyVideo);
+                        if (needVisual) {
+                            const rawVisualPrompt = mergeComicPromptWithStylePreset(
+                                shot.visualPrompt?.trim() || shot.title || modal.prompt.trim(),
+                                modal.stylePresetId,
+                                'visual'
+                            );
+                            const vConnId = visualRoute.connection?.id || visualRoute.id;
+                            const vQuote = visualRoute.kind === 'managed' ? optionalKeyPriceQuoteId(visualRoute.offering?.keyPriceQuoteId) : undefined;
+                            let input: MediaJob['input'];
+                            if (visualCap === 'video') {
+                                const guide = videoModelGuide(visualRoute.model);
+                                const firstFrame = Boolean(readyVisual && guide.firstFrame && comicRouteImageInput(visualRoute, 'firstFrame'));
+                                const allowed = comicRouteVideoSeconds(visualRoute, false, width >= 1080 && height >= 1080);
+                                const wantedSec = Math.max(1, Math.round(shot.durationFrames / project.frameRate));
+                                const clipSeconds = allowed.find(v => v >= wantedSec) || allowed[allowed.length - 1] || 5;
+                                const vPrompt = assembleComicVideoPrompt({
+                                    guide,
+                                    chinese: comicPromptUsesChinese(guide, rawVisualPrompt),
+                                    firstFrame,
+                                    silent: !(modal.topicVoiceSubtitles && nativeVideoSound),
+                                    segments: [{ visual: rawVisualPrompt, ...(firstFrame ? { motion: rawVisualPrompt } : {}), seconds: clipSeconds }]
+                                });
+                                input = {
+                                    connectionId: vConnId,
+                                    ...(vQuote ? { keyPriceQuoteId: vQuote } : {}),
+                                    model: visualRoute.model,
+                                    prompt: vPrompt,
+                                    durationSeconds: clipSeconds,
+                                    width,
+                                    height,
+                                    ...(firstFrame && readyVisual ? { referenceAssetUris: [readyVisual.uri] } : {}),
+                                    requestAudio: false,
+                                    requestSubtitles: false
+                                };
+                            } else {
+                                input = {
+                                    connectionId: vConnId,
+                                    ...(vQuote ? { keyPriceQuoteId: vQuote } : {}),
+                                    model: visualRoute.model,
+                                    prompt: rawVisualPrompt,
+                                    width,
+                                    height
+                                };
+                            }
+                            const cost: MediaJob['cost'] = visualRoute.kind === 'local'
+                                ? { billing: 'free', description: mediaRuntimeText(this.desktopLocale, 'freeBilling') }
+                                : visualRoute.kind === 'managed'
+                                    ? { billing: 'platform_billed', description: this.managedMediaEstimate(visualRoute, visualCap, input) }
+                                    : { billing: 'provider_billed', description: '由所选官方 API 渠道直接计费' };
+                            const job = await this.platformService.enqueueMediaJob({
+                                workspaceRoot,
+                                job: {
+                                    idempotencyKey: `studio-topic-${visualCap}-${run.runId}-${shot.id}`,
+                                    kind: visualCap,
+                                    projectId: project.id,
+                                    sceneId: scene.id,
+                                    shotId: shot.id,
+                                    input,
+                                    cost
+                                }
+                            });
+                            run.mediaJobIds.push(job.id);
+                            if (visualRoute.kind !== 'local') {
+                                await this.platformService.confirmMediaJob(workspaceRoot, job.id);
+                            }
+                            pendingJobs.push({ jobId: job.id, sceneId: scene.id, shotId: shot.id, kind: visualCap });
+                        }
+
+                        if (modal.topicVoiceSubtitles && speechCandidate && speechRoute) {
+                            const speechText = shot.dialogueCues.map(cue => cue.text.trim()).filter(Boolean).join(' ').slice(0, 4_000);
+                            if (speechText) {
+                                const sConnId = speechRoute.connection?.id || speechRoute.id;
+                                const sQuote = speechRoute.kind === 'managed' ? optionalKeyPriceQuoteId(speechRoute.offering?.keyPriceQuoteId) : undefined;
+                                const voices = this.comicChatVoices(speechCandidate);
+                                const sInput: MediaJob['input'] = {
+                                    connectionId: sConnId,
+                                    ...(sQuote ? { keyPriceQuoteId: sQuote } : {}),
+                                    model: speechRoute.model,
+                                    text: speechText,
+                                    voice: voices[0] || this.comicMediaVoice(speechRoute) || 'alloy',
+                                    format: 'mp3'
+                                };
+                                const sCost: MediaJob['cost'] = speechRoute.kind === 'local'
+                                    ? { billing: 'free', description: mediaRuntimeText(this.desktopLocale, 'freeBilling') }
+                                    : speechRoute.kind === 'managed'
+                                        ? { billing: 'platform_billed', description: this.managedMediaEstimate(speechRoute, 'speech', sInput) }
+                                        : { billing: 'provider_billed', description: '由所选官方 API 渠道直接计费' };
+                                const sJob = await this.platformService.enqueueMediaJob({
+                                    workspaceRoot,
+                                    job: {
+                                        idempotencyKey: `studio-topic-speech-${run.runId}-${shot.id}`,
+                                        kind: 'speech',
+                                        projectId: project.id,
+                                        sceneId: scene.id,
+                                        shotId: shot.id,
+                                        input: sInput,
+                                        cost: sCost
+                                    }
+                                });
+                                run.mediaJobIds.push(sJob.id);
+                                if (speechRoute.kind !== 'local') {
+                                    await this.platformService.confirmMediaJob(workspaceRoot, sJob.id);
+                                }
+                                pendingJobs.push({ jobId: sJob.id, sceneId: scene.id, shotId: shot.id, kind: 'speech' });
+                            }
+                        }
+                    }
+                }
+
+                const completedVisualJobs: MediaJob[] = [];
+                for (const item of pendingJobs) {
+                    const doneJob = await this.waitForStudioMediaJob(workspaceRoot, item.jobId, run);
+                    if (item.kind === 'video') completedVisualJobs.push(doneJob);
+                }
+
+                // Promote any pendingVideoAssetId on shots before final export
+                projectState = await this.platformService.getComicProject(workspaceRoot);
+                project = projectState.project!;
+                for (const scene of project.scenes) {
+                    for (const shot of scene.shots) {
+                        if (shot.pendingVideoAssetId) {
+                            projectState = await this.platformService.applyComicCommand({
+                                locale: this.desktopLocale,
+                                workspaceRoot,
+                                command: {
+                                    type: 'shot.apply_pending_video',
+                                    expectedRevision: projectState.project!.revision,
+                                    sceneId: scene.id,
+                                    shotId: shot.id
+                                } as ComicCommand
+                            });
+                        }
+                    }
+                }
+
+                // Stage 3: Compose final .mp4 and save into workspaceRoot
+                modal.generatingStageLabel = localizeDesktopSurface(this.desktopLocale, '第 3/3 步：正在合成最终成片…');
+                this.update();
+
+                let finalSourcePath = '';
+                let finalDuration = modal.seconds;
+                try {
+                    const startedExport = await this.platformService.startComicExport({
+                        workspaceRoot,
+                        quality: 'balanced',
+                        subtitleMode: modal.topicVoiceSubtitles ? 'burned' : 'none',
+                        allowPlaceholders: true,
+                        verifyAssetIntegrity: false
+                    });
+                    run.exportId = startedExport.id;
+                    for (;;) {
+                        if (run.cancelled) {
+                            await this.platformService.cancelComicExport(workspaceRoot, startedExport.id).catch(() => undefined);
+                            throw Object.assign(new Error(this.comicChatT('cancelled')), { code: 'AGENT_CANCELLED' });
+                        }
+                        const exportWorkspace = await this.platformService.getComicExportWorkspaceState(workspaceRoot);
+                        const currentExport = exportWorkspace.active?.id === startedExport.id
+                            ? exportWorkspace.active
+                            : exportWorkspace.exports.find(item => item.id === startedExport.id);
+                        if (!currentExport) {
+                            throw new Error(localizeDesktopSurface(this.desktopLocale, '成片导出状态丢失'));
+                        }
+                        if (currentExport.status === 'completed' && currentExport.output) {
+                            finalSourcePath = currentExport.output.savedPath
+                                || URI.fromFilePath(workspaceRoot).resolve(currentExport.output.relativeUri).path.fsPath();
+                            finalDuration = currentExport.output.durationSeconds || modal.seconds;
+                            break;
+                        }
+                        if (currentExport.status === 'failed') {
+                            throw new Error(currentExport.error || currentExport.message || localizeDesktopSurface(this.desktopLocale, '成片合成失败'));
+                        }
+                        if (currentExport.status === 'cancelled') {
+                            throw Object.assign(new Error(this.comicChatT('cancelled')), { code: 'AGENT_CANCELLED' });
+                        }
+                        await new Promise<void>(resolve => window.setTimeout(resolve, 1_200));
+                    }
+                } catch (exportErr) {
+                    if ((exportErr as { code?: string })?.code === 'AGENT_CANCELLED') throw exportErr;
+                    if (completedVisualJobs.length === 1 && completedVisualJobs[0].output?.relativeUri) {
+                        finalSourcePath = URI.fromFilePath(workspaceRoot).resolve(completedVisualJobs[0].output.relativeUri).path.fsPath();
+                    } else {
+                        throw exportErr;
+                    }
+                } finally {
+                    run.exportId = undefined;
+                }
+
+                const baseName = modal.title.trim() || this.comicChatFolderName(workspaceRoot) || '主题成片';
+                const exported = await this.platformService.exportStudioTakeToProjectFolder({
+                    workspaceRoot,
+                    sourcePathOrDataUrl: finalSourcePath,
+                    kind: 'video',
+                    title: baseName,
+                    ...(modal.prompt.trim() ? { prompt: modal.prompt.trim() } : {}),
+                    aspectRatio: modal.aspectRatio,
+                    modelLabel: visualCandidate.label,
+                    durationSeconds: finalDuration
+                });
+                const take: ComicStudioGeneratedTake = {
+                    id: exported.takeId,
+                    kind: 'video',
+                    title: exported.fileName.replace(/\.[^.]+$/, ''),
+                    mediaUrl: URI.fromFilePath(exported.filePath).toString(),
+                    filePath: exported.filePath,
+                    durationSeconds: finalDuration,
+                    aspectRatio: modal.aspectRatio,
+                    modelLabel: visualCandidate.label,
+                    ...(modal.prompt.trim() ? { prompt: modal.prompt.trim() } : {})
+                };
+                modal.takes = [take, ...modal.takes.filter(item => item.filePath !== take.filePath)];
+                modal.activeTakeId = take.id;
+            }
+            void this.loadComicLibrary?.();
+        } catch (error) {
+            if ((error as { code?: string })?.code !== 'AGENT_CANCELLED') {
+                this.comicKindError = { failure: error };
+            }
+        } finally {
+            if (modal.activeRun === run) {
+                modal.activeRun = undefined;
+                modal.generating = false;
+                modal.generatingStageLabel = undefined;
+            }
+            this.update();
+        }
+    }
+
+    protected async enterComicStudioModalEditor(): Promise<void> {
+        const modal = this.comicStudioModalState;
+        if (!modal || modal.generating || !modal.boundProjectPath) return;
+        const workspaceRoot = modal.boundProjectPath;
+        const label = modal.title.trim() || this.comicChatFolderName(workspaceRoot) || workspaceRoot;
+        try {
+            const syncedState = await this.platformService.syncComicFolderMaterials(workspaceRoot);
+            this.closeComicStudioModalState();
+            this.completeNavigationSurface?.();
+            this.comicChatUi().surface = 'studio';
+            this.comicChatUi().editor = false;
+            if (!this.comicWorkspaceOptions.some(item => item.path === workspaceRoot)) {
+                this.comicWorkspaceOptions = [...this.comicWorkspaceOptions, { path: workspaceRoot, label }];
+                this.persistComicWorkspaceSelection?.();
+            }
+            this.selectComicWorkspaceRoot(workspaceRoot);
+            this.comicWorkspaceRoot = workspaceRoot;
+            this.comicState = syncedState;
+            this.comicLandingPending = false;
+            this.setComicView('timeline');
+            void this.loadComicLibrary?.();
+            this.update();
+        } catch (error) {
+            this.comicKindError = { failure: error };
+            this.update();
+        }
+    }
+
+    protected renderComicStudioModal(): React.ReactNode {
+        const kind = this.comicKindSheet;
+        if (!kind) return undefined;
+        if (!this.comicStudioModalState || !this.comicStudioModalState.open || this.comicStudioModalState.kind !== kind) {
+            this.initComicStudioModalState(kind);
+        }
+        const modal = this.comicStudioModalState!;
+        this.reconcileComicStudioModalParameters();
+
+        const defaultDir = this.comicLibrary?.root || '';
+        const parentDir = modal.parentDirectory ?? this.comicCreateParentDirectory ?? defaultDir;
+        const existingPaths = this.comicExistingPathsForDirectory(parentDir || undefined);
+        const fallbackTitle = kind === 'music'
+            ? localizeDesktopSurface(this.desktopLocale, '未命名歌曲')
+            : comicKindText(this.desktopLocale, kind);
+        const previewFolderPath = modal.boundProjectPath
+            || (parentDir ? previewComicProjectFolderPath(parentDir, modal.title, fallbackTitle, existingPaths) : '');
+        const secondsOptions = this.comicStudioModalSecondsOptions(modal);
+        const aspectOptions = this.comicStudioModalAspectOptions(modal);
+        const priceInfo = this.comicStudioModalPriceInfo(modal);
+        const blockedInfo = this.comicStudioModalBlockedInfo(modal);
+        const videoRoute = kind === 'image' ? this.comicStepMediaRouteForKind('image', 'video') : undefined;
+        const soundSupported = kind === 'image' ? this.comicVideoMakesSound(videoRoute) : false;
+
+        const primaryModelPickerSlot = kind === 'image'
+            ? this.renderComicStudioIsolatedModelSlot('image', 'video')
+            : kind === 'music'
+                ? this.renderComicStudioIsolatedModelSlot('music', 'music')
+                : this.renderComicStudioIsolatedModelSlot('topic', modal.topicVisualMode === 'images' ? 'image' : 'video');
+        const secondaryModelPickerSlot = kind === 'topic'
+            ? this.renderComicStudioIsolatedModelSlot('topic', 'text')
+            : undefined;
+
+        return (
+            <ComicMediaStudioModal
+                locale={this.desktopLocale}
+                kind={kind}
+                open={modal.open}
+                boundProjectPath={modal.boundProjectPath}
+                title={modal.title}
+                onTitleChange={value => {
+                    modal.title = value;
+                    this.update();
+                }}
+                parentDirectory={parentDir}
+                defaultDirectory={defaultDir || undefined}
+                previewFolderPath={previewFolderPath}
+                onChooseDirectory={!modal.boundProjectPath && this.chooseComicCreateDirectory ? () => { void this.chooseComicCreateDirectory(); } : undefined}
+                onResetDirectory={!modal.boundProjectPath ? () => {
+                    modal.parentDirectory = undefined;
+                    this.comicCreateParentDirectory = undefined;
+                    this.update();
+                } : undefined}
+                sourceFiles={modal.sourceFiles}
+                onPickLocalFiles={() => { void this.pickComicStudioLocalFiles(); }}
+                onDropLocalFiles={files => this.addComicStudioDroppedFiles(files)}
+                onRemoveSourceFile={id => this.removeComicStudioSourceFile(id)}
+                libraryItems={this.comicCreationLibraryItems?.() ?? []}
+                onToggleLibraryItem={item => this.toggleComicStudioLibraryItem(item)}
+                selectedLibraryIds={modal.selectedLibraryIds}
+                primaryModelPickerSlot={primaryModelPickerSlot}
+                secondaryModelPickerSlot={secondaryModelPickerSlot}
+                prompt={modal.prompt}
+                onPromptChange={value => {
+                    modal.prompt = value;
+                    if (this.comicKindError) this.comicKindError = '';
+                    this.update();
+                }}
+                stylePresetId={modal.stylePresetId}
+                onStylePresetChange={presetId => {
+                    modal.stylePresetId = presetId;
+                    this.update();
+                }}
+                seconds={modal.seconds}
+                secondsOptions={secondsOptions}
+                onSecondsChange={seconds => {
+                    modal.seconds = seconds;
+                    this.update();
+                }}
+                aspectRatio={modal.aspectRatio}
+                aspectRatioOptions={aspectOptions}
+                onAspectRatioChange={ratio => {
+                    modal.aspectRatio = ratio;
+                    this.update();
+                }}
+                soundSupported={soundSupported}
+                soundEnabled={modal.soundEnabled}
+                onSoundEnabledChange={enabled => {
+                    modal.soundEnabled = enabled;
+                    this.update();
+                }}
+                topicVisualMode={modal.topicVisualMode}
+                onTopicVisualModeChange={mode => {
+                    modal.topicVisualMode = mode;
+                    this.comicStudioIsolatedPicker = undefined;
+                    this.update();
+                }}
+                topicVoiceSubtitles={modal.topicVoiceSubtitles}
+                onTopicVoiceSubtitlesChange={enabled => {
+                    modal.topicVoiceSubtitles = enabled;
+                    this.update();
+                }}
+                topicVoiceSummaryText={kind === 'topic' ? this.topicVoiceSummaryText(modal.topicVisualMode) : undefined}
+                musicInstrumental={modal.musicInstrumental}
+                onMusicInstrumentalChange={instrumental => {
+                    modal.musicInstrumental = instrumental;
+                    if (this.comicKindError) this.comicKindError = '';
+                    this.update();
+                }}
+                musicFullTrack={modal.musicFullTrack}
+                onMusicFullTrackChange={fullTrack => {
+                    modal.musicFullTrack = fullTrack;
+                    this.update();
+                }}
+                estimatedPriceLabel={priceInfo.label}
+                estimatedPriceHint={priceInfo.hint}
+                blockedReason={blockedInfo.reason}
+                onBlockedAction={blockedInfo.onAction}
+                blockedActionLabel={blockedInfo.actionLabel}
+                generating={modal.generating}
+                generatingStageLabel={modal.generatingStageLabel}
+                errorMessage={this.comicKindError || undefined}
+                takes={modal.takes}
+                activeTakeId={modal.activeTakeId}
+                onSelectTake={takeId => {
+                    modal.activeTakeId = takeId;
+                    this.update();
+                }}
+                onGenerate={() => { void this.runComicStudioModalGenerate(); }}
+                onCancelGenerate={() => this.cancelComicStudioModalGenerate()}
+                onRevealInFolder={filePath => { void this.platformService.revealInFileManager(filePath); }}
+                onEnterEditor={() => { void this.enterComicStudioModalEditor(); }}
+                onClose={() => {
+                    if (!modal.generating && !this.comicKindBusy) {
+                        this.closeNavigationSurface();
+                    }
+                }}
+            />
+        );
+    }
+
     protected renderComicKindSheet(): React.ReactNode {
         if (!this.comicKindSheet) return undefined;
-        const close = (): void => { if (!this.comicKindBusy) this.closeNavigationSurface(); };
-        const defaultDir = this.comicLibrary?.root;
-        const parentDir = this.comicCreateParentDirectory ?? defaultDir;
-        const existingPaths = this.comicExistingPathsForDirectory(parentDir);
-        const chooseDir = this.chooseComicCreateDirectory ? () => void this.chooseComicCreateDirectory() : undefined;
-        const resetDir = () => { this.comicCreateParentDirectory = undefined; this.update(); };
-        const locationProps = parentDir !== undefined ? {
-            parentDirectory: parentDir,
-            defaultDirectory: defaultDir,
-            existingPaths,
-            onChooseDirectory: chooseDir,
-            onResetDirectory: resetDir
-        } : {};
-        if (this.comicKindSheet === 'music') {
-            return <MusicCreateSheet locale={this.desktopLocale} busy={this.comicKindBusy} {...(this.comicKindError ? { error: this.comicKindError, errorDetail: this.comicKindErrorDetail } : {})}
-                defaultTitle={localizeDesktopSurface(this.desktopLocale, '未命名歌曲')}
-                textModel={this.renderComicStepSummary('text', 'field', musicText(this.desktopLocale, 'aiTitle'))} ratioOptions={['1:1', '16:9', '9:16']}
-                {...locationProps}
-                onCancel={close} onCreate={request => void this.createComicMusicProject(request)} />;
-        }
-        // Pictures and topics take their material from the asset library too.
-        const libraryItems = this.comicCreationLibraryItems?.();
-        if (this.comicKindSheet === 'image') {
-            const plan = this.comicCreatePlan({ ...this.comicCreateDraft, aspectRatio: this.comicKindRatio, videoChoice: undefined });
-            const durations = plan.choice ? comicRouteVideoSeconds(plan.choice.route, false, true) : [];
-            return <ComicImageCreateSheet locale={this.desktopLocale} busy={this.comicKindBusy} {...(this.comicKindError ? { error: this.comicKindError, errorDetail: this.comicKindErrorDetail } : {})}
-                modelPicker={this.renderComicStepSummary('video')}
-                textPicker={this.renderComicStepSummary('text', 'field', comicSheetText(this.desktopLocale, 'textModel'))}
-                ratioOptions={plan.ratioOptions} ratio={plan.ratio}
-                onRatio={ratio => { this.comicKindRatio = ratio as ComicAspectRatio; this.update(); }} secondsOptions={durations}
-                {...locationProps} libraryItems={libraryItems}
-                onCancel={close} onCreate={request => void this.createComicImageProject(request, plan.ratio, plan.rate)} />;
-        }
-        return <ComicTopicCreateSheet locale={this.desktopLocale} busy={this.comicKindBusy} {...(this.comicKindError ? { error: this.comicKindError, errorDetail: this.comicKindErrorDetail } : {})}
-            textPicker={this.renderComicStepSummary('text', 'field', comicSheetText(this.desktopLocale, 'textModel'))}
-            imagePicker={this.renderComicStepSummary('image')} videoPicker={this.renderComicStepSummary('video')} speechPicker={this.renderComicStepSummary('speech')}
-            ratioOptions={['9:16', '16:9', '1:1', '4:3']} ratio={this.comicKindRatio}
-            onRatio={ratio => { this.comicKindRatio = ratio as ComicAspectRatio; this.update(); }}
-            stockState={this.stockMediaState} onOpenLink={url => this.openExternalUrl(url)}
-            {...locationProps} libraryItems={libraryItems}
-            onCancel={close} onCreate={request => void this.createComicTopicProject(request)} />;
+        if (this.renderComicStudioModal) return this.renderComicStudioModal();
+        return <div className='nmx-comic-studio-fallback'>
+            {this.comicKindError && <div className='nmx-agent-inline-error' role='alert'>
+                <span data-nmx-literal={Boolean(this.comicKindErrorDetail) || undefined}>{this.comicKindError}</span>
+                {this.comicKindErrorDetail && <MediaDiagnostic locale={this.desktopLocale} detail={this.comicKindErrorDetail} />}
+            </div>}
+        </div>;
     }
 
     /** A new library project is listed among the comic folders and opened. */
@@ -12935,53 +14775,72 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     /** Language (text) models from every source, grouped as the user's own APIs and relays. */
     protected comicTextRouteChoices(): readonly ComicTextRouteChoice[] {
-        const choices = new Map<string, ComicTextRouteChoice>();
-        // Relays opened from the advanced model menu join once their models are loaded.
-        const extra = this.comicStepExtraRelayKeys('text').flatMap(key => {
-            const routes = this.routesForRelay(key, 'coding');
-            return routes.length ? routes : this.comicCatalogTextRoutes(key.slice('managed:'.length));
-        });
-        for (const route of [...this.allModelRoutes('coding'), ...extra]) {
-            if (route.kind === 'official_connection') {
-                if (isOfficialMediaProtocol(route.connection.protocol) || !this.isModelVisible(route.connection.model)) continue;
-                // An OpenAI-style API lists its picture and voice models too (gpt-image-1, tts-1): never a script writer.
-                const media = this.comicConnectionMetadata(route.connection);
-                if (media && !media.output.includes('text')) continue;
-                const id = `own:${route.connection.id}:${route.connection.model}`;
-                if (!choices.has(id)) choices.set(id, { id, group: 'own', label: this.modelDisplayName(route.connection.model, route.connection.modelFamily), detail: route.connection.providerName, route });
-            } else {
-                // Comic agent requests require reasoning as well as tool calling.
-                if (!this.isModelVisible(route.canonicalModel) || !route.offering.capabilities.includes('tools')
-                    || !route.offering.capabilities.includes('reasoning') && route.offering.category !== 'reasoning'
-                    || route.offering.output.some(kind => kind !== 'text')) continue;
-                const id = route.automatic ? `auto:${route.registryModelId}` : `relay:${route.id}`;
-                if (!choices.has(id)) choices.set(id, {
-                    id, group: 'relay', label: this.modelDisplayName(route.canonicalModel, route.offering.modelFamily),
-                    detail: route.automatic ? this.ct('automatic') : route.offering.providerName, route
-                });
+        const run = (): readonly ComicTextRouteChoice[] => {
+            const choices = new Map<string, ComicTextRouteChoice>();
+            // Relays opened from the advanced model menu join once their models are loaded.
+            const extra = this.comicStepExtraRelayKeys('text').flatMap(key => {
+                const routes = this.routesForRelay(key, 'coding');
+                return routes.length ? routes : this.comicCatalogTextRoutes(key.slice('managed:'.length));
+            });
+            for (const route of [...this.allModelRoutes('coding'), ...extra]) {
+                if (route.kind === 'official_connection') {
+                    if (isOfficialMediaProtocol(route.connection.protocol) || !this.isModelVisible(route.connection.model)) continue;
+                    // An OpenAI-style API lists its picture and voice models too (gpt-image-1, tts-1): never a script writer.
+                    const media = this.comicConnectionMetadata(route.connection);
+                    if (media && !media.output.includes('text')) continue;
+                    const id = `own:${route.connection.id}:${route.connection.model}`;
+                    if (!choices.has(id)) choices.set(id, { id, group: 'own', label: this.modelDisplayName(route.connection.model, route.connection.modelFamily), detail: route.connection.providerName, route });
+                } else {
+                    // Comic agent requests require reasoning as well as tool calling.
+                    if (!this.isModelVisible(route.canonicalModel) || !route.offering.capabilities.includes('tools')
+                        || !route.offering.capabilities.includes('reasoning') && route.offering.category !== 'reasoning'
+                        || route.offering.output.some(kind => kind !== 'text')) continue;
+                    const id = route.automatic ? `auto:${route.registryModelId}` : `relay:${route.id}`;
+                    if (!choices.has(id)) choices.set(id, {
+                        id, group: 'relay', label: this.modelDisplayName(route.canonicalModel, route.offering.modelFamily),
+                        detail: route.automatic ? this.ct('automatic') : route.offering.providerName, route
+                    });
+                }
             }
-        }
-        return [...choices.values()].sort((left, right) => left.group === right.group ? left.label.localeCompare(right.label) : left.group === 'own' ? -1 : 1);
+            return [...choices.values()].sort((left, right) => left.group === right.group ? left.label.localeCompare(right.label) : left.group === 'own' ? -1 : 1);
+        };
+        return this.cachedComicRoutes ? this.cachedComicRoutes('text-choices', 'text', run) : run();
+    }
+
+    protected comicTextRouteChoiceById(id: string): ComicTextRouteChoice | undefined {
+        const build = (): ReadonlyMap<string, ComicTextRouteChoice> => new Map(this.comicTextRouteChoices().map(choice => [choice.id, choice]));
+        const map = this.cachedComicRoutes ? this.cachedComicRoutes('text-choices-map', 'text', build) : build();
+        return map.get(id);
+    }
+
+    protected comicTextRouteForKind(kind: ComicProjectKind): ComicTextRouteChoice | undefined {
+        if (kind === 'image' || kind === 'music') return undefined;
+        const candidate = this.comicStepChoiceForKind ? this.comicStepChoiceForKind(kind, 'text') : this.comicStepChoice('text');
+        return candidate ? this.comicTextRouteChoiceById(candidate.routeId) : undefined;
     }
 
     protected comicTextRoute(): ComicTextRouteChoice | undefined {
-        const candidate = this.comicStepChoice('text');
-        return candidate ? this.comicTextRouteChoices().find(choice => choice.id === candidate.routeId) : undefined;
+        return this.comicTextRouteForKind(this.comicModelKind());
     }
 
-    protected selectComicTextRoute(id: string): void {
-        this.selectComicStepModel('text', id);
+    protected selectComicTextRoute(id: string, kind: ComicProjectKind = this.comicModelKind()): void {
+        if (kind === 'image' || kind === 'music') return;
+        this.selectComicStepModelForKind(kind, 'text', id);
     }
 
     // ── Model per comic step ────────────────────────────────────────────────
     // Each step lists only models that can do it, with the best one preselected; “高级” picks a
     // relay first (only relays with such a model), then one of its models.
 
-    protected saveComicStepPrefs(patch: Partial<{ readonly [K in keyof ComicStepPrefs]: ComicStepPrefs[K] }>): void {
-        const kind = this.comicModelKind();
+    protected saveComicStepPrefs(patch: Partial<{ readonly [K in keyof ComicStepPrefs]: ComicStepPrefs[K] }>, explicitKind?: ComicProjectKind): void {
+        const kind = explicitKind ?? this.comicModelKind();
         const next = { ...this.comicStepPrefsFor(kind), ...patch };
-        this.comicStepPrefsByKind = { ...this.comicStepPrefsByKind, [kind]: next };
-        try { window.localStorage.setItem(`${COMIC_STEP_PREFS_KEY}.${kind}`, JSON.stringify(next)); } catch { /* keep in memory */ }
+        this.comicStepPrefsByKind = { ...(this.comicStepPrefsByKind || {}), [kind]: next };
+        if (Object.prototype.hasOwnProperty.call(this, 'comicStepPrefs') && kind === (this.comicModelKind?.() ?? 'novel')) {
+            (this as unknown as { comicStepPrefs: ComicStepPrefs }).comicStepPrefs = next;
+        }
+        const key = this.comicStepPrefsStorageKey ? this.comicStepPrefsStorageKey(kind) : `nextmux.desktop.comicStepModels.${kind}.v1`;
+        try { window.localStorage.setItem(key, JSON.stringify(next)); } catch { /* keep in memory */ }
     }
 
     /** Lower is better: platform recommendation, then public popularity, then how recent the model is. */
@@ -13082,35 +14941,41 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     /** Every model that can do this step, from every source the app knows. */
-    protected comicStepCandidates(capability: ComicStepCapability): readonly ComicStepCandidate[] {
-        // One row per relay model and price (see dedupeComicPriceVariants); each carries its offering for the price card.
-        // Cached like the media routes: the studio header's AI 模型 button reads every step on every render, and the
-        // text and transcription lists were rebuilt each time (about 50 ms per render with the full catalogue).
+    protected comicStepCandidates(capability: ComicStepCapability, explicitKind?: ComicProjectKind): readonly ComicStepCandidate[] {
+        const kind = explicitKind ?? this.comicModelKind?.() ?? 'novel';
+        if ((kind === 'image' || kind === 'music') && capability === 'text') return [];
         const candidates = this.cachedComicRoutes(`final:${capability}`, capability, () => dedupeComicPriceVariants(this.comicStepCandidatesByRoute(capability)));
-        const key = [candidates, this.comicProject?.(), this.comicKindSheet, this.comicCreateSheetOpen, this.comicModelKind?.(), this.videoProfiles];
-        const cache = this.comicStepEligibilityCache ??= new Map<ComicStepCapability, { readonly key: readonly unknown[]; readonly value: readonly ComicStepCandidate[] }>();
-        const hit = cache.get(capability);
+        const cacheKeyName = `${kind}:${capability}`;
+        const key = [candidates, this.comicProject?.(), Boolean(this.comicStudioModalState?.open), this.comicKindSheet, this.comicCreateSheetOpen, kind, this.videoProfiles];
+        const cache = this.comicStepEligibilityCache ??= new Map<string, { readonly key: readonly unknown[]; readonly value: readonly ComicStepCandidate[] }>();
+        const hit = cache.get(cacheKeyName);
         if (hit && hit.key.every((value, index) => Object.is(value, key[index]))) return hit.value;
-        const value = candidates.filter(candidate => this.comicStepCandidateEligible?.(capability, candidate) ?? true);
-        cache.set(capability, { key, value });
+        const value = candidates.filter(candidate => this.comicStepCandidateEligible?.(capability, candidate, kind) ?? true);
+        cache.set(cacheKeyName, { key, value });
         return value;
     }
 
-    protected comicStepEligibilityCache: Map<ComicStepCapability, { readonly key: readonly unknown[]; readonly value: readonly ComicStepCandidate[] }> | undefined;
+    protected comicStepCandidatesForKind(kind: ComicProjectKind, capability: ComicStepCapability): readonly ComicStepCandidate[] {
+        return this.comicStepCandidates(capability, kind);
+    }
+
+    protected comicStepEligibilityCache: Map<string, { readonly key: readonly unknown[]; readonly value: readonly ComicStepCandidate[] }> | undefined;
 
     /** Studio steps must work both from text and with the reference inputs already in this project. */
-    protected comicStepCandidateEligible(capability: ComicStepCapability, candidate: ComicStepCandidate): boolean {
+    protected comicStepCandidateEligible(capability: ComicStepCapability, candidate: ComicStepCandidate, explicitKind?: ComicProjectKind): boolean {
+        const activeKind = explicitKind ?? this.comicModelKind?.() ?? 'novel';
         if (capability === 'transcription') return true;
         if (capability === 'text') {
-            if (this.comicModelKind() !== 'image') return true;
-            const choice = this.comicTextRouteChoices().find(item => item.id === candidate.routeId);
-            return Boolean(choice && routeSupportsModelAttachment({ kind: 'image', name: 'motion.png', mimeType: 'image/png', dataBase64: '' }, choice.route));
+            if (activeKind === 'image' || activeKind === 'music') return false;
+            const choice = this.comicTextRouteChoiceById ? this.comicTextRouteChoiceById(candidate.routeId) : undefined;
+            return Boolean(choice ?? !this.comicTextRouteChoiceById);
         }
         const route = this.comicMediaRoute(capability, candidate.routeId);
         if (!route || route.offering?.available === false) return false;
         if (capability === 'speech') return this.comicMediaVoices(route).length > 0;
         if (capability === 'sound_effect') return true;
-        const project = this.comicKindSheet || this.comicCreateSheetOpen ? undefined : this.comicProject();
+        const inModalOrSheet = Boolean(this.comicStudioModalState?.open || this.comicKindSheet || this.comicCreateSheetOpen || (explicitKind && explicitKind !== this.comicProjectKind?.(this.comicProject?.())));
+        const project = inModalOrSheet ? undefined : this.comicProject?.();
         const hasCast = project?.characters.some(character => character.referenceAssetIds?.some(id => project.assets.some(asset => asset.id === id && asset.kind === 'image' && asset.status === 'ready')));
         const hasPlate = project?.scenes.some(scene => Boolean(scene.setPlateAssetId));
         if (capability === 'image') return comicRouteTakesText('image', route)
@@ -13122,8 +14987,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (settings?.mode === 'cover') return support.cover;
             return comicRouteTakesText('music', route) && (settings?.vocalSource !== 'my_voice' || support.vocalReference);
         }
-        const fromPicture = this.comicModelKind() === 'image';
-        if (fromPicture ? !comicRouteImageInput(route, 'firstFrame') : !comicRouteTakesText('video', route)) return false;
+        const fromPicture = activeKind === 'image';
+        if (fromPicture ? (!comicRouteImageInput(route, 'firstFrame') && !comicRouteImageInput(route, 'references')) : !comicRouteTakesText('video', route)) return false;
         const hasFrames = project?.scenes.some(scene => scene.shots.some(shot => project.assets.some(asset => asset.id === shot.visualAssetId && asset.kind === 'image' && asset.status === 'ready')));
         if (hasFrames && !comicRouteImageInput(route, 'firstFrame') && !comicRouteImageInput(route, 'references')) return false;
         if ((hasCast || hasPlate) && !comicRouteImageInput(route, 'firstFrame') && !comicRouteImageInput(route, 'references')) return false;
@@ -13256,14 +15121,38 @@ export class NextMuxDesktopWidget extends ReactWidget {
         } : undefined;
     }
 
-    /** The model this step uses now and why: its own choice, the global relay's best model, or the recommended one. */
-    protected comicStepResolution(capability: ComicStepCapability, candidates = this.comicStepCandidates(capability)): ComicStepResolution {
-        const auto = this.comicStepAuto();
-        const stored = auto ? undefined : this.comicStepPrefs.choices[capability] || (capability === 'text' ? this.comicTextRouteId || undefined : undefined);
-        const kind = this.comicModelKind();
-        const platform = this.comicPlatformDefaults.find(item => item.kind === kind && item.step === capability);
-        return resolveComicStep(auto ? this.recommendableComicCandidates?.(candidates) ?? candidates : candidates, stored, auto ? undefined : this.comicStepPrefs.global, auto,
-            platform ? { sourceKey: managedRelayKey(platform.merchantId), model: platform.canonicalModel } : undefined);
+    /** The model this step uses now and why: its own choice, the per-step relay's best model, the global relay's best model, or the recommended one. */
+    protected comicStepResolution(
+        capability: ComicStepCapability,
+        candidates?: readonly ComicStepCandidate[],
+        explicitKind?: ComicProjectKind
+    ): ComicStepResolution {
+        const kind = explicitKind ?? this.comicModelKind?.() ?? 'novel';
+        const resolvedCandidates = candidates ?? this.comicStepCandidates(capability, kind);
+        if ((kind === 'image' || kind === 'music') && capability === 'text') {
+            return { candidate: undefined, origin: 'recommended', globalUnsupported: false };
+        }
+        const prefs = this.comicStepPrefsFor ? this.comicStepPrefsFor(kind) : this.comicStepPrefs;
+        const auto = this.comicStepAuto(kind);
+        const textId = capability === 'text' ? (this.comicTextRouteIdForKind ? this.comicTextRouteIdForKind(kind) : this.comicTextRouteId) : '';
+        const stored = auto ? undefined : prefs.choices[capability] || (textId || undefined);
+        const relayScope = auto ? undefined : (prefs.relays?.[capability] || prefs.global);
+        const platform = (this.comicPlatformDefaults || []).find(item => item.kind === kind && item.step === capability);
+        return resolveComicStep(
+            auto ? this.recommendableComicCandidates?.(resolvedCandidates) ?? resolvedCandidates : resolvedCandidates,
+            stored,
+            relayScope,
+            auto,
+            platform ? { sourceKey: managedRelayKey(platform.merchantId), model: platform.canonicalModel } : undefined
+        );
+    }
+
+    protected comicStepResolutionForKind(
+        kind: ComicProjectKind,
+        capability: ComicStepCapability,
+        candidates?: readonly ComicStepCandidate[]
+    ): ComicStepResolution {
+        return this.comicStepResolution(capability, candidates, kind);
     }
 
     /** Signed out, a relay model cannot run: recommendations use the person's own API or this computer when there is one. */
@@ -13288,14 +15177,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     /** “默认推荐” is on: every step uses its recommended model (older preferences: on unless something was chosen). */
-    protected comicStepAuto(): boolean {
-        const prefs = this.comicStepPrefs;
-        return prefs.auto ?? (!Object.keys(prefs.choices).length && !prefs.global);
+    protected comicStepAuto(explicitKind?: ComicProjectKind): boolean {
+        const kind = explicitKind ?? this.comicModelKind?.() ?? 'novel';
+        const prefs = this.comicStepPrefsFor ? this.comicStepPrefsFor(kind) : this.comicStepPrefs;
+        return prefs.auto ?? (!Object.keys(prefs.choices).length && !Object.keys(prefs.relays || {}).length && !prefs.global);
+    }
+
+    protected comicStepAutoForKind(kind: ComicProjectKind): boolean {
+        return this.comicStepAuto(kind);
     }
 
     /** The switch at the top of the AI 模型 panel. Turning it off keeps the earlier per-step choices. */
-    protected setComicStepAuto(auto: boolean): void {
-        this.saveComicStepPrefs({ auto, ...(auto ? { global: undefined } : {}) });
+    protected setComicStepAuto(auto: boolean, explicitKind?: ComicProjectKind): void {
+        this.saveComicStepPrefs({ auto, ...(auto ? { global: undefined } : {}) }, explicitKind);
         for (const capability of ['image', 'video', 'speech', 'music'] as const) this.syncMediaSheetToStep(capability);
         this.update();
     }
@@ -13315,25 +15209,64 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.update();
     }
 
+    protected topicNativeVideoAudioLabel(): string {
+        if (this.desktopLocale === 'zh-TW') return '隨當前影片模型一併生成聲音';
+        if (this.desktopLocale === 'en') return 'Generated natively with current video model';
+        return localizeDesktopSurface(this.desktopLocale, '随当前视频模型一并生成声音');
+    }
+
+    protected topicUsesVideoNativeSound(visualMode: 'videos' | 'images' = 'videos'): boolean {
+        if (visualMode !== 'videos') return false;
+        const topicPrefs = this.comicStepPrefsFor('topic');
+        if (!this.comicStepAutoForKind('topic') && topicPrefs.choices.speech) return false;
+        const topicVideoRoute = this.comicStepMediaRouteForKind('topic', 'video');
+        return this.comicVideoMakesSound(topicVideoRoute);
+    }
+
+    protected topicVoiceSummaryText(visualMode: 'videos' | 'images' = 'videos'): string {
+        if (this.topicUsesVideoNativeSound(visualMode)) {
+            return this.topicNativeVideoAudioLabel();
+        }
+        const speechCandidate = this.comicStepChoiceForKind('topic', 'speech');
+        if (speechCandidate) {
+            return `${speechCandidate.label} · ${comicStepSourceLabel(this.desktopLocale, speechCandidate.source)}`;
+        }
+        return comicStepText(this.desktopLocale, 'none');
+    }
+
     /** A step's model as one line with “更换”, wherever a form needs it (the choice itself lives in the AI 模型 panel). */
     protected renderComicStepSummary(capability: ComicStepCapability, variant: 'field' | 'inline' = 'field', label?: string): React.ReactNode {
-        const candidate = this.comicStepResolution(capability).candidate;
+        const kind = this.comicModelKind();
+        const candidate = this.comicStepResolutionForKind(kind, capability).candidate;
+        const coveredByTopicVideo = capability === 'speech' && kind === 'topic' && this.topicUsesVideoNativeSound(
+            this.comicStudioModalState?.kind === 'topic' ? this.comicStudioModalState.topicVisualMode : 'videos'
+        );
         const busy = this.catalogLoading || this.registryModelsLoading || this.officialModelsLoading;
         const name = label || comicStepName(this.desktopLocale, capability);
-        return <div className={`nmx-step-summary is-${variant} ${candidate ? '' : 'is-missing'}`} data-capability={capability}>
+        return <div className={`nmx-step-summary is-${variant} ${candidate || coveredByTopicVideo ? '' : 'is-missing'}`} data-capability={capability}>
             <span className='nmx-step-summary-icon' aria-hidden='true'><i className={`codicon codicon-${COMIC_STEP_ICONS[capability]}`}></i></span>
             <span className='nmx-step-summary-copy'>
                 {variant === 'field' && <small>{name}</small>}
-                <strong data-nmx-literal>{candidate ? candidate.label : busy ? comicStepText(this.desktopLocale, 'loading') : comicStepText(this.desktopLocale, 'none')}</strong>
-                {variant === 'field' && candidate && <em data-nmx-literal>{comicStepSourceLabel(this.desktopLocale, candidate.source)}{this.comicStepAuto() ? ` · ${comicModelPanelText(this.desktopLocale, 'auto')}` : ''}</em>}
+                <strong data-nmx-literal>{coveredByTopicVideo ? this.topicNativeVideoAudioLabel() : candidate ? candidate.label : busy ? comicStepText(this.desktopLocale, 'loading') : comicStepText(this.desktopLocale, 'none')}</strong>
+                {variant === 'field' && !coveredByTopicVideo && candidate && <em data-nmx-literal>{comicStepSourceLabel(this.desktopLocale, candidate.source)}{this.comicStepAutoForKind(kind) ? ` · ${comicModelPanelText(this.desktopLocale, 'auto')}` : ''}</em>}
             </span>
             <button type='button' className='nmx-step-summary-change' aria-label={`${name} · ${comicModelPanelText(this.desktopLocale, 'change')}`}
                 onClick={() => this.openComicModelSetupFor(capability)}>{comicModelPanelText(this.desktopLocale, 'change')}</button>
         </div>;
     }
 
-    protected comicStepChoice(capability: ComicStepCapability): ComicStepCandidate | undefined {
-        return this.comicStepResolution(capability).candidate;
+    protected comicStepChoice(capability: ComicStepCapability, explicitKind?: ComicProjectKind): ComicStepCandidate | undefined {
+        return this.comicStepResolution(capability, undefined, explicitKind).candidate;
+    }
+
+    protected comicStepChoiceForKind(kind: ComicProjectKind, capability: ComicStepCapability): ComicStepCandidate | undefined {
+        return this.comicStepChoice(capability, kind);
+    }
+
+    protected comicStepMediaRouteForKind(projectKind: ComicProjectKind, mediaKind: MediaJobKind): ComicMediaRoute | undefined {
+        if (mediaKind !== 'image' && mediaKind !== 'video' && mediaKind !== 'speech' && mediaKind !== 'music' && mediaKind !== 'sound_effect') return undefined;
+        const candidate = this.comicStepChoiceForKind(projectKind, mediaKind);
+        return candidate ? this.comicMediaRoute(mediaKind, candidate.routeId) : undefined;
     }
 
     /** An open media sheet, desk video facts, and default-routed canvas nodes follow a step's model when that changes. */
@@ -13367,27 +15300,27 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     /** Drops this step's own choice: it uses the global setting again. */
-    protected followComicStepGlobal(capability: ComicStepCapability): void {
+    protected followComicStepGlobal(capability: ComicStepCapability, explicitKind?: ComicProjectKind): void {
+        const kind = explicitKind ?? this.comicModelKind();
+        const prefs = this.comicStepPrefsFor(kind);
         const without = <T,>(record: Partial<Record<ComicStepCapability, T>>): Partial<Record<ComicStepCapability, T>> =>
             Object.fromEntries(Object.entries(record).filter(([key]) => key !== capability)) as Partial<Record<ComicStepCapability, T>>;
-        this.saveComicStepPrefs({ choices: without(this.comicStepPrefs.choices), advanced: without(this.comicStepPrefs.advanced), relays: without(this.comicStepPrefs.relays) });
+        this.saveComicStepPrefs({ choices: without(prefs.choices), advanced: without(prefs.advanced), relays: without(prefs.relays) }, kind);
         if (capability === 'text') {
-            this.comicTextRouteId = '';
-            try { window.localStorage.removeItem('nextmux.desktop.comicTextRoute.v1'); } catch { /* keep in memory */ }
+            this.forgetComicTextRouteForKind(kind);
         }
         this.syncMediaSheetToStep(capability);
         this.update();
     }
 
-    protected comicModelSetupSteps(): readonly ComicModelSetupStep[] {
-        // Each kind lists the steps it uses, including the song's MV pictures.
-        const kind = this.comicModelKind();
-        const steps: readonly ComicStepCapability[] = kind === 'music' ? ['text', 'music', 'video', 'image', 'transcription']
-            : kind === 'image' ? ['video', 'speech', 'music', 'transcription']
-                : kind === 'topic' ? ['text', 'image', 'video', 'speech', 'music', 'transcription'] : COMIC_STEP_CAPABILITIES;
+    protected comicModelSetupSteps(explicitKind?: ComicProjectKind): readonly ComicModelSetupStep[] {
+        const kind = explicitKind ?? this.comicModelKind();
+        const steps: readonly ComicStepCapability[] = kind === 'music' ? ['music']
+            : kind === 'image' ? ['video']
+                : kind === 'topic' ? ['text', 'video', 'image', 'speech'] : COMIC_STEP_CAPABILITIES;
         return steps.map(capability => {
-            const candidates = this.comicStepCandidates(capability);
-            const resolution = this.comicStepResolution(capability, candidates);
+            const candidates = this.comicStepCandidatesForKind(kind, capability);
+            const resolution = this.comicStepResolutionForKind(kind, capability, candidates);
             const ownModels = new Set(groupModelsByName(candidates.filter(candidate => candidate.source.kind === 'official'),
                 candidate => `${candidate.source.key}/${candidate.model}`, resolution.candidate));
             return { capability, candidates: candidates.filter(candidate => candidate.source.kind !== 'official' || ownModels.has(candidate)), resolution };
@@ -13417,47 +15350,92 @@ export class NextMuxDesktopWidget extends ReactWidget {
         try { window.localStorage.setItem('nextmux.desktop.comicModelSetup.v1', '1'); } catch { /* once per launch */ }
     }
 
-    /** The panel has flown into the header button: the button pulses once to show where it went. */
+    /** Closes the model setup sheet cleanly. */
     protected finishComicModelSetup(): void {
         this.comicModelsSheetOpen = false;
         this.comicModelSetupFocus = undefined;
         this.comicModelSetupIntro = false;
         this.markComicModelSetupSeen();
-        // The button pulses once where the panel landed, in this one render: no timer re-renders the app to end it
-        // (the class simply drops at the next render after the pulse).
         this.comicAiButtonLandedAt = Date.now();
         this.update();
     }
 
-    /** First visit to the comic workspace: open the panel as a guide once the page has settled. */
+    /** Auto-pop onboarding guide removed: models are chosen per feature inside each creation surface. */
     protected scheduleComicModelSetupGuide(): void {
-        if (this.comicModelSetupSeen || this.comicModelSetupScheduled || this.detachedConversationId) return;
-        this.comicModelSetupScheduled = true;
-        window.setTimeout(() => {
-            if (this.isDisposed || this.comicModelSetupSeen || this.activeSection !== 'comic') { this.comicModelSetupScheduled = false; return; }
-            if (this.hasTransientNavigationSurface() || this.comicStage !== 'idle') { this.comicModelSetupScheduled = false; return; }
-            this.openComicModelSetup(true);
-        }, 700);
+        return;
     }
 
-    protected selectComicStepModel(capability: ComicStepCapability, key: string): void {
-        // Picking a model for a step is choosing by step: 默认推荐 turns off.
-        this.saveComicStepPrefs({ choices: { ...this.comicStepPrefs.choices, [capability]: key }, auto: false });
+    protected selectComicStepModelForKind(kind: ComicProjectKind, capability: ComicStepCapability, key: string): void {
+        if ((kind === 'image' || kind === 'music') && capability === 'text') return;
+        const prefs = this.comicStepPrefsFor(kind);
+        const picked = this.comicStepCandidatesForKind(kind, capability).find(item => item.key === key || item.routeId === key);
+        this.saveComicStepPrefs({
+            choices: { ...prefs.choices, [capability]: picked?.key || key },
+            relays: { ...prefs.relays, ...(picked ? { [capability]: picked.source.key } : {}) },
+            auto: false
+        }, kind);
         if (capability === 'text') {
-            this.comicTextRouteId = key;
-            try { window.localStorage.setItem('nextmux.desktop.comicTextRoute.v1', key); } catch { /* keep in memory */ }
+            this.setComicTextRouteForKind(kind, picked?.routeId || key);
         }
-        // An open media sheet for this kind follows the new choice.
         this.syncMediaSheetToStep(capability);
         this.update();
     }
 
-    protected setComicStepAdvanced(capability: ComicStepCapability, advanced: boolean): void {
-        const current = this.comicStepChoice(capability);
+    protected selectComicStepRelayForKind(kind: ComicProjectKind, capability: ComicStepCapability, relayKey: string): void {
+        if ((kind === 'image' || kind === 'music') && capability === 'text') return;
+        const option = this.relayPickerOptions?.().find(item => item.key === relayKey);
+        if (option && this.relayOptionIsFull?.(option)) return;
+        const prefs = this.comicStepPrefsFor(kind);
+        const candidates = this.comicStepCandidatesForKind(kind, capability)
+            .filter(item => item.source.key === relayKey)
+            .sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label));
+        const best = candidates[0];
+        const nextChoices = { ...prefs.choices };
+        if (best) nextChoices[capability] = best.key;
+        else delete nextChoices[capability];
         this.saveComicStepPrefs({
-            advanced: { ...this.comicStepPrefs.advanced, [capability]: advanced },
-            relays: { ...this.comicStepPrefs.relays, [capability]: advanced ? current?.source.key || this.comicStepPrefs.relays[capability] || '' : this.comicStepPrefs.relays[capability] || '' }
-        });
+            relays: { ...prefs.relays, [capability]: relayKey },
+            choices: nextChoices,
+            auto: false
+        }, kind);
+        if (capability === 'text') {
+            if (best) this.setComicTextRouteForKind(kind, best.routeId);
+            else this.forgetComicTextRouteForKind(kind);
+        }
+        if (relayKey.startsWith('managed:')) {
+            const merchantId = relayKey.slice('managed:'.length);
+            void this.loadComicChatRelayCatalog(merchantId).then(() => {
+                const refreshedPrefs = this.comicStepPrefsFor(kind);
+                if (refreshedPrefs.relays?.[capability] !== relayKey) return;
+                const refreshed = this.comicStepCandidatesForKind(kind, capability)
+                    .filter(item => item.source.key === relayKey)
+                    .sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label))[0];
+                if (refreshed && !refreshedPrefs.choices[capability]) {
+                    this.saveComicStepPrefs({
+                        choices: { ...refreshedPrefs.choices, [capability]: refreshed.key },
+                        auto: false
+                    }, kind);
+                    if (capability === 'text') this.setComicTextRouteForKind(kind, refreshed.routeId);
+                    this.update();
+                }
+            });
+        }
+        this.syncMediaSheetToStep(capability);
+        this.update();
+    }
+
+    protected selectComicStepModel(capability: ComicStepCapability, key: string): void {
+        this.selectComicStepModelForKind(this.comicModelKind(), capability, key);
+    }
+
+    protected setComicStepAdvanced(capability: ComicStepCapability, advanced: boolean): void {
+        const kind = this.comicModelKind();
+        const prefs = this.comicStepPrefsFor(kind);
+        const current = this.comicStepChoiceForKind(kind, capability);
+        this.saveComicStepPrefs({
+            advanced: { ...prefs.advanced, [capability]: advanced },
+            relays: { ...prefs.relays, [capability]: advanced ? current?.source.key || prefs.relays[capability] || '' : prefs.relays[capability] || '' }
+        }, kind);
         if (advanced) void this.loadComicStepDirectory(capability);
         this.update();
     }
@@ -13467,15 +15445,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
      * cannot do keeps what it uses. A relay whose models are not loaded yet is read first (every page of its catalog).
      */
     protected selectComicSetupSource(key: string): void {
-        const choices = { ...this.comicStepPrefs.choices };
+        const kind = this.comicModelKind();
+        const prefs = this.comicStepPrefsFor(kind);
+        const choices = { ...prefs.choices };
         let textFollows = false;
-        for (const step of this.comicModelSetupSteps()) {
+        for (const step of this.comicModelSetupSteps(kind)) {
             if (!step.candidates.some(candidate => candidate.source.key === key)) continue;
             delete choices[step.capability];
             if (step.capability === 'text') textFollows = true;
         }
-        this.saveComicStepPrefs({ global: key, choices, auto: false });
-        if (textFollows) this.forgetComicTextRoute();
+        this.saveComicStepPrefs({ global: key, choices, auto: false }, kind);
+        if (textFollows) this.forgetComicTextRouteForKind(kind);
         for (const capability of ['image', 'video', 'speech', 'music'] as const) this.syncMediaSheetToStep(capability);
         const merchantId = key.startsWith('managed:') ? key.slice('managed:'.length) : '';
         if (merchantId && !this.merchantPickerSnapshots.has(merchantId)) void this.loadComicSetupSource(merchantId, choices);
@@ -13484,18 +15464,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     /** “用于全部”: one model for every function it serves at the chosen source. */
     protected selectComicStepModels(choices: Partial<Record<ComicStepCapability, string>>): void {
-        this.saveComicStepPrefs({ choices: { ...this.comicStepPrefs.choices, ...choices }, auto: false });
-        if (choices.text) {
-            this.comicTextRouteId = choices.text;
-            try { window.localStorage.setItem('nextmux.desktop.comicTextRoute.v1', choices.text); } catch { /* keep in memory */ }
+        const kind = this.comicModelKind();
+        const prefs = this.comicStepPrefsFor(kind);
+        this.saveComicStepPrefs({ choices: { ...prefs.choices, ...choices }, auto: false }, kind);
+        if (choices.text && kind !== 'image' && kind !== 'music') {
+            this.setComicTextRouteForKind(kind, choices.text);
         }
         for (const capability of Object.keys(choices) as ComicStepCapability[]) this.syncMediaSheetToStep(capability);
         this.update();
     }
 
+    protected forgetComicTextRouteForKind(kind: ComicProjectKind = this.comicModelKind()): void {
+        this.comicTextRouteIdsByKind = { ...(this.comicTextRouteIdsByKind || {}), [kind]: '' };
+        try {
+            window.localStorage.removeItem(this.comicTextRouteStorageKey(kind));
+            if (kind === 'novel') window.localStorage.removeItem('nextmux.desktop.comicTextRoute.v1');
+        } catch { /* keep in memory */ }
+    }
+
     protected forgetComicTextRoute(): void {
-        this.comicTextRouteId = '';
-        try { window.localStorage.removeItem('nextmux.desktop.comicTextRoute.v1'); } catch { /* keep in memory */ }
+        this.forgetComicTextRouteForKind(this.comicModelKind());
     }
 
     /**
@@ -21980,6 +23968,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.relayMetricTooltip = undefined;
             changed = true;
         }
+        if (this.comicModelPickerOpen && !target?.closest('.nmx-comic-model-portal .nmx-model-picker-popover, .nmx-comic-model-effort-portal .nmx-model-effort-menu, .nmx-offering-price-pop, .nmx-model-price-overlay-drawer, .nmx-comic-chat-drawers .nmx-route-button')) {
+            this.comicModelPickerOpen = false;
+            this.comicModelPickerQuery = '';
+            this.closeComicModelHoverImmediately();
+            changed = true;
+        }
+        if (this.comicStudioIsolatedPicker && !target?.closest('.nmx-studio-isolated-picker-portal .nmx-model-picker-popover, .nmx-comic-model-effort-portal .nmx-model-effort-menu, .nmx-relay-metric-tooltip, .nmx-offering-price-pop, .nmx-model-price-overlay-drawer, [data-studio-picker-anchor]')) {
+            this.comicStudioIsolatedPicker = undefined;
+            this.comicStudioModelQuery = '';
+            this.relayMetricTooltip = undefined;
+            this.closeComicModelHoverImmediately();
+            changed = true;
+        }
         if (changed) this.update();
     };
 
@@ -30214,6 +32215,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.turnMessageMenuTrigger = undefined;
         this.followUpTaskMenuId = '';
         this.agentProgressPopoverOpen = false;
+        this.comicRelayPickerOpen = false;
+        this.comicModelPickerOpen = false;
+        this.closeComicModelHoverImmediately?.();
         this.closeModelEffortPickerImmediately();
         if (!this.turnEditSubmitting) {
             this.pendingTurnEdit = undefined;
@@ -30449,7 +32453,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             || this.activeCheckpointDiff
             || this.officialProviderSheet || this.officialModelListOpenId || this.myApisOpen || this.scheduleDialogOpen || this.fullAccessConfirmationOpen
             || this.pendingRelaySwitch
-            || this.comicCreateSheetOpen || this.comicKindSheet || this.comicModelsSheetOpen || this.comicCharacterSheetOpen || this.comicExportSheetOpen || this.mediaSheetOpen || this.comicChatUi?.().materials
+            || this.comicStudioIsolatedPicker || this.comicCreateSheetOpen || this.comicKindSheet || this.comicModelsSheetOpen || this.comicCharacterSheetOpen || this.comicExportSheetOpen || this.mediaSheetOpen || this.comicChatUi?.().materials
             || this.codingSessionRenameId || this.codingSessionDeleteId || this.projectMenuPath || this.projectDeletePath || this.pendingTurnEdit || this.turnCopyMenuId);
     }
 
@@ -30503,15 +32507,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.fullAccessConfirmationTarget = 'current';
         }
         else if (this.pendingRelaySwitch) this.pendingRelaySwitch = undefined;
+        else if (this.comicStudioIsolatedPicker) {
+            this.closeComicStudioIsolatedPicker(false);
+        }
+        else if (this.comicModelsSheetOpen) { this.comicModelsSheetOpen = false; this.comicModelSetupIntro = false; this.markComicModelSetupSeen(); }
         else if (this.comicCreateSheetOpen) this.comicCreateSheetOpen = false;
         else if (this.comicKindSheet) {
-            // Picture-to-video and topic sheets stay open while their project is being created.
-            if (this.comicKindBusy) return false;
-            this.comicKindSheet = undefined;
+            // Studio modals stay open while creating or generating.
+            if (this.comicKindBusy || this.comicStudioModalState?.generating) return false;
+            this.closeComicStudioModalState();
         }
-        // The panel's own close (×, 完成, Escape inside it, a click outside) flies into the header button;
-        // navigation closes it in place so the history sees it closed.
-        else if (this.comicModelsSheetOpen) { this.comicModelsSheetOpen = false; this.comicModelSetupIntro = false; this.markComicModelSetupSeen(); }
         else if (this.comicCharacterSheetOpen) this.comicCharacterSheetOpen = false;
         else if (this.comicExportSheetOpen) this.comicExportSheetOpen = false;
         else if (this.mediaSheetOpen) this.mediaSheetOpen = false;
@@ -30531,7 +32536,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected hasTransientNavigationSurface(): boolean {
         return Boolean(this.goalDrawer || this.goalCloseConfirmation || this.pendingDurableRetry || this.pendingRestoreConfirmation || this.pendingIncognitoMode || this.conversationWindowMenuOpen || this.accountMenuOpen || this.codingPopover || this.codingSearchOpen || this.codingSessionMenuId || this.conversationTabMenuAt
             || this.walletTopupSheetOpen || this.selectedOffering || this.activeCheckpointDiff || this.officialProviderSheet || this.officialModelListOpenId || this.myApisOpen || this.scheduleDialogOpen
-            || this.fullAccessConfirmationOpen || this.pendingRelaySwitch || this.comicCreateSheetOpen || this.comicKindSheet || this.comicModelsSheetOpen || this.comicCharacterSheetOpen
+            || this.fullAccessConfirmationOpen || this.pendingRelaySwitch || this.comicStudioIsolatedPicker || this.comicCreateSheetOpen || this.comicKindSheet || this.comicModelsSheetOpen || this.comicCharacterSheetOpen
             || this.comicExportSheetOpen || this.mediaSheetOpen || this.comicChatUi?.().materials || this.codingSessionRenameId || this.codingSessionDeleteId
             || this.projectMenuPath || this.projectDeletePath || this.pendingTurnEdit || this.turnCopyMenuId);
     }
@@ -30558,10 +32563,22 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const target = event.target instanceof Element ? event.target : undefined;
         // Trigger focus is outside the portal. Keep other active layers' Escape
         // behavior unless this key belongs to the visible Comic picker.
+        if (this.comicStudioIsolatedPicker) {
+            event.preventDefault();
+            event.stopImmediatePropagation?.();
+            this.closeComicStudioIsolatedPicker(true);
+            return;
+        }
         if (this.comicRelayPickerOpen && !this.comicChatUi().recommended && (!transient
             || target?.closest('.nmx-comic-relay-portal, .nmx-comic-chat-drawers .nmx-composer-relay-button'))) {
             event.preventDefault();
             this.dismissComicChatRelayPicker(true);
+            return;
+        }
+        if (this.comicModelPickerOpen && (!transient
+            || target?.closest('.nmx-comic-model-portal, .nmx-comic-model-effort-portal, .nmx-comic-chat-drawers .nmx-route-button'))) {
+            event.preventDefault();
+            this.dismissComicChatModelPicker?.(true);
             return;
         }
         if (!transient) return;
@@ -31803,9 +33820,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             width: Math.max(1, window.innerWidth),
             height: Math.max(1, window.innerHeight)
         };
-        const trigger = this.node.querySelector<HTMLElement>(triggerSelector || (this.modelPickerRelayOpen
+        const selector = triggerSelector || (this.modelPickerRelayOpen
             ? '.nmx-composer-relay-button'
-            : '.nmx-route-button'));
+            : '.nmx-route-button');
+        const trigger = this.node?.querySelector<HTMLElement>(selector)
+            || (triggerSelector && typeof document !== 'undefined' ? document.querySelector<HTMLElement>(triggerSelector) : null);
+        const isPortaledTrigger = Boolean(trigger && (!this.node || !this.node.contains?.(trigger)));
         const triggerRect = trigger?.getBoundingClientRect();
         // A leading trigger (the composer "+") opens beside the whole surface
         // it belongs to, so the menu never covers the text being typed.
@@ -31822,22 +33842,28 @@ export class NextMuxDesktopWidget extends ReactWidget {
             bottom: fallbackBottom,
             left: Math.max(8, viewport.width - 180)
         };
-        const titlebarBottom = this.node.querySelector<HTMLElement>('.nmx-titlebar-primary-nav')?.getBoundingClientRect().bottom || 40;
-        const workspaceTopbarBottom = this.node.querySelector<HTMLElement>(this.activeSection === 'comic' ? '.nmx-comic-topbar' : '.nmx-coding-topbar')?.getBoundingClientRect().bottom
-            || titlebarBottom;
-        const terminalTop = this.terminalDrawerOpen
-            ? this.node.querySelector<HTMLElement>('.nmx-terminal-drawer.is-open')?.getBoundingClientRect().top
+        const titlebarBottom = this.node?.querySelector<HTMLElement>('.nmx-titlebar-primary-nav')?.getBoundingClientRect().bottom || 40;
+        const workspaceTopbarBottom = isPortaledTrigger
+            ? titlebarBottom
+            : (this.node?.querySelector<HTMLElement>(this.activeSection === 'comic' ? '.nmx-comic-topbar' : '.nmx-coding-topbar')?.getBoundingClientRect().bottom
+                || titlebarBottom);
+        const terminalTop = !isPortaledTrigger && this.terminalDrawerOpen
+            ? this.node?.querySelector<HTMLElement>('.nmx-terminal-drawer.is-open')?.getBoundingClientRect().top
             : undefined;
+        const baseSafeTop = Math.max(titlebarBottom, workspaceTopbarBottom) + 6;
         const safeBottom = terminalTop === undefined
             ? 8
             : Math.max(8, viewport.height - terminalTop + 8);
+        const portaledPreferBelow = isPortaledTrigger
+            && triggerRect !== undefined
+            && (viewport.height - safeBottom - anchor.bottom - 10) > (anchor.top - 10 - baseSafeTop);
         const placement = placeAnchoredFloatingPanel(anchor, viewport, panelWidth, panelHeight, {
             edge: 8,
             gap: 10,
-            safeTop: Math.max(titlebarBottom, workspaceTopbarBottom) + 6,
+            safeTop: portaledPreferBelow ? Math.max(baseSafeTop, anchor.top) : baseSafeTop,
             safeBottom,
             minHeight: Math.min(Math.max(1, panelHeight), 150),
-            alignLeft: Boolean(surfaceSelector) && this.desktopLocale !== 'ar'
+            alignLeft: (Boolean(surfaceSelector) || isPortaledTrigger) && this.desktopLocale !== 'ar'
         });
         if (!triggerSelector && !surfaceSelector && !this.modelPickerRelayOpen && this.activeSection === 'coding') {
             const layout = placeModelPickerPanels(placement, viewport);
@@ -40872,6 +42898,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     /** Closes a comic sheet whose render failed (the panel's own open flag). */
     protected dismissBrokenComicSurface(): void {
+        this.comicStudioIsolatedPicker = undefined;
+        if (this.comicStudioModalState) this.comicStudioModalState.open = false;
         this.comicModelsSheetOpen = false;
         this.comicCreateSheetOpen = false;
         this.comicKindSheet = undefined;
@@ -41101,7 +43129,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             {tooltip && tooltipRect && ReactDOM.createPortal(<div className={`nmx-relay-metric-tooltip nmx-theme-${this.resolvedDesktopTheme()}`} role='tooltip'
                 dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'} lang={this.desktopLocale}
                 style={{ width: `${tooltipWidth}px`, left: `${Math.max(8, Math.min(tooltipRect.left, window.innerWidth - tooltipWidth - 8))}px`,
-                    top: `${Math.max(8, Math.min(tooltipRect.bottom + 6, window.innerHeight - 110))}px` }}>{tooltip.text}</div>, document.body)}
+                    top: `${Math.max(8, Math.min(tooltipRect.bottom + 6, window.innerHeight - 110))}px`,
+                    ...(this.comicStudioIsolatedPicker || this.comicStudioModalState?.open ? { zIndex: 12030 } : {}) }}>{tooltip.text}</div>, document.body)}
         </section>;
     }
 
@@ -45060,21 +47089,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const mode = read('nextmux.desktop.comicChatMode.v1');
         const folders = read('nextmux.desktop.comicChatFolders.v1');
         const managed = read('nextmux.desktop.comicChatManaged.v1');
-        const recommended = read('nextmux.desktop.comicChatRecommended.v1');
         const relay = read('nextmux.desktop.comicChatRelay.v1');
         const libraryHint = read('nextmux.desktop.comicLibraryHint.v1');
         const pinned = read('nextmux.desktop.comicChatModelsPinned.v1');
+        const allowedModes: readonly ComicChatMode[] = ['image', 'video', 'music'];
         self.comicChatState = {
             surface: 'studio', chats: new Map(), target: '', lists: new Map(), loading: new Set(),
             library: new Map(), libraryLoading: new Set(), libraryHintDone: libraryHint === true,
             modelsPinned: new Set(Array.isArray(pinned) ? pinned.filter((item): item is ComicChatMode => COMIC_CHAT_DRAWER_MODES.includes(item as ComicChatMode)) : []),
             folders: Array.isArray(folders) ? [...new Set(folders.filter((item): item is string => typeof item === 'string' && item.length > 0 && item.length <= 4_096))].slice(0, 200) : [],
             folderInfo: new Map(), foldersLoaded: false, managed: typeof managed === 'string' ? managed : '',
-            recommended: recommended !== false, relay: typeof relay === 'string' ? relay : '',
+            recommended: false, relay: typeof relay === 'string' ? relay : '',
             editorGroups: { chat: true, project: false, all: false }, allMaterialsLoading: false, materialScope: 'all',
             expanded: new Set(Array.isArray(expanded) ? expanded.filter((item): item is string => typeof item === 'string').slice(0, 200) : []),
             // The conversation offers 图片 / 视频 / 音乐 (older saved modes fall back to 图片).
-            mode: COMIC_CHAT_DRAWER_MODES.includes(mode as ComicChatMode) ? mode as ComicChatMode : 'image', prompt: '', params: {}, references: [],
+            mode: allowedModes.includes(mode as ComicChatMode) ? mode as ComicChatMode : 'image', prompt: '', params: {}, references: [],
             models: models && typeof models === 'object' && !Array.isArray(models)
                 ? Object.fromEntries(Object.entries(models as Record<string, unknown>).filter(([key, value]) => COMIC_CHAT_MODES.includes(key as ComicChatMode) && typeof value === 'string')) : {},
             sending: false, editor: false, error: '', notice: '', saving: Promise.resolve()
@@ -45153,7 +47182,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (folder.status === 'comic') {
                 const kind = comicProjectKindOf(folder.projectKind);
                 this.addNotification('info', this.comicChatT('folderIsComic', { name: folder.title || folder.name, kind: comicKindText(this.desktopLocale, kind) }), folder.path);
-                this.openComicStudio(folder.path, folder.title || folder.name);
+                if (kind === 'novel') {
+                    this.openComicStudio(folder.path, folder.title || folder.name);
+                } else {
+                    await this.handleComicHomeProjectOpen({
+                        path: folder.path,
+                        title: folder.title || folder.name,
+                        kind
+                    } as ComicHomeProject);
+                }
                 void this.loadComicLibrary();
                 return false;
             }
@@ -45222,6 +47259,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         ui.menu = undefined;
         ui.materials = undefined;
         ui.viewer = undefined;
+        this.comicRelayPickerOpen = false;
+        this.comicModelPickerOpen = false;
+        this.closeComicModelHoverImmediately?.();
         if (path) this.openComicLibraryProject(path, title);
         this.update();
     }
@@ -45348,26 +47388,31 @@ export class NextMuxDesktopWidget extends ReactWidget {
             platform ? { sourceKey: managedRelayKey(platform.merchantId), model: platform.canonicalModel } : undefined);
     }
 
-    /** The model a mode uses: the recommended one, or (推荐模型 off) the one picked for it at the chosen relay, else that relay's best. */
+    /** The model a mode uses: the one picked for it at the chosen relay, else the platform's recommended one on that relay, else that relay's best. */
     protected comicChatCandidate(mode: ComicChatMode): ComicStepCandidate | undefined {
         const ui = this.comicChatUi();
         if (ui.recommended) return this.comicChatRecommendedCandidate(mode);
         const relay = this.comicChatRelayKey();
         const candidates = this.comicChatCandidates(mode).filter(candidate => !relay || candidate.source.key === relay);
         const stored = ui.models[mode];
-        return (stored ? candidates.find(candidate => candidate.key === stored) : undefined)
-            || [...candidates].sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label))[0];
+        const matched = stored ? candidates.find(candidate => candidate.key === stored) : undefined;
+        if (matched) return matched;
+        const rec = this.comicChatRecommendedCandidate(mode);
+        if (rec && (!relay || rec.source.key === relay)) return rec;
+        return [...candidates].sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label))[0];
     }
 
-    /** The relay chosen with 推荐模型 off (the one offering the most functions until one is chosen). */
+    /** The relay chosen for the conversation: the saved choice, else the recommended model's relay, else the one offering the most functions. */
     protected comicChatRelayKey(): string {
         const ui = this.comicChatUi();
+        // A relay picked in the drawer stays chosen while its models load (or when it has none for a function).
+        if (ui.relay) return ui.relay;
+        const recommendedRelay = this.comicChatRecommendedCandidate(ui.mode)?.source.key;
+        if (recommendedRelay) return recommendedRelay;
         const counts = new Map<string, number>();
         for (const mode of COMIC_CHAT_DRAWER_MODES) {
             for (const key of new Set(this.comicChatCandidates(mode).map(candidate => candidate.source.key))) counts.set(key, (counts.get(key) || 0) + 1);
         }
-        // A relay picked in the drawer stays chosen while its models load (or when it has none for a function).
-        if (ui.relay) return ui.relay;
         return [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] || '';
     }
 
@@ -45474,6 +47519,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected openComicChatRelayPicker(): void {
         if (this.comicRelayPickerOpen) { this.dismissComicChatRelayPicker(true); return; }
+        this.comicModelPickerOpen = false;
+        this.comicModelPickerQuery = '';
+        this.closeComicModelHoverImmediately();
         this.comicRelayPickerOpen = true;
         this.relayMetricTooltip = undefined;
         if (this.comicRelayPickerOpen && this.relaySourceTab !== 'my-api' && !this.publicMerchantPage && !this.publicMerchantPageLoading) void this.loadPublicMerchantPage();
@@ -45490,6 +47538,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const label = this.relayPickerOptions().find(option => option.key === key)?.label;
         if (label) try { window.localStorage.setItem('nextmux.desktop.comicChatRelayLabel.v1', JSON.stringify({ key, label })); } catch { /* named from the directory later */ }
         this.comicRelayPickerOpen = false;
+        this.comicModelPickerOpen = false;
+        this.closeComicModelHoverImmediately();
         this.relayMetricTooltip = undefined;
         this.reconcileComicChatParamsAndReferences?.();
         this.persistComicChatUi();
@@ -45518,6 +47568,279 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             height: `${placement.height}px`, maxHeight: `${placement.maxHeight}px`
                         } as React.CSSProperties}>
                         <div className='nmx-model-picker-relay-view'>{this.renderRelayPopover()}</div>
+                    </section>
+                </div>
+            </div>,
+            document.body
+        );
+    }
+
+    protected comicModelPickerOpen = false;
+    protected comicModelPickerQuery = '';
+    protected comicModelHoverKey = '';
+    protected comicModelHoverPlacement: AdjacentFloatingPanelPlacement | undefined;
+    protected comicModelHoverCloseTimer: number | undefined;
+
+    protected cancelComicModelHoverClose(): void {
+        if (this.comicModelHoverCloseTimer !== undefined) {
+            window.clearTimeout(this.comicModelHoverCloseTimer);
+            this.comicModelHoverCloseTimer = undefined;
+        }
+    }
+
+    protected scheduleComicModelHoverClose(): void {
+        this.cancelComicModelHoverClose();
+        if (!this.comicModelHoverKey) return;
+        this.comicModelHoverCloseTimer = window.setTimeout(() => {
+            this.comicModelHoverCloseTimer = undefined;
+            this.closeComicModelHoverImmediately();
+            this.update();
+        }, 180);
+    }
+
+    protected closeComicModelHoverImmediately(): void {
+        this.cancelComicModelHoverClose();
+        this.comicModelHoverKey = '';
+        this.comicModelHoverPlacement = undefined;
+    }
+
+    protected openComicModelHover(key: string, anchor: HTMLElement, detailGeometry?: { readonly side: 'left' | 'right'; readonly left: number; readonly width: number }): void {
+        this.cancelComicModelHoverClose();
+        const rect = anchor.getBoundingClientRect();
+        const menu = document.querySelector<HTMLElement>('.nmx-comic-model-effort-portal .nmx-model-effort-menu:not(.nmx-model-price-overlay-drawer)');
+        const measuredHeight = menu && menu.dataset.modelId === key ? menu.scrollHeight : 0;
+        const viewport = { width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) };
+        const width = detailGeometry?.width ?? 264;
+        const initial = placeAdjacentFloatingPanel(rect, viewport, width, Math.max(measuredHeight, 200));
+        const nextPlacement: AdjacentFloatingPanelPlacement = { ...initial, width, ...(detailGeometry || {}) };
+        if (this.comicModelHoverKey === key && this.comicModelHoverPlacement
+            && Math.abs(this.comicModelHoverPlacement.top - nextPlacement.top) < 1
+            && this.comicModelHoverPlacement.left === nextPlacement.left
+            && this.comicModelHoverPlacement.width === nextPlacement.width) {
+            this.comicModelHoverPlacement = nextPlacement;
+            return;
+        }
+        this.comicModelHoverKey = key;
+        this.comicModelHoverPlacement = nextPlacement;
+        this.update();
+    }
+
+    protected fitComicModelHoverMenu(menu: HTMLElement, detailGeometry?: { readonly side: 'left' | 'right'; readonly left: number; readonly width: number }): void {
+        const placement = this.comicModelHoverPlacement;
+        if (!placement) return;
+        const edge = 8;
+        if (detailGeometry) {
+            menu.style.left = `${detailGeometry.left}px`;
+            menu.style.width = `${detailGeometry.width}px`;
+            menu.dataset.compact = String(detailGeometry.width < 240);
+        }
+        const top = Math.max(edge, Math.min(placement.top, window.innerHeight - edge - menu.scrollHeight));
+        const maxHeight = Math.max(1, window.innerHeight - top - edge);
+        if (Math.abs(top - placement.top) < 1 && Math.abs(maxHeight - placement.maxHeight) < 1
+            && (!detailGeometry || detailGeometry.left === placement.left && detailGeometry.width === placement.width && detailGeometry.side === placement.side)) return;
+        this.comicModelHoverPlacement = { ...placement, ...(detailGeometry || {}), top, maxHeight };
+        menu.style.top = `${top}px`;
+        menu.style.maxHeight = `${maxHeight}px`;
+    }
+
+    protected dismissComicChatModelPicker(restoreFocus = false): void {
+        if (!this.comicModelPickerOpen) return;
+        const trigger = restoreFocus ? this.node.querySelector<HTMLElement>('.nmx-comic-chat-drawers .nmx-route-button') : undefined;
+        const focusBeforeDismiss = restoreFocus ? document.activeElement : undefined;
+        this.comicModelPickerOpen = false;
+        this.comicModelPickerQuery = '';
+        this.closeComicModelHoverImmediately();
+        this.update();
+        if (trigger) requestAnimationFrame(() => {
+            const currentFocus = document.activeElement;
+            if (!this.comicModelPickerOpen && this.node.isConnected && trigger.isConnected && this.node.contains(trigger)
+                && this.node.querySelector<HTMLElement>('.nmx-comic-chat-drawers .nmx-route-button') === trigger
+                && (currentFocus === focusBeforeDismiss || currentFocus === document.body || currentFocus === trigger)) trigger.focus();
+        });
+    }
+
+    protected openComicChatModelPicker(): void {
+        if (this.comicModelPickerOpen) { this.dismissComicChatModelPicker(true); return; }
+        if (this.comicRelayPickerOpen) {
+            this.comicRelayPickerOpen = false;
+            this.relayMetricTooltip = undefined;
+        }
+        this.comicModelPickerOpen = true;
+        this.comicModelPickerQuery = '';
+        this.closeComicModelHoverImmediately();
+        const ui = this.comicChatUi();
+        if (!COMIC_CHAT_DRAWER_MODES.includes(ui.mode)) {
+            this.setComicChatMode('image');
+            return;
+        }
+        const relayKey = this.comicChatRelayKey();
+        if (relayKey.startsWith('managed:')) {
+            const merchantId = relayKey.slice('managed:'.length);
+            if (!this.merchantPickerSnapshots.has(merchantId)) void this.loadComicChatRelayCatalog(merchantId);
+        }
+        this.update();
+    }
+
+    protected renderComicModelPickerPortal(): React.ReactNode {
+        if (!this.comicModelPickerOpen) return undefined;
+        const ui = this.comicChatUi();
+        const activeTab: ComicChatMode = COMIC_CHAT_DRAWER_MODES.includes(ui.mode) ? ui.mode : 'image';
+        const relayKey = this.comicChatRelayKey();
+        if (relayKey.startsWith('managed:')) {
+            const merchantId = relayKey.slice('managed:'.length);
+            if (!this.merchantPickerSnapshots.has(merchantId)) void this.loadComicChatRelayCatalog(merchantId);
+        }
+        const allOptions = this.comicChatCandidates(activeTab)
+            .filter(candidate => !relayKey || candidate.source.key === relayKey)
+            .sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label));
+        const query = this.comicModelPickerQuery.trim().toLowerCase();
+        const filtered = query
+            ? allOptions.filter(candidate => candidate.label.toLowerCase().includes(query)
+                || candidate.model.toLowerCase().includes(query)
+                || Boolean(candidate.offering?.providerName?.toLowerCase().includes(query)))
+            : allOptions;
+        const selectedCandidate = this.comicChatCandidate(activeTab);
+        const basePlacement = this.calculateModelPickerPlacement(
+            Math.max(260, 128 + (allOptions.length > 5 ? 36 : 0) + Math.max(2, filtered.length) * 32),
+            264,
+            '.nmx-comic-chat-drawers .nmx-route-button'
+        );
+        const viewport = { width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) };
+        const layout = placeModelPickerPanels(basePlacement, viewport);
+        const placement = layout.picker;
+        const detailGeometry = layout.detail;
+        const relayLoading = Boolean(relayKey.startsWith('managed:')
+            && (this as unknown as { comicChatRelayLoading?: Set<string> }).comicChatRelayLoading?.has(relayKey.slice('managed:'.length)));
+        return ReactDOM.createPortal(
+            <div className='nmx-model-picker-portal nmx-desktop-widget nmx-comic-model-portal' dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'} lang={this.desktopLocale}
+                onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented && !event.nativeEvent.isComposing) { event.preventDefault(); this.dismissComicChatModelPicker(true); } }}>
+                <div className={`nmx-model-picker-surface nmx-shell nmx-theme-${this.resolvedDesktopTheme()}`}>
+                    <section className='nmx-composer-popover nmx-route-popover nmx-model-picker-popover nmx-model-only-popover' data-side={placement.side}
+                        aria-label={localizeDesktopSurface(this.desktopLocale, '选择模型')}
+                        style={{
+                            '--nmx-model-picker-max-height': `${placement.maxHeight}px`,
+                            top: `${placement.top}px`, left: `${placement.left}px`, width: `${placement.width}px`,
+                            height: `${placement.height}px`, maxHeight: `${placement.maxHeight}px`
+                        } as React.CSSProperties}>
+                        <header>
+                            <strong>{localizeDesktopSurface(this.desktopLocale, '选择模型')}</strong>
+                            <button type='button' disabled={this.catalogLoading || relayLoading}
+                                aria-label={localizeDesktopSurface(this.desktopLocale, '刷新')} title={localizeDesktopSurface(this.desktopLocale, '刷新')}
+                                onClick={() => void (relayKey.startsWith('managed:') ? this.loadComicChatRelayCatalog(relayKey.slice('managed:'.length)) : this.loadCatalog())}>
+                                <i className='codicon codicon-refresh'></i>
+                            </button>
+                        </header>
+                        <div className='nmx-relay-source-tabs nmx-comic-picker-mode-tabs' role='tablist' aria-label={this.comicChatT('skills')}>
+                            {COMIC_CHAT_DRAWER_MODES.map(tabMode => (
+                                <button key={tabMode} type='button' role='tab' aria-selected={activeTab === tabMode}
+                                    className={activeTab === tabMode ? 'is-active' : ''}
+                                    onClick={() => { this.closeComicModelHoverImmediately(); this.setComicChatMode(tabMode); }}>
+                                    <span>{this.comicChatT(tabMode)}</span>
+                                </button>
+                            ))}
+                        </div>
+                        {allOptions.length > 5 && <div className='nmx-model-picker-search'><i className='codicon codicon-search' aria-hidden='true'></i>
+                            <ImeInput value={this.comicModelPickerQuery} placeholder={modelPickerListText(this.desktopLocale, 'search')} aria-label={modelPickerListText(this.desktopLocale, 'search')}
+                                onChange={event => { this.comicModelPickerQuery = event.currentTarget.value; this.closeComicModelHoverImmediately(); this.update(); }} /></div>}
+                        {filtered.length > 0 ? (
+                            <div className='nmx-model-picker-list' role='listbox' aria-label={this.comicChatT(activeTab)}
+                                onScroll={() => { if (this.comicModelHoverKey) { this.closeComicModelHoverImmediately(); this.update(); } }}>
+                                {filtered.map(item => {
+                                    const selected = item.key === selectedCandidate?.key;
+                                    const offering = item.offering;
+                                    const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
+                                    const variantTag = offering ? (ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering))) : '';
+                                    const hoverOpen = this.comicModelHoverKey === item.key;
+                                    const hoverPlacement = hoverOpen ? this.comicModelHoverPlacement : undefined;
+                                    const evidenceRows: { readonly label: string; readonly value: string }[] = [
+                                        {
+                                            label: item.source.kind === 'official' ? relayText(this.desktopLocale, 'apiName')
+                                                : item.source.kind === 'local' ? relayText(this.desktopLocale, 'local') : relayText(this.desktopLocale, 'relayTitle'),
+                                            value: offering?.providerName || comicStepSourceLabel(this.desktopLocale, item.source)
+                                        }
+                                    ];
+                                    if (!offering) {
+                                        evidenceRows.push({
+                                            label: relayText(this.desktopLocale, 'price'),
+                                            value: item.source.kind === 'local' ? this.comicChatT('free') : this.comicChatT('providerBilled')
+                                        });
+                                    }
+                                    if (activeTab === 'video') {
+                                        const aspects = this.comicChatAspectChoices(item);
+                                        if (aspects.length > 0) evidenceRows.push({ label: this.comicChatT('aspect'), value: aspects.join(' / ') });
+                                        const durations = this.comicChatSecondsChoices(item, ui.references.length);
+                                        if (durations.length > 0) evidenceRows.push({ label: canvasText(this.desktopLocale, 'duration'), value: durations.map(n => `${n}s`).join(' / ') });
+                                        if (videoModelGuide(item.model).nativeAudio) evidenceRows.push({ label: canvasText(this.desktopLocale, 'audio'), value: this.comicChatT('sound') });
+                                    }
+                                    if (activeTab === 'image' || activeTab === 'video') {
+                                        const refPolicy = this.comicChatReferencePolicy(activeTab, item);
+                                        if (refPolicy.limit > 0) {
+                                            evidenceRows.push({
+                                                label: refPolicy.firstFrame ? this.comicChatT('firstFrame') : this.comicChatT('reference'),
+                                                value: refPolicy.firstFrame ? this.comicChatT('count', { n: 1 }) : this.comicChatT('referencesLimit', { n: refPolicy.limit })
+                                            });
+                                        }
+                                    }
+                                    const optionTitle = [item.label, ...evidenceRows.map(metric => `${metric.label}: ${metric.value}`)].filter(Boolean).join(' · ');
+                                    return <div className={`nmx-model-option ${selected ? 'is-selected' : ''}`} key={item.key} data-model-id={item.key}
+                                        onPointerEnter={event => this.openComicModelHover(item.key, event.currentTarget, detailGeometry)}
+                                        onFocus={event => this.openComicModelHover(item.key, event.currentTarget, detailGeometry)}
+                                        onBlur={() => this.scheduleComicModelHoverClose()}
+                                        onPointerLeave={() => this.scheduleComicModelHoverClose()}>
+                                        <button type='button' role='option' aria-selected={selected} aria-label={optionTitle}
+                                            onClick={() => {
+                                                this.pickComicChatModel(activeTab, item.key);
+                                                if (ui.mode !== activeTab) this.setComicChatMode(activeTab);
+                                                this.dismissComicChatModelPicker(true);
+                                            }}>
+                                            <span><strong data-nmx-literal>{item.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr'>{variantTag}</small>}</span>
+                                            {selected && <i className='codicon codicon-check'></i>}
+                                        </button>
+                                        {hoverOpen && hoverPlacement && ReactDOM.createPortal(
+                                            <div className={`nmx-model-effort-portal nmx-comic-model-effort-portal nmx-theme-${this.resolvedDesktopTheme()}`}
+                                                dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'} lang={this.desktopLocale}
+                                                onPointerEnter={() => this.cancelComicModelHoverClose()}
+                                                onPointerLeave={() => this.scheduleComicModelHoverClose()}>
+                                                <section className={`nmx-model-effort-menu nmx-model-evidence-menu is-${hoverPlacement.side}`} data-model-id={item.key}
+                                                    ref={element => { if (element) this.fitComicModelHoverMenu(element, detailGeometry); }}
+                                                    data-compact={hoverPlacement.width !== undefined && hoverPlacement.width < 240 || undefined}
+                                                    style={{
+                                                        top: `${hoverPlacement.top}px`, left: `${hoverPlacement.left}px`,
+                                                        width: hoverPlacement.width === undefined ? undefined : `${hoverPlacement.width}px`,
+                                                        maxHeight: `${hoverPlacement.maxHeight}px`
+                                                    }}
+                                                    aria-label={optionTitle}
+                                                    onFocus={() => this.cancelComicModelHoverClose()}
+                                                    onBlur={() => this.scheduleComicModelHoverClose()}
+                                                    onPointerEnter={() => this.cancelComicModelHoverClose()}
+                                                    onPointerLeave={() => this.scheduleComicModelHoverClose()}>
+                                                    <header><strong data-nmx-literal>{item.label}</strong></header>
+                                                    <dl className='nmx-model-evidence'>
+                                                        {evidenceRows.map(metric => <div key={metric.label}><dt>{metric.label}</dt><dd data-nmx-literal>{metric.value}</dd></div>)}
+                                                    </dl>
+                                                    {offering && <OfferingPriceCard locale={this.desktopLocale} offering={offering} collapsible pullOutDrawer />}
+                                                </section>
+                                            </div>,
+                                            document.body
+                                        )}
+                                    </div>;
+                                })}
+                            </div>
+                        ) : (
+                            <div className='nmx-model-picker-list nmx-model-picker-empty-list'>
+                                {relayLoading ? (
+                                    <div className='nmx-merchant-catalog-status is-centered' role='status'>
+                                        <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />
+                                        <span>{relayText(this.desktopLocale, 'modelsLoading')}</span>
+                                    </div>
+                                ) : (
+                                    <div className='nmx-route-empty'>
+                                        <span>{this.comicModelPickerQuery.trim() ? modelPickerListText(this.desktopLocale, 'noMatch') : this.comicChatT('noModelHere', { kind: this.comicChatT(activeTab) })}</span>
+                                        {!this.comicModelPickerQuery.trim() && <button type='button' onClick={() => { this.dismissComicChatModelPicker(); this.openComicChatRelayPicker(); }}>{relayText(this.desktopLocale, 'selectRelay')}</button>}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </section>
                 </div>
             </div>,
@@ -45667,7 +47990,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected comicChatBlocked(): string {
         const ui = this.comicChatUi();
-        const policy = this.comicChatReferencePolicy(ui.mode, this.comicChatCandidate(ui.mode));
+        const candidate = this.comicChatCandidate(ui.mode);
+        if (!this.platformSession?.linked && candidate && (candidate.source.kind === 'managed' || candidate.source.kind === 'automatic')) {
+            const msg = this.comicChatT('signInNeeded' as ComicChatTextKey);
+            return msg && msg !== 'signInNeeded' ? msg : relayText(this.desktopLocale, 'signInRequired');
+        }
+        const policy = this.comicChatReferencePolicy(ui.mode, candidate);
         if (ui.mode === 'video' && ui.references.length && !policy.limit) return this.comicChatT('noFirstFrame');
         if (ui.mode === 'video' && ui.skill === 'animate' && !ui.references.length) return this.comicChatT('needFirstFrame');
         return '';
@@ -45814,15 +48142,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected async sendComicChat(): Promise<void> {
         const ui = this.comicChatUi();
         const prompt = ui.prompt.trim();
-        const requestedMode = ui.mode;
-        let mode = requestedMode;
-        let candidate = this.comicChatCandidate(mode);
-        // "1", "你好" or "怎么用" in 图片/视频 mode is conversation, not a paid generation: the assistant answers in words
-        // and offers a generation once the user says what it should show.
-        if (mode !== 'agent' && comicChatLooksConversational(prompt, ui.references.length > 0)) {
-            const assistant = this.comicChatCandidate('agent');
-            if (assistant) { mode = 'agent'; candidate = assistant; }
-        }
+        const mode = ui.mode;
+        const candidate = this.comicChatCandidate(mode);
         if (!prompt || ui.sending || !candidate || (mode === 'agent' && ui.agent)) return;
         const blocked = this.comicChatBlocked();
         if (blocked) { ui.error = blocked; this.update(); return; }
@@ -45844,7 +48165,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const chat: ComicChat = this.activeComicChat() ?? { schemaVersion: 1, id: `chat-${window.crypto.randomUUID()}`, projectId: project.id,
                 title: comicChatTitleFrom(prompt) || this.comicChatT('untitled'), createdAt: now, updatedAt: now, turns: [] };
             const turn: ComicChatTurn = { id: `turn-${window.crypto.randomUUID()}`, mode, prompt, ...(ui.skill ? { skill: ui.skill } : {}),
-                ...(mode !== requestedMode && requestedMode !== 'agent' ? { from: requestedMode } : {}), references: references.map(asset => asset.id), params,
+                references: references.map(asset => asset.id), params,
                 model: { key: candidate.key, routeId: candidate.routeId, model: candidate.model, label: candidate.label, source: comicStepSourceLabel(this.desktopLocale, candidate.source) },
                 jobIds: [], createdAt: now };
             const next: ComicChat = { ...chat, updatedAt: now, turns: [...chat.turns, turn].slice(-400) };
@@ -47204,6 +49525,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onStop={() => { if (ui.agent) { ui.agent.cancel = true; if (ui.agent.runId) void this.platformService.cancelAgentRun(ui.agent.runId).catch(() => undefined); this.update(); } }}
                 onRecommended={on => this.setComicChatRecommended(on)}
                 relayOpen={this.comicRelayPickerOpen} onOpenRelay={() => this.openComicChatRelayPicker()}
+                modelOpen={this.comicModelPickerOpen} onOpenModel={() => this.openComicChatModelPicker()}
+                onSignIn={() => void this.startDeviceLink()}
                 onModel={(which, key) => this.pickComicChatModel(which, key)}
                 onModels={keys => { ui.models = { ...ui.models, ...keys }; for (const mode of Object.keys(keys)) ui.modelsPinned.add(mode as ComicChatMode); this.reconcileComicChatParamsAndReferences?.(); this.persistComicChatUi(); this.update(); }}
                 onFiles={files => void this.addComicChatFiles(files)}
@@ -47216,9 +49539,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onClearFolder={() => { ui.target = ''; this.update(); }}
                 onSetUpModels={() => this.openComicModelSetup()} />
             {this.renderComicRelayPickerPortal()}
+            {this.renderComicModelPickerPortal()}
             {/* 新建 from the sidebar's kinds while a conversation is on screen (the new comic then opens in its own view). */}
             {this.guard('comic-create', () => this.renderComicCreateSheet(), () => this.dismissBrokenComicSurface())}
             {this.guard('comic-kind', () => this.renderComicKindSheet(), () => this.dismissBrokenComicSurface())}
+            {this.renderComicStudioIsolatedPickerPortal()}
             {this.renderComicChatMenu('chat')}
             {this.renderComicChatViewer()}
             {this.renderComicChatDeleteDialog()}
@@ -47283,7 +49608,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.ensureComicLibrary();
         // A song exports from its last step (封面与导出), so the header keeps only the AI 模型 button.
         const music = this.comicProjectKind(project) === 'music';
-        this.scheduleComicModelSetupGuide();
+        const studioCutView = Boolean(project && view === 'timeline' && ['image', 'topic', 'music'].includes(this.comicProjectKind(project)));
         return <div className='nmx-comic-studio' data-comic-studio>
             <header className='nmx-studio-header'>
                 <div className='nmx-studio-project'><span className='nmx-studio-project-icon'><i className={`codicon codicon-${music ? 'music' : 'device-camera-video'}`}></i></span><div>
@@ -47293,14 +49618,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 </div></div>
                 <div className='nmx-studio-header-actions'>
                     {project && this.comicUsesDesk(project) && this.renderComicDeskButton(project)}
-                    {this.renderComicModelButton()}
                     {project && !music && !deskHome && view !== 'timeline' && <button className='nmx-studio-export' disabled={projectFrames < 1 || editingBlocked} onClick={() => this.openComicExportSheet()}><i className='codicon codicon-export'></i><span>{this.comicExportState.active ? `${this.comicExportState.active.progress}%` : '导出成片'}</span></button>}
                     {/* In-app close buttons all sit at the top right (sheets, the desk, dialogs); closing a project returns to 全部漫剧. */}
                     {workspace && project && <button type='button' className='nmx-studio-close' aria-label={`${appPluginText(this.desktopLocale, 'close')} · ${this.ct('allComics')}`}
                         title={`${appPluginText(this.desktopLocale, 'close')} · ${this.ct('allComics')}`} disabled={this.comicStage !== 'idle'} onClick={() => this.openComicHomeKind(this.comicHomeKind)}><i className='codicon codicon-close' aria-hidden='true'></i></button>}
                 </div>
             </header>
-            {project && !deskHome && this.renderComicViewBar(project, scene, shot)}
+            {project && !deskHome && !studioCutView && this.renderComicViewBar(project, scene, shot)}
             {(this.comicMessage || this.comicError || this.comicExternalChange || this.comicVoicePending || this.comicHasDirtyDraft()) && <div className={`nmx-studio-notice ${this.comicError || this.comicExternalChange ? 'is-error' : ''}`} role='status'>
                 <i className={`codicon codicon-${this.comicError || this.comicExternalChange ? 'warning' : 'info'}`}></i><span data-nmx-literal={Boolean(this.comicErrorDetail) || undefined}>{this.comicError || this.comicMessage || (this.comicHasDirtyDraft() ? mediaAuditText(this.desktopLocale, 'unsaved') : '')}</span>
                 {this.comicErrorDetail && <MediaDiagnostic locale={this.desktopLocale} detail={this.comicErrorDetail} />}
@@ -47318,6 +49642,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             </div>}
             {this.guard('comic-create', () => this.renderComicCreateSheet(), () => this.dismissBrokenComicSurface())}
             {this.guard('comic-kind', () => this.renderComicKindSheet(), () => this.dismissBrokenComicSurface())}
+            {this.renderComicStudioIsolatedPickerPortal()}
             {this.guard('comic-models', () => this.renderComicModelsSheet(), () => this.dismissBrokenComicSurface())}
             {this.guard('comic-character', () => this.renderComicCharacterSheet(), () => this.dismissBrokenComicSurface())}
             {this.renderComicProjectDelete()}
@@ -48404,7 +50729,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             {...(this.comicStepPrefs.global ? { source: this.comicStepPrefs.global } : {})}
             scopeLabel={comicKindText(this.desktopLocale, this.comicModelKind())}
             {...(this.comicModelKind() === 'music' ? { stepLabels: { text: musicText(this.desktopLocale, 'aiTitle'), music: musicText(this.desktopLocale, 'songTitle'), image: musicText(this.desktopLocale, 'cover') } } : {})}
-            anchorSelector='[data-nmx-comic-ai]'
+            anchorSelector='.nmx-studio-desk'
             // Only where a video step makes the sound (a song has no video to carry its music).
             soundVideoModel={this.comicModelKind() !== 'music' && this.comicVideoMakesSound(this.comicStepMediaRoute('video')) ? this.comicStepChoice('video')?.label : undefined}
             refreshing={Boolean(this.modelListsRefreshing)} onRefresh={() => void this.refreshAllModelLists()}
@@ -48419,12 +50744,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
             onStepSelectMany={choices => this.selectComicStepModels(choices)}
             onAddApi={() => { this.finishComicModelSetup(); this.selectSection('models'); }}
             onClose={() => this.finishComicModelSetup()} />;
-    }
-
-    protected renderComicModelButton(): React.ReactNode {
-        const summary = comicModelSetupSummary(this.desktopLocale, this.comicModelSetupSteps(), this.comicStepAuto());
-        return <ComicModelButton locale={this.desktopLocale} open={this.comicModelsSheetOpen} landed={Date.now() - this.comicAiButtonLandedAt < 900}
-            relay={summary.relay} missing={summary.missing} onClick={() => this.toggleComicModelSetup()} />;
     }
 
     /**
@@ -50414,11 +52733,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             {/* The four kinds, each with its projects by status (全部 / 草稿 / 进行中 / 已完成 / 已导出 / 失败待处理). */}
             <ComicHomeCategories locale={this.desktopLocale} kind={this.comicHomeKind} status={this.comicHomeStatus}
                 projects={this.orderedComicProjects(this.comicLibrary.projects).map(item => this.comicHomeProject(item))}
+                deletedProjectPaths={this.comicDeletedProjectPaths}
                 {...(this.comicLibraryLoaded ? {} : { loading: `${this.tx('reading')}…` })} disabled={loading || this.comicStage !== 'idle'}
                 onDelete={project => this.askComicProjectDelete(project.path, project.title)}
                 onKind={kind => { this.comicHomeKind = kind; this.comicHomeStatus = 'all'; try { window.localStorage.setItem('nextmux.desktop.comicHomeKind', kind); } catch { /* session only */ } this.update(); }}
                 onStatus={status => { this.comicHomeStatus = status; this.update(); }}
-                onOpen={project => this.openComicStudio(project.path, project.title)}
+                onOpen={project => { void this.handleComicHomeProjectOpen(project); }}
                 onCreate={kind => this.openComicKindSheet(kind)}
                 folders={(this.comicLibrary.folders ?? []).map(folder => ({ id: folder.id, name: folder.name }))} folder={this.comicHomeFolder} query={this.comicHomeQuery} sort={this.comicHomeSort}
                 onFolder={folder => { this.comicHomeFolder = folder; this.update(); }}
@@ -51107,6 +53427,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     },
                     closeLabel: deskText(this.desktopLocale, 'minimize'),
                     onClose: () => this.minimizeComicDesk()
+                } : !inDesk && root && ['image', 'topic', 'music'].includes(this.comicProjectKind(project)) ? {
+                    backLabel: deskText(this.desktopLocale, 'back'),
+                    onBack: () => {
+                        this.comicEditorController?.pause();
+                        const kind = this.comicProjectKind(project) as ComicStudioModalKind;
+                        const targetRoot = root;
+                        const targetTitle = project.title;
+                        this.openComicHomeKind(kind);
+                        void this.platformService.inspectComicProjectDiskStatus(targetRoot).then(
+                            disk => this.openBoundComicStudioModal(kind, targetRoot, targetTitle, disk),
+                            () => this.openBoundComicStudioModal(kind, targetRoot, targetTitle)
+                        );
+                    }
                 } : {
                     backLabel: deskText(this.desktopLocale, 'back'),
                     onBack: () => {

@@ -23,7 +23,7 @@ export function comicProjectKindOf(value: string | undefined): ComicProjectKind 
 }
 
 type KindKey = 'novel' | 'image' | 'topic' | 'music' | 'novelLead' | 'imageLead' | 'topicLead' | 'musicLead' | 'novelTags' | 'imageTags' | 'topicTags' | 'musicTags' | 'start' | 'projects' | 'empty' | 'newProject'
-    | 'statusAll' | 'statusDraft' | 'statusProgress' | 'statusDone' | 'statusExported' | 'statusFailed' | 'statusEmpty' | 'failedBadge' | 'updated';
+    | 'statusAll' | 'statusDraft' | 'statusProgress' | 'statusDone' | 'statusExported' | 'statusFailed' | 'statusEmpty' | 'failedBadge' | 'updated' | 'deletedNotice';
 type SheetKey = 'imageTitle' | 'imageLead' | 'name' | 'images' | 'imagesDrop' | 'imagesAdd' | 'motion' | 'motionPlaceholder' | 'motionAll' | 'motionAllPlaceholder'
     | 'clipSeconds' | 'aspect' | 'create' | 'creating' | 'cancel' | 'remove' | 'needImages'
     | 'topicTitle' | 'topicLead' | 'topic' | 'topicPlaceholder' | 'length' | 'visual' | 'visualImages' | 'visualVideos' | 'voice' | 'voiceOn' | 'style' | 'stylePlaceholder'
@@ -39,84 +39,84 @@ const kindCopy: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<KindKey, s
         topicLead: '输入一个主题或关键词，AI 写好解说文案，配上画面、配音和字幕，自动合成短视频。', musicLead: '写歌词或让 AI 写，选好曲风和人声，一键生成完整歌曲；再配上封面，导出音频或视频。',
         novelTags: 'AI 拆镜 · 素材库 · 无限画布', imageTags: '批量上传 · 动作描述 · 图生视频', topicTags: 'AI 文案 · 配音字幕 · 一键合成', musicTags: 'AI 写词 · 曲风人声 · 一键成曲',
         start: '开始创作', projects: '{count} 个项目', empty: '还没有项目', newProject: '新建',
-        statusAll: '全部', statusDraft: '草稿', statusProgress: '进行中', statusDone: '已完成', statusExported: '已导出', statusFailed: '失败待处理', statusEmpty: '这里还没有项目', failedBadge: '{count} 个失败', updated: '{time} 更新' },
+        statusAll: '全部', statusDraft: '草稿', statusProgress: '进行中', statusDone: '已完成', statusExported: '已导出', statusFailed: '失败待处理', statusEmpty: '这里还没有项目', failedBadge: '{count} 个失败', updated: '{time} 更新', deletedNotice: '该文件夹项目已被删除' },
     'zh-TW': { novel: '小說轉漫劇', image: '圖片轉影片', topic: '主題一鍵成片', music: '音樂製作',
         novelLead: '在畫布裡改編小說、拆分鏡頭，重用人物定妝照並生成圖片、影片，再依鏡頭鏈條剪輯成片。',
         imageLead: '上傳一張或多張圖片，用一句話描述動作，選擇影片模型讓畫面動起來，再剪輯成片。',
         topicLead: '輸入一個主題或關鍵字，AI 寫好解說文案，配上畫面、配音和字幕，自動合成短影片。', musicLead: '寫歌詞或讓 AI 寫，選好曲風和人聲，一鍵生成完整歌曲；再配上封面，匯出音訊或影片。',
         novelTags: 'AI 拆鏡 · 素材庫 · 無限畫布', imageTags: '批次上傳 · 動作描述 · 圖生影片', topicTags: 'AI 文案 · 配音字幕 · 一鍵合成', musicTags: 'AI 寫詞 · 曲風人聲 · 一鍵成曲',
         start: '開始創作', projects: '{count} 個專案', empty: '還沒有專案', newProject: '新增',
-        statusAll: '全部', statusDraft: '草稿', statusProgress: '進行中', statusDone: '已完成', statusExported: '已匯出', statusFailed: '失敗待處理', statusEmpty: '這裡還沒有專案', failedBadge: '{count} 個失敗', updated: '{time} 更新' },
+        statusAll: '全部', statusDraft: '草稿', statusProgress: '進行中', statusDone: '已完成', statusExported: '已匯出', statusFailed: '失敗待處理', statusEmpty: '這裡還沒有專案', failedBadge: '{count} 個失敗', updated: '{time} 更新', deletedNotice: '該資料夾專案已被刪除' },
     en: { novel: 'Novel to comic', image: 'Picture to video', topic: 'Topic to video', music: 'Music',
         novelLead: 'Adapt a story on the canvas, plan shots, reuse character references, generate images and video, then edit the shot sequence.',
         imageLead: 'Upload one or more pictures, describe the motion in a sentence and let a video model bring them to life; then edit the film.',
         topicLead: 'Give a topic or keywords: AI writes the narration and adds pictures, voice-over and subtitles, then assembles a short video.', musicLead: 'Write lyrics or let AI write them, pick the sound and voice, and make a full song in one go; add a cover and export audio or video.',
         novelTags: 'AI shot planning · Asset library · Infinite canvas', imageTags: 'Batch upload · Motion prompts · Image to video', topicTags: 'AI script · Voice & subtitles · One click', musicTags: 'AI lyrics · Sound & voice · One-click song',
         start: 'Start creating', projects: '{count} projects', empty: 'No projects yet', newProject: 'New',
-        statusAll: 'All', statusDraft: 'Drafts', statusProgress: 'In progress', statusDone: 'Completed', statusExported: 'Exported', statusFailed: 'Needs attention', statusEmpty: 'Nothing here yet', failedBadge: '{count} failed', updated: 'Updated {time}' },
+        statusAll: 'All', statusDraft: 'Drafts', statusProgress: 'In progress', statusDone: 'Completed', statusExported: 'Exported', statusFailed: 'Needs attention', statusEmpty: 'Nothing here yet', failedBadge: '{count} failed', updated: 'Updated {time}', deletedNotice: 'This project folder or its generated media has been deleted' },
     ja: { novel: '小説からアニメ漫画', image: '画像から動画', topic: 'テーマから動画', music: '音楽制作',
         novelLead: 'キャンバスで物語を脚色し、ショットを構成。人物の参照画像を再利用して画像や動画を生成し、順番に編集します。',
         imageLead: '画像をアップロードして動きを一文で書くと、動画モデルが画像を動かします。あとは編集して完成。',
         topicLead: 'テーマやキーワードを入れると、AI がナレーション原稿を書き、画像・音声・字幕を付けて短い動画にします。', musicLead: '歌詞を書くか AI に書かせ、曲調と歌声を選んでフルコーラスを生成。カバーを付けて音声や動画で書き出せます。',
         novelTags: 'AI ショット構成 · 素材ライブラリ · 無限キャンバス', imageTags: '一括アップロード · 動きの指示 · 画像から動画', topicTags: 'AI 原稿 · 音声と字幕 · ワンクリック', musicTags: 'AI 作詞 · 曲調と歌声 · ワンクリックで曲',
         start: '作成を始める', projects: '{count} 件', empty: 'まだありません', newProject: '新規',
-        statusAll: 'すべて', statusDraft: '下書き', statusProgress: '進行中', statusDone: '完成', statusExported: '書き出し済み', statusFailed: '要対応', statusEmpty: 'まだありません', failedBadge: '失敗 {count} 件', updated: '{time} 更新' },
+        statusAll: 'すべて', statusDraft: '下書き', statusProgress: '進行中', statusDone: '完成', statusExported: '書き出し済み', statusFailed: '要対応', statusEmpty: 'まだありません', failedBadge: '失敗 {count} 件', updated: '{time} 更新', deletedNotice: 'このフォルダのプロジェクトは削除されました' },
     ko: { novel: '소설로 만화 영상', image: '이미지로 영상', topic: '주제로 영상', music: '음악 제작',
         novelLead: '캔버스에서 이야기를 각색하고 샷을 구성하세요. 인물 참조 이미지를 재사용해 이미지와 영상을 생성한 뒤 순서대로 편집합니다.',
         imageLead: '이미지를 올리고 동작을 한 문장으로 적으면 영상 모델이 이미지를 움직입니다. 편집해서 완성하세요.',
         topicLead: '주제나 키워드를 입력하면 AI가 내레이션 원고를 쓰고 이미지·음성·자막을 붙여 짧은 영상을 만듭니다.', musicLead: '가사를 쓰거나 AI에게 맡기고 장르와 보컬을 골라 한 번에 전체 곡을 만듭니다. 커버를 붙여 오디오나 영상으로 내보내세요.',
         novelTags: 'AI 샷 구성 · 소재 라이브러리 · 무한 캔버스', imageTags: '일괄 업로드 · 동작 설명 · 이미지→영상', topicTags: 'AI 원고 · 음성과 자막 · 원클릭', musicTags: 'AI 작사 · 장르와 보컬 · 원클릭 작곡',
         start: '만들기 시작', projects: '프로젝트 {count}개', empty: '아직 프로젝트가 없습니다', newProject: '새로 만들기',
-        statusAll: '전체', statusDraft: '초안', statusProgress: '진행 중', statusDone: '완료', statusExported: '내보냄', statusFailed: '처리 필요', statusEmpty: '아직 없습니다', failedBadge: '실패 {count}건', updated: '{time} 업데이트' },
+        statusAll: '전체', statusDraft: '초안', statusProgress: '진행 중', statusDone: '완료', statusExported: '내보냄', statusFailed: '처리 필요', statusEmpty: '아직 없습니다', failedBadge: '실패 {count}건', updated: '{time} 업데이트', deletedNotice: '이 폴더 프로젝트가 삭제되었습니다' },
     es: { novel: 'Novela a cómic', image: 'Imagen a vídeo', topic: 'Tema a vídeo', music: 'Música',
         novelLead: 'Adapta una historia en el lienzo, organiza los planos, reutiliza referencias de personajes y genera imágenes y vídeo para editar la secuencia.',
         imageLead: 'Sube una o varias imágenes, describe el movimiento en una frase y un modelo de vídeo les da vida; luego edita la película.',
         topicLead: 'Escribe un tema o palabras clave: la IA redacta la narración, añade imágenes, voz y subtítulos y monta un vídeo corto.', musicLead: 'Escribe la letra o deja que la IA la escriba, elige sonido y voz y crea una canción completa; añade portada y exporta audio o vídeo.',
         novelTags: 'Planos con IA · Biblioteca · Lienzo infinito', imageTags: 'Subida en lote · Movimiento · Imagen a vídeo', topicTags: 'Guion IA · Voz y subtítulos · Un clic', musicTags: 'Letra con IA · Sonido y voz · Canción en un clic',
         start: 'Empezar', projects: '{count} proyectos', empty: 'Aún no hay proyectos', newProject: 'Nuevo',
-        statusAll: 'Todos', statusDraft: 'Borradores', statusProgress: 'En curso', statusDone: 'Completados', statusExported: 'Exportados', statusFailed: 'Requieren atención', statusEmpty: 'Aún no hay nada aquí', failedBadge: '{count} fallidos', updated: 'Actualizado {time}' },
+        statusAll: 'Todos', statusDraft: 'Borradores', statusProgress: 'En curso', statusDone: 'Completados', statusExported: 'Exportados', statusFailed: 'Requieren atención', statusEmpty: 'Aún no hay nada aquí', failedBadge: '{count} fallidos', updated: 'Actualizado {time}', deletedNotice: 'La carpeta de este proyecto ha sido eliminada' },
     fr: { novel: 'Roman en BD animée', image: 'Image en vidéo', topic: 'Sujet en vidéo', music: 'Musique',
         novelLead: 'Adaptez un récit sur le canevas, organisez les plans, réutilisez les références des personnages, puis générez et montez les images et vidéos.',
         imageLead: 'Importez une ou plusieurs images, décrivez le mouvement en une phrase et un modèle vidéo les anime ; puis montez le film.',
         topicLead: 'Donnez un sujet ou des mots-clés : l’IA écrit la narration, ajoute images, voix off et sous-titres et assemble une courte vidéo.', musicLead: 'Écrivez les paroles ou laissez l’IA les écrire, choisissez le son et la voix, et créez une chanson complète ; ajoutez une pochette et exportez en audio ou en vidéo.',
         novelTags: 'Plans avec IA · Bibliothèque · Canevas infini', imageTags: 'Import en lot · Mouvement · Image en vidéo', topicTags: 'Script IA · Voix et sous-titres · En un clic', musicTags: 'Paroles IA · Son et voix · Chanson en un clic',
         start: 'Commencer', projects: '{count} projets', empty: 'Aucun projet', newProject: 'Nouveau',
-        statusAll: 'Tous', statusDraft: 'Brouillons', statusProgress: 'En cours', statusDone: 'Terminés', statusExported: 'Exportés', statusFailed: 'À traiter', statusEmpty: 'Rien ici pour l’instant', failedBadge: '{count} en échec', updated: 'Mis à jour {time}' },
+        statusAll: 'Tous', statusDraft: 'Brouillons', statusProgress: 'En cours', statusDone: 'Terminés', statusExported: 'Exportés', statusFailed: 'À traiter', statusEmpty: 'Rien ici pour l’instant', failedBadge: '{count} en échec', updated: 'Mis à jour {time}', deletedNotice: 'Le dossier de ce projet a été supprimé' },
     de: { novel: 'Roman zum Comic', image: 'Bild zu Video', topic: 'Thema zu Video', music: 'Musik',
         novelLead: 'Geschichten auf der Leinwand adaptieren, Einstellungen planen, Figurenreferenzen wiederverwenden und Bilder sowie Videos als Sequenz schneiden.',
         imageLead: 'Bilder hochladen, die Bewegung in einem Satz beschreiben – ein Videomodell erweckt sie zum Leben; danach schneiden.',
         topicLead: 'Thema oder Stichwörter angeben: Die KI schreibt den Sprechertext, ergänzt Bilder, Stimme und Untertitel und schneidet ein kurzes Video.', musicLead: 'Songtext selbst schreiben oder von der KI schreiben lassen, Klang und Stimme wählen und einen ganzen Song erstellen; Cover dazu, als Audio oder Video exportieren.',
         novelTags: 'KI-Einstellungen · Mediathek · Unendliche Leinwand', imageTags: 'Stapel-Upload · Bewegung · Bild zu Video', topicTags: 'KI-Text · Stimme & Untertitel · Ein Klick', musicTags: 'KI-Text · Klang & Stimme · Song per Klick',
         start: 'Loslegen', projects: '{count} Projekte', empty: 'Noch keine Projekte', newProject: 'Neu',
-        statusAll: 'Alle', statusDraft: 'Entwürfe', statusProgress: 'In Arbeit', statusDone: 'Fertig', statusExported: 'Exportiert', statusFailed: 'Fehler offen', statusEmpty: 'Noch nichts hier', failedBadge: '{count} fehlgeschlagen', updated: 'Aktualisiert {time}' },
+        statusAll: 'Alle', statusDraft: 'Entwürfe', statusProgress: 'In Arbeit', statusDone: 'Fertig', statusExported: 'Exportiert', statusFailed: 'Fehler offen', statusEmpty: 'Noch nichts hier', failedBadge: '{count} fehlgeschlagen', updated: 'Aktualisiert {time}', deletedNotice: 'Dieser Projektordner wurde gelöscht' },
     'pt-BR': { novel: 'Romance em quadrinhos', image: 'Imagem em vídeo', topic: 'Tema em vídeo', music: 'Música',
         novelLead: 'Adapte uma história na tela, organize os planos, reutilize referências de personagens e gere imagens e vídeos para editar a sequência.',
         imageLead: 'Envie uma ou mais imagens, descreva o movimento em uma frase e um modelo de vídeo dá vida a elas; depois edite o filme.',
         topicLead: 'Informe um tema ou palavras-chave: a IA escreve a narração, adiciona imagens, voz e legendas e monta um vídeo curto.', musicLead: 'Escreva a letra ou deixe a IA escrever, escolha o som e a voz e crie uma música completa; adicione uma capa e exporte em áudio ou vídeo.',
         novelTags: 'Planos com IA · Biblioteca · Tela infinita', imageTags: 'Envio em lote · Movimento · Imagem em vídeo', topicTags: 'Roteiro IA · Voz e legendas · Um clique', musicTags: 'Letra com IA · Som e voz · Música em um clique',
         start: 'Começar', projects: '{count} projetos', empty: 'Nenhum projeto ainda', newProject: 'Novo',
-        statusAll: 'Todos', statusDraft: 'Rascunhos', statusProgress: 'Em andamento', statusDone: 'Concluídos', statusExported: 'Exportados', statusFailed: 'Precisam de atenção', statusEmpty: 'Nada aqui ainda', failedBadge: '{count} com falha', updated: 'Atualizado {time}' },
+        statusAll: 'Todos', statusDraft: 'Rascunhos', statusProgress: 'Em andamento', statusDone: 'Concluídos', statusExported: 'Exportados', statusFailed: 'Precisam de atenção', statusEmpty: 'Nada aqui ainda', failedBadge: '{count} com falha', updated: 'Atualizado {time}', deletedNotice: 'A pasta deste projeto foi excluída' },
     ru: { novel: 'Роман в комикс', image: 'Изображение в видео', topic: 'Тема в видео', music: 'Музыка',
         novelLead: 'Адаптируйте историю на холсте, планируйте кадры, используйте референсы персонажей, создавайте изображения и видео и монтируйте последовательность.',
         imageLead: 'Загрузите изображения, опишите движение одной фразой — видеомодель оживит их; затем смонтируйте ролик.',
         topicLead: 'Укажите тему или ключевые слова: ИИ напишет закадровый текст, добавит кадры, озвучку и субтитры и соберёт короткое видео.', musicLead: 'Напишите текст сами или поручите ИИ, выберите звучание и голос и создайте целую песню; добавьте обложку и экспортируйте аудио или видео.',
         novelTags: 'Кадры с ИИ · Библиотека · Бесконечный холст', imageTags: 'Пакетная загрузка · Движение · Изображение в видео', topicTags: 'Текст ИИ · Озвучка и субтитры · В один клик', musicTags: 'Текст от ИИ · Звучание и голос · Песня в один клик',
         start: 'Начать', projects: 'Проектов: {count}', empty: 'Проектов пока нет', newProject: 'Новый',
-        statusAll: 'Все', statusDraft: 'Черновики', statusProgress: 'В работе', statusDone: 'Готовые', statusExported: 'Экспортированные', statusFailed: 'Требуют внимания', statusEmpty: 'Здесь пока пусто', failedBadge: 'Ошибок: {count}', updated: 'Обновлено {time}' },
+        statusAll: 'Все', statusDraft: 'Черновики', statusProgress: 'В работе', statusDone: 'Готовые', statusExported: 'Экспортированные', statusFailed: 'Требуют внимания', statusEmpty: 'Здесь пока пусто', failedBadge: 'Ошибок: {count}', updated: 'Обновлено {time}', deletedNotice: 'Папка этого проекта была удалена' },
     ar: { novel: 'رواية إلى قصة مصورة', image: 'صورة إلى فيديو', topic: 'موضوع إلى فيديو', music: 'الموسيقى',
         novelLead: 'حوّل القصة على اللوحة، ورتّب اللقطات، وأعد استخدام صور الشخصيات المرجعية، ثم أنشئ الصور والفيديو وحرّر تسلسل اللقطات.',
         imageLead: 'ارفع صورة أو أكثر وصف الحركة بجملة واحدة ليحرّكها نموذج فيديو، ثم حرّر الفيلم.',
         topicLead: 'اكتب موضوعًا أو كلمات مفتاحية: يكتب الذكاء الاصطناعي التعليق ويضيف الصور والصوت والترجمة ويجمع فيديو قصيرًا.', musicLead: 'اكتب الكلمات أو دع الذكاء الاصطناعي يكتبها، واختر الأسلوب والصوت لتُنشئ أغنية كاملة، ثم أضف غلافًا وصدّرها صوتًا أو فيديو.',
         novelTags: 'تخطيط اللقطات · مكتبة المواد · لوحة غير محدودة', imageTags: 'رفع دفعة · وصف الحركة · صورة إلى فيديو', topicTags: 'نص بالذكاء الاصطناعي · صوت وترجمة · بنقرة', musicTags: 'كلمات بالذكاء الاصطناعي · الأسلوب والصوت · أغنية بنقرة',
         start: 'ابدأ الإنشاء', projects: '{count} مشاريع', empty: 'لا توجد مشاريع بعد', newProject: 'جديد',
-        statusAll: 'الكل', statusDraft: 'مسودات', statusProgress: 'قيد التنفيذ', statusDone: 'مكتملة', statusExported: 'مُصدَّرة', statusFailed: 'تحتاج معالجة', statusEmpty: 'لا شيء هنا بعد', failedBadge: '{count} فشل', updated: 'حُدِّث {time}' },
+        statusAll: 'الكل', statusDraft: 'مسودات', statusProgress: 'قيد التنفيذ', statusDone: 'مكتملة', statusExported: 'مُصدَّرة', statusFailed: 'تحتاج معالجة', statusEmpty: 'لا شيء هنا بعد', failedBadge: '{count} فشل', updated: 'حُدِّث {time}', deletedNotice: 'تم حذف مجلد هذا المشروع' },
     hi: { novel: 'उपन्यास से कॉमिक', image: 'चित्र से वीडियो', topic: 'विषय से वीडियो', music: 'संगीत',
         novelLead: 'कैनवास पर कहानी रूपांतरित करें, शॉट बनाएँ, किरदारों की संदर्भ तस्वीरें दोबारा इस्तेमाल करें और चित्र व वीडियो बनाकर क्रम में संपादित करें।',
         imageLead: 'एक या अधिक चित्र अपलोड करें, एक वाक्य में गति लिखें और वीडियो मॉडल उन्हें जीवंत कर देगा; फिर फ़िल्म संपादित करें।',
         topicLead: 'कोई विषय या कीवर्ड दें: AI कथन लिखता है, चित्र, आवाज़ और उपशीर्षक जोड़ता है और छोटा वीडियो बनाता है।', musicLead: 'बोल ख़ुद लिखें या AI से लिखवाएँ, ध्वनि और आवाज़ चुनें और एक क्लिक में पूरा गीत बनाएँ; कवर जोड़कर ऑडियो या वीडियो निर्यात करें।',
         novelTags: 'AI शॉट योजना · सामग्री लाइब्रेरी · अनंत कैनवास', imageTags: 'बैच अपलोड · गति विवरण · चित्र से वीडियो', topicTags: 'AI स्क्रिप्ट · आवाज़ व उपशीर्षक · एक क्लिक', musicTags: 'AI बोल · ध्वनि और आवाज़ · एक क्लिक में गीत',
         start: 'बनाना शुरू करें', projects: '{count} प्रोजेक्ट', empty: 'अभी कोई प्रोजेक्ट नहीं', newProject: 'नया',
-        statusAll: 'सभी', statusDraft: 'ड्राफ़्ट', statusProgress: 'जारी', statusDone: 'पूरे', statusExported: 'एक्सपोर्ट किए गए', statusFailed: 'ध्यान चाहिए', statusEmpty: 'अभी यहाँ कुछ नहीं', failedBadge: '{count} विफल', updated: '{time} अपडेट' }
+        statusAll: 'सभी', statusDraft: 'ड्राफ़्ट', statusProgress: 'जारी', statusDone: 'पूरे', statusExported: 'एक्सपोर्ट किए गए', statusFailed: 'ध्यान चाहिए', statusEmpty: 'अभी यहाँ कुछ नहीं', failedBadge: '{count} विफल', updated: '{time} अपडेट', deletedNotice: 'इस प्रोजेक्ट का फ़ोल्डर हटा दिया गया है' }
 };
 
 const sheetEn: Readonly<Record<SheetKey, string>> = {
@@ -374,6 +374,8 @@ export function ComicHomeCategories(props: {
     /** Shown instead of counts and projects while the library is still being read. */
     readonly loading?: string;
     readonly disabled?: boolean;
+    /** Project paths whose folder or generated media was found missing on disk; renders inline deleted notice on matching cards across all 4 tabs. */
+    readonly deletedProjectPaths?: ReadonlySet<string>;
     readonly onKind: (kind: ComicProjectKind) => void;
     readonly onStatus: (status: ComicHomeStatus) => void;
     readonly onOpen: (project: ComicHomeProject) => void;
@@ -552,32 +554,44 @@ export function ComicHomeCategories(props: {
                     <b>{t('start')}<i className='codicon codicon-arrow-right' aria-hidden='true'></i></b>
                 </button>
                 : shown.length === 0 ? <p className='nmx-comic-cats-empty'>{t('statusEmpty')}</p>
-                    : <div className='nmx-comic-home-grid' role='list' aria-label={t(props.kind)}>{shown.map(project => <div role='listitem' key={project.path} className='nmx-comic-cats-item'>
-                        {(props.onDelete || props.onRename || props.onDuplicate || props.onOpenFolder) && <button type='button' className='nmx-comic-cats-delete' aria-label={`${h('more')} · ${project.title}`} aria-haspopup='menu' aria-expanded={menu === project.path}
-                            title={h('more')} disabled={props.disabled} onClick={() => setMenu(menu === project.path ? undefined : project.path)}>
-                            <i className='codicon codicon-ellipsis' aria-hidden='true'></i></button>}
-                        {menu === project.path && <div className='nmx-comic-org-menu' role='menu' onKeyDown={event => { if (event.key === 'Escape') setMenu(undefined); }}>
-                            {props.onRename && <button type='button' role='menuitem' onClick={() => { setMenu(undefined); setProblem(undefined); setNaming({ kind: 'renameProject', value: project.title, project }); }}><i className='codicon codicon-edit' aria-hidden='true'></i>{h('rename')}</button>}
-                            {props.onDuplicate && <button type='button' role='menuitem' disabled={busy} onClick={() => { setMenu(undefined); void act(() => props.onDuplicate!(project)); }}><i className='codicon codicon-copy' aria-hidden='true'></i>{h('duplicate')}</button>}
-                            {props.onOpenFolder && <button type='button' role='menuitem' onClick={() => { setMenu(undefined); props.onOpenFolder!(project); }}><i className='codicon codicon-folder-opened' aria-hidden='true'></i>{h('openFolder')}</button>}
-                            {props.onDelete && <button type='button' role='menuitem' className='is-danger' onClick={() => { setMenu(undefined); props.onDelete!(project); }}><i className='codicon codicon-trash' aria-hidden='true'></i>{comicProjectText(props.locale, 'delete')}</button>}
-                        </div>}
-                        <button type='button' className='nmx-comic-home-card nmx-comic-cats-card' title={project.path} onClick={() => props.onOpen(project)}>
-                        <span className={`nmx-comic-home-cover is-${(project.aspectRatio || '16:9').replace(':', 'x')}${project.coverUrl ? ' has-picture' : ''}`}>
-                            {project.coverUrl ? <img src={project.coverUrl} alt='' loading='lazy' draggable={false} />
-                                : <span className='nmx-comic-home-cover-frame'><b data-nmx-literal>{Array.from(project.title || '?')[0]}</b></span>}
-                            <span className='nmx-comic-cats-badges'>
-                                {project.exported && <em className='is-exported'><i className='codicon codicon-check' aria-hidden='true'></i>{t('statusExported')}</em>}
-                                {project.failedJobs > 0 && <em className='is-failed'><i className='codicon codicon-warning' aria-hidden='true'></i>{t('failedBadge', { count: project.failedJobs })}</em>}
-                            </span>
-                            <small data-nmx-literal>{project.aspectRatio}</small>
-                        </span>
-                        <span className='nmx-comic-home-card-copy'>
-                            <strong data-nmx-literal>{project.title}</strong>
-                            <small data-nmx-literal>{project.meta} · {t('updated', { time: project.updated })}</small>
-                            <span className='nmx-comic-home-progress' aria-hidden='true'><i style={{ width: `${project.progress}%` }}></i></span>
-                        </span>
-                    </button></div>)}</div>}
+                    : <div className='nmx-comic-home-grid' role='list' aria-label={t(props.kind)}>{shown.map(project => {
+                        const isDeleted = Boolean(props.deletedProjectPaths?.has(project.path));
+                        return <div role='listitem' key={project.path} className={`nmx-comic-cats-item${isDeleted ? ' is-deleted' : ''}`}>
+                            {isDeleted && props.onDelete && <button type='button' className='nmx-comic-cats-remove-deleted is-danger'
+                                aria-label={`${comicProjectText(props.locale, 'removeFromList')} · ${project.title}`}
+                                title={comicProjectText(props.locale, 'removeFromList')} disabled={props.disabled}
+                                onClick={event => { event.stopPropagation(); props.onDelete!(project); }}>
+                                <i className='codicon codicon-trash' aria-hidden='true'></i></button>}
+                            {(props.onDelete || props.onRename || props.onDuplicate || props.onOpenFolder) && <button type='button' className='nmx-comic-cats-delete' aria-label={`${h('more')} · ${project.title}`} aria-haspopup='menu' aria-expanded={menu === project.path}
+                                title={h('more')} disabled={props.disabled} onClick={() => setMenu(menu === project.path ? undefined : project.path)}>
+                                <i className='codicon codicon-ellipsis' aria-hidden='true'></i></button>}
+                            {menu === project.path && <div className='nmx-comic-org-menu' role='menu' onKeyDown={event => { if (event.key === 'Escape') setMenu(undefined); }}>
+                                {props.onRename && <button type='button' role='menuitem' onClick={() => { setMenu(undefined); setProblem(undefined); setNaming({ kind: 'renameProject', value: project.title, project }); }}><i className='codicon codicon-edit' aria-hidden='true'></i>{h('rename')}</button>}
+                                {props.onDuplicate && <button type='button' role='menuitem' disabled={busy} onClick={() => { setMenu(undefined); void act(() => props.onDuplicate!(project)); }}><i className='codicon codicon-copy' aria-hidden='true'></i>{h('duplicate')}</button>}
+                                {props.onOpenFolder && <button type='button' role='menuitem' onClick={() => { setMenu(undefined); props.onOpenFolder!(project); }}><i className='codicon codicon-folder-opened' aria-hidden='true'></i>{h('openFolder')}</button>}
+                                {props.onDelete && <button type='button' role='menuitem' className='is-danger' onClick={() => { setMenu(undefined); props.onDelete!(project); }}><i className='codicon codicon-trash' aria-hidden='true'></i>{comicProjectText(props.locale, 'delete')}</button>}
+                            </div>}
+                            <button type='button' className={`nmx-comic-home-card nmx-comic-cats-card${isDeleted ? ' is-deleted' : ''}`} title={project.path} onClick={() => props.onOpen(project)}>
+                                <span className={`nmx-comic-home-cover is-${(project.aspectRatio || '16:9').replace(':', 'x')}${project.coverUrl ? ' has-picture' : ''}`}>
+                                    {project.coverUrl ? <img src={project.coverUrl} alt='' loading='lazy' draggable={false} />
+                                        : <span className='nmx-comic-home-cover-frame'><b data-nmx-literal>{Array.from(project.title || '?')[0]}</b></span>}
+                                    <span className='nmx-comic-cats-badges'>
+                                        {project.exported && <em className='is-exported'><i className='codicon codicon-check' aria-hidden='true'></i>{t('statusExported')}</em>}
+                                        {project.failedJobs > 0 && <em className='is-failed'><i className='codicon codicon-warning' aria-hidden='true'></i>{t('failedBadge', { count: project.failedJobs })}</em>}
+                                    </span>
+                                    <small data-nmx-literal>{project.aspectRatio}</small>
+                                </span>
+                                <span className='nmx-comic-home-card-copy'>
+                                    <strong data-nmx-literal>{project.title}</strong>
+                                    {isDeleted && <span className='nmx-comic-card-deleted-notice' role='status'>
+                                        <i className='codicon codicon-warning' aria-hidden='true'></i>
+                                        <span>{t('deletedNotice')}</span>
+                                    </span>}
+                                    <small data-nmx-literal>{project.meta} · {t('updated', { time: project.updated })}</small>
+                                    <span className='nmx-comic-home-progress' aria-hidden='true'><i style={{ width: `${project.progress}%` }}></i></span>
+                                </span>
+                            </button></div>;
+                    })}</div>}
         </div>
     </section>;
 }
@@ -621,7 +635,12 @@ export function ComicImageCreateSheet(props: {
     const [problem, setProblem] = React.useState('');
     const urls = React.useRef<string[]>([]);
     React.useEffect(() => () => { for (const url of urls.current) URL.revokeObjectURL(url); }, []);
-    React.useEffect(() => { if (!props.secondsOptions.includes(seconds) && props.secondsOptions[0]) setSeconds(props.secondsOptions[0]); }, [props.secondsOptions, seconds]);
+    const secondsKey = props.secondsOptions.join(',');
+    React.useEffect(() => {
+        if (props.secondsOptions.length > 0 && !props.secondsOptions.includes(seconds)) {
+            setSeconds(props.secondsOptions[0]);
+        }
+    }, [secondsKey, seconds]);
     React.useEffect(() => {
         if (props.busy) return;
         const onKeyDown = (event: KeyboardEvent): void => {

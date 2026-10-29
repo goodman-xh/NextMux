@@ -1,3 +1,5 @@
+@import './nextmux-comic-studio-modals.css';
+
 /*
  * 漫剧对话 — the comic sidebar's project folders and conversations, the chat surface (thread, composer with
  * modes, results), its right-click menu, the materials drawer and the 剪辑 window lead. The composer card
@@ -200,6 +202,7 @@
 .nmx-shell .nmx-comic-chat-dock > .nmx-composer-wrap { width: min(760px, calc(100% - 48px)); }
 .nmx-shell .nmx-comic-chat-modes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 8px; }
 .nmx-shell .nmx-comic-chat-modes > [role='tablist'] { display: flex; flex-wrap: wrap; gap: 4px; }
+.nmx-shell .nmx-comic-chat-mode-params { margin-inline-start: auto; display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
 /* The conversation's folder (or 选择文件夹) before the functions, set apart by a thin rule. */
 .nmx-shell .nmx-comic-chat-modes > .nmx-comic-chat-folder { position: relative; flex: none; max-width: 240px; height: 28px; margin: 0 9px 0 0; }
 .nmx-shell .nmx-comic-chat-modes > .nmx-comic-chat-folder::after { content: ''; position: absolute; top: 6px; bottom: 6px; inset-inline-end: -9px; width: 1px; background: var(--nmx-border); }
@@ -213,13 +216,32 @@
 .nmx-shell .nmx-comic-chat-modes > [role='tablist'] > button:hover:not(:disabled) { color: var(--nmx-text); }
 .nmx-shell .nmx-comic-chat-modes > [role='tablist'] > button.is-active { border-color: color-mix(in srgb, var(--mode-a) 55%, var(--nmx-border)); color: var(--nmx-text); background: color-mix(in srgb, var(--mode-a) 12%, var(--nmx-panel)); font-weight: 600; }
 .nmx-shell .nmx-comic-chat-modes > [role='tablist'] > button.is-active > .codicon { color: var(--mode-a); }
-.nmx-shell .nmx-comic-chat-dock .nmx-composer > div:last-child { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.nmx-shell .nmx-comic-chat-dock .nmx-composer > div:last-child { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; min-width: 0; }
+.nmx-shell .nmx-comic-chat-dock .nmx-composer-spacer { flex: 1 1 auto; min-width: 4px; }
 .nmx-shell .nmx-comic-chat-dock .nmx-composer textarea { field-sizing: content; max-height: 220px; }
-.nmx-shell .nmx-comic-chat-chip { position: relative; display: inline-flex; align-items: center; height: 28px; border: 1px solid var(--nmx-border); border-radius: 8px; background: transparent; }
+.nmx-shell .nmx-comic-chat-chip { position: relative; display: inline-flex; align-items: center; height: 28px; box-sizing: border-box; border: 1px solid var(--nmx-border); border-radius: 8px; background: transparent; }
 .nmx-shell .nmx-comic-chat-chip > select { height: 100%; margin: 0; padding: 0 22px 0 9px; border: 0; color: var(--nmx-text); background: transparent; font-size: 12px; cursor: pointer; appearance: none; -webkit-appearance: none; }
 .nmx-shell .nmx-comic-chat-chip > select:focus-visible { outline: 2px solid color-mix(in srgb, var(--nmx-accent) 55%, transparent); outline-offset: 1px; border-radius: 7px; }
 .nmx-shell .nmx-comic-chat-chip > .codicon { position: absolute; inset-inline-end: 6px; color: var(--nmx-muted); font-size: 12px; pointer-events: none; }
 .nmx-shell .nmx-comic-chat-chip > select option { color: var(--nmx-text); background: var(--nmx-panel); }
+.nmx-shell .nmx-comic-chat-mode-params .nmx-comic-chat-chip {
+    height: 28px; border-radius: 999px; background: color-mix(in srgb, var(--nmx-panel) 72%, transparent);
+    transition: border-color 140ms ease, background-color 140ms ease;
+}
+.nmx-shell .nmx-comic-chat-mode-params .nmx-comic-chat-chip:hover {
+    border-color: color-mix(in srgb, var(--nmx-accent) 45%, var(--nmx-border));
+    background: color-mix(in srgb, var(--nmx-panel-2) 82%, transparent);
+}
+.nmx-shell .nmx-comic-chat-mode-params .nmx-comic-chat-chip:has(> select:focus-visible) {
+    border-color: color-mix(in srgb, var(--nmx-accent) 55%, var(--nmx-border));
+}
+.nmx-shell .nmx-comic-chat-mode-params .nmx-comic-chat-chip > select {
+    padding-block: 0; padding-inline: 11px 24px; border-radius: 999px; background: transparent !important; line-height: 26px;
+}
+.nmx-shell .nmx-comic-chat-mode-params .nmx-comic-chat-chip > select:focus-visible { border-radius: 999px; }
+.nmx-shell .nmx-comic-chat-mode-params .nmx-comic-chat-chip > .codicon { inset-inline-end: 8px; }
+.nmx-shell.nmx-theme-light .nmx-comic-chat-mode-params .nmx-comic-chat-chip { background: #fff; }
+.nmx-shell.nmx-theme-light .nmx-comic-chat-mode-params .nmx-comic-chat-chip:hover { background: #f6f4f5; }
 .nmx-shell .nmx-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .nmx-shell :is(.nmx-comic-chat-add, .nmx-comic-chat-pickers) { position: relative; display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
 .nmx-shell .nmx-comic-chat-pickers > button { max-width: 200px; }
@@ -333,21 +355,14 @@
 /* ── Composer: folder chip on top-left (as in coding), 推荐模型 switch, relay/model drawers sliding out to its left ── */
 .nmx-shell .nmx-comic-chat-dock .nmx-comic-chat-refs { align-items: flex-start; }
 .nmx-shell .nmx-comic-chat-dock .nmx-comic-chat-refs > :is(.nmx-composer-project-chip, .nmx-composer-project-select) { align-self: center; }
-.nmx-shell .nmx-comic-chat-pickers { gap: 6px; }
-.nmx-shell .nmx-comic-chat-drawers {
-    display: inline-flex; align-items: center; gap: 4px; max-width: 0; overflow: hidden; opacity: 0; transform: translateX(14px);
-    transition: max-width 260ms cubic-bezier(.2, .8, .2, 1), opacity 180ms ease, transform 260ms cubic-bezier(.2, .8, .2, 1);
-}
-.nmx-shell .nmx-comic-chat-pickers.is-open > .nmx-comic-chat-drawers { max-width: 440px; opacity: 1; transform: none; }
-.nmx-shell .nmx-comic-chat-drawers > button { max-width: 150px; flex: none; }
-/* With 推荐模型 off the source and model buttons fill the row: they give way first, and the microphone and send
-   buttons stay at the right end even when the row wraps. */
-.nmx-shell .nmx-comic-chat-dock .nmx-comic-chat-pickers { flex: 0 1 auto; }
-.nmx-shell .nmx-comic-chat-dock .nmx-mic-button { margin-inline-start: auto; }
-.nmx-shell .nmx-comic-chat-drawers > button > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.nmx-shell .nmx-comic-chat-drawers > button > small { padding: 0 5px; border-radius: 8px; color: var(--nmx-muted); background: var(--nmx-panel-2); font-size: 10.5px; }
-[dir='rtl'] .nmx-shell .nmx-comic-chat-drawers { transform: translateX(-14px); }
-@media (prefers-reduced-motion: reduce) { .nmx-shell .nmx-comic-chat-drawers { transition: none; } }
+.nmx-shell .nmx-comic-chat-dock .nmx-comic-chat-pickers { display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 0; gap: 6px; }
+.nmx-shell .nmx-comic-chat-drawers { display: inline-flex; align-items: center; flex: 0 1 auto; min-width: 0; gap: 4px; max-width: none; overflow: visible; opacity: 1; transform: none; }
+.nmx-shell .nmx-comic-chat-drawers > button { flex: 0 1 auto; min-width: 64px; max-width: 180px; overflow: hidden; }
+.nmx-shell .nmx-comic-chat-drawers > button > .codicon { flex: none; }
+.nmx-shell .nmx-comic-chat-drawers > button > span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell .nmx-comic-chat-drawers > button > small { flex: none; padding: 0 5px; border-radius: 8px; color: var(--nmx-muted); background: var(--nmx-panel-2); font-size: 10.5px; }
+.nmx-shell .nmx-comic-chat-dock :is(.nmx-comic-chat-add, .nmx-mic-button, .nmx-send-button) { flex: none; }
+.nmx-shell .nmx-comic-chat-dock .nmx-mic-button { margin-inline-start: 0; }
 .nmx-shell .nmx-comic-chat-recommend {
     display: inline-flex; align-items: center; gap: 6px; height: 28px; margin: 0; padding: 0 5px 0 9px; border: 1px solid var(--nmx-border); border-radius: 999px;
     color: var(--nmx-muted); background: transparent; font-size: 12px; white-space: nowrap; cursor: pointer;
@@ -509,4 +524,90 @@
 }
 .nmx-shell .nmx-desk.is-chat-edit {
     grid-template-rows: minmax(0, 1fr);
+}
+
+/* ── Coding-style Comic Model Picker Portal: 3-column mode segmented bar (图片 / 视频 / 音乐) ── */
+:is(.nmx-shell .nmx-model-picker-popover, .nmx-comic-model-portal .nmx-model-picker-popover, .nmx-comic-model-portal) .nmx-comic-picker-mode-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    flex-shrink: 0;
+    gap: 3px;
+    margin: 0 6px 6px;
+    padding: 2px;
+    border: 1px solid var(--nmx-border, rgba(255, 255, 255, .09));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--nmx-bg, #171617) 68%, var(--nmx-panel, #222022));
+}
+:is(.nmx-shell .nmx-model-picker-popover, .nmx-comic-model-portal .nmx-model-picker-popover, .nmx-comic-model-portal) .nmx-comic-picker-mode-tabs > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 0;
+    height: 26px;
+    min-height: 26px;
+    margin: 0;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 6px;
+    color: var(--nmx-muted, #9a9497);
+    background: transparent;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+:is(.nmx-shell .nmx-model-picker-popover, .nmx-comic-model-portal .nmx-model-picker-popover, .nmx-comic-model-portal) .nmx-comic-picker-mode-tabs > button > .codicon {
+    flex: none;
+    font-size: 13px;
+    opacity: .88;
+}
+:is(.nmx-shell .nmx-model-picker-popover, .nmx-comic-model-portal .nmx-model-picker-popover, .nmx-comic-model-portal) .nmx-comic-picker-mode-tabs > button > span {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+:is(.nmx-shell .nmx-model-picker-popover, .nmx-comic-model-portal .nmx-model-picker-popover, .nmx-comic-model-portal) .nmx-comic-picker-mode-tabs > button:hover:not(:disabled):not(.is-active):not([aria-selected='true']) {
+    color: var(--nmx-text, #ece9ea);
+    background: var(--nmx-hover, rgba(255, 255, 255, .05));
+}
+:is(.nmx-shell .nmx-model-picker-popover, .nmx-comic-model-portal .nmx-model-picker-popover, .nmx-comic-model-portal) .nmx-comic-picker-mode-tabs > button:is(.is-active, [aria-selected='true']) {
+    color: var(--nmx-text, #f4f1f2);
+    background: var(--nmx-selected, rgba(255, 255, 255, .11));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 1px 2px rgba(0, 0, 0, .18);
+    font-weight: 600;
+}
+:is(.nmx-shell .nmx-model-picker-popover, .nmx-comic-model-portal .nmx-model-picker-popover, .nmx-comic-model-portal) .nmx-comic-picker-mode-tabs > button:is(.is-active, [aria-selected='true']) > .codicon {
+    color: var(--nmx-picker-accent, var(--nmx-accent, #a38bff));
+    opacity: 1;
+}
+:is(.nmx-theme-light .nmx-model-picker-popover, .nmx-theme-light .nmx-comic-model-portal, .nmx-comic-model-portal.nmx-theme-light) .nmx-comic-picker-mode-tabs {
+    border-color: #dcd7da;
+    background: #f2eff0;
+}
+:is(.nmx-theme-light .nmx-model-picker-popover, .nmx-theme-light .nmx-comic-model-portal, .nmx-comic-model-portal.nmx-theme-light) .nmx-comic-picker-mode-tabs > button {
+    color: #655f63;
+}
+:is(.nmx-theme-light .nmx-model-picker-popover, .nmx-theme-light .nmx-comic-model-portal, .nmx-comic-model-portal.nmx-theme-light) .nmx-comic-picker-mode-tabs > button:hover:not(:disabled):not(.is-active):not([aria-selected='true']) {
+    color: #2c282a;
+    background: rgba(44, 40, 42, .05);
+}
+:is(.nmx-theme-light .nmx-model-picker-popover, .nmx-theme-light .nmx-comic-model-portal, .nmx-comic-model-portal.nmx-theme-light) .nmx-comic-picker-mode-tabs > button:is(.is-active, [aria-selected='true']) {
+    color: #262224;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(40, 32, 36, .1), inset 0 0 0 1px rgba(40, 32, 36, .08);
+}
+:is(.nmx-theme-light .nmx-model-picker-popover, .nmx-theme-light .nmx-comic-model-portal, .nmx-comic-model-portal.nmx-theme-light) .nmx-comic-picker-mode-tabs > button:is(.is-active, [aria-selected='true']) > .codicon {
+    color: var(--nmx-picker-accent, var(--nmx-accent, #6849ef));
+}
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell .nmx-comic-chat-mode-params .nmx-comic-chat-chip,
+    :is(.nmx-shell .nmx-model-picker-popover, .nmx-comic-model-portal .nmx-model-picker-popover, .nmx-comic-model-portal) .nmx-comic-picker-mode-tabs > button {
+        transition: none;
+    }
 }
