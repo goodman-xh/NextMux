@@ -6,6 +6,15 @@ import { assetLibraryOperations, runAssetLibraryOperation } from './nextmux-comi
 import { ImeInput } from './nextmux-ime-field';
 import '../../src/browser/style/nextmux-comic-asset-library.css';
 
+/**
+ * Height (px) of Chromium's native control bar at the bottom of a card video. Videos narrower than 1441px get the
+ * `sizing-small` layout: a 48px button row (play, time, volume, menu) above a 4px timeline with 20px of bottom
+ * padding (third_party/blink/renderer/modules/media_controls/resources/mediaControls.css). Chromium keeps clicks on
+ * that row and the timeline inside the controls; the strip check below is the guard for any click that does reach
+ * the <video> there.
+ */
+const LIBRARY_VIDEO_CONTROL_STRIP=72;
+
 export interface CanvasAssetLibraryDialogProps {
     readonly locale:string;readonly load:()=>Promise<readonly ComicAssetLibraryEntry[]>;
     readonly onUse?:(assetId:string,requestId:string,entry:ComicAssetLibraryEntry)=>Promise<void>;readonly onClose:()=>void;
@@ -45,6 +54,9 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
     const [renaming,setRenaming]=React.useState<{readonly entry:ComicAssetLibraryEntry;readonly value:string}|undefined>();
     const menuRef=React.useRef<HTMLDivElement|null>(null);
     const deletePopoverRef=React.useRef<HTMLDivElement|null>(null);
+    /** What opened the delete confirmation: Cancel and Escape hand focus back to it (or to that card's × when it is gone). */
+    const deleteTriggerRef=React.useRef<HTMLElement|null>(null);
+    const deleteHintId=React.useId();
     const gridRef=React.useRef<HTMLDivElement|null>(null);
     const lightboxVideoRef=React.useRef<HTMLVideoElement|null>(null);
     const lightboxBackdropDownRef=React.useRef(false);
@@ -93,7 +105,7 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
             if(event.key!=='Escape'||event.isComposing||operations.busy)return;
             event.preventDefault();event.stopPropagation();event.stopImmediatePropagation?.();
             if(zoomedEntry)closeZoom();
-            else if(pendingDelete)setPendingDelete(undefined);
+            else if(pendingDelete)closeDeletePopover(true);
             else if(contextMenu)setContextMenu(undefined);
             else if(renaming)setRenaming(undefined);
             else props.onClose();
@@ -136,6 +148,7 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
             if(deletePopoverRef.current&&event.target instanceof Node&&deletePopoverRef.current.contains(event.target))return;
             if(typeof Element!=='undefined'&&event.target instanceof Element&&event.target.closest('[data-library-delete-trigger]'))return;
             markDismissedOnDown();
+            deleteTriggerRef.current=null;
             setPendingDelete(undefined);
         };
         window.addEventListener('pointerdown',onOutsideDown,true);
@@ -160,6 +173,12 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
             setPendingDelete(prev=>prev?{...prev,x:nextX,y:nextY}:undefined);
         }
     },[pendingDelete]);
+    const pendingDeleteId=pendingDelete?.entry.assetId;
+    React.useEffect(()=>{
+        if(!pendingDeleteId||typeof window==='undefined')return;
+        const frame=window.requestAnimationFrame(()=>deletePopoverRef.current?.querySelector<HTMLElement>('.nmx-library-delete-cancel')?.focus({preventScroll:true}));
+        return()=>window.cancelAnimationFrame(frame);
+    },[pendingDeleteId]);
     const resolveMediaUrl=(entry:ComicAssetLibraryEntry|undefined):string|undefined=>{
         if(!entry?.mediaPath)return undefined;
         return playbackUrls[entry.mediaPath]||URI.fromFilePath(entry.mediaPath).toString();
@@ -225,8 +244,21 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
         }
         const x=Math.max(12,Math.min(rawX,vw-256-12));
         const y=Math.max(12,Math.min(rawY,vh-120-12));
+        const active=typeof document!=='undefined'?document.activeElement:null;
+        deleteTriggerRef.current=event.currentTarget instanceof HTMLElement?event.currentTarget:active instanceof HTMLElement&&active!==document.body?active:null;
         setContextMenu(undefined);
         setPendingDelete({entry,x,y});
+    };
+    /** Closes the delete confirmation; Cancel and Escape (restoreFocus) return focus to what opened it. */
+    const closeDeletePopover=(restoreFocus:boolean):void=>{
+        const trigger=deleteTriggerRef.current,entry=pendingDelete?.entry;
+        deleteTriggerRef.current=null;
+        setPendingDelete(undefined);
+        if(!restoreFocus)return;
+        const escape=(value:string):string=>typeof CSS!=='undefined'&&typeof CSS.escape==='function'?CSS.escape(value):value.replace(/["\\]/g,'\\$&');
+        // A context-menu item that opened it is gone with the menu: the card's own × takes the focus instead.
+        const target=trigger?.isConnected?trigger:entry?gridRef.current?.querySelector<HTMLElement>(`[data-library-asset="${escape(entry.assetId)}"] [data-library-delete-trigger]`):null;
+        target?.focus({preventScroll:true});
     };
     const use=async(entry:ComicAssetLibraryEntry):Promise<void>=>{
         if(!props.onUse||props.selectTypes&&!props.selectTypes.includes(entry.assetType))return;
@@ -238,7 +270,7 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
     const mutate=async(entry:ComicAssetLibraryEntry,remove:boolean):Promise<void>=>{
         if(cardLocks.current.has(entry.assetId)||operations.busy===entry.assetId)return;
         cardLocks.current.add(entry.assetId);render();setError('');setFailedUpload(false);
-        try{if(remove){await props.onDelete?.(entry.assetId);if(mounted.current){setEntries(current=>current.filter(item=>item.assetId!==entry.assetId));setPendingDelete(undefined);if(zoomedEntry?.assetId===entry.assetId)closeZoom();}}
+        try{if(remove){await props.onDelete?.(entry.assetId);if(mounted.current){setEntries(current=>current.filter(item=>item.assetId!==entry.assetId));deleteTriggerRef.current=null;setPendingDelete(undefined);if(zoomedEntry?.assetId===entry.assetId)closeZoom();}}
             else{await props.onPin?.(entry.assetId,!entry.pinnedAt);if(mounted.current)setEntries(current=>current.map(item=>item.assetId===entry.assetId?{...item,pinnedAt:entry.pinnedAt?undefined:new Date().toISOString()}:item));}}
         catch(error){if(mounted.current){setFailedUpload(false);setError(error instanceof Error?error.message:String(error));}}
         finally{cardLocks.current.delete(entry.assetId);if(mounted.current)render();}
@@ -293,7 +325,7 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
         if(event.target===event.currentTarget&&!operations.busy)props.onClose();
     }}>
         <section className='nmx-board-tool-dialog nmx-board-asset-library nmx-unified-asset-library' role='dialog' aria-modal='true' aria-label={t('library')}
-            onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();if(zoomedEntry)closeZoom();else if(pendingDelete)setPendingDelete(undefined);else if(contextMenu)setContextMenu(undefined);else if(renaming)setRenaming(undefined);else props.onClose();}}}>
+            onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();if(zoomedEntry)closeZoom();else if(pendingDelete)closeDeletePopover(true);else if(contextMenu)setContextMenu(undefined);else if(renaming)setRenaming(undefined);else props.onClose();}}}>
             <header>
                 <div className='nmx-library-header-title'>
                     <strong>{t('library')}</strong>
@@ -343,7 +375,16 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
                             setContextMenu({entry,x:event.clientX,y:event.clientY});
                         }}>
                         <div className={`nmx-library-preview${isZoomableImage?' is-zoomable-image':isZoomableVideo?' is-zoomable-video':''}`} onClick={isZoomableImage?()=>openZoom(entry):undefined}>
-                            {isZoomableImage?<img src={media} alt='' loading='lazy'/>:isZoomableVideo?<video src={media} controls playsInline preload='metadata' controlsList='nofullscreen noremoteplayback' disablePictureInPicture onClick={event=>{event.preventDefault();event.stopPropagation();openZoom(entry,event.currentTarget);}}/>:entry.assetType==='audio'&&media?<audio src={media} controls preload='metadata'/>:<span>{entry.textContent?.slice(0,160)||t(entry.assetType==='text'?'text':entry.assetType)}</span>}
+                            {isZoomableImage?<img src={media} alt='' loading='lazy'/>:isZoomableVideo?<video src={media} controls playsInline preload='metadata' controlsList='nofullscreen noremoteplayback' disablePictureInPicture onMouseMove={event=>{
+                                // The zoom-in cursor belongs to the frame only; over the control bar the native cursors apply.
+                                const rect=event.currentTarget.getBoundingClientRect(),zone=event.clientY<rect.bottom-LIBRARY_VIDEO_CONTROL_STRIP?'frame':'controls';
+                                if(event.currentTarget.dataset.pointerZone!==zone)event.currentTarget.dataset.pointerZone=zone;
+                            }} onClick={event=>{
+                                // A pointer click on the frame opens the zoom; the bottom strip is the native control bar's.
+                                const rect=event.currentTarget.getBoundingClientRect();
+                                if(!(event.detail>0&&event.clientY<rect.bottom-LIBRARY_VIDEO_CONTROL_STRIP))return;
+                                event.preventDefault();event.stopPropagation();openZoom(entry,event.currentTarget);
+                            }}/>:entry.assetType==='audio'&&media?<audio src={media} controls preload='metadata'/>:<span>{entry.textContent?.slice(0,160)||t(entry.assetType==='text'?'text':entry.assetType)}</span>}
                             {(isZoomableImage||isZoomableVideo)&&<button type='button' className='nmx-library-zoom-btn' title={t('zoomPreview')} aria-label={t('zoomPreview')} onClick={event=>{event.stopPropagation();const siblingVideo=isZoomableVideo?event.currentTarget.parentElement?.querySelector('video'):null;openZoom(entry,siblingVideo);}}><i className='codicon codicon-screen-full' aria-hidden='true'/></button>}
                             <span className={`nmx-library-type-badge is-${isChar?'character':entry.assetType}`}>{badgeLabel}</span>
                         </div>
@@ -377,12 +418,12 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
             })()}
             {pendingDelete&&(()=>{
                 const busy=cardLocks.current.has(pendingDelete.entry.assetId)||operations.busy===pendingDelete.entry.assetId;
-                return <div ref={deletePopoverRef} className='nmx-library-delete-popover' role='alertdialog' aria-label={t('delete')}
+                return <div ref={deletePopoverRef} className='nmx-library-delete-popover' role='alertdialog' aria-label={t('delete')} aria-describedby={deleteHintId}
                     style={{left:pendingDelete.x,top:pendingDelete.y}}
                     onPointerDown={event=>event.stopPropagation()} onMouseDown={event=>event.stopPropagation()} onClick={event=>event.stopPropagation()}>
-                    <p>{t('deleteHint')}</p>
+                    <p id={deleteHintId}>{t('deleteHint')}</p>
                     <div className='nmx-library-delete-popover-actions'>
-                        <button type='button' className='nmx-library-delete-cancel' title={t('cancel')} onClick={()=>setPendingDelete(undefined)}>{t('cancel')}</button>
+                        <button type='button' className='nmx-library-delete-cancel' title={t('cancel')} onClick={()=>closeDeletePopover(true)}>{t('cancel')}</button>
                         <button type='button' className='nmx-library-delete-ok' title={t('confirm')} disabled={busy} onClick={()=>void mutate(pendingDelete.entry,true)}>{t('confirm')}</button>
                     </div>
                 </div>;

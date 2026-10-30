@@ -1,12 +1,12 @@
 name: Sync Verified Desktop Release from R2 (Zero-Downtime Draft-to-Latest)
 
+# The same file lives in the private source tree and in the public goodman-xh/NextMux mirror.
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (e.g. 0.1.3)"
+        description: "Release version without the leading v (e.g. 0.1.8)"
         required: true
-        default: "0.1.7"
         type: string
 
 permissions:
@@ -16,24 +16,54 @@ jobs:
   sync-and-publish:
     name: Stage 4-Arch Installers to Draft Release & Atomically Promote
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
+      - name: Check the version and whether its release is still a draft
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "${VERSION}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "ERROR: version must look like 0.1.8 (got '${VERSION}')"
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          # Looked up by tag (drafts included), never by scanning page 1 of the release list.
+          if DRAFT=$(gh release view "${TAG}" --repo "${REPO}" --json isDraft --jq '.isDraft' 2>/dev/null); then
+            if [ "${DRAFT}" != "true" ]; then
+              # Replacing a published release's assets in place breaks downloads that are under way.
+              echo "::notice::${TAG} is already published; its live assets are left untouched."
+              echo "publish=false" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+          else
+            echo "Creating Draft Release ${TAG} (the current Latest release is not touched)..."
+            gh release create "${TAG}" --repo "${REPO}" --draft --title "NextMux ${TAG}" \
+              --notes "NextMux ${TAG} Desktop Release (macOS Apple Silicon, macOS Intel, Windows x64, Windows ARM64)"
+          fi
+          echo "publish=true" >> "${GITHUB_OUTPUT}"
+
       - name: Download & verify 4-architecture installers from immutable R2 staging
+        if: steps.release.outputs.publish == 'true'
         env:
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           mkdir -p /tmp/r2-release
           cd /tmp/r2-release
-
           BASE="https://nextmux.app/updates/releases/v${VERSION}"
 
           echo "=== Downloading 4-arch installers & SHA256SUMS from immutable R2 staging (${BASE}) ==="
-          curl -fSL --retry 5 -o "NextMux-${VERSION}-arm64.dmg" "${BASE}/macos/arm64/NextMux-${VERSION}-arm64.dmg" &
-          curl -fSL --retry 5 -o "NextMux-${VERSION}-x64.dmg" "${BASE}/macos/x64/NextMux-${VERSION}-x64.dmg" &
-          curl -fSL --retry 5 -o "NextMux-${VERSION}-x64-setup.exe" "${BASE}/windows/x64/NextMux-${VERSION}-x64-setup.exe" &
-          curl -fSL --retry 5 -o "NextMux-${VERSION}-arm64-setup.exe" "${BASE}/windows/arm64/NextMux-${VERSION}-arm64-setup.exe" &
-          wait
+          PIDS=()
+          curl -fSL --retry 5 -o "NextMux-${VERSION}-arm64.dmg" "${BASE}/macos/arm64/NextMux-${VERSION}-arm64.dmg" & PIDS+=($!)
+          curl -fSL --retry 5 -o "NextMux-${VERSION}-x64.dmg" "${BASE}/macos/x64/NextMux-${VERSION}-x64.dmg" & PIDS+=($!)
+          curl -fSL --retry 5 -o "NextMux-${VERSION}-x64-setup.exe" "${BASE}/windows/x64/NextMux-${VERSION}-x64-setup.exe" & PIDS+=($!)
+          curl -fSL --retry 5 -o "NextMux-${VERSION}-arm64-setup.exe" "${BASE}/windows/arm64/NextMux-${VERSION}-arm64-setup.exe" & PIDS+=($!)
+          # A bare `wait` ignores a failed background download: wait for each one so any failure stops the job.
+          for pid in "${PIDS[@]}"; do wait "${pid}"; done
 
           curl -fSL --retry 5 -o "SHA256SUMS-macos-arm64.txt" "${BASE}/macos/arm64/SHA256SUMS-macos-arm64.txt"
           curl -fSL --retry 5 -o "SHA256SUMS-macos-x64.txt" "${BASE}/macos/x64/SHA256SUMS-macos-x64.txt"
@@ -44,11 +74,17 @@ jobs:
           ls -lh /tmp/r2-release
 
           echo "=== Verifying SHA-256 checksums for all 4 installers ==="
-          grep -E "NextMux-${VERSION}-(arm64\.dmg|x64\.dmg|x64-setup\.exe|arm64-setup\.exe)$" SHA256SUMS.txt > /tmp/verify.sha256
+          grep -E "NextMux-${VERSION//./\\.}-(arm64\.dmg|x64\.dmg|x64-setup\.exe|arm64-setup\.exe)$" SHA256SUMS.txt > /tmp/verify.sha256 || true
           cat /tmp/verify.sha256
+          # Each installer needs its own checksum line; a missing line would publish that installer unverified.
+          if [ "$(wc -l < /tmp/verify.sha256 | tr -d ' ')" -ne 4 ]; then
+            echo "ERROR: expected exactly 4 installer checksums in SHA256SUMS"
+            exit 1
+          fi
           sha256sum -c /tmp/verify.sha256
 
-      - name: Upload all assets to Draft Release & atomically publish as Latest
+      - name: Upload all assets to the Draft Release & atomically publish as Latest
+        if: steps.release.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ inputs.version }}
@@ -58,14 +94,7 @@ jobs:
           cd /tmp/r2-release
           TAG="v${VERSION}"
 
-          # Ensure Draft Release exists (without touching current Latest release)
-          REL_ID=$(gh api "repos/${REPO}/releases" --jq "[.[] | select(.tag_name == \"${TAG}\")][0].id // empty")
-          if [ -z "${REL_ID}" ]; then
-            echo "Creating Draft Release ${TAG}..."
-            gh release create "${TAG}" --repo "${REPO}" --draft --title "NextMux ${TAG}" --notes "NextMux ${TAG} Desktop Release (macOS Apple Silicon, macOS Intel, Windows x64, Windows ARM64)"
-          fi
-
-          echo "=== Uploading all 4 architecture installers + SHA256SUMS to Release ${TAG} ==="
+          echo "=== Uploading all 4 architecture installers + SHA256SUMS to Draft Release ${TAG} ==="
           gh release upload "${TAG}" \
             "NextMux-${VERSION}-arm64.dmg" \
             "NextMux-${VERSION}-x64.dmg" \
@@ -78,35 +107,58 @@ jobs:
             "SHA256SUMS.txt" \
             --clobber --repo "${REPO}"
 
-          echo "=== Verifying all 4 installer assets are in 'uploaded' state before promoting Draft to Latest ==="
-          UPLOADED_COUNT=$(gh api "repos/${REPO}/releases" --jq "[.[] | select(.tag_name == \"${TAG}\")][0].assets | map(select(.state == \"uploaded\" and (.name | test(\"\\\\.(dmg|exe)$\")))) | length")
-          echo "Verified uploaded installer count: ${UPLOADED_COUNT}"
-          if [ "${UPLOADED_COUNT}" -lt 4 ]; then
-            echo "ERROR: Expected 4 uploaded installers, found ${UPLOADED_COUNT}"
-            exit 1
-          fi
+          echo "=== Verifying each installer asset is in 'uploaded' state before promoting the draft ==="
+          for name in "NextMux-${VERSION}-arm64.dmg" "NextMux-${VERSION}-x64.dmg" "NextMux-${VERSION}-x64-setup.exe" "NextMux-${VERSION}-arm64-setup.exe"; do
+            STATE=$(gh release view "${TAG}" --repo "${REPO}" --json assets --jq ".assets[] | select(.name == \"${name}\") | .state")
+            if [ "${STATE}" != "uploaded" ]; then
+              echo "ERROR: ${name} is not uploaded (state: ${STATE:-missing})"
+              exit 1
+            fi
+          done
 
           echo "=== Atomically promoting Release ${TAG} from Draft to Latest ==="
           gh release edit "${TAG}" --repo "${REPO}" --draft=false --latest
           echo "ATOMIC_GITHUB_RELEASE_PROMOTED_OK"
 
-      - name: Checkout repository to keep GitHub homepage README download buttons synced
+      - name: Checkout repository to keep README download links in sync
         uses: actions/checkout@v4
         with:
-          ref: main
           fetch-depth: 1
 
-      - name: Sync GitHub homepage README & README.zh-CN download buttons to new release version
+      - name: Point README download links at this release
         env:
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          node scripts/sync-readme-release-version.mjs "${VERSION}"
-          if [ -n "$(git status --porcelain README.md README.zh-CN.md .github/workflows/sync-release-from-r2.yml)" ]; then
+          node -e '
+            const fs = require("node:fs");
+            const version = String(process.env.VERSION || "").trim().replace(/^v/i, "");
+            if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
+              throw new Error(`Invalid release version: "${version}"`);
+            }
+            const badgeVer = version.replace(/-/g, "--");
+            for (const rel of ["README.md", "README.zh-CN.md"]) {
+              if (!fs.existsSync(rel)) continue;
+              const before = fs.readFileSync(rel, "utf8");
+              let next = before
+                .replace(/\[!\[Release\]\(https:\/\/img\.shields\.io\/badge\/Release-v[^)]+-1263db\)\]\(https:\/\/github\.com\/goodman-xh\/NextMux\/releases\/tag\/v[^)]+\)/g,
+                  `[![Release](https://img.shields.io/badge/Release-v${badgeVer}-1263db)](https://github.com/goodman-xh/NextMux/releases/tag/v${version})`)
+                .replace(/^(##\s+(?:Download Installers|客户端下载)\s*[（(]`v)\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(`.*)$/gm, `$1${version}$2`)
+                .replace(/https:\/\/github\.com\/goodman-xh\/NextMux\/releases\/download\/v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\/NextMux-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?-(arm64\.dmg|x64\.dmg|x64-setup\.exe|arm64-setup\.exe)/g,
+                  `https://github.com/goodman-xh/NextMux/releases/download/v${version}/NextMux-${version}-$1`)
+                .replace(/\[`NextMux-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?-(arm64\.dmg|x64\.dmg|x64-setup\.exe|arm64-setup\.exe)`\]/g,
+                  `[\`NextMux-${version}-$1\`]`)
+                .replace(/https:\/\/nextmux\.app\/updates\/releases\/v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\/(macos|windows)\/(arm64|x64)\/NextMux-\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?-(arm64\.dmg|x64\.dmg|x64-setup\.exe|arm64-setup\.exe)/g,
+                  `https://nextmux.app/updates/releases/v${version}/$1/$2/NextMux-${version}-$3`);
+              if (next !== before) fs.writeFileSync(rel, next, "utf8");
+            }
+          '
+          # GITHUB_TOKEN may not push workflow files, so only the READMEs are ever staged.
+          if [ -n "$(git status --porcelain -- README.md README.zh-CN.md)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add README.md README.zh-CN.md .github/workflows/sync-release-from-r2.yml
+            git add README.md README.zh-CN.md
             git commit -m "docs(release): update homepage download buttons to v${VERSION}"
-            git pull --rebase origin main
-            git push origin main
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
           fi

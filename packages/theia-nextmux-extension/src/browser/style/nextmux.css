@@ -15897,6 +15897,14 @@ body.theia-dark .nmx-file-editor-tabs:hover::-webkit-scrollbar-thumb,
     visibility: visible;
 }
 
+/* One explanation at a time: a focused pill's tip yields to the portal tooltip (a column head, dial or row) and to
+   the pill the pointer is on. */
+.nmx-relay-popover[data-metric-tooltip] .nmx-relay-sort button:focus-visible:not(:hover)::after,
+.nmx-relay-sort:hover button:focus-visible:not(:hover)::after {
+    opacity: 0;
+    visibility: hidden;
+}
+
 .nmx-model-picker-relay-view .nmx-relay-sort {
     flex-shrink: 0;
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -21523,11 +21531,11 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     padding-inline-end: 6px;
 }
 .nmx-relay-option-metrics.is-delisted > em[data-relay-delisted] {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
+    /* A block (not flex) container so a long label in a very narrow drawer ends in an ellipsis inside the pill. */
+    display: block;
+    flex: 0 1 auto;
     width: max-content;
+    min-width: 0;
     max-width: 100%;
     min-height: 20px;
     height: auto;
@@ -21540,7 +21548,10 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     font-size: 11px;
     font-style: normal;
     font-weight: 500;
-    line-height: 1.2;
+    line-height: 14px;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 .nmx-theme-light .nmx-relay-option-metrics.is-delisted > em[data-relay-delisted] {

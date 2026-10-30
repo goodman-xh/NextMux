@@ -5,7 +5,7 @@
 **开源 AI 编程、多智能体“臭皮匠模式”、桌面应用/游戏自动化与漫剧多轨视频工作台**
 
 [![License: Apache-2.0 with Commons Clause](https://img.shields.io/badge/License-Apache%202.0%20%2B%20Commons%20Clause-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.1.7-1263db)](https://github.com/goodman-xh/NextMux/releases/tag/v0.1.7)
+[![Release](https://img.shields.io/badge/Release-v0.1.8-1263db)](https://github.com/goodman-xh/NextMux/releases/tag/v0.1.8)
 [![Website](https://img.shields.io/badge/Website-nextmux.app-111111)](https://nextmux.app)
 
 [English](./README.md) | **简体中文**
@@ -103,55 +103,37 @@ https://github.com/user-attachments/assets/a71b55cf-17e3-4dc3-8cbf-5459afc54d77
 
 ---
 
-## 客户端下载（`v0.1.7` 四架构独立构建）
+## 客户端下载（`v0.1.8` 四架构独立构建）
 
 每个发布版本均针对不同操作系统与 CPU 架构独立编译、打包并校验原生二进制边界。您可直接从 **[官网下载页 (nextmux.app/download)](https://nextmux.app/download)** 或 **GitHub Releases** 获取安装包：
 
 | 操作系统 | CPU 架构 | GitHub Release 安装包下载 | 官网高速直链 (`nextmux.app`) |
 | :--- | :--- | :--- | :--- |
-| **macOS** (`12.0+`) | Apple 芯片 (`darwin-arm64`) | [`NextMux-0.1.7-arm64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.7/NextMux-0.1.7-arm64.dmg) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.7/macos/arm64/NextMux-0.1.7-arm64.dmg) |
-| **macOS** (`12.0+`) | Intel 芯片 (`darwin-x64`) | [`NextMux-0.1.7-x64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.7/NextMux-0.1.7-x64.dmg) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.7/macos/x64/NextMux-0.1.7-x64.dmg) |
-| **Windows** (`10 / 11`) | x64 (`win32-x64`) | [`NextMux-0.1.7-x64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.7/NextMux-0.1.7-x64-setup.exe) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.7/windows/x64/NextMux-0.1.7-x64-setup.exe) |
-| **Windows** (`11`) | ARM64 (`win32-arm64`) | [`NextMux-0.1.7-arm64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.7/NextMux-0.1.7-arm64-setup.exe) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.7/windows/arm64/NextMux-0.1.7-arm64-setup.exe) |
+| **macOS** (`12.0+`) | Apple 芯片 (`darwin-arm64`) | [`NextMux-0.1.8-arm64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.8/NextMux-0.1.8-arm64.dmg) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.8/macos/arm64/NextMux-0.1.8-arm64.dmg) |
+| **macOS** (`12.0+`) | Intel 芯片 (`darwin-x64`) | [`NextMux-0.1.8-x64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.8/NextMux-0.1.8-x64.dmg) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.8/macos/x64/NextMux-0.1.8-x64.dmg) |
+| **Windows** (`10 / 11`) | x64 (`win32-x64`) | [`NextMux-0.1.8-x64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.8/NextMux-0.1.8-x64-setup.exe) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.8/windows/x64/NextMux-0.1.8-x64-setup.exe) |
+| **Windows** (`11`) | ARM64 (`win32-arm64`) | [`NextMux-0.1.8-arm64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.8/NextMux-0.1.8-arm64-setup.exe) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.8/windows/arm64/NextMux-0.1.8-arm64-setup.exe) |
 
 > 已安装的桌面端会在后台自动检测 `https://nextmux.app/updates`，当发现新版本时会在左下角账户栏旁显示圆角蓝色 **“更新”** 按钮，支持后台静默下载与一键升级。
 
 ---
 
-## 从源码构建
+## 开源 UI 界面代码结构
 
-### 环境要求
+本仓库对外开源 NextMux 桌面端的**前端 UI 界面组件、工作台交互视图、12 语言界面文案、深浅色样式体系与启动动画视觉资源**；四架构桌面端完整安装包通过 [GitHub Releases](https://github.com/goodman-xh/NextMux/releases) 与 [官网下载页 (nextmux.app/download)](https://nextmux.app/download) 官方构建分发：
 
-- **Node.js** `24.x` (`>= 24.13.0`)
-- **pnpm** `11.x` (`corepack enable`)
-- **Python** `3.11+`
-
-### 本地开发与启动
-
-```bash
-git clone https://github.com/goodman-xh/NextMux.git
-cd NextMux
-pnpm install
-
-# 编译所有工作区包并启动桌面端
-pnpm desktop:build
-pnpm desktop:start
-```
-
-### 四架构独立打包命令
-
-```bash
-# macOS Apple 芯片 (darwin-arm64)
-pnpm desktop:prepare && pnpm --filter @nextmux/desktop dist:mac:arm64
-
-# macOS Intel 芯片 (darwin-x64)
-pnpm desktop:prepare && pnpm --filter @nextmux/desktop dist:mac:x64
-
-# Windows x64 (win32-x64)
-pnpm desktop:prepare && pnpm --filter @nextmux/desktop dist:win:x64
-
-# Windows ARM64 (win32-arm64)
-pnpm desktop:prepare && pnpm --filter @nextmux/desktop dist:win:arm64
+```text
+NextMux/
+├── apps/
+│   └── desktop/
+│       └── splash/                   # 启动画面 WebGL / Canvas 视觉动画与纹理贴图
+├── assets/                           # 品牌标识、实机界面截图与功能演示视频
+└── packages/
+    └── theia-nextmux-extension/
+        └── src/
+            ├── browser/              # 编程主工作台、中转商与模型抽屉、臭皮匠模式、漫剧创作台与 12 语言界面文案
+            │   └── style/            # 深浅色主题设计令牌、组件布局样式表与厂商图标
+            └── styles.d.ts           # 前端视图桥接与静态资源 TypeScript 类型声明
 ```
 
 ---

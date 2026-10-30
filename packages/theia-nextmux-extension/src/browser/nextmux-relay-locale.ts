@@ -2,6 +2,8 @@ import type { NextMuxDesktopLocale } from './nextmux-locale';
 import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
 
 const en = {
+    // Column explanations (the drawer's head and sort tooltips).
+    columnMerchant: "Relays: each relay's name, public code and store introduction", columnQuality: "Quality: smoothed approval after completed requests, (positive votes + 50) ÷ (all votes + 50); starts at 100%", columnAuthenticity: "Authenticity: whether the models a relay actually serves match the official originals", columnLatency: "Latency: recent time to first token (lower is faster)", columnPrice: "Avg. multiplier: a relay's average billing multiplier over official prices, across its multiplier-priced models", columnApiName: "API: name and endpoint of your own API connection", columnFavorite: "Favorites: save relays you use often for quick switching",
     searchSourceModels: 'Search models',
     sourceTabs: 'Route sources', merchantSources: 'Relays', favoriteSources: 'Favorites', myApiSources: 'My APIs', searchSources: 'Search name or ID',
     noMatchingSources: 'No matching sources', noFavorites: 'No favorite relays yet', noMyApis: 'No API connections added',
@@ -23,6 +25,8 @@ type RelayTextKey = keyof typeof en;
 const translations: Record<NextMuxDesktopLocale, Record<RelayTextKey, string>> = {
     en,
     'zh-CN': {
+        // Column explanations (the drawer's head and sort tooltips).
+        columnMerchant: "商家信息：中转商名称、编号与店铺简介", columnQuality: "质量：完成请求后的平滑好评率，（点赞数 + 50）÷（全部评价 + 50），初始为 100%", columnAuthenticity: "真实性：中转商实际提供的模型与官方原版是否一致", columnLatency: "延迟：近期请求的首字响应耗时（越低越快）", columnPrice: "平均倍率：中转商按倍率计价的模型相对官方原价的平均计费倍率", columnApiName: "API 名称：你已添加的自有 API 连接名称与端点", columnFavorite: "收藏：把常用中转商加入收藏，便于快速切换",
         searchSourceModels: '搜索模型',
         sourceTabs: '线路来源', merchantSources: '中转商', favoriteSources: '收藏', myApiSources: '我的 API', searchSources: '搜索名称或 ID',
         noMatchingSources: '没有匹配的来源', noFavorites: '还没有收藏中转商', noMyApis: '尚未添加 API 连接',
@@ -38,6 +42,8 @@ const translations: Record<NextMuxDesktopLocale, Record<RelayTextKey, string>> =
         local: '本机', noRelay: '暂无可用中转商', savedRelayUnavailable: '已保存的直连线路不可用', relaySwitched: '原来的直连线路已删除，已改用 {label}。', openModelCenter: '前往模型中心', addFavorite: '收藏中转商', removeFavorite: '取消收藏'
     },
     'zh-TW': {
+        // Column explanations (the drawer's head and sort tooltips).
+        columnMerchant: "商家資訊：中轉商名稱、編號與店鋪簡介", columnQuality: "品質：完成請求後的平滑好評率，（讚數 + 50）÷（全部評價 + 50），初始為 100%", columnAuthenticity: "真實性：中轉商實際提供的模型與官方原版是否一致", columnLatency: "延遲：近期請求的首字回應耗時（越低越快）", columnPrice: "平均倍率：中轉商按倍率計價的模型相對官方原價的平均計費倍率", columnApiName: "API 名稱：你已新增的自有 API 連線名稱與端點", columnFavorite: "收藏：將常用中轉商加入收藏，方便快速切換",
         searchSourceModels: '搜尋模型',
         sourceTabs: '線路來源', merchantSources: '中轉商', favoriteSources: '收藏', myApiSources: '我的 API', searchSources: '搜尋名稱或 ID',
         noMatchingSources: '沒有符合的來源', noFavorites: '尚未收藏中轉商', noMyApis: '尚未新增 API 連線',
@@ -53,6 +59,8 @@ const translations: Record<NextMuxDesktopLocale, Record<RelayTextKey, string>> =
         local: '本機', noRelay: '目前沒有可用中轉商', savedRelayUnavailable: '已儲存的直連線路無法使用', relaySwitched: '原來的直連線路已刪除，已改用 {label}。', openModelCenter: '前往模型中心', addFavorite: '收藏中轉商', removeFavorite: '取消收藏'
     },
     ja: {
+        // Column explanations (the drawer's head and sort tooltips).
+        columnMerchant: "リレー：各リレーの名前、公開番号、ショップ紹介", columnQuality: "品質：完了したリクエストへの評価（平滑化）。（賛成票 + 50）÷（全投票 + 50）で、初期値は 100%", columnAuthenticity: "真正性：リレーが実際に提供するモデルが公式のオリジナルと一致しているか", columnLatency: "遅延：最近のリクエストで最初のトークンが届くまでの時間（短いほど高速）", columnPrice: "平均倍率：リレーの倍率課金モデルにおける、公式価格に対する平均課金倍率", columnApiName: "API 名：追加した自分の API 接続の名前とエンドポイント", columnFavorite: "お気に入り：よく使うリレーを保存してすばやく切り替え",
         searchSourceModels: 'モデルを検索',
         sourceTabs: 'ルートの接続元', merchantSources: 'リレー', favoriteSources: 'お気に入り', myApiSources: '自分の API', searchSources: '名前または ID を検索',
         noMatchingSources: '一致する接続元はありません', noFavorites: 'お気に入りのリレーはありません', noMyApis: 'API 接続が追加されていません',
@@ -68,6 +76,8 @@ const translations: Record<NextMuxDesktopLocale, Record<RelayTextKey, string>> =
         local: 'ローカル', noRelay: '利用可能なリレーはありません', savedRelayUnavailable: '保存済みの直接ルートは利用できません', relaySwitched: '以前の直接接続は削除されたため、{label} に切り替えました。', openModelCenter: 'モデルセンターを開く', addFavorite: 'お気に入りに追加', removeFavorite: 'お気に入りから削除'
     },
     ko: {
+        // Column explanations (the drawer's head and sort tooltips).
+        columnMerchant: "중계: 각 중계의 이름, 공개 번호, 상점 소개", columnQuality: "품질: 완료된 요청 평가(보정). (추천 수 + 50) ÷ (전체 투표 + 50), 초기값 100%", columnAuthenticity: "진위성: 중계가 실제로 제공하는 모델이 공식 원본과 일치하는지 여부", columnLatency: "지연: 최근 요청에서 첫 토큰까지 걸린 시간(낮을수록 빠름)", columnPrice: "평균 배율: 중계의 배율 과금 모델이 공식 가격 대비 적용하는 평균 배율", columnApiName: "API 이름: 추가한 내 API 연결의 이름과 엔드포인트", columnFavorite: "즐겨찾기: 자주 쓰는 중계를 저장해 빠르게 전환",
         searchSourceModels: '모델 검색',
         sourceTabs: '경로 소스', merchantSources: '중계', favoriteSources: '즐겨찾기', myApiSources: '내 API', searchSources: '이름 또는 ID 검색',
         noMatchingSources: '일치하는 소스가 없습니다', noFavorites: '즐겨찾는 중계가 없습니다', noMyApis: '추가된 API 연결이 없습니다',
@@ -83,6 +93,8 @@ const translations: Record<NextMuxDesktopLocale, Record<RelayTextKey, string>> =
         local: '로컬', noRelay: '사용 가능한 중계가 없습니다', savedRelayUnavailable: '저장된 직접 경로를 사용할 수 없음', relaySwitched: '이전 직접 연결이 삭제되어 {label}(으)로 전환했습니다.', openModelCenter: '모델 센터 열기', addFavorite: '즐겨찾기에 추가', removeFavorite: '즐겨찾기에서 제거'
     },
     es: {
+        // Column explanations (the drawer's head and sort tooltips).
+        columnMerchant: "Intermediarios: nombre, código público y presentación de la tienda de cada intermediario", columnQuality: "Calidad: aprobación suavizada tras solicitudes completadas, (votos positivos + 50) ÷ (todos los votos + 50); empieza en 100 %", columnAuthenticity: "Autenticidad: si los modelos que sirve realmente un intermediario coinciden con los originales oficiales", columnLatency: "Latencia: tiempo reciente hasta el primer token (menos es más rápido)", columnPrice: "Multiplicador medio: multiplicador de cobro medio sobre el precio oficial en los modelos con precio por multiplicador", columnApiName: "API: nombre y endpoint de tu conexión de API propia", columnFavorite: "Favoritos: guarda los intermediarios que más usas para cambiar rápido",
         searchSourceModels: 'Buscar modelos',
         sourceTabs: 'Orígenes de ruta', merchantSources: 'Intermediarios', favoriteSources: 'Favoritos', myApiSources: 'Mis API', searchSources: 'Buscar nombre o ID',
         noMatchingSources: 'No hay orígenes coincidentes', noFavorites: 'Aún no hay intermediarios favoritos', noMyApis: 'No se han añadido conexiones API',
@@ -98,6 +110,8 @@ const translations: Record<NextMuxDesktopLocale, Record<RelayTextKey, string>> =
         local: 'Local', noRelay: 'No hay intermediarios disponibles', savedRelayUnavailable: 'La ruta directa guardada no está disponible', relaySwitched: 'La conexión directa guardada se eliminó; se cambió a {label}.', openModelCenter: 'Abrir centro de modelos', addFavorite: 'Añadir a favoritos', removeFavorite: 'Quitar de favoritos'
     },
     fr: {
+        // Column explanations (the drawer's head and sort tooltips).
+        columnMerchant: "Relais : nom, code public et présentation de la boutique de chaque relais", columnQuality: "Qualité : approbation lissée après requêtes terminées, (votes positifs + 50) ÷ (tous les votes + 50) ; commence à 100 %", columnAuthenticity: "Authenticité : les modèles réellement servis par un relais correspondent-ils aux originaux officiels", columnLatency: "Latence : délai récent avant le premier jeton (plus bas, plus rapide)", columnPrice: "Multiplicateur moyen : multiplicateur de facturation moyen par rapport au prix officiel, sur les modèles facturés au multiplicateur", columnApiName: "API : nom et point de terminaison de votre connexion API", columnFavorite: "Favoris : enregistrez les relais que vous utilisez souvent pour changer rapidement",
         searchSourceModels: 'Rechercher des modèles',
         sourceTabs: 'Sources de routage', merchantSources: 'Relais', favoriteSources: 'Favoris', myApiSources: 'Mes API', searchSources: 'Rechercher un nom ou un ID',
         noMatchingSources: 'Aucune source correspondante', noFavorites: 'Aucun relais favori', noMyApis: 'Aucune connexion API ajoutée',
@@ -113,6 +127,8 @@ const translations: Record<NextMuxDesktopLocale, Record<RelayTextKey, string>> =
         local: 'Local', noRelay: 'Aucun relais disponible', savedRelayUnavailable: 'La route directe enregistrée est indisponible', relaySwitched: 'La connexion directe enregistrée a été supprimée ; passage à {label}.', openModelCenter: 'Ouvrir le centre des modèles', addFavorite: 'Ajouter aux favoris', removeFavorite: 'Retirer des favoris'
     },
     de: {
+        // Column explanations (the drawer's head and sort tooltips).
+        columnMerchant: "Relays: Name, öffentliche Nummer und Shop-Vorstellung jedes Relays", columnQuality: "Qualität: geglättete Zustimmung nach abgeschlossenen Anfragen, (positive Stimmen + 50) ÷ (alle Stimmen + 50); beginnt bei 100 %", columnAuthenticity: "Echtheit: ob die tatsächlich gelieferten Modelle eines Relays den offiziellen Originalen entsprechen", columnLatency: "Latenz: aktuelle Zeit bis zum ersten Token (niedriger ist schneller)", columnPrice: "Ø Multiplikator: durchschnittlicher Abrechnungsmultiplikator gegenüber dem offiziellen Preis bei multiplikatorbasierten Modellen", columnApiName: "API: Name und Endpunkt Ihrer eigenen API-Verbindung", columnFavorite: "Favoriten: häufig genutzte Relays speichern und schnell wechseln",
         searchSourceModels: 'Modelle suchen',
         sourceTabs: 'Routenquellen', merchantSources: 'Relays', favoriteSources: 'Favoriten', myApiSources: 'Meine APIs', searchSources: 'Name oder ID suchen',
         noMatchingSources: 'Keine passende Quelle', noFavorites: 'Noch keine favorisierten Relays', noMyApis: 'Keine API-Verbindungen hinzugefügt',
@@ -128,6 +144,8 @@ const translations: Record<NextMuxDesktopLocale, Record<RelayTextKey, string>> =
         local: 'Lokal', noRelay: 'Derzeit ist kein Relay verfügbar', savedRelayUnavailable: 'Gespeicherte Direktroute nicht verfügbar', relaySwitched: 'Die gespeicherte Direktverbindung wurde entfernt; gewechselt zu {label}.', openModelCenter: 'Modellzentrum öffnen', addFavorite: 'Zu Favoriten hinzufügen', removeFavorite: 'Aus Favoriten entfernen'
     },
     'pt-BR': {
+        // Column explanations (the drawer's head and sort tooltips).
+        columnMerchant: "Relays: nome, código público e apresentação da loja de cada relay", columnQuality: "Qualidade: aprovação suavizada após solicitações concluídas, (votos positivos + 50) ÷ (todos os votos + 50); começa em 100%", columnAuthenticity: "Autenticidade: se os modelos que um relay realmente entrega correspondem aos originais oficiais", columnLatency: "Latência: tempo recente até o primeiro token (menor é mais rápido)", columnPrice: "Multiplicador médio: multiplicador de cobrança médio sobre o preço oficial nos modelos cobrados por multiplicador", columnApiName: "API: nome e endpoint da sua conexão de API própria", columnFavorite: "Favoritos: salve os relays que você usa com frequência para trocar rapidamente",
         searchSourceModels: 'Buscar modelos',
         sourceTabs: 'Origens de rota', merchantSources: 'Relays', favoriteSources: 'Favoritos', myApiSources: 'Minhas APIs', searchSources: 'Buscar nome ou ID',
         noMatchingSources: 'Nenhuma origem correspondente', noFavorites: 'Nenhum relay favorito', noMyApis: 'Nenhuma conexão API adicionada',
@@ -143,6 +161,8 @@ const translations: Record<NextMuxDesktopLocale, Record<RelayTextKey, string>> =
         local: 'Local', noRelay: 'Nenhum relay disponível', savedRelayUnavailable: 'A rota direta salva não está disponível', relaySwitched: 'A conexão direta salva foi removida; mudamos para {label}.', openModelCenter: 'Abrir central de modelos', addFavorite: 'Adicionar aos favoritos', removeFavorite: 'Remover dos favoritos'
     },
     ru: {
+        // Column explanations (the drawer's head and sort tooltips).
+        columnMerchant: "Посредники: название, публичный код и описание магазина каждого посредника", columnQuality: "Качество: сглаженное одобрение после завершённых запросов, (положительные + 50) ÷ (все голоса + 50); начинается со 100 %", columnAuthenticity: "Подлинность: совпадают ли модели, которые посредник на самом деле отдаёт, с официальными оригиналами", columnLatency: "Задержка: недавнее время до первого токена (меньше — быстрее)", columnPrice: "Средний множитель: средний множитель оплаты к официальной цене по моделям с оплатой по множителю", columnApiName: "API: название и адрес вашего собственного API-подключения", columnFavorite: "Избранное: сохраните часто используемых посредников для быстрого переключения",
         searchSourceModels: 'Поиск моделей',
         sourceTabs: 'Источники маршрута', merchantSources: 'Посредники', favoriteSources: 'Избранное', myApiSources: 'Мои API', searchSources: 'Поиск по имени или ID',
         noMatchingSources: 'Совпадений нет', noFavorites: 'Нет избранных посредников', noMyApis: 'Подключения API не добавлены',
@@ -158,6 +178,8 @@ const translations: Record<NextMuxDesktopLocale, Record<RelayTextKey, string>> =
         local: 'Локально', noRelay: 'Нет доступных посредников', savedRelayUnavailable: 'Сохранённый прямой маршрут недоступен', relaySwitched: 'Сохранённое прямое подключение удалено; выбрано {label}.', openModelCenter: 'Открыть центр моделей', addFavorite: 'Добавить в избранное', removeFavorite: 'Удалить из избранного'
     },
     ar: {
+        // Column explanations (the drawer's head and sort tooltips).
+        columnMerchant: "الوسطاء: اسم كل وسيط ورمزه العام ونبذة عن متجره", columnQuality: "الجودة: نسبة رضا مُنعَّمة بعد الطلبات المكتملة، (الأصوات الإيجابية + 50) ÷ (جميع الأصوات + 50)؛ تبدأ من 100٪", columnAuthenticity: "الأصالة: هل تطابق النماذج التي يقدّمها الوسيط فعليًا النماذج الرسمية الأصلية", columnLatency: "زمن الاستجابة: الوقت الأخير حتى أول رمز (الأقل أسرع)", columnPrice: "متوسط المضاعف: متوسط مضاعف الفوترة مقارنة بالسعر الرسمي للنماذج المسعّرة بالمضاعف", columnApiName: "واجهة API: اسم اتصال API الخاص بك وعنوانه", columnFavorite: "المفضلة: احفظ الوسطاء الذين تستخدمهم كثيرًا للتبديل السريع",
         searchSourceModels: 'البحث عن نماذج',
         sourceTabs: 'مصادر المسارات', merchantSources: 'الوسطاء', favoriteSources: 'المفضلة', myApiSources: 'واجهات API الخاصة بي', searchSources: 'البحث بالاسم أو المعرّف',
         noMatchingSources: 'لا توجد مصادر مطابقة', noFavorites: 'لا توجد وسطاء مفضلة', noMyApis: 'لم تتم إضافة اتصالات API',
@@ -173,6 +195,8 @@ const translations: Record<NextMuxDesktopLocale, Record<RelayTextKey, string>> =
         local: 'محلي', noRelay: 'لا يوجد وسيط متاح حالياً', savedRelayUnavailable: 'المسار المباشر المحفوظ غير متاح', relaySwitched: 'أُزيل الاتصال المباشر المحفوظ؛ تم التبديل إلى {label}.', openModelCenter: 'فتح مركز النماذج', addFavorite: 'إضافة إلى المفضلة', removeFavorite: 'إزالة من المفضلة'
     },
     hi: {
+        // Column explanations (the drawer's head and sort tooltips).
+        columnMerchant: "रिले: हर रिले का नाम, सार्वजनिक कोड और स्टोर परिचय", columnQuality: "गुणवत्ता: पूर्ण अनुरोधों के बाद समायोजित स्वीकृति, (सकारात्मक वोट + 50) ÷ (सभी वोट + 50); शुरुआत 100% से", columnAuthenticity: "प्रामाणिकता: रिले जो मॉडल वास्तव में देता है, क्या वे आधिकारिक मूल मॉडल से मेल खाते हैं", columnLatency: "विलंब: हाल के अनुरोधों में पहले टोकन तक का समय (कम यानी तेज़)", columnPrice: "औसत गुणक: गुणक-आधारित मॉडलों पर आधिकारिक मूल्य की तुलना में औसत बिलिंग गुणक", columnApiName: "API: आपके अपने API कनेक्शन का नाम और एंडपॉइंट", columnFavorite: "पसंदीदा: अक्सर इस्तेमाल होने वाले रिले सहेजें और तुरंत बदलें",
         searchSourceModels: 'मॉडल खोजें',
         sourceTabs: 'मार्ग स्रोत', merchantSources: 'रिले', favoriteSources: 'पसंदीदा', myApiSources: 'मेरे API', searchSources: 'नाम या ID खोजें',
         noMatchingSources: 'कोई मेल खाता स्रोत नहीं', noFavorites: 'कोई पसंदीदा रिले नहीं', noMyApis: 'कोई API कनेक्शन नहीं जोड़ा गया',

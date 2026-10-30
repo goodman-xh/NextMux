@@ -13,4 +13,4 @@ Free code signing on Windows is provided by [SignPath.io](https://signpath.io/),
 
 This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
 
-All official Windows builds (`win32-x64` and `win32-arm64`) are built deterministically from source in GitHub Actions and signed via SignPath.io.
+Official Windows release pipelines (`win32-x64` and `win32-arm64`) are configured to integrate with SignPath.io for deterministic CI builds and Authenticode signing upon SignPath Foundation project onboarding.

@@ -5,7 +5,7 @@
 **Open-Source AI Coding, Multi-Agent Council, Desktop App Automation & Comic/Video Studio**
 
 [![License: Apache-2.0 with Commons Clause](https://img.shields.io/badge/License-Apache%202.0%20%2B%20Commons%20Clause-blue.svg)](./LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.1.7-1263db)](https://github.com/goodman-xh/NextMux/releases/tag/v0.1.7)
+[![Release](https://img.shields.io/badge/Release-v0.1.8-1263db)](https://github.com/goodman-xh/NextMux/releases/tag/v0.1.8)
 [![Website](https://img.shields.io/badge/Website-nextmux.app-111111)](https://nextmux.app)
 
 **English** | [简体中文](./README.zh-CN.md)
@@ -103,88 +103,37 @@ Send generated canvas shots straight to the built-in multitrack timeline editor 
 
 ---
 
-## Download Installers (`v0.1.7`)
+## Download Installers (`v0.1.8`)
 
 Every release is built and verified independently for all 4 OS/CPU targets (no foreign-architecture binaries mixed into native bundles). You can download directly from **[nextmux.app/download](https://nextmux.app/download)** or **GitHub Releases**:
 
 | Operating System | CPU Architecture | GitHub Release Installer | Official Website Mirror (`nextmux.app`) |
 | :--- | :--- | :--- | :--- |
-| **macOS** (`12.0+`) | Apple Silicon (`darwin-arm64`) | [`NextMux-0.1.7-arm64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.7/NextMux-0.1.7-arm64.dmg) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.7/macos/arm64/NextMux-0.1.7-arm64.dmg) |
-| **macOS** (`12.0+`) | Intel (`darwin-x64`) | [`NextMux-0.1.7-x64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.7/NextMux-0.1.7-x64.dmg) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.7/macos/x64/NextMux-0.1.7-x64.dmg) |
-| **Windows** (`10 / 11`) | x64 (`win32-x64`) | [`NextMux-0.1.7-x64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.7/NextMux-0.1.7-x64-setup.exe) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.7/windows/x64/NextMux-0.1.7-x64-setup.exe) |
-| **Windows** (`11`) | ARM64 (`win32-arm64`) | [`NextMux-0.1.7-arm64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.7/NextMux-0.1.7-arm64-setup.exe) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.7/windows/arm64/NextMux-0.1.7-arm64-setup.exe) |
+| **macOS** (`12.0+`) | Apple Silicon (`darwin-arm64`) | [`NextMux-0.1.8-arm64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.8/NextMux-0.1.8-arm64.dmg) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.8/macos/arm64/NextMux-0.1.8-arm64.dmg) |
+| **macOS** (`12.0+`) | Intel (`darwin-x64`) | [`NextMux-0.1.8-x64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.8/NextMux-0.1.8-x64.dmg) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.8/macos/x64/NextMux-0.1.8-x64.dmg) |
+| **Windows** (`10 / 11`) | x64 (`win32-x64`) | [`NextMux-0.1.8-x64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.8/NextMux-0.1.8-x64-setup.exe) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.8/windows/x64/NextMux-0.1.8-x64-setup.exe) |
+| **Windows** (`11`) | ARM64 (`win32-arm64`) | [`NextMux-0.1.8-arm64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.8/NextMux-0.1.8-arm64-setup.exe) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.8/windows/arm64/NextMux-0.1.8-arm64-setup.exe) |
 
 >Installed clients check `https://nextmux.app/updates` in the background and display a one-click **Update (`更新`)** button in the bottom-left account dock when a newer build is ready.
 
 ---
 
-## Repository Architecture
+## Open-Source UI Repository Structure
+
+This repository open-sources NextMux's **desktop frontend UI views, interaction surfaces, 12-locale interface copy, CSS theme system, and launch visuals**, while official prebuilt 4-architecture desktop installers are published via [GitHub Releases](https://github.com/goodman-xh/NextMux/releases) and [nextmux.app/download](https://nextmux.app/download):
 
 ```text
 NextMux/
 ├── apps/
-│   └── desktop/                      # Electron + Theia desktop shell, native C#/Swift/ObjC helpers & updater
-├── packages/
-│   ├── agent-runtime/                # Agent loop, tool execution, MCP client, Council orchestration & recovery
-│   ├── model-runtime/                # Official, compatible, local Ollama & Relay Marketplace model routing
-│   ├── comic-core/                   # Storyboard, Infinite Canvas graph & asset library domain engine
-│   ├── media-core/                   # Multitrack timeline composition, subtitle burn-in & FFmpeg pipeline
-│   └── theia-nextmux-extension/      # Main workbench UI, Comic Studio, Plugin viewport & i18n (12 locales)
-├── plugins/                          # Built-in extension & runtime plugin descriptors
-└── scripts/                          # Cross-platform build, native runtime preparation & architecture verification
-```
-
----
-
-## Build from Source
-
-### Prerequisites
-
-- **Node.js** `24.x` (`>= 24.13.0`)
-- **pnpm** `11.x` (`corepack enable`)
-- **Python** `3.11+`
-- **Platform toolchains**:
-  - **macOS**: Xcode Command Line Tools (`clang`, `swiftc`, `vtool`, `codesign`)
-  - **Windows**: Visual Studio Build Tools (`csc.exe` / .NET Framework 4.x speech & window helpers)
-
-### Quick Start (Development)
-
-```bash
-git clone https://github.com/goodman-xh/NextMux.git
-cd NextMux
-pnpm install
-
-# Build all workspace packages and launch the desktop app
-pnpm desktop:build
-pnpm desktop:start
-```
-
-### Package Architecture-Specific Installers
-
-```bash
-# macOS Apple Silicon (darwin-arm64)
-pnpm desktop:prepare
-pnpm --filter @nextmux/desktop dist:mac:arm64
-
-# macOS Intel (darwin-x64)
-pnpm desktop:prepare
-pnpm --filter @nextmux/desktop dist:mac:x64
-
-# Windows x64 (win32-x64)
-pnpm desktop:prepare
-pnpm --filter @nextmux/desktop dist:win:x64
-
-# Windows ARM64 (win32-arm64)
-pnpm desktop:prepare
-pnpm --filter @nextmux/desktop dist:win:arm64
-```
-
-### Quality & Security Verification
-
-```bash
-pnpm typecheck
-pnpm test
-pnpm scan:secrets
+│   └── desktop/
+│       └── splash/                   # WebGL / Canvas launch visual animation & textures
+├── assets/                           # Brand artwork, product screenshots & showcase videos
+└── packages/
+    └── theia-nextmux-extension/
+        └── src/
+            ├── browser/              # Workbench UI, Relay & Model drawers, Council, Comic Studio & 12-locale copy
+            │   └── style/            # Dark/light monochrome theme tokens, layout stylesheets & provider icons
+            └── styles.d.ts           # Frontend bridge & asset TypeScript declarations
 ```
 
 ---

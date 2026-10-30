@@ -125,6 +125,8 @@ export interface ComicMediaStudioModalProps {
     readonly onCancelGenerate?: () => void;
     readonly onRevealInFolder: (filePath: string) => void;
     readonly onEnterEditor: () => void;
+    /** Whether the editor can open now: the project folder exists and nothing is generating. Defaults to "not generating". */
+    readonly canEnterEditor?: boolean;
     readonly onClose: () => void;
     readonly onFormScroll?: () => void;
     readonly onDismissTransientOverlay?: () => boolean;
@@ -221,6 +223,7 @@ const zhCN = {
     stockLicenseNote: '来自 Pexels / Pixabay 免费商用素材库，生成时自动检索并下载至项目文件夹。',
     noAiHintNote: '没有素材的镜头会先空着，之后可以在剪辑里补上。',
     enterEditor: '进入剪辑',
+    enterEditorDisabled: '生成完成后才能进入剪辑',
     emptyStageTitle: '作品预览舞台',
     emptyStageHint: '生成完成后将在此直接播放，并自动保存至所选文件夹',
     regeneratingBanner: '正在生成新版本…',
@@ -315,6 +318,7 @@ const zhTW: StudioModalCopyTable = {
     stockLicenseNote: '來自 Pexels / Pixabay 免費商用素材庫，生成時自動檢索並下載至專案資料夾。',
     noAiHintNote: '沒有素材的鏡頭會先留空，之後可以在剪輯裡補上。',
     enterEditor: '進入剪輯',
+    enterEditorDisabled: '生成完成後才能進入剪輯',
     emptyStageTitle: '作品預覽舞台',
     emptyStageHint: '生成完成後將在此直接播放，並自動儲存至所選資料夾',
     regeneratingBanner: '正在生成新版本…',
@@ -406,6 +410,7 @@ const en: StudioModalCopyTable = {
     stockLicenseNote: 'Royalty-free clips and photos from Pexels / Pixabay are downloaded directly into your project folder.',
     noAiHintNote: 'Shots without matching media stay empty for now and can be filled in the Editor later.',
     enterEditor: 'Open in Editor',
+    enterEditorDisabled: 'Available once generation finishes',
     emptyStageTitle: 'Preview Stage',
     emptyStageHint: 'Generated media will play right here and save automatically to your selected folder',
     regeneratingBanner: 'Generating new take…',
@@ -490,6 +495,7 @@ const ja: StudioModalCopyTable = {
     stockLicenseNote: 'Pexels / Pixabay の商用利用可能な素材を検索し、プロジェクトフォルダへ保存します。',
     noAiHintNote: '素材がないカットは空のまま残され、後から編集画面で追加できます。',
     enterEditor: '編集へ進む',
+    enterEditorDisabled: '生成が終わると編集を開けます',
     emptyStageTitle: 'プレビューステージ',
     emptyStageHint: '生成が完了するとここで再生され、選択したフォルダに自動保存されます',
     regeneratingBanner: '新しいテイクを生成中…',
@@ -569,6 +575,7 @@ const ko: StudioModalCopyTable = {
     stockLicenseNote: 'Pexels / Pixabay 무료 상업용 소재를 검색해 프로젝트 폴더로 바로 저장합니다.',
     noAiHintNote: '소재가 없는 컷은 비워 두며 나중에 편집에서 채울 수 있습니다.',
     enterEditor: '편집으로 이동',
+    enterEditorDisabled: '생성이 끝나면 편집을 열 수 있습니다',
     emptyStageTitle: '미리보기 스테이지',
     emptyStageHint: '생성이 완료되면 이곳에서 바로 재생되고 선택한 폴더에 자동 저장됩니다',
     regeneratingBanner: '새 버전 생성 중…',
@@ -638,7 +645,8 @@ const es: StudioModalCopyTable = {
     stockGetKey: 'Obtener clave gratis',
     stockLicenseNote: 'Material libre de derechos de Pexels / Pixabay descargado directamente en tu carpeta.',
     noAiHintNote: 'Las tomas sin material quedarán vacías por ahora y podrás completarlas en el editor.',
-    enterEditor: 'Ir al editor'
+    enterEditor: 'Ir al editor',
+    enterEditorDisabled: 'Disponible cuando termine la generación'
 };
 
 const fr: StudioModalCopyTable = {
@@ -701,7 +709,8 @@ const fr: StudioModalCopyTable = {
     stockGetKey: 'Obtenir une clé gratuite',
     stockLicenseNote: 'Médias libres de droits Pexels / Pixabay téléchargés directement dans le dossier du projet.',
     noAiHintNote: 'Les plans sans média resteront vides pour l’instant et pourront être complétés dans l’éditeur.',
-    enterEditor: 'Ouvrir dans l’éditeur'
+    enterEditor: 'Ouvrir dans l’éditeur',
+    enterEditorDisabled: 'Disponible une fois la génération terminée'
 };
 
 const de: StudioModalCopyTable = {
@@ -764,7 +773,8 @@ const de: StudioModalCopyTable = {
     stockGetKey: 'Kostenlosen Key holen',
     stockLicenseNote: 'Lizenzfreie Medien von Pexels / Pixabay werden direkt in den Projektordner geladen.',
     noAiHintNote: 'Einstellungen ohne passendes Material bleiben vorerst leer und können im Schnitt ergänzt werden.',
-    enterEditor: 'Zum Schnitt'
+    enterEditor: 'Zum Schnitt',
+    enterEditorDisabled: 'Verfügbar, sobald die Erstellung abgeschlossen ist'
 };
 
 const ptBR: StudioModalCopyTable = {
@@ -827,7 +837,8 @@ const ptBR: StudioModalCopyTable = {
     stockGetKey: 'Obter chave grátis',
     stockLicenseNote: 'Mídias gratuitas para uso comercial de Pexels / Pixabay baixadas na pasta do projeto.',
     noAiHintNote: 'Cenas sem mídia ficarão vazias por enquanto e poderão ser preenchidas na edição.',
-    enterEditor: 'Ir para edição'
+    enterEditor: 'Ir para edição',
+    enterEditorDisabled: 'Disponível quando a geração terminar'
 };
 
 const ru: StudioModalCopyTable = {
@@ -890,7 +901,8 @@ const ru: StudioModalCopyTable = {
     stockGetKey: 'Получить ключ бесплатно',
     stockLicenseNote: 'Бесплатные материалы Pexels / Pixabay скачиваются прямо в папку проекта.',
     noAiHintNote: 'Кадры без материалов пока останутся пустыми — их можно дополнить при монтаже.',
-    enterEditor: 'Перейти к монтажу'
+    enterEditor: 'Перейти к монтажу',
+    enterEditorDisabled: 'Станет доступно после завершения генерации'
 };
 
 const ar: StudioModalCopyTable = {
@@ -951,7 +963,8 @@ const ar: StudioModalCopyTable = {
     stockGetKey: 'احصل على مفتاح مجاني',
     stockLicenseNote: 'تُحمَّل الوسائط المجانية من Pexels / Pixabay مباشرة إلى مجلد المشروع.',
     noAiHintNote: 'المشاهد التي بلا وسائط ستبقى فارغة مؤقتاً ويمكن إكمالها في المونتاج.',
-    enterEditor: 'الدخول إلى المونتاج'
+    enterEditor: 'الدخول إلى المونتاج',
+    enterEditorDisabled: 'يصبح متاحًا بعد انتهاء الإنشاء'
 };
 
 const hi: StudioModalCopyTable = {
@@ -1012,7 +1025,8 @@ const hi: StudioModalCopyTable = {
     stockGetKey: 'मुफ़्त Key प्राप्त करें',
     stockLicenseNote: 'Pexels / Pixabay से निःशुल्क व्यावसायिक मीडिया सीधे आपके प्रोजेक्ट फ़ोल्डर में डाउनलोड होता है।',
     noAiHintNote: 'बिना मीडिया वाले शॉट अभी खाली रहेंगे और बाद में एडिटर में भरे जा सकते हैं।',
-    enterEditor: 'एडिटर में खोलें'
+    enterEditor: 'एडिटर में खोलें',
+    enterEditorDisabled: 'जनरेशन पूरा होने पर उपलब्ध'
 };
 
 const STUDIO_MODAL_TABLES: Readonly<Record<NextMuxDesktopLocale, StudioModalCopyTable>> = {
@@ -1065,6 +1079,8 @@ interface StudioContextMenuState {
 export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.ReactElement | null {
     const t = (key: StudioModalTextKey, values?: Readonly<Record<string, string | number>>): string =>
         comicStudioModalText(props.locale, key, values);
+    // While a take is generating (or before its project folder exists) "Go to Edit" is shown disabled with the reason.
+    const enterEditorEnabled = props.canEnterEditor ?? !props.generating;
 
     const [draggingFiles, setDraggingFiles] = React.useState(false);
     const [showLibrary, setShowLibrary] = React.useState(false);
@@ -2561,7 +2577,9 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                     <button
                                         type='button'
                                         className='nmx-comic-studio-enter-btn is-primary'
-                                        onClick={props.onEnterEditor}
+                                        disabled={!enterEditorEnabled}
+                                        title={enterEditorEnabled ? undefined : t('enterEditorDisabled')}
+                                        onClick={() => { if (enterEditorEnabled) props.onEnterEditor(); }}
                                     >
                                         <i className='codicon codicon-play-circle' aria-hidden='true' />
                                         <span>{t('enterEditor')}</span>
@@ -3000,7 +3018,10 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                             <button
                                 type='button'
                                 className='nmx-comic-studio-enter-btn is-primary'
+                                disabled={!enterEditorEnabled}
+                                title={enterEditorEnabled ? undefined : t('enterEditorDisabled')}
                                 onClick={() => {
+                                    if (!enterEditorEnabled) return;
                                     closeLightbox();
                                     props.onEnterEditor();
                                 }}

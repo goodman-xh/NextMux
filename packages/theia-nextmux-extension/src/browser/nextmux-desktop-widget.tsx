@@ -150,7 +150,7 @@ import { ownModelCategories, ownModelMediaFacts } from './nextmux-own-model-kind
 import { officialDiscoveryText } from './nextmux-official-discovery-locale';
 import { officialProviderLogoAsset } from './nextmux-provider-logos';
 import { closePersistenceText } from './nextmux-close-persistence-locale';
-import { DesktopUpdateAction, desktopUpdateText, updateAppearsInDock } from './nextmux-update-action';
+import { DesktopUpdateAction, desktopUpdateText, isUpdateDownloadErrorCode, updateAppearsInDock } from './nextmux-update-action';
 import type { DesktopCommunitySkillInstallReview } from '../common/nextmux-platform-protocol';
 import { normalizeCouncilRouteSource } from './nextmux-conversation-history';
 import { normalizeArchivedChildResults, ArchivedChildResult } from '../common/nextmux-citation-display';
@@ -7485,6 +7485,52 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
     }
 
+    /** The candidate route a council setup drawer shows: the council relay's own routes, never the composer's. */
+    protected councilCandidateRoute(modelId: string, routeId?: string): DesktopModelRoute | undefined {
+        const routes = typeof this.councilRoutesForRelay === 'function' ? this.councilRoutesForRelay(this.councilModalRelayKey) : [];
+        return (routeId ? routes.find(candidate => candidate.id === routeId) : undefined)
+            || routes.find(candidate => this.modelKeyForRoute(candidate) === modelId);
+    }
+
+    /**
+     * A context size chosen in the council setup's model drawer is that model's own preference (contextWindowByModel).
+     * Unlike the composer's drawer it never selects the model for the conversation, changes the conversation's budget
+     * or rewrites the lead slot: a model joins a slot only when it is picked for that slot.
+     */
+    protected setCouncilCandidateContextWindow(modelId: string, value: number | undefined, displayedQuote?: { readonly id?: string }, routeId?: string): void {
+        const route = this.councilCandidateRoute(modelId, routeId);
+        if (!route) return;
+        if (displayedQuote && (route.kind !== 'managed_gateway' || route.offering.keyPriceQuoteId !== displayedQuote.id)) { this.update(); return; }
+        // The same maximum the drawer offers its sizes from (renderCouncilModelHoverPortal).
+        const maximum = this.modelContextWindowTokens(route, modelId);
+        const normalized = value !== undefined && maximum !== undefined && value <= maximum ? normalizeContextWindowTokens(value) : undefined;
+        const modelKey = this.modelKeyForRoute(route);
+        const next = { ...(this.contextWindowByModel || {}) };
+        if (normalized !== undefined) next[modelKey] = normalized;
+        else delete next[modelKey];
+        this.contextWindowByModel = next;
+        try { window.localStorage.setItem('nextmux.desktop.contextWindow.v1', JSON.stringify(next)); } catch { /* kept for this window */ }
+        this.cancelModelEffortPickerClose?.();
+        this.update();
+    }
+
+    /** A thinking depth chosen in the council setup's model drawer: that model's settings and effort only (see above). */
+    protected setCouncilCandidateReasoningDepth(modelId: string, option: ReasoningDepthOption, displayedQuote?: { readonly id?: string }, routeId?: string): void {
+        const route = this.councilCandidateRoute(modelId, routeId);
+        if (!route || !this.reasoningDepthChoicesForRoute(route).options.some(item => item.id === option.id)) return;
+        if (displayedQuote && (route.kind !== 'managed_gateway' || route.offering.keyPriceQuoteId !== displayedQuote.id)) { this.update(); return; }
+        const modelKey = this.modelKeyForRoute(route);
+        this.reasoningSettingsByModel = { ...this.reasoningSettingsByModel,
+            [modelKey]: declaredReasoningSettings(this.modelReasoningContract(route)?.reasoningControls, option.settings) };
+        try { window.localStorage.setItem('nextmux.desktop.reasoningSettings.v1', JSON.stringify(this.reasoningSettingsByModel)); } catch { /* kept for this window */ }
+        if (option.effort && this.reasoningEffortLevels(route).includes(option.effort)) {
+            this.reasoningEffortByModel = { ...this.reasoningEffortByModel, [modelKey]: option.effort };
+            try { window.localStorage.setItem('nextmux.desktop.reasoningEffort.v1', JSON.stringify(this.reasoningEffortByModel)); } catch { /* kept for this window */ }
+        }
+        this.cancelModelEffortPickerClose?.();
+        this.update();
+    }
+
     protected renderCouncilModelHoverPortal(candidate: CouncilModelCandidate): React.ReactNode {
         if (this.modelPickerEffortModelId !== candidate.routeId || !this.modelPickerEffortPlacement || typeof document === 'undefined') return null;
         const placement = this.modelPickerEffortPlacement;
@@ -7541,12 +7587,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 const depthTip = `${reasoningControlText(this.desktopLocale, 'depth')}: ${item.evidence ? `${depthLabel} · ${reasoningControlText(this.desktopLocale, 'verified')}` : depthLabel}`;
                                 return <button key={item.id} type='button' role='radio' aria-checked={activeDepth === item.id}
                                     data-reasoning-depth={item.id} className={activeDepth === item.id ? 'is-active' : ''}
-                                    title={depthTip} aria-label={depthTip}
+                                    aria-label={depthTip}
                                     onPointerEnter={event => this.showModelEvidenceTooltip?.(depthTip, event.currentTarget)}
                                     onPointerLeave={() => this.hideModelEvidenceTooltip?.()}
                                     onFocus={event => this.showModelEvidenceTooltip?.(depthTip, event.currentTarget)}
                                     onBlur={() => this.hideModelEvidenceTooltip?.()}
-                                    onClick={() => this.setModelOptionReasoningDepth(baseModelId, item, 'coding',
+                                    onClick={() => this.setCouncilCandidateReasoningDepth(baseModelId, item,
                                         optionRoute?.kind === 'managed_gateway' ? { id: optionRoute.offering.keyPriceQuoteId } : undefined, optionRoute?.id)}>{depthLabel}</button>;
                             })}
                         </div>
@@ -7561,12 +7607,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 const contextTip = `${contextBudgetText(this.desktopLocale, 'window')}: ${shortLabel} (${fullTokens} Tokens)`;
                                 return <button key={tokens} type='button' role='radio' aria-checked={activeContextTokens === tokens}
                                     data-context-window={tokens} className={activeContextTokens === tokens ? 'is-active' : ''} dir='ltr'
-                                    title={contextTip} aria-label={contextTip}
+                                    aria-label={contextTip}
                                     onPointerEnter={event => this.showModelEvidenceTooltip?.(contextTip, event.currentTarget)}
                                     onPointerLeave={() => this.hideModelEvidenceTooltip?.()}
                                     onFocus={event => this.showModelEvidenceTooltip?.(contextTip, event.currentTarget)}
                                     onBlur={() => this.hideModelEvidenceTooltip?.()}
-                                    onClick={() => this.setModelOptionContextWindow(baseModelId, tokens,
+                                    onClick={() => this.setCouncilCandidateContextWindow(baseModelId, tokens,
                                         optionRoute?.kind === 'managed_gateway' ? { id: optionRoute.offering.keyPriceQuoteId } : undefined, optionRoute?.id)}>{shortLabel}</button>;
                             })}
                         </div>
@@ -7576,7 +7622,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         <span>{contextBudgetText(this.desktopLocale, 'learned').split('{cap}').join(contextWindowTokenLabel(learnedContextCap!))}</span>
                     </p>}
                     <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}
-                        title={metric.hint}
+                        role={metric.hint ? 'group' : undefined} aria-label={metric.hint ? `${metric.label}: ${metric.value}. ${metric.hint}` : undefined}
                         tabIndex={metric.hint ? 0 : undefined}
                         onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
                         onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
@@ -8848,7 +8894,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (state.phase === 'downloading' || state.phase === 'ready') {
             this.updateError = '';
         } else if (state.error || state.errorCode) {
-            this.updateError = String(state.error || state.message || desktopUpdateText(this.desktopLocale, 'downloadFailed'));
+            // Without a sentence from the updater, a failed check says so instead of "download incomplete".
+            this.updateError = String(state.error || state.message || desktopUpdateText(this.desktopLocale,
+                state.errorCode && !isUpdateDownloadErrorCode(state.errorCode) ? 'error' : 'downloadFailed'));
         } else if (state.phase !== 'error') {
             this.updateError = '';
         }
@@ -14470,11 +14518,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected async openStudioDirectoryInFileManager(
-        modal: NonNullable<NextMuxDesktopWidget['comicStudioModalState']>
+        modal: NonNullable<NextMuxDesktopWidget['comicStudioModalState']>,
+        projectFolder?: string
     ): Promise<void> {
         const defaultDir = this.comicLibrary?.root || '';
         const parentDir = modal.parentDirectory ?? this.comicCreateParentDirectory ?? defaultDir;
-        const candidates = [modal.boundProjectPath, parentDir].filter((item): item is string => Boolean(item && item.trim()));
+        // The project's own folder first (bound, else the folder this title creates when it is already on disk), then its parent.
+        const candidates = [...new Set([modal.boundProjectPath, projectFolder, parentDir].filter((item): item is string => Boolean(item && item.trim())))];
         for (const candidate of candidates) {
             const opened = await this.platformService?.openFolderInFileManager?.(candidate).catch(() => false);
             if (opened) return;
@@ -14625,7 +14675,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     this.comicCreateParentDirectory = undefined;
                     this.update();
                 } : undefined}
-                onOpenDirectory={canOpenDirectory ? () => { void this.openStudioDirectoryInFileManager(modal); } : undefined}
+                onOpenDirectory={canOpenDirectory ? () => { void this.openStudioDirectoryInFileManager(modal, previewFolderPath); } : undefined}
                 onFormScroll={() => {
                     if (this.comicStudioIsolatedPicker) {
                         this.closeComicStudioIsolatedPicker(false);
@@ -14767,6 +14817,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onCancelGenerate={() => this.cancelComicStudioModalGenerate()}
                 onRevealInFolder={filePath => { void this.revealStudioTakeInFileManager(filePath, modal); }}
                 onEnterEditor={() => { void this.enterComicStudioModalEditor(); }}
+                canEnterEditor={Boolean(modal.boundProjectPath && !modal.generating)}
                 onClose={() => {
                     if (!modal.generating && !this.comicKindBusy) {
                         this.closeNavigationSurface();
@@ -43948,40 +43999,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const tooltip = this.relayMetricTooltip && (this.relayMetricTooltip.key.startsWith('sort:') || this.relayMetricTooltip.key.startsWith('head:') || relayOptions.some(option => option.key === this.relayMetricTooltip!.key)) ? this.relayMetricTooltip : undefined;
         const tooltipRect = tooltip?.anchor.getBoundingClientRect();
         const tooltipWidth = Math.min(tooltip?.key.startsWith('head:') || tooltip?.key.startsWith('sort:') ? 260 : 204, window.innerWidth - 16);
-        const relayColumnExplanation = (column: 'merchant' | 'quality' | 'authenticity' | 'latency' | 'price' | 'apiName' | 'favorite'): string => {
-            if (this.desktopLocale === 'zh-TW') {
-                switch (column) {
-                    case 'merchant': return '商家資訊：展示中轉商名稱、編號與店鋪簡介';
-                    case 'quality': return '品質：基於真實調用成功率、穩定性與響應表現的綜合評分';
-                    case 'authenticity': return '真實性：評估該中轉商實際提供的模型能力與官方原版模型是否一致';
-                    case 'latency': return '延遲：近期模型請求的首字響應耗時（越低越快）';
-                    case 'price': return '平均倍率：該中轉商各模型相對官方原價的平均計費倍率';
-                    case 'apiName': return 'API 名稱：你已新增的自有 API 連線名稱與端點';
-                    case 'favorite': return '收藏：將常用中轉商加入收藏夾以便快速切換';
-                }
-            }
-            if (this.desktopLocale === 'en') {
-                switch (column) {
-                    case 'merchant': return 'Merchant info: Displays the relay name, code, and store introduction';
-                    case 'quality': return 'Quality: Overall rating based on real call success rate, stability, and response performance';
-                    case 'authenticity': return 'Authenticity: Measures whether the relay\'s actual model capabilities match the official original model';
-                    case 'latency': return 'Latency: Recent time-to-first-token response latency (lower is faster)';
-                    case 'price': return 'Avg. multiplier: Average billing multiplier across models relative to official pricing';
-                    case 'apiName': return 'API name: Name and endpoint of your configured custom API connection';
-                    case 'favorite': return 'Favorites: Bookmark frequently used relays for quick switching';
-                }
-            }
-            switch (column) {
-                case 'merchant': return '商家信息：展示中转商名称、编号与店铺简介';
-                case 'quality': return '质量：基于真实调用成功率、稳定性与响应表现的综合评分';
-                case 'authenticity': return '真实性：评估该中转商实际提供的模型能力与官方原版模型是否一致';
-                case 'latency': return '延迟：近期模型请求的首字响应耗时（越低越快）';
-                case 'price': return '平均倍率：该中转商各模型相对官方原价的平均计费倍率';
-                case 'apiName': return 'API 名称：你已添加的自有 API 连接名称与端点';
-                case 'favorite': return '收藏：将常用中转商加入收藏夹以便快速切换';
-            }
-        };
-        return <section className='nmx-relay-popover'>
+        // Every language has its own explanations (nextmux-relay-locale.ts); quality is the smoothed approval rating.
+        const relayColumnExplanation = (column: 'merchant' | 'quality' | 'authenticity' | 'latency' | 'price' | 'apiName' | 'favorite'): string => relayText(this.desktopLocale,
+            column === 'merchant' ? 'columnMerchant' : column === 'quality' ? 'columnQuality' : column === 'authenticity' ? 'columnAuthenticity'
+                : column === 'latency' ? 'columnLatency' : column === 'price' ? 'columnPrice' : column === 'apiName' ? 'columnApiName' : 'columnFavorite');
+        // While the portal tooltip explains a head, a dial or a row, a focused sort pill keeps its own tip hidden.
+        return <section className='nmx-relay-popover' data-metric-tooltip={tooltip ? 'open' : undefined}>
             <RelayCapacityRefresh poller={this.relayCapacityPoller}
                 merchantIds={relayOptions.filter(option => option.kind === 'managed' && option.merchantId).map(option => option.merchantId!)}
                 // The chosen merchant's models are on screen beside this list (the council dialog) or right after it.
@@ -46977,7 +47000,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         const depthTip = `${reasoningControlText(this.desktopLocale, 'depth')}: ${item.evidence ? `${depthLabel} · ${reasoningControlText(this.desktopLocale, 'verified')}` : depthLabel}`;
                                         return <button key={item.id} type='button' role='radio' aria-checked={activeDepth === item.id}
                                             data-reasoning-depth={item.id} className={activeDepth === item.id ? 'is-active' : ''}
-                                            title={depthTip} aria-label={depthTip}
+                                            aria-label={depthTip}
                                             onPointerEnter={event => this.showModelEvidenceTooltip?.(depthTip, event.currentTarget)}
                                             onPointerLeave={() => this.hideModelEvidenceTooltip?.()}
                                             onFocus={event => this.showModelEvidenceTooltip?.(depthTip, event.currentTarget)}
@@ -46997,7 +47020,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         const contextTip = `${contextBudgetText(this.desktopLocale, 'window')}: ${shortLabel} (${fullTokens} Tokens)`;
                                         return <button key={tokens} type='button' role='radio' aria-checked={activeContextTokens === tokens}
                                             data-context-window={tokens} className={activeContextTokens === tokens ? 'is-active' : ''} dir='ltr'
-                                            title={contextTip} aria-label={contextTip}
+                                            aria-label={contextTip}
                                             onPointerEnter={event => this.showModelEvidenceTooltip?.(contextTip, event.currentTarget)}
                                             onPointerLeave={() => this.hideModelEvidenceTooltip?.()}
                                             onFocus={event => this.showModelEvidenceTooltip?.(contextTip, event.currentTarget)}
@@ -47012,7 +47035,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 <span>{contextBudgetText(this.desktopLocale, 'learned').split('{cap}').join(contextWindowTokenLabel(learnedContextCap!))}</span>
                             </p>}
                             <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}
-                                title={metric.hint}
+                                role={metric.hint ? 'group' : undefined} aria-label={metric.hint ? `${metric.label}: ${metric.value}. ${metric.hint}` : undefined}
                                 tabIndex={metric.hint ? 0 : undefined}
                                 onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
                                 onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
@@ -47501,7 +47524,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 return <div className='nmx-route-empty' role={pickerRelayFull ? 'status' : undefined}><span>{pickerQuery ? modelPickerListText(this.desktopLocale, 'noMatch')
                                     : pickerRelayFull ? relayText(this.desktopLocale, 'relayFull') : relayText(this.desktopLocale, this.activeRelayKey ? 'noSourceModels' : 'chooseSourceFirst')}</span>
                                     {pickerRelayFull ? <button onClick={() => this.toggleComposerRelayPicker()}>{relayText(this.desktopLocale, 'selectRelay')}</button>
-                                        : modelOptions.length > 0 && <button onClick={() => this.openSettingsPanel('models')}>{modelVisibilityCopy(this.desktopLocale)[0]}</button>}</div>;
+                                        : modelOptions.length > 0 && <button onClick={() => { this.completeNavigationSurface(); this.openSettingsPanel('models'); }}>{modelVisibilityCopy(this.desktopLocale)[0]}</button>}</div>;
                             })()}
                         </div>}
                         {(officialPickerPending && visibleModelOptions.length > 0 || officialPickerFailed && !officialPickerPending) && <div className='nmx-merchant-catalog-status' role='status'>
@@ -47518,16 +47541,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             <span>{relayText(this.desktopLocale, this.merchantCatalogStatus === 'loading' ? 'modelsLoading' : this.merchantCatalogError || this.merchantCatalogStatus === 'failed' ? 'modelsFailed' : this.merchantCatalogStatus === 'partial' ? 'modelsPartial' : 'modelsNotLoaded')}</span>
                             {this.merchantCatalogStatus !== 'loading' && <button onClick={() => void this.loadSelectedMerchantCatalog(this.activeRelayKey.slice('managed:'.length), Boolean(this.selectedMerchantCatalog?.nextCursor))}>{this.tx('retry')}</button>}
                         </div>}
+                        {/* "Enable more models" always opens Settings → Models; the "N more models hidden" hint beside it owns the inline list. */}
                         <footer className='nmx-model-picker-settings-footer'><button type='button' className='nmx-model-picker-settings-link'
-                            onClick={event => {
-                                const hasHidden = pickerPartition.selectable.some(candidate => candidate.model.available && (!this.isModelVisible(candidate.model.model) || Boolean(this.modelPickerHiddenPopoverTicked?.has(candidate.model.model))));
-                                if (hasHidden) {
-                                    event?.stopPropagation?.();
-                                    this.modelPickerHiddenPopoverOpen = !this.modelPickerHiddenPopoverOpen;
-                                    this.modelPickerHiddenVisibleLimit = 10;
-                                    this.update();
-                                    return;
-                                }
+                            onClick={() => {
                                 this.completeNavigationSurface();
                                 this.openSettingsPanel('models');
                             }}>{modelPickerListText(this.desktopLocale, 'enableMoreModels')}</button>
@@ -49205,17 +49221,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const seconds = params.seconds && allowed.includes(params.seconds) ? params.seconds : allowed[0];
             if (!seconds) throw new Error(this.comicChatT('noModel'));
             const sound = params.sound !== false && this.comicVideoMakesSound(route);
-            let visual = prompt;
-            if (guide.promptLanguage === 'en') {
-                try {
-                    visual = (await this.comicPromptTranslations.translate(`${projectId}:chat:${turnId}`, { visual: prompt },
-                        request => this.comicPlanText(`${request.system}\n${request.prompt}`, undefined, root))).visual || prompt;
-                } catch (error) {
-                    // The clip can still use the user's words; the failed text call remains visible and is never resent.
-                    this.comicChatUi().notice = modelFailureText(this.desktopLocale, error);
-                    this.update();
-                }
-            }
+            // Direct dispatch: the user's words go to the selected video model as written. No other model (such as the
+            // project's text model) is called to translate them, so nothing is billed or can fail outside this choice.
+            const visual = prompt;
             const text = assembleComicVideoPrompt({ guide, chinese: comicPromptUsesChinese(guide, visual), firstFrame, silent: !sound,
                 segments: [{ visual, ...(firstFrame ? { motion: visual } : {}), seconds }],
                 ...(withReferences ? { referenceCaption: 'Keep the people and objects of the provided reference pictures in this clip.' } : {}) });
@@ -54927,7 +54935,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             : state.phase === 'error' ? text('error') : text('waiting');
             const description = state.restartRequired ? text('restartHint') : state.phase === 'ready' ? text('readyHint')
                 : state.phase === 'unsupported' ? text(state.reason === 'portable' ? 'portableHint' : 'developmentHint')
-                    : state.phase === 'available' && state.errorCode ? text('downloadFailed') : text('backgroundHint');
+                    : state.phase === 'available' && isUpdateDownloadErrorCode(state.errorCode) ? text('downloadFailed') : text('backgroundHint');
             content = <section className='nmx-settings-panel nmx-update-settings'>
                 <div className={`nmx-update-summary is-${state.phase}`}><span><i className={`codicon codicon-${state.phase === 'ready' ? 'cloud-download' : state.phase === 'current' ? 'pass-filled' : state.phase === 'error' ? 'warning' : 'sync'}`}></i><strong>{status}</strong><small>{description}</small></span><em>{state.currentVersion ? `v${state.currentVersion}` : 'NextMux'}</em></div>
                 {state.phase === 'downloading' && <div className='nmx-update-progress' role='progressbar' aria-label='更新下载进度' aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.progress)}><i style={{ width: `${state.progress}%` }}></i></div>}

@@ -40,11 +40,11 @@
     padding-inline-end: 6px;
 }
 .nmx-relay-option-metrics.is-delisted > em {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
+    /* A block (not flex) container so a long label in a very narrow drawer ends in an ellipsis inside the pill. */
+    display: block;
+    flex: 0 1 auto;
     width: max-content;
+    min-width: 0;
     max-width: 100%;
     min-height: 20px;
     height: auto;
@@ -57,7 +57,10 @@
     font-size: 11px;
     font-style: normal;
     font-weight: 500;
-    line-height: 1.2;
+    line-height: 14px;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 .nmx-theme-light .nmx-relay-option-metrics.is-delisted > em {

@@ -19,13 +19,19 @@ export interface OwnModelFacts extends ModelTaskMetadata {
     readonly outputModalities?: readonly string[];
 }
 
-/** Music model names (“udio” only as a name of its own: “gpt-audio” is a voice model, not Udio). */
-const MUSIC_NAME = /lyria|music|suno|(?:^|[\s/_.-])udio(?:$|[\s/_.-])|(?:^|[\s/_.-])song(?:$|[\s/_.-])/;
+/**
+ * Music model names (“udio” only as a name of its own: “gpt-audio” is a voice model, not Udio). Stable Audio is music,
+ * as in the cloud taxonomy (apps/cloudflare-platform/src/model-taxonomy.js tests MUSIC before SOUND_EFFECT).
+ */
+const MUSIC_NAME = /lyria|music|suno|stable-audio|mureka|riffusion|ace-step|diffrhythm|song-?gen|(?:^|[\s/_.-])udio(?:$|[\s/_.-])|(?:^|[\s/_.-])song(?:$|[\s/_.-])/;
 
 // The same name evidence and order as model-runtime's model-taxonomy.ts NAME_RULES (plus moderation, and Wan picture
 // models ahead of the Wan video rule because this list also tests dashed spellings of each id): Alibaba's
 // "wan2.1-t2v-turbo" is a video model and "wanx2.1-t2i-turbo" a picture model; ElevenLabs' "eleven_text_to_sound_v2"
-// is a sound effect, matched before the "eleven_" voice rule that catches "eleven_multilingual_v2".
+// is a sound effect, matched before the "eleven_" voice rule that catches "eleven_multilingual_v2". A bare id the API
+// reported nothing for lands where the cloud classifier puts it: Nano Banana, Jimeng and "wanx-v1" draw, Stable
+// Audio is music (before sound effects), MMAudio a sound effect, Sambert and Kling's voice/TTS ids speak (before the
+// Kling video rule).
 const NAME_RULES: readonly [OwnModelKind, RegExp][] = [
     ['decision', /(^|\/)(?:jev(?:$|[._-])|tev1-4b-experimental|mercury-decide|solar-decide|gliner-[\d.]+-decide|span-01)/],
     ['rerank', /rerank/],
@@ -33,12 +39,12 @@ const NAME_RULES: readonly [OwnModelKind, RegExp][] = [
     ['embedding', /embed|(^|[/_-])(bge|gte|e5)([/_-]|$)/],
     ['transcription', /whisper|transcri|(^|[/_-])(asr|stt)([/_-]|$)|chirp|paraformer|sensevoice/],
     ['music', MUSIC_NAME],
-    ['sound_effect', /sound[\s_-]?effect|text[\s_-]?to[\s_-]?sound|(^|[/_-])sfx([/_-]|$)/],
+    ['sound_effect', /sound[\s_-]?effect|text[\s_-]?to[\s_-]?sound|(^|[/_-])sfx([/_-]|$)|mmaudio|audiogen|audioldm|foley/],
     // Before the "wan-<n>" video rule: the dashed spelling of "wan2.2-t2i-flash" ("wan-2.2-t2i-flash") is a picture model.
-    ['image', /(^|[/_-])wanx?-?\d+(\.\d+)?-(t2i|i2i|image)/],
-    ['speech', /(^|[/_-])(tts|speech|voice)([/_-]|$)|^tts|aura-|orpheus|fish-audio|elevenlabs|(^|\/)eleven_|cosyvoice|minimax-speech|audio-tts/],
+    ['image', /(^|[/_-])wanx?-?\d[\d.]*[-_](?:t2i|i2i|imageedit|image)|(^|[/_-])wanx-v\d/],
+    ['speech', /(^|[/_-])(tts|speech|voice)([/_-]|$)|^tts|aura-|orpheus|fish-audio|fishaudio|elevenlabs|(^|\/)eleven_|cosyvoice|minimax-speech|audio-tts|sambert|kokoro|chattts|megatts|kling[-_](?:tts|text-to-audio|(?:custom-|presets-)?voices(?:-list)?)/],
     ['video', /veo-|sora|kling(?![-_\s](?:image|kolors|multi-image2image|tts|text-to-audio|(?:custom-|presets-)?voices))|(^|[/_-])wan-\d|(^|[/_-])wanx?\d+(\.\d+)?-(t2v|i2v|kf2v|s2v|r2v|vace|animate|video|videoedit|video-edit)|(^|[/_-])[tir]2v([/_.-]|$)|hailuo|minimax-h-?0?3|seedance|dreamina-seedance|runway[-/]gen[34]|(^|[/_-])gen-(?:3a|4(?:\.5)?)|(^|[/_-])(?:luma[-_]|ray-[23])|pika-[12]|jimeng-video|cogvideox|hunyuan-video|flux-3-video|avatar-iv|pixverse|vidu|video|ltx-|mochi|happyhorse/],
-    ['image', /dall-e|gpt-image|imagen|flux|sdxl|stable-diffusion|seedream|dola-seedream|recraft|midjourney|ideogram|qwen-image|grok-imagine-image|hunyuan-image|kling-image|(^|[/_-])wanx?\d+(\.\d+)?-(t2i|i2i|image)|-image(-|$)|image-\d/],
+    ['image', /dall-e|gpt-image|imagen|flux|sdxl|stable-diffusion|seedream|seededit|dola-seedream|recraft|midjourney|ideogram|qwen-image|grok-imagine-image|hunyuan-image|kling-image|nano-?banana|jimeng(?![-_]videos?)|cogview|kolors|hidream|(^|[/_-])wanx?\d+(\.\d+)?-(t2i|i2i|image)|-image(-|$)|image-\d/],
     ['3d', /trellis|hunyuan[-_]?3d|tripo[-_]?3d|triposr|meshy|rodin[-_]?3d|point-e|shap-e|zero123|(^|[/_-])3d([/_-]|$)/],
 ];
 

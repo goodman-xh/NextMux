@@ -130,6 +130,64 @@ export function setOfferingPriceExpanded(expanded: boolean): void {
     setOfferingPriceSectionExpanded('user', expanded);
 }
 
+/** A measured viewport rectangle (DOMRect's fields). */
+export interface PriceOverlayBox {
+    readonly left: number; readonly top: number; readonly right: number; readonly bottom: number; readonly width: number; readonly height: number;
+}
+
+/**
+ * Where the pulled-out price drawer (C) goes. Horizontally: beside the model detail drawer (B), over the model list
+ * (A), at most as wide as A. Vertically: level with B's top, lowered just enough that C's bottom reaches the price
+ * trigger bar at the bottom of B, so the pointer moving straight across from that bar lands in C and never on A's
+ * rows below a short C. Always inside the viewport; content taller than the room scrolls in C.
+ */
+export function placePriceOverlayDrawer(input: {
+    readonly viewportWidth: number; readonly viewportHeight: number;
+    readonly picker?: PriceOverlayBox; readonly detail?: PriceOverlayBox; readonly trigger?: PriceOverlayBox;
+    /** B sits left of its list (no list measured): C opens on B's right. */
+    readonly detailOnLeft?: boolean;
+    /** C's content height; 0 before C has rendered. */
+    readonly contentHeight: number;
+}): { readonly left: number; readonly top: number; readonly width: number; readonly maxHeight: number; readonly side: 'left' | 'right' } {
+    const edge = 8, gap = 7, minimumHeight = 120;
+    const { viewportWidth, viewportHeight, picker, detail, trigger } = input;
+    const pickerBox = picker && picker.width > 0 ? picker : undefined;
+    const detailBox = detail && detail.width > 0 ? detail : undefined;
+    const maxViewportWidth = Math.max(120, viewportWidth - edge * 2);
+    let width = Math.min(240, maxViewportWidth);
+    if (pickerBox) {
+        const rawWidth = pickerBox.width > 232
+            ? Math.max(216, Math.min(Math.round(pickerBox.width - 24), Math.floor(pickerBox.width - 16)))
+            : Math.max(120, Math.floor(pickerBox.width - 12));
+        width = Math.min(rawWidth, maxViewportWidth);
+    } else if (detailBox) {
+        const rawWidth = detailBox.width > 232
+            ? Math.max(216, Math.round(detailBox.width - 24))
+            : Math.max(120, Math.floor(detailBox.width - 12));
+        width = Math.min(rawWidth, maxViewportWidth);
+    }
+    let left = edge;
+    if (detailBox) {
+        if (pickerBox) {
+            left = detailBox.left >= pickerBox.left
+                ? Math.max(edge, detailBox.left - gap - width)
+                : Math.min(viewportWidth - edge - width, detailBox.right + gap);
+        } else {
+            left = input.detailOnLeft
+                ? Math.min(viewportWidth - edge - width, detailBox.right + gap)
+                : Math.max(edge, detailBox.left - gap - width);
+        }
+    } else if (pickerBox) {
+        left = pickerBox.left;
+    }
+    left = Math.max(edge, Math.min(left, viewportWidth - edge - width));
+    const height = input.contentHeight > 0 ? input.contentHeight : minimumHeight;
+    const levelTop = detailBox && detailBox.height > 0 ? detailBox.top : (pickerBox?.top ?? edge);
+    const bar = trigger && trigger.height > 0 ? trigger : undefined;
+    const top = Math.max(edge, Math.min(bar ? Math.max(levelTop, bar.bottom - height) : levelTop, viewportHeight - edge - height));
+    return { left, top, width, maxHeight: Math.max(minimumHeight, viewportHeight - top - edge), side: detailBox && left > detailBox.left ? 'right' : 'left' };
+}
+
 export interface OfferingPriceCardProps {
     readonly locale: NextMuxDesktopLocale;
     readonly offering: PlatformOffering;
@@ -173,8 +231,6 @@ export function OfferingPriceCard(props: OfferingPriceCardProps): React.ReactEle
     }, []);
     const measureOverlayRect = React.useCallback((): void => {
         if (typeof window === 'undefined' || typeof document === 'undefined') return;
-        const edge = 8;
-        const gap = 7;
         const pickerCandidates = Array.from(
             document.querySelectorAll<HTMLElement>(
                 '.nmx-model-picker-popover, .nmx-council-model-dropdown, [data-comic-model-panel], .nmx-comic-setup'
@@ -190,46 +246,13 @@ export function OfferingPriceCard(props: OfferingPriceCardProps): React.ReactEle
             }
         }
         const detailEl = triggerRef.current?.closest<HTMLElement>('.nmx-model-effort-menu:not(.nmx-model-price-overlay-drawer)');
-        const pickerBox = pickerEl?.getBoundingClientRect();
-        const detailBox = detailEl?.getBoundingClientRect();
-        const maxViewportWidth = Math.max(120, window.innerWidth - edge * 2);
-        let width = Math.min(240, maxViewportWidth);
-        if (pickerBox && pickerBox.width > 0) {
-            const rawWidth = pickerBox.width > 232
-                ? Math.max(216, Math.min(Math.round(pickerBox.width - 24), Math.floor(pickerBox.width - 16)))
-                : Math.max(120, Math.floor(pickerBox.width - 12));
-            width = Math.min(rawWidth, maxViewportWidth);
-        } else if (detailBox && detailBox.width > 0) {
-            const rawWidth = detailBox.width > 232
-                ? Math.max(216, Math.round(detailBox.width - 24))
-                : Math.max(120, Math.floor(detailBox.width - 12));
-            width = Math.min(rawWidth, maxViewportWidth);
-        }
-        let left = edge;
-        if (detailBox && detailBox.width > 0) {
-            if (pickerBox && pickerBox.width > 0) {
-                const placeLeftOfDetail = detailBox.left >= pickerBox.left;
-                left = placeLeftOfDetail
-                    ? Math.max(edge, detailBox.left - gap - width)
-                    : Math.min(window.innerWidth - edge - width, detailBox.right + gap);
-            } else {
-                left = detailEl?.classList.contains('is-left')
-                    ? Math.min(window.innerWidth - edge - width, detailBox.right + gap)
-                    : Math.max(edge, detailBox.left - gap - width);
-            }
-        } else if (pickerBox && pickerBox.width > 0) {
-            left = pickerBox.left;
-        }
-        left = Math.max(edge, Math.min(left, window.innerWidth - edge - width));
-        const baseTop = detailBox && detailBox.height > 0 ? detailBox.top : (pickerBox?.top ?? edge);
-        const contentHeight = overlayRef.current?.scrollHeight || 0;
-        const top = contentHeight > 0
-            ? Math.max(edge, Math.min(baseTop, window.innerHeight - edge - contentHeight))
-            : Math.max(edge, Math.min(baseTop, window.innerHeight - edge - 120));
-        const maxHeight = Math.max(120, window.innerHeight - top - edge);
+        const { left, top, width, maxHeight, side } = placePriceOverlayDrawer({
+            viewportWidth: window.innerWidth, viewportHeight: window.innerHeight,
+            picker: pickerEl?.getBoundingClientRect(), detail: detailEl?.getBoundingClientRect(), trigger: triggerRef.current?.getBoundingClientRect(),
+            detailOnLeft: Boolean(detailEl?.classList.contains('is-left')), contentHeight: overlayRef.current?.scrollHeight || 0
+        });
         const detailZ = detailEl ? (Number.parseInt(window.getComputedStyle(detailEl).zIndex, 10) || 0) : 0;
         const zIndex = Math.max(2210, detailZ + 10);
-        const side: 'left' | 'right' = detailBox && left > detailBox.left ? 'right' : 'left';
         setOverlayRect(prev => prev
             && Math.abs(prev.left - left) < 1
             && Math.abs(prev.top - top) < 1

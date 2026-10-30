@@ -1647,7 +1647,11 @@
     font-size: 13px;
 }
 
-.nmx-comic-studio-cta:disabled {
+/* Scoped to the modal so the studio's generic `.nmx-comic-studio button:disabled` (opacity .45, default cursor) does
+   not hide that these two primary actions are blocked for now. */
+.nmx-comic-studio-cta:disabled,
+.nmx-comic-studio-enter-btn:disabled,
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) :is(.nmx-comic-studio-cta, .nmx-comic-studio-enter-btn):disabled {
     opacity: 0.48;
     box-shadow: none;
     cursor: not-allowed;
@@ -2418,6 +2422,10 @@
 
 .nmx-comic-studio-lightbox .nmx-comic-studio-enter-btn.is-primary > :is(.codicon, i, span) {
     color: #111114 !important;
+}
+
+.nmx-comic-studio-lightbox .nmx-comic-studio-enter-btn.is-primary:disabled {
+    box-shadow: none;
 }
 
 .nmx-comic-studio-lightbox .nmx-comic-studio-enter-btn.is-primary:hover:not(:disabled) {
