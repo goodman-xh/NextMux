@@ -14,17 +14,20 @@
 /* ---- Relay picker: a relay needs an account when signed out ---- */
 .nmx-relay-sign-in-note {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 5px;
     min-width: 0;
     margin: 0 10px 4px;
     color: var(--nmx-muted);
-    font-size: 11px;
-    line-height: 18px;
 }
-/* The drawer keeps the model picker's width, so the note wraps instead of losing its second half. */
-.nmx-relay-sign-in-note > span { min-width: 0; overflow-wrap: anywhere; white-space: normal; line-height: 1.4; }
-.nmx-relay-sign-in-note > .codicon { flex: none; font-size: 12px; }
+/* The drawer keeps the model picker's width, so the note wraps instead of losing its second half. It restates its
+   type over the pickers' blanket 13px / 18px (`.nmx-relay-picker-popover *`, `.nmx-model-picker-portal *` in
+   nextmux.css, both !important): an 11px aside of at most two 15px lines in every locale, which leaves a 360px-high
+   window room for two merchant rows without a scrollbar. The icon shares that line box, so it sits on the first line. */
+.nmx-relay-popover .nmx-relay-sign-in-note,
+.nmx-relay-popover .nmx-relay-sign-in-note > span { font-size: 11px !important; line-height: 15px !important; }
+.nmx-relay-sign-in-note > span { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.nmx-relay-popover .nmx-relay-sign-in-note > .codicon { flex: none; font-size: 12px !important; line-height: 15px !important; }
 
 /* ---- Relay picker: a favorite that left the public directory (U072) ---- */
 .nmx-relay-option-metrics.is-delisted,

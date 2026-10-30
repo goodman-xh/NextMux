@@ -106,6 +106,16 @@ interface RelayPickerSource {
 }
 
 /** A view of the existing user-visible routes, never an additional routing source. */
+/**
+ * The source drawer's height besides its 32px rows, as Chrome lays it out: source tabs, search and the panel's
+ * padding (91px); the merchant tab adds its sort row and column header (65px), the own-API tab its column header
+ * (24px); signed out, the merchant and favorite tabs carry the sign-in note, at most two 15px lines with its margin
+ * (34px). Too small an estimate leaves a scrollbar on a list the window has room for.
+ */
+export function relayDrawerChromeHeight(tab: RelaySourceTab, signedIn: boolean): number {
+    return (tab === 'merchant' ? 156 : tab === 'my-api' ? 115 : 91) + (tab !== 'my-api' && !signedIn ? 34 : 0);
+}
+
 export function filterRelayPickerSources<T extends RelayPickerSource>(
     options: readonly T[], tab: RelaySourceTab, query: string, favoriteMerchantIds: ReadonlySet<string> = new Set()
 ): readonly T[] {

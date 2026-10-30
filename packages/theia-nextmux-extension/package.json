@@ -1,6 +1,6 @@
 {
   "name": "@nextmux/theia-extension",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "private": true,
   "description": "NextMux desktop shell and workbench views for Eclipse Theia",
   "keywords": [

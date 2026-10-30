@@ -1641,7 +1641,9 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 .nmx-shell.nmx-theme-light .nmx-workspace-topbar.nmx-coding-topbar { background: #ecebe8 !important; }
 .nmx-shell.nmx-theme-light :is(.nmx-context-panel, .nmx-context-account-dock) { background: #e4e2de !important; }
 #theia-app-shell:has(.nmx-theme-light) #theia-top-panel { background: #e4e2de !important; }
-.nmx-shell.nmx-theme-light :is(.nmx-composer, .nmx-composer-popover, .nmx-header-popover, .nmx-account-menu, .nmx-session-menu, .nmx-model-picker, .nmx-model-effort-menu, .nmx-follow-up-menu, .nmx-settings-panel, .nmx-settings-group) {
+/* The model and relay drawers keep the pickers' own white surface and border (nextmux.css): painted here, their frame
+   turned warm grey around a still-white list. `:where` keeps this rule's specificity for every other surface. */
+.nmx-shell.nmx-theme-light :is(.nmx-composer, .nmx-composer-popover:not(:where(.nmx-model-picker-popover)), .nmx-header-popover, .nmx-account-menu, .nmx-session-menu, .nmx-model-picker, .nmx-model-effort-menu, .nmx-follow-up-menu, .nmx-settings-panel, .nmx-settings-group) {
     background: #f4f3f0 !important;
     border-color: #dcd8d4 !important;
 }

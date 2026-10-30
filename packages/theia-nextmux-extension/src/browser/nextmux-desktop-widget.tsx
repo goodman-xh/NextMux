@@ -458,6 +458,7 @@ import { placeAdjacentFloatingPanel, placeAnchoredFloatingPanel, placeModelPicke
 import type { AdjacentFloatingPanelPlacement } from './nextmux-floating-panel';
 import type { AnchoredFloatingPanelPlacement } from './nextmux-floating-panel';
 import type { PublicMerchantDirectoryPage, PublicMerchantDirectoryQuery, PublicMerchantIdentity } from '../common/nextmux-public-merchants';
+import { reorderPublicMerchantDirectory } from '../common/nextmux-public-merchants';
 import { bindPriceQuote, optionalKeyPriceQuoteId, priceAuthorizationErrorCode } from '../common/nextmux-price-quote';
 import { canRateRelayReply, normalizeRelayFeedbackRequestIds } from '../common/nextmux-relay-feedback';
 import { codingProjectPathKey, codingSidebarProjects } from './nextmux-sidebar-projects';
@@ -574,6 +575,7 @@ import {
     relayMultiplierText,
     relayPercentText,
     parseRelayFavoriteMerchants,
+    relayDrawerChromeHeight,
     serializeRelayFavoriteMerchants,
     RelaySourceTab
 } from './nextmux-relay-picker';
@@ -717,6 +719,8 @@ type PrivacyStage = 'idle' | 'loading' | 'saving';
 type LocalDataStage = 'idle' | 'loading' | 'clearing' | 'exporting' | 'archive' | 'cache';
 type BillingTab = 'usage' | 'topups' | 'movements';
 type RelaySortMode = 'quality' | 'authenticity' | 'latency' | 'price';
+/** As long as the platform service keeps a directory page: an older one opening a drawer is refreshed behind its rows. */
+const PUBLIC_MERCHANT_PAGE_FRESH_MS = 30_000;
 type WorkspaceRoot = Awaited<WorkspaceService['roots']>[number];
 
 // LibreChat's default: ten files per message; pasted long texts count separately.
@@ -4178,6 +4182,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
     protected favoriteMerchantLabels = parseRelayFavoriteMerchants(window.localStorage.getItem(RELAY_FAVORITES_STORAGE_KEY));
     protected publicMerchantPage: PublicMerchantDirectoryPage | undefined;
+    /** The plain merchant list (no search) last read in `sortMode`, and when: a drawer opens on it at once
+     * (revalidatePublicMerchantPage). Cleared with publicMerchantPage when the account or catalog revision changes. */
+    protected publicMerchantBrowsePage: { readonly page: PublicMerchantDirectoryPage; readonly sortMode: RelaySortMode; readonly loadedAt: number } | undefined;
     protected favoriteMerchantPage: PublicMerchantDirectoryPage | undefined;
     protected publicMerchantPageLoading = false;
     protected publicMerchantPageError = false;
@@ -7109,6 +7116,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.councilConfigModalClosing = false;
         this.closeNavigationSurface();
         this.councilModalRouteError = false;
+        this.revalidatePublicMerchantPage?.();
         if ((!this.publicMerchantPage || this.publicMerchantPageError) && !this.publicMerchantPageLoading) {
             void this.loadPublicMerchantPage();
         }
@@ -12944,7 +12952,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.relayMetricTooltip = undefined;
         this.closeComicModelHoverImmediately?.();
         if (mode === 'relay') {
-            if (this.relaySourceTab !== 'my-api' && !this.publicMerchantPage && !this.publicMerchantPageLoading) {
+            this.revalidatePublicMerchantPage?.();
+            // The open tab's own list: favorites are not satisfied by the merchant page, nor a failed read by nothing.
+            const directoryPage = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage;
+            if (this.relaySourceTab !== 'my-api' && (!directoryPage || this.publicMerchantPageError) && !this.publicMerchantPageLoading) {
                 void this.loadPublicMerchantPage?.();
             }
         } else {
@@ -13014,7 +13025,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const rows = Math.max(2, this.relayPickerOptions().length);
             const directoryPage = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage;
             const loading = this.relaySourceTab !== 'my-api' && (this.publicMerchantPageLoading || !directoryPage || this.publicMerchantPageError);
-            const chromeHeight = this.relaySourceTab === 'merchant' ? 132 : 91;
+            const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked));
             const footerHeight = loading || (this.relaySourceTab === 'merchant' && this.publicMerchantPage?.nextCursor) ? 30 : 0;
             const placement = this.calculateModelPickerPlacement(Math.max(300, chromeHeight + rows * 32 + footerHeight), 264, anchorSelector);
             return ReactDOM.createPortal(
@@ -33805,11 +33816,22 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         this.relayMetricTooltip = undefined;
         if (!(this.codingPopover === 'routes' && this.modelPickerRelayOpen)) {
+            const previousTab = this.relaySourceTab, previousQuery = this.relaySourceQuery;
             // Signed out, platform relays need an account: the person's own APIs come first (unless a relay is chosen).
             this.relaySourceTab = this.activeRelayKey.startsWith('official:')
                 || !this.platformSession?.linked && !this.activeRelayKey.startsWith('managed:') && this.relayOptions().some(option => option.kind === 'official')
                 ? 'my-api' : 'merchant';
             this.relaySourceQuery = '';
+            if ((this.publicMerchantPageLoading || this.publicMerchantSearchTimer) && (previousTab !== this.relaySourceTab || previousQuery)) {
+                // A read (or pending search) for the view the drawer just left is discarded on arrival and would
+                // never end this spinner.
+                if (this.publicMerchantSearchTimer) window.clearTimeout(this.publicMerchantSearchTimer);
+                this.publicMerchantSearchTimer = 0;
+                this.publicMerchantPageRequest++;
+                this.publicMerchantPageLoading = false;
+            }
+            // The plain list opens at once from what this window already read, refreshed behind it when old.
+            this.revalidatePublicMerchantPage?.();
             if (this.relaySourceTab === 'merchant' && (!this.publicMerchantPage || this.publicMerchantPageError) && !this.publicMerchantPageLoading) void this.loadPublicMerchantPage();
         }
         if (this.codingPopover === 'routes') {
@@ -36281,6 +36303,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.syncModelRoute(); this.update();
             });
             if (first.nextCursor) void this.loadRestOfPlatformCatalog(first.nextCursor, revision);
+            // With the catalog in, the relay drawer's first page is read too if this window has none yet.
+            this.prewarmPublicMerchantPage?.();
             return true;
         } catch { return false; }
         finally { this.catalogLoading = false; this.syncModelRoute(); this.recoverDeletedOfficialRelay(); this.update(); }
@@ -36380,6 +36404,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.accountOverview = EMPTY_ACCOUNT_OVERVIEW;
             this.publicMerchantPageRequest++;
             this.publicMerchantPage = undefined;
+            this.publicMerchantBrowsePage = undefined;
             this.favoriteMerchantPage = undefined;
             this.publicMerchantPageLoading = false;
             this.publicMerchantPageError = false;
@@ -36401,7 +36426,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.merchantPickerSnapshots.clear();
             this.merchantDiscoveredModels.clear();
             this.merchantCatalogStatus = 'idle';
-            if (this.modelPickerRelayOpen && this.relaySourceTab !== 'my-api') void this.loadPublicMerchantPage();
+            if ((this.relayDirectoryOnScreen?.() ?? this.modelPickerRelayOpen) && this.relaySourceTab !== 'my-api') void this.loadPublicMerchantPage();
+            else this.prewarmPublicMerchantPage?.();
         }
         if (previousUserId !== session.user?.id) {
             this.modelSwitchSettings = new ModelSwitchSettings(session.user?.id ? window.localStorage.getItem(this.modelSwitchStorageKey()) : null);
@@ -36675,6 +36701,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.merchantCatalogError = false;
         }
         if (this.selectedPublicMerchant?.id === merchantId) this.selectedPublicMerchant = undefined;
+        // Directory rows kept on screen while they refresh (and the plain list a drawer reopens on) drop it now,
+        // instead of offering a withdrawn merchant until the next read. A favorite reads as delisted.
+        const withoutMerchant = (page: PublicMerchantDirectoryPage | undefined): PublicMerchantDirectoryPage | undefined =>
+            page?.merchants.some(merchant => merchant.id === merchantId) ? { ...page, merchants: page.merchants.filter(merchant => merchant.id !== merchantId) } : page;
+        const visible = withoutMerchant(this.publicMerchantPage);
+        const browse = this.publicMerchantBrowsePage;
+        if (browse) this.publicMerchantBrowsePage = { ...browse, page: browse.page === this.publicMerchantPage ? visible! : withoutMerchant(browse.page)! };
+        this.publicMerchantPage = visible;
+        this.favoriteMerchantPage = withoutMerchant(this.favoriteMerchantPage);
         for (const [kind, entry] of this.comicStepDirectory) this.comicStepDirectory.set(kind, {
             ...entry, relays: entry.relays.filter(relay => relay.key !== managedRelayKey(merchantId))
         });
@@ -36788,11 +36823,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 if (this.publicMerchantSearchTimer) window.clearTimeout(this.publicMerchantSearchTimer);
                 this.publicMerchantSearchTimer = 0;
                 this.publicMerchantPage = undefined;
+                this.publicMerchantBrowsePage = undefined;
                 this.favoriteMerchantPage = undefined;
                 this.selectedPublicMerchant = undefined;
                 this.publicMerchantPageLoading = false;
                 this.publicMerchantPageError = false;
-                if (this.modelPickerRelayOpen && this.relaySourceTab !== 'my-api') void this.loadPublicMerchantPage();
+                // An open drawer reads the new revision at once; a closed one has it read before its next opening.
+                if ((this.relayDirectoryOnScreen?.() ?? this.modelPickerRelayOpen) && this.relaySourceTab !== 'my-api') void this.loadPublicMerchantPage();
+                else this.prewarmPublicMerchantPage?.();
                 this.update();
             }
             const snapshotRevision = this.catalogSnapshotRevision;
@@ -37983,7 +38021,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.relaySortMode = mode;
         window.localStorage.setItem('nextmux.desktop.relaySort.v1', mode);
         this.relayMetricTooltip = undefined;
-        if (this.relaySourceTab !== 'my-api') void this.loadPublicMerchantPage();
+        const page = this.publicMerchantPage;
+        // The whole directory is already on screen (one page, nothing before or after it): reorder those rows in
+        // this frame, and let the server's order replace them when it arrives. A longer directory is ordered by the
+        // server across pages, so it loads again.
+        if (this.relaySourceTab === 'merchant' && page && !this.publicMerchantPageLoading && !this.publicMerchantPageError
+            && !this.relaySourceQuery.trim() && !page.nextCursor && !page.previousCursor && page.merchants.length < 100) {
+            this.reorderPublicMerchantPage?.(mode);
+            void this.loadPublicMerchantPage({}, { silent: true });
+        } else if (this.relaySourceTab !== 'my-api') void this.loadPublicMerchantPage();
         this.update();
     }
 
@@ -38019,7 +38065,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.update();
     }
 
-    protected async loadPublicMerchantPage(cursor: Pick<PublicMerchantDirectoryQuery, 'after' | 'before'> = {}): Promise<void> {
+    /**
+     * `silent`: refresh the plain merchant list already on screen. Its rows stay (with the automatic choice, and
+     * no spinner) until the new page replaces them in one step, and a failed refresh keeps them
+     * (stale-while-revalidate). With nothing to keep (a search, favorites, a later page, no rows yet, an error
+     * or another read under way) it loads as usual.
+     */
+    protected async loadPublicMerchantPage(cursor: Pick<PublicMerchantDirectoryQuery, 'after' | 'before'> = {}, options: { readonly silent?: boolean } = {}): Promise<void> {
         if (this.publicMerchantSearchTimer) window.clearTimeout(this.publicMerchantSearchTimer);
         this.publicMerchantSearchTimer = 0;
         const append = Boolean(cursor.after) && !cursor.before;
@@ -38034,11 +38086,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const direction = sortMode === 'quality' || sortMode === 'authenticity' ? 'desc' : 'asc';
         const favoriteIds = tab === 'favorite' ? [...this.favoriteMerchantLabels.keys()].sort().slice(0, 256) : [];
         const favoriteScope = JSON.stringify(favoriteIds);
-        this.publicMerchantPageLoading = true;
-        this.publicMerchantPageError = false;
-        if (tab === 'favorite') this.favoriteMerchantPage = undefined;
-        else if (!append) this.publicMerchantPage = undefined;
-        this.update();
+        const silent = options?.silent === true && !cursor.after && !cursor.before && tab !== 'favorite' && !query.trim()
+            && !this.publicMerchantPageLoading && !this.publicMerchantPageError && Boolean(this.publicMerchantPage?.merchants.length);
+        if (!silent) {
+            this.publicMerchantPageLoading = true;
+            this.publicMerchantPageError = false;
+            if (tab === 'favorite') this.favoriteMerchantPage = undefined;
+            else if (!append) this.publicMerchantPage = undefined;
+            this.update();
+        }
         const current = (): boolean => token === this.publicMerchantPageRequest && query === this.relaySourceQuery
             && sortMode === this.relaySortMode && tab === this.relaySourceTab
             && (tab !== 'favorite' || favoriteScope === JSON.stringify([...this.favoriteMerchantLabels.keys()].sort().slice(0, 256)))
@@ -38049,12 +38105,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 const pages = await Promise.all(chunks.map(merchantIds => this.platformService.getPublicMerchantDirectory({ query, sort, direction, merchantIds })));
                 if (!current()) return;
                 const allowed = new Set(favoriteIds);
+                // A merchant withdrawn meanwhile (forgetMerchantCatalogSnapshot) reads as delisted, not as listed again.
+                const removed = this.catalogRemovedMerchants;
                 this.favoriteMerchantPage = { measuredAt: pages[0]?.measuredAt || new Date().toISOString(),
-                    merchants: [...new Map(pages.flatMap(page => page.merchants).filter(merchant => allowed.has(merchant.id)).map(merchant => [merchant.id, merchant])).values()] };
+                    merchants: [...new Map(pages.flatMap(page => page.merchants).filter(merchant => allowed.has(merchant.id) && !removed?.has(merchant.id)).map(merchant => [merchant.id, merchant])).values()] };
                 return;
             }
-            const page = await this.platformService.getPublicMerchantDirectory({ query, sort, direction, ...cursor });
+            const response = await this.platformService.getPublicMerchantDirectory({ query, sort, direction, ...cursor });
             if (!current()) return;
+            const removed = this.catalogRemovedMerchants;
+            const page = removed?.size ? { ...response, merchants: response.merchants.filter(merchant => !removed.has(merchant.id)) } : response;
             if (append && previous) {
                 const merchants = new Map(previous.merchants.map(merchant => [merchant.id, merchant]));
                 for (const merchant of page.merchants) merchants.set(merchant.id, merchant);
@@ -38064,12 +38124,78 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     ...(previous.previousCursor ? { previousCursor: previous.previousCursor } : {})
                 };
             } else this.publicMerchantPage = page;
+            if (!query.trim()) {
+                const browse = this.publicMerchantBrowsePage;
+                this.publicMerchantBrowsePage = { page: this.publicMerchantPage, sortMode,
+                    loadedAt: append && previous && browse?.page === previous ? browse.loadedAt : Date.now() };
+            }
         } catch {
             if (!current()) return;
-            this.publicMerchantPageError = true;
+            // A refresh behind rows already on screen keeps them; the next opening of the drawer tries again.
+            if (!silent) this.publicMerchantPageError = true;
         } finally {
             if (current()) { this.publicMerchantPageLoading = false; this.update(); }
         }
+    }
+
+    /**
+     * Order the rows on screen as the directory will serve them for `mode`, so a new sort shows in the same frame
+     * (setRelaySortMode). The rows the page placed ahead of its own order are the platform's recommended merchants,
+     * which lead under every sort: they keep their places.
+     */
+    protected reorderPublicMerchantPage(mode: RelaySortMode): void {
+        const page = this.publicMerchantPage;
+        if (!page) return;
+        const sort = mode === 'price' ? 'multiplier' : mode;
+        const direction = mode === 'quality' || mode === 'authenticity' ? 'desc' : 'asc';
+        const reordered = reorderPublicMerchantDirectory(page, sort, direction);
+        const browse = this.publicMerchantBrowsePage;
+        // Same rows, so the same age: an old list is still refreshed when the drawer next opens.
+        if (browse?.page === page) this.publicMerchantBrowsePage = { page: reordered, sortMode: mode, loadedAt: browse.loadedAt };
+        this.publicMerchantPage = reordered;
+    }
+
+    /**
+     * A drawer opening on the plain merchant list shows the list this window last read for the current order at
+     * once (also after a search, whose results the opening has just cleared), and refreshes it behind the rows when
+     * it is older than 30 seconds (stale-while-revalidate). A list read for a search or another order with no plain
+     * list to fall back on loads again. An appended (scrolled) list is left as it is.
+     */
+    protected revalidatePublicMerchantPage(): void {
+        if (this.relaySourceTab !== 'merchant' || this.relaySourceQuery.trim() || this.publicMerchantPageLoading || this.publicMerchantSearchTimer) return;
+        const browse = this.publicMerchantBrowsePage?.sortMode === this.relaySortMode ? this.publicMerchantBrowsePage : undefined;
+        if (!browse) {
+            if (this.publicMerchantPage && !this.publicMerchantPageError) void this.loadPublicMerchantPage();
+            return;
+        }
+        if (this.publicMerchantPage !== browse.page || this.publicMerchantPageError) {
+            this.publicMerchantPage = browse.page;
+            this.publicMerchantPageError = false;
+        }
+        const measuredAt = Date.parse(browse.page.measuredAt);
+        // A page answered from the launch disk snapshot is new to this window yet older on the server: either age counts.
+        const age = Date.now() - Math.min(browse.loadedAt, Number.isFinite(measuredAt) ? measuredAt : 0);
+        if (age > PUBLIC_MERCHANT_PAGE_FRESH_MS && !browse.page.previousCursor && browse.page.merchants.length <= 100) {
+            void this.loadPublicMerchantPage({}, { silent: true });
+        }
+    }
+
+    /**
+     * Read the plain merchant list before the first click when this window has none (a catalog revision or another
+     * account cleared it, or the launch read was discarded), so 选择中转商 opens on rows instead of a spinner. A failed
+     * read waits for the drawer's own retry, as after an account change (reloadRelayDirectoryAfterSessionChange).
+     */
+    protected prewarmPublicMerchantPage(): void {
+        // The plain list is what both the merchant and the own-API tab read; favorites are read when shown. Called
+        // inside the catalog load, so it must never throw into it.
+        if (this.detachedConversationId || this.isDisposed || this.relaySourceTab === 'favorite' || this.relaySourceQuery?.trim()
+            || this.publicMerchantPage || this.publicMerchantPageLoading || this.publicMerchantPageError || this.publicMerchantSearchTimer) return;
+        void this.loadPublicMerchantPage();
+    }
+
+    /** A source drawer (or the council setup's source list) is on screen, reading the shared directory state. */
+    protected relayDirectoryOnScreen(): boolean {
+        return Boolean(this.modelPickerRelayOpen || this.comicRelayPickerOpen || this.comicStudioIsolatedPicker?.mode === 'relay' || this.councilConfigModalOpen);
     }
 
     protected loadNextPublicMerchantPage(): void {
@@ -43965,7 +44091,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const rows = Math.max(2, this.relayPickerOptions().length);
         const directoryPage = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage;
         const loading = this.relaySourceTab !== 'my-api' && (this.publicMerchantPageLoading || !directoryPage || this.publicMerchantPageError);
-        const chromeHeight = this.relaySourceTab === 'merchant' ? 132 : 91;
+        const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked));
         const footerHeight = loading || this.relaySourceTab === 'merchant' && this.publicMerchantPage?.nextCursor ? 30 : 0;
         const placement = this.calculateModelPickerPlacement(Math.max(300, chromeHeight + rows * 32 + footerHeight), 264);
         return ReactDOM.createPortal(
@@ -48375,7 +48501,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.closeComicModelHoverImmediately();
         this.comicRelayPickerOpen = true;
         this.relayMetricTooltip = undefined;
-        if (this.comicRelayPickerOpen && this.relaySourceTab !== 'my-api' && !this.publicMerchantPage && !this.publicMerchantPageLoading) void this.loadPublicMerchantPage();
+        this.revalidatePublicMerchantPage?.();
+        const directoryPage = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage;
+        if (this.relaySourceTab !== 'my-api' && (!directoryPage || this.publicMerchantPageError) && !this.publicMerchantPageLoading) void this.loadPublicMerchantPage();
         this.update();
     }
 
@@ -48403,7 +48531,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const rows = Math.max(2, this.relayPickerOptions().length);
         const directoryPage = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage;
         const loading = this.relaySourceTab !== 'my-api' && (this.publicMerchantPageLoading || !directoryPage || this.publicMerchantPageError);
-        const chromeHeight = this.relaySourceTab === 'merchant' ? 132 : 91;
+        const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked));
         const footerHeight = loading || this.relaySourceTab === 'merchant' && this.publicMerchantPage?.nextCursor ? 30 : 0;
         const placement = this.calculateModelPickerPlacement(Math.max(300, chromeHeight + rows * 32 + footerHeight), 264, '.nmx-comic-chat-drawers .nmx-composer-relay-button');
         const close = (): void => this.dismissComicChatRelayPicker(true);
