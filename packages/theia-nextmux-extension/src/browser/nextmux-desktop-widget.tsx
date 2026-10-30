@@ -5395,6 +5395,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
             complete: nonce => this.platformService.completeDeviceLink(nonce),
             poll: () => this.platformService.getDeviceSession(),
             accept: session => {
+                if (session.linked) {
+                    this.deviceLink = undefined;
+                    this.deviceLinkError = '';
+                    if (this.deviceLinkExpiryTimer) {
+                        window.clearTimeout(this.deviceLinkExpiryTimer);
+                        this.deviceLinkExpiryTimer = 0;
+                    }
+                }
                 this.applyPlatformSession(session);
                 this.reloadRelayDirectoryAfterSessionChange();
                 this.update();
@@ -5402,6 +5410,24 @@ export class NextMuxDesktopWidget extends ReactWidget {
             reportError: error => {
                 this.deviceLinkError = error instanceof Error ? error.message : '无法连接账户服务';
                 this.update();
+            }
+        });
+        const nudgeAccountLink = (): void => {
+            this.accountLinkCoordinator?.nudge();
+        };
+        const nudgeAccountLinkOnVisible = (): void => {
+            if (document.visibilityState === 'visible') this.accountLinkCoordinator?.nudge();
+        };
+        window.addEventListener('focus', nudgeAccountLink);
+        document.addEventListener('visibilitychange', nudgeAccountLinkOnVisible);
+        this.toDispose.push({
+            dispose: () => {
+                window.removeEventListener('focus', nudgeAccountLink);
+                document.removeEventListener('visibilitychange', nudgeAccountLinkOnVisible);
+                if (this.deviceLinkExpiryTimer) {
+                    window.clearTimeout(this.deviceLinkExpiryTimer);
+                    this.deviceLinkExpiryTimer = 0;
+                }
             }
         });
         const desktopBridge = window.nextmuxDesktop;
@@ -12729,7 +12755,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected comicCreationLibraryItems(): ComicCreationLibraryItem[] {
-        return (this.comicGlobalLibraryMaterialViews?.() ?? [])
+        const items = (this.comicGlobalLibraryMaterialViews?.() ?? [])
             .filter((item): item is ComicMaterialView & { readonly path: string } => Boolean(item.path))
             .map(item => ({
                 id: item.libraryAssetId || item.assetId,
@@ -12738,6 +12764,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 path: item.path,
                 previewUrl: item.url
             }));
+        const unprobedVideos = items
+            .filter(item => item.kind === 'video' && /\.(?:mp4|m4v|mov)$/i.test(item.path) && !this.playbackFileUrlByPath?.has(item.path))
+            .map(item => item.path);
+        if (unprobedVideos.length > 0) {
+            this.ensurePlaybackUrlsForPaths?.(unprobedVideos);
+        }
+        return items;
     }
 
     protected async pickComicStudioLocalFiles(): Promise<void> {
@@ -12784,12 +12817,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const isVideo = ['mp4', 'mov', 'webm', 'm4v'].includes(ext);
             if (imageOnly && !isImage) continue;
             if (!isImage && !isVideo) continue;
+            if (isVideo) {
+                this.ensurePlaybackUrlsForPaths?.([fsPath]);
+            }
             entries.push({
                 id: `local:${fsPath}`,
                 name: fsPath.split(/[\\/]/).pop() || fsPath,
                 kind: isVideo ? 'video' : 'image',
                 path: fsPath,
-                previewUrl: URI.fromFilePath(fsPath).toString()
+                previewUrl: (isVideo ? this.playbackFileUrlByPath?.get(fsPath) : undefined) || URI.fromFilePath(fsPath).toString()
             });
             break;
         }
@@ -14591,7 +14627,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     }
                     return false;
                 }}
-                sourceFiles={modal.sourceFiles}
+                sourceFiles={modal.sourceFiles.map(file =>
+                    file.kind === 'video' && file.path && this.playbackFileUrlByPath?.has(file.path)
+                        ? { ...file, previewUrl: this.playbackFileUrlByPath.get(file.path) }
+                        : file
+                )}
                 onPickLocalFiles={() => { void this.pickComicStudioLocalFiles(); }}
                 onDropLocalFiles={files => this.addComicStudioDroppedFiles(files)}
                 onRemoveSourceFile={id => this.removeComicStudioSourceFile(id)}
@@ -24393,6 +24433,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.closeAttachmentLightbox('escape');
             return;
         }
+        if (event.key === 'Escape' && !event.isComposing && this.comicChatUi?.()?.viewer && this.node.isConnected) {
+            event.preventDefault();
+            event.stopPropagation();
+            this.closeComicChatViewer();
+            return;
+        }
         if (this.activeSection !== 'coding' || this.codingPanel !== 'thread' || !this.node.isConnected) return;
         if (this.codingSessionRunHistoryId) return;
         if (event.key === 'Escape' && this.pendingTurnEdit) {
@@ -29638,6 +29684,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const name = fallbackName || resolved.path.split(/[\\/]/).pop() || resolved.path;
         const initialUrl = (kind === 'video' && resolved.path ? this.playbackFileUrlByPath?.get(resolved.path) : undefined) || resolved.url;
         if (this.activeSection === 'comic' && this.comicChatUi?.()?.surface === 'chat') {
+            this.comicChatViewerBackdropDown = false;
+            this.comicChatViewerMediaState = kind === 'video'
+                ? { key: `${resolved.path || initialUrl}::${name}`, restoredUrl: '', currentTime: 0, volume: 1, muted: false }
+                : undefined;
             this.comicChatUi().viewer = { url: initialUrl, name, kind };
         }
         if (kind === 'image') {
@@ -29674,6 +29724,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
             try { fileKey = new URI(url).path.fsPath(); } catch { fileKey = ''; }
         }
         const initialUrl = (kind === 'video' && fileKey ? this.playbackFileUrlByPath?.get(fileKey) : undefined) || url;
+        this.comicChatViewerBackdropDown = false;
+        this.comicChatViewerMediaState = kind === 'video'
+            ? { key: `${fileKey || initialUrl}::${name}`, restoredUrl: '', currentTime: 0, volume: 1, muted: false }
+            : undefined;
         ui.viewer = { url: initialUrl, name, kind };
         if (kind === 'video' && fileKey && /\.(?:mp4|m4v|mov)$/i.test(fileKey) && !this.playbackFileUrlByPath?.has(fileKey)) {
             void this.preparePlaybackFileMap?.([fileKey]).then(() => {
@@ -36355,6 +36409,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         if (session.linked) {
             this.deviceLink = undefined;
+            this.deviceLinkError = '';
+            if (this.deviceLinkExpiryTimer) {
+                window.clearTimeout(this.deviceLinkExpiryTimer);
+                this.deviceLinkExpiryTimer = 0;
+            }
+            this.accountLinkCoordinator?.cancel();
             void this.loadAccountOverview(true);
         } else {
             this.accountOverview = EMPTY_ACCOUNT_OVERVIEW;
@@ -36421,26 +36481,39 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.update();
     }
 
-    protected async startDeviceLink(): Promise<void> {
+    protected async startDeviceLink(fresh = true): Promise<void> {
         if (this.deviceLinkStarting) return;
         const active = this.deviceLink;
-        if (active && Number(active.expiresAt) > Date.now() + 1_000) {
+        if (!fresh && active && Number(active.expiresAt) > Date.now() + 1_000) {
             this.openExternalUrl(active.verificationUrl);
             return;
         }
         this.deviceLinkError = '';
         this.deviceLinkStarting = true;
+        if (fresh) {
+            this.accountLinkCoordinator?.cancel();
+            if (this.deviceLinkExpiryTimer) {
+                window.clearTimeout(this.deviceLinkExpiryTimer);
+                this.deviceLinkExpiryTimer = 0;
+            }
+            this.deviceLink = undefined;
+        }
         this.update();
         try {
-            this.deviceLink = await this.platformService.startDeviceLink('NextMux Desktop');
+            const link = await this.platformService.startDeviceLink('NextMux Desktop', fresh ? { fresh: true } : undefined);
+            if (this.isDisposed || this.platformSession.linked) return;
+            this.deviceLink = link;
             this.accountLinkCoordinator?.start(this.deviceLink);
             this.openExternalUrl(this.deviceLink.verificationUrl);
-            // Re-render once the code expires so the card offers "Sign in again".
+            // Re-render once the link expires so the card offers "Sign in again".
             if (this.deviceLinkExpiryTimer) window.clearTimeout(this.deviceLinkExpiryTimer);
             const remaining = Number(this.deviceLink.expiresAt) - Date.now();
             this.deviceLinkExpiryTimer = remaining > 0 && remaining < 86_400_000 ? window.setTimeout(() => { this.deviceLinkExpiryTimer = 0; this.update(); }, remaining + 250) : 0;
         } catch (error) {
             this.deviceLinkError = error instanceof Error ? error.message : '无法创建设备连接';
+            if (!(this.activeSection === 'settings' && this.settingsPanel === 'profile')) {
+                this.addNotification?.('error', this.tx?.('account') || '账户', this.deviceLinkError);
+            }
         } finally {
             this.deviceLinkStarting = false;
         }
@@ -50016,20 +50089,95 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.update();
     }
 
+    protected comicChatViewerBackdropDown = false;
+    protected comicChatViewerMediaState?: {
+        key: string;
+        restoredUrl: string;
+        currentTime: number;
+        volume: number;
+        muted: boolean;
+        aspectRatio?: number;
+    };
+
+    protected closeComicChatViewer(): void {
+        const ui = this.comicChatUi();
+        if (!ui.viewer && !this.comicChatViewerZoom) return;
+        ui.viewer = undefined;
+        this.comicChatViewerZoom = undefined;
+        this.comicChatViewerBackdropDown = false;
+        this.comicChatViewerMediaState = undefined;
+        this.update();
+    }
+
     protected renderComicChatViewer(): React.ReactNode {
         const ui = this.comicChatUi();
         const viewer = ui.viewer;
         if (!viewer) return undefined;
         const isImage = viewer.kind !== 'video' && viewer.kind !== 'audio';
         const zoomState = isImage ? this.currentComicChatViewerZoom(viewer.url, viewer.name) : undefined;
-        const close = (): void => { ui.viewer = undefined; this.comicChatViewerZoom = undefined; this.update(); };
-        return <div className='nmx-attachment-lightbox nmx-comic-chat-viewer' role='dialog' aria-modal='true' aria-label={viewer.name} onMouseDown={close}
-            onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); close(); } }}>
-            <section onMouseDown={event => event.stopPropagation()}>
+        const close = (): void => this.closeComicChatViewer();
+        const isBackdropTarget = (target: EventTarget | null): boolean =>
+            !(target instanceof Element) || !target.closest('video, img, audio, button, a, input, footer, .nmx-lightbox-title');
+        const videoAr = viewer.kind === 'video' ? this.comicChatViewerMediaState?.aspectRatio : undefined;
+        return <div className={`nmx-attachment-lightbox nmx-comic-chat-viewer is-${viewer.kind}`} role='dialog' aria-modal='true' aria-label={viewer.name}
+            onPointerDown={event => { this.comicChatViewerBackdropDown = isBackdropTarget(event.target); }}
+            onMouseDown={event => { this.comicChatViewerBackdropDown = isBackdropTarget(event.target); }}
+            onClick={event => {
+                const shouldClose = (this.comicChatViewerBackdropDown || event.detail === 0) && isBackdropTarget(event.target);
+                this.comicChatViewerBackdropDown = false;
+                if (shouldClose) close();
+            }}
+            onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } }}>
+            <section>
                 <header><span className='nmx-lightbox-title'><strong data-nmx-literal>{viewer.name}</strong></span>
                     <button type='button' className='nmx-lightbox-close' autoFocus aria-label={this.comicChatT('close')} title={this.comicChatT('close')} onClick={close}><i className='codicon codicon-close' aria-hidden='true'></i></button></header>
-                <div className='nmx-attachment-lightbox-stage' ref={isImage ? this.bindComicChatViewerWheel : undefined} onWheel={isImage ? event => this.onComicChatViewerWheel(event) : undefined}>{viewer.kind === 'video' ? <video src={viewer.url} controls autoPlay playsInline />
-                    : viewer.kind === 'audio' ? <audio src={viewer.url} controls autoPlay /> : <img style={zoomState ? this.imagePreviewStyle(zoomState) : undefined} src={viewer.url} alt='' draggable={false} />}</div>
+                <div className='nmx-attachment-lightbox-stage' ref={isImage ? this.bindComicChatViewerWheel : undefined} onWheel={isImage ? event => this.onComicChatViewerWheel(event) : undefined}>{viewer.kind === 'video'
+                    ? <video
+                        src={viewer.url}
+                        style={videoAr ? ({ '--nmx-viewer-video-ar': String(Number(videoAr.toFixed(6))) } as React.CSSProperties) : undefined}
+                        controls
+                        autoPlay
+                        playsInline
+                        controlsList='nofullscreen noremoteplayback'
+                        disablePictureInPicture
+                        onMouseUp={() => { this.comicChatViewerBackdropDown = false; }}
+                        onLoadedMetadata={event => {
+                            const el = event.currentTarget;
+                            if (!this.comicChatViewerMediaState) {
+                                this.comicChatViewerMediaState = { key: `${viewer.url}::${viewer.name}`, restoredUrl: '', currentTime: 0, volume: 1, muted: false };
+                            }
+                            if (el.videoWidth > 0 && el.videoHeight > 0) {
+                                const ar = el.videoWidth / el.videoHeight;
+                                this.comicChatViewerMediaState.aspectRatio = ar;
+                                el.style.setProperty('--nmx-viewer-video-ar', String(Number(ar.toFixed(6))));
+                            }
+                            const saved = this.comicChatViewerMediaState;
+                            try {
+                                el.volume = Math.max(0, Math.min(1, saved.volume));
+                                el.muted = saved.muted;
+                            } catch { /* noop */ }
+                            if (saved.currentTime > 0 && (!Number.isFinite(el.duration) || saved.currentTime < el.duration - 0.15)) {
+                                try { el.currentTime = saved.currentTime; } catch { /* noop */ }
+                            }
+                            saved.restoredUrl = viewer.url;
+                            const playPromise = el.play?.();
+                            if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => undefined);
+                        }}
+                        onTimeUpdate={event => {
+                            const el = event.currentTarget;
+                            if (this.comicChatViewerMediaState && this.comicChatViewerMediaState.restoredUrl === viewer.url && el.readyState >= 1) {
+                                this.comicChatViewerMediaState.currentTime = el.currentTime;
+                            }
+                        }}
+                        onVolumeChange={event => {
+                            const el = event.currentTarget;
+                            if (this.comicChatViewerMediaState) {
+                                this.comicChatViewerMediaState.volume = el.volume;
+                                this.comicChatViewerMediaState.muted = el.muted;
+                            }
+                        }} />
+                    : viewer.kind === 'audio' ? <audio src={viewer.url} controls autoPlay onMouseUp={() => { this.comicChatViewerBackdropDown = false; }} />
+                    : <img style={zoomState ? this.imagePreviewStyle(zoomState) : undefined} src={viewer.url} alt='' draggable={false} onMouseUp={() => { this.comicChatViewerBackdropDown = false; }} />}</div>
                 {zoomState && <footer>
                     <button type='button' disabled={zoomState.zoomPercent <= 25} aria-label={imageLightboxText(this.desktopLocale, 'zoomOut')} onClick={() => this.zoomComicChatViewer('out')}><i className='codicon codicon-zoom-out'></i></button>
                     <output>{imageLightboxPercentage(zoomState)}</output>
@@ -54408,7 +54556,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         let content: React.ReactNode = null;
         if (this.settingsPanel === 'profile') {
             // “Appearance & language” is part of the account page (REQUIREMENTS §6.8).
-            content = <section className='nmx-settings-panel nmx-account-settings nmx-general-settings'><div className='nmx-profile-card'><span className={this.platformSession.linked ? 'is-linked' : ''}>{this.platformSession.linked ? identity.slice(0, 1).toUpperCase() : <i className='codicon codicon-account'></i>}</span><div><strong>{identity}</strong>{this.platformSession.linked ? <small>{this.platformSession.user?.email || '账户已连接'}</small> : this.deviceLinkError ? <small role='alert'>{this.deviceLinkError}</small> : <small data-nmx-literal role='status'>{deviceLinkText(this.desktopLocale, this.currentDeviceLinkState())}</small>}</div>{this.platformSession.linked ? <button onClick={() => void this.openAccountPortal()}>管理账户</button> : <DeviceLinkActions locale={this.desktopLocale} state={this.currentDeviceLinkState()} code={this.deviceLink?.code} signInLabel={localizeDesktopSurface(this.desktopLocale, '登录/注册')} onStart={() => void this.startDeviceLink()} onReopen={() => { if (this.deviceLink) this.openExternalUrl(this.deviceLink.verificationUrl); }} onCancel={() => this.cancelDeviceLink()} />}</div>
+            content = <section className='nmx-settings-panel nmx-account-settings nmx-general-settings'><div className='nmx-profile-card'><span className={this.platformSession.linked ? 'is-linked' : ''}>{this.platformSession.linked ? identity.slice(0, 1).toUpperCase() : <i className='codicon codicon-account'></i>}</span><div><strong>{identity}</strong>{this.platformSession.linked ? <small>{this.platformSession.user?.email || '账户已连接'}</small> : this.deviceLinkError ? <small role='alert'>{this.deviceLinkError}</small> : <small data-nmx-literal role='status'>{deviceLinkText(this.desktopLocale, this.currentDeviceLinkState())}</small>}</div>{this.platformSession.linked ? <button onClick={() => void this.openAccountPortal()}>管理账户</button> : <DeviceLinkActions locale={this.desktopLocale} state={this.currentDeviceLinkState()} signInLabel={localizeDesktopSurface(this.desktopLocale, '登录/注册')} onStart={() => void this.startDeviceLink(true)} onReopen={() => void this.startDeviceLink(true)} onCancel={() => this.cancelDeviceLink()} />}</div>
                 <GitHubAccountSettings locale={this.desktopLocale} api={this.platformService} openExternal={url => this.openExternalUrl(url)} />
                 <article className='nmx-settings-group'>
                     <header><i className='codicon codicon-color-mode'></i><span><strong>外观</strong></span></header>

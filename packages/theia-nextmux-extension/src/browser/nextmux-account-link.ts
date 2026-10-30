@@ -46,6 +46,9 @@ export class DesktopAccountLinkCoordinator {
     protected active = false;
     protected generation = 0;
     protected disposed = false;
+    protected polling = false;
+    protected currentPollStartedAt = 0;
+    protected nudgePending = false;
     protected readonly handledNonces = new Set<string>();
     protected readonly setTimer: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>;
     protected readonly clearTimer: (timer: ReturnType<typeof setTimeout>) => void;
@@ -70,8 +73,38 @@ export class DesktopAccountLinkCoordinator {
         this.generation += 1;
         this.active = false;
         this.expiresAt = 0;
+        this.polling = false;
+        this.currentPollStartedAt = 0;
+        this.nudgePending = false;
         if (this.timer !== undefined) this.clearTimer(this.timer);
         this.timer = undefined;
+    }
+
+    /**
+     * Immediately poll `/api/devices/session` when the desktop window regains focus or
+     * visibility, so multi-browser logins (or dismissed deep-link prompts) sync at once.
+     */
+    nudge(): void {
+        if (!this.active || this.disposed) return;
+        if (this.expiresAt <= this.now()) {
+            this.cancel();
+            return;
+        }
+        if (this.timer !== undefined) {
+            this.clearTimer(this.timer);
+            this.timer = undefined;
+        }
+        if (this.polling) {
+            if (this.now() - this.currentPollStartedAt >= 250) {
+                this.nudgePending = true;
+            }
+            return;
+        }
+        void this.pollOnce();
+    }
+
+    pollNow(): void {
+        this.nudge();
     }
 
     dispose(): void {
@@ -115,15 +148,25 @@ export class DesktopAccountLinkCoordinator {
             this.cancel();
             return;
         }
+        if (this.timer !== undefined) {
+            this.clearTimer(this.timer);
+            this.timer = undefined;
+        }
         this.timer = this.setTimer(() => {
             this.timer = undefined;
             void this.pollOnce();
-        }, this.options.pollIntervalMs || 3_000);
+        }, this.options.pollIntervalMs || 2_000);
     }
 
     protected async pollOnce(): Promise<void> {
         if (!this.active || this.disposed) return;
+        if (this.expiresAt <= this.now()) {
+            this.cancel();
+            return;
+        }
         const generation = this.generation;
+        this.polling = true;
+        this.currentPollStartedAt = this.now();
         try {
             const session = await this.options.poll();
             // A browser approval (or cancel, or a new sign-in) finished while this poll was out: its older answer
@@ -135,7 +178,22 @@ export class DesktopAccountLinkCoordinator {
                 return;
             }
         } catch (error) {
+            if (generation !== this.generation || !this.active || this.disposed) return;
             this.options.reportError(error);
+        } finally {
+            if (generation === this.generation) {
+                this.polling = false;
+            }
+        }
+        if (generation !== this.generation || !this.active || this.disposed) return;
+        if (this.nudgePending) {
+            this.nudgePending = false;
+            if (this.expiresAt > this.now()) {
+                void this.pollOnce();
+                return;
+            }
+            this.cancel();
+            return;
         }
         this.schedulePoll();
     }

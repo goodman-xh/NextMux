@@ -38,6 +38,7 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
     const [search,setSearch]=React.useState('');
     const [pendingDelete,setPendingDelete]=React.useState<{readonly entry:ComicAssetLibraryEntry;readonly x:number;readonly y:number}|undefined>();
     const [zoomedEntry,setZoomedEntry]=React.useState<ComicAssetLibraryEntry|undefined>();
+    const [zoomAspectRatio,setZoomAspectRatio]=React.useState<number|undefined>();
     const [playbackUrls,setPlaybackUrls]=React.useState<Readonly<Record<string,string>>>({});
     const [failedUpload,setFailedUpload]=React.useState(false);
     const [contextMenu,setContextMenu]=React.useState<{readonly entry:ComicAssetLibraryEntry;readonly x:number;readonly y:number}|undefined>();
@@ -45,8 +46,20 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
     const menuRef=React.useRef<HTMLDivElement|null>(null);
     const deletePopoverRef=React.useRef<HTMLDivElement|null>(null);
     const gridRef=React.useRef<HTMLDivElement|null>(null);
+    const lightboxVideoRef=React.useRef<HTMLVideoElement|null>(null);
+    const lightboxBackdropDownRef=React.useRef(false);
+    const zoomMediaStateRef=React.useRef<{assetId:string;currentTime:number;volume:number;muted:boolean;aspectRatio?:number}|undefined>(undefined);
+    const zoomRestoredSrcRef=React.useRef('');
     const probedPathsRef=React.useRef(new Set<string>());
     const dismissedOverlayOnDownRef=React.useRef(false);
+    const closeZoom=():void=>{
+        lightboxBackdropDownRef.current=false;
+        zoomRestoredSrcRef.current='';
+        zoomMediaStateRef.current=undefined;
+        try{lightboxVideoRef.current?.pause();}catch{/* noop */}
+        setZoomedEntry(undefined);
+        setZoomAspectRatio(undefined);
+    };
     const [operations]=React.useState(()=>assetLibraryOperations(props.operationScope,props.onUse??props.load));
     const [,render]=React.useReducer(value=>value+1,0),cardLocks=React.useRef(new Set<string>()),mounted=React.useRef(true),preserveError=React.useRef(false);
     React.useEffect(()=>{mounted.current=true;const notify=()=>render();operations.listeners.add(notify);return()=>{operations.listeners.delete(notify);mounted.current=false;};},[operations]);
@@ -79,7 +92,7 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
         const onKeyDown=(event:KeyboardEvent):void=>{
             if(event.key!=='Escape'||event.isComposing||operations.busy)return;
             event.preventDefault();event.stopPropagation();event.stopImmediatePropagation?.();
-            if(zoomedEntry)setZoomedEntry(undefined);
+            if(zoomedEntry)closeZoom();
             else if(pendingDelete)setPendingDelete(undefined);
             else if(contextMenu)setContextMenu(undefined);
             else if(renaming)setRenaming(undefined);
@@ -147,12 +160,47 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
             setPendingDelete(prev=>prev?{...prev,x:nextX,y:nextY}:undefined);
         }
     },[pendingDelete]);
-    const openZoom=(entry:ComicAssetLibraryEntry):void=>{
+    const resolveMediaUrl=(entry:ComicAssetLibraryEntry|undefined):string|undefined=>{
+        if(!entry?.mediaPath)return undefined;
+        return playbackUrls[entry.mediaPath]||URI.fromFilePath(entry.mediaPath).toString();
+    };
+    const zoomedMedia=resolveMediaUrl(zoomedEntry);
+    useLayoutEffectSafe(()=>{
+        const el=lightboxVideoRef.current;
+        const saved=zoomMediaStateRef.current;
+        if(!el||!zoomedEntry||zoomedEntry.assetType!=='video'||!saved||saved.assetId!==zoomedEntry.assetId)return;
+        try{
+            el.volume=Math.max(0,Math.min(1,saved.volume));
+            el.muted=saved.muted;
+        }catch{/* noop */}
+    },[zoomedEntry?.assetId,zoomedMedia]);
+    const openZoom=(entry:ComicAssetLibraryEntry,sourceVideo?:HTMLVideoElement|null):void=>{
         setContextMenu(undefined);
         setPendingDelete(undefined);
+        lightboxBackdropDownRef.current=false;
+        zoomRestoredSrcRef.current='';
+        let initialAspectRatio:number|undefined=
+            entry.metadata?.width&&entry.metadata?.height&&entry.metadata.width>0&&entry.metadata.height>0
+                ?entry.metadata.width/entry.metadata.height
+                :undefined;
+        if(entry.assetType==='video'){
+            if(sourceVideo&&sourceVideo.videoWidth>0&&sourceVideo.videoHeight>0){
+                initialAspectRatio=sourceVideo.videoWidth/sourceVideo.videoHeight;
+            }
+            zoomMediaStateRef.current={
+                assetId:entry.assetId,
+                currentTime:sourceVideo&&Number.isFinite(sourceVideo.currentTime)&&sourceVideo.currentTime>0?sourceVideo.currentTime:0,
+                volume:sourceVideo&&Number.isFinite(sourceVideo.volume)?Math.max(0,Math.min(1,sourceVideo.volume)):1,
+                muted:Boolean(sourceVideo?.muted),
+                aspectRatio:initialAspectRatio
+            };
+        }else{
+            zoomMediaStateRef.current=undefined;
+        }
         gridRef.current?.querySelectorAll('video,audio').forEach(node=>{
             try{(node as HTMLMediaElement).pause();}catch{/* noop */}
         });
+        setZoomAspectRatio(initialAspectRatio);
         setZoomedEntry(entry);
     };
     const openDeletePopover=(entry:ComicAssetLibraryEntry,event:React.MouseEvent<HTMLElement>,fallback?:{readonly x:number;readonly y:number}):void=>{
@@ -190,7 +238,7 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
     const mutate=async(entry:ComicAssetLibraryEntry,remove:boolean):Promise<void>=>{
         if(cardLocks.current.has(entry.assetId)||operations.busy===entry.assetId)return;
         cardLocks.current.add(entry.assetId);render();setError('');setFailedUpload(false);
-        try{if(remove){await props.onDelete?.(entry.assetId);if(mounted.current){setEntries(current=>current.filter(item=>item.assetId!==entry.assetId));setPendingDelete(undefined);setZoomedEntry(prev=>prev?.assetId===entry.assetId?undefined:prev);}}
+        try{if(remove){await props.onDelete?.(entry.assetId);if(mounted.current){setEntries(current=>current.filter(item=>item.assetId!==entry.assetId));setPendingDelete(undefined);if(zoomedEntry?.assetId===entry.assetId)closeZoom();}}
             else{await props.onPin?.(entry.assetId,!entry.pinnedAt);if(mounted.current)setEntries(current=>current.map(item=>item.assetId===entry.assetId?{...item,pinnedAt:entry.pinnedAt?undefined:new Date().toISOString()}:item));}}
         catch(error){if(mounted.current){setFailedUpload(false);setError(error instanceof Error?error.message:String(error));}}
         finally{cardLocks.current.delete(entry.assetId);if(mounted.current)render();}
@@ -236,21 +284,16 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
     const countFor=(filter:ComicAssetLibraryFilter):number=>entries.filter(entry=>comicAssetLibraryMatches(entry,filter)).length;
     const isCharacterEntry=(entry:ComicAssetLibraryEntry):boolean=>entry.assetCategory==='character'||Boolean(entry.characterBundleId);
     const canReclassify=(entry:ComicAssetLibraryEntry):boolean=>Boolean(props.onCategoryChange&&entry.assetType==='image'&&entry.mediaPath);
-    const resolveMediaUrl=(entry:ComicAssetLibraryEntry|undefined):string|undefined=>{
-        if(!entry?.mediaPath)return undefined;
-        return playbackUrls[entry.mediaPath]||URI.fromFilePath(entry.mediaPath).toString();
-    };
-    const zoomedMedia=resolveMediaUrl(zoomedEntry);
     return <div className='nmx-board-tool-backdrop nmx-library-backdrop' onMouseDown={event=>{
         event.stopPropagation();
         if(dismissedOverlayOnDownRef.current){dismissedOverlayOnDownRef.current=false;return;}
-        if(zoomedEntry){setZoomedEntry(undefined);return;}
+        if(zoomedEntry){closeZoom();return;}
         if(pendingDelete){setPendingDelete(undefined);return;}
         if(contextMenu){setContextMenu(undefined);return;}
         if(event.target===event.currentTarget&&!operations.busy)props.onClose();
     }}>
         <section className='nmx-board-tool-dialog nmx-board-asset-library nmx-unified-asset-library' role='dialog' aria-modal='true' aria-label={t('library')}
-            onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();if(zoomedEntry)setZoomedEntry(undefined);else if(pendingDelete)setPendingDelete(undefined);else if(contextMenu)setContextMenu(undefined);else if(renaming)setRenaming(undefined);else props.onClose();}}}>
+            onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();if(zoomedEntry)closeZoom();else if(pendingDelete)setPendingDelete(undefined);else if(contextMenu)setContextMenu(undefined);else if(renaming)setRenaming(undefined);else props.onClose();}}}>
             <header>
                 <div className='nmx-library-header-title'>
                     <strong>{t('library')}</strong>
@@ -299,10 +342,9 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
                             setPendingDelete(undefined);
                             setContextMenu({entry,x:event.clientX,y:event.clientY});
                         }}>
-                        <div className={`nmx-library-preview${isZoomableImage?' is-zoomable-image':''}`} onClick={isZoomableImage?()=>openZoom(entry):undefined}>
-                            {isZoomableImage?<img src={media} alt='' loading='lazy'/>:isZoomableVideo?<video src={media} controls preload='metadata'/>:entry.assetType==='audio'&&media?<audio src={media} controls preload='metadata'/>:<span>{entry.textContent?.slice(0,160)||t(entry.assetType==='text'?'text':entry.assetType)}</span>}
-                            {isZoomableVideo&&<button type='button' className='nmx-library-video-zoom-hit' title={t('zoomPreview')} aria-label={t('zoomPreview')} onClick={event=>{event.stopPropagation();openZoom(entry);}}/>}
-                            {(isZoomableImage||isZoomableVideo)&&<button type='button' className='nmx-library-zoom-btn' title={t('zoomPreview')} aria-label={t('zoomPreview')} onClick={event=>{event.stopPropagation();openZoom(entry);}}><i className='codicon codicon-screen-full' aria-hidden='true'/></button>}
+                        <div className={`nmx-library-preview${isZoomableImage?' is-zoomable-image':isZoomableVideo?' is-zoomable-video':''}`} onClick={isZoomableImage?()=>openZoom(entry):undefined}>
+                            {isZoomableImage?<img src={media} alt='' loading='lazy'/>:isZoomableVideo?<video src={media} controls playsInline preload='metadata' controlsList='nofullscreen noremoteplayback' disablePictureInPicture onClick={event=>{event.preventDefault();event.stopPropagation();openZoom(entry,event.currentTarget);}}/>:entry.assetType==='audio'&&media?<audio src={media} controls preload='metadata'/>:<span>{entry.textContent?.slice(0,160)||t(entry.assetType==='text'?'text':entry.assetType)}</span>}
+                            {(isZoomableImage||isZoomableVideo)&&<button type='button' className='nmx-library-zoom-btn' title={t('zoomPreview')} aria-label={t('zoomPreview')} onClick={event=>{event.stopPropagation();const siblingVideo=isZoomableVideo?event.currentTarget.parentElement?.querySelector('video'):null;openZoom(entry,siblingVideo);}}><i className='codicon codicon-screen-full' aria-hidden='true'/></button>}
                             <span className={`nmx-library-type-badge is-${isChar?'character':entry.assetType}`}>{badgeLabel}</span>
                         </div>
                         <div className='nmx-library-card-meta'>
@@ -345,17 +387,6 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
                     </div>
                 </div>;
             })()}
-            {zoomedEntry&&zoomedMedia&&<div className='nmx-library-lightbox' role='dialog' aria-modal='true' aria-label={zoomedEntry.assetName}
-                onMouseDown={event=>event.stopPropagation()}
-                onClick={event=>{event.stopPropagation();if(event.target===event.currentTarget)setZoomedEntry(undefined);}}>
-                <button type='button' className='nmx-library-lightbox-close' title={t('close')} aria-label={t('close')}
-                    onMouseDown={event=>event.stopPropagation()}
-                    onClick={event=>{event.stopPropagation();setZoomedEntry(undefined);}}>×</button>
-                {zoomedEntry.assetType==='video'
-                    ?<video key={zoomedEntry.assetId} className='nmx-library-lightbox-media' src={zoomedMedia} controls autoPlay playsInline onMouseDown={event=>event.stopPropagation()} onClick={event=>event.stopPropagation()}/>
-                    :<img key={zoomedEntry.assetId} className='nmx-library-lightbox-media' src={zoomedMedia} alt={zoomedEntry.assetName} onMouseDown={event=>event.stopPropagation()} onClick={event=>event.stopPropagation()}/>}
-                <div className='nmx-library-lightbox-caption' data-nmx-literal>{zoomedEntry.assetName}</div>
-            </div>}
             {renaming&&(()=>{
                 const busy=cardLocks.current.has(renaming.entry.assetId)||operations.busy===renaming.entry.assetId;
                 return <div className='nmx-library-backdrop nmx-library-rename-backdrop' role='dialog' aria-modal='true' aria-label={t('renameTitle')}
@@ -384,5 +415,81 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
                 </div>;
             })()}
         </section>
+        {zoomedEntry&&zoomedMedia&&<div className='nmx-library-lightbox' role='dialog' aria-modal='true' aria-label={zoomedEntry.assetName}
+            onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closeZoom();}}}
+            onPointerDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=event.target===event.currentTarget;}}
+            onMouseDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=event.target===event.currentTarget;}}
+            onClick={event=>{event.stopPropagation();const shouldClose=(lightboxBackdropDownRef.current||event.detail===0)&&event.target===event.currentTarget;lightboxBackdropDownRef.current=false;if(shouldClose)closeZoom();}}>
+            <div className='nmx-library-lightbox-topbar'
+                onPointerDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=event.target===event.currentTarget;}}
+                onMouseDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=event.target===event.currentTarget;}}
+                onClick={event=>{event.stopPropagation();const shouldClose=(lightboxBackdropDownRef.current||event.detail===0)&&event.target===event.currentTarget;lightboxBackdropDownRef.current=false;if(shouldClose)closeZoom();}}>
+                <div className='nmx-library-lightbox-meta'
+                    onPointerDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
+                    onMouseDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
+                    onClick={event=>event.stopPropagation()}>
+                    <div className='nmx-library-lightbox-caption' data-nmx-literal title={zoomedEntry.assetName}>{zoomedEntry.assetName}</div>
+                    {zoomedEntry.durationMs!==undefined&&zoomedEntry.durationMs>0&&<span className='nmx-library-lightbox-duration' data-nmx-literal>{`${(zoomedEntry.durationMs/1000).toFixed(1)}s`}</span>}
+                </div>
+                <button type='button' className='nmx-library-lightbox-close' title={t('close')} aria-label={t('close')}
+                    onPointerDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
+                    onMouseDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
+                    onClick={event=>{event.stopPropagation();closeZoom();}}>×</button>
+            </div>
+            <div className='nmx-library-lightbox-stage'
+                onPointerDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=event.target===event.currentTarget;}}
+                onMouseDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=event.target===event.currentTarget;}}
+                onClick={event=>{event.stopPropagation();const shouldClose=(lightboxBackdropDownRef.current||event.detail===0)&&event.target===event.currentTarget;lightboxBackdropDownRef.current=false;if(shouldClose)closeZoom();}}>
+                {zoomedEntry.assetType==='video'
+                    ?<video ref={lightboxVideoRef} key={zoomedEntry.assetId} className='nmx-library-lightbox-media is-video'
+                        style={zoomAspectRatio?({'--nmx-zoom-ar':String(Number(zoomAspectRatio.toFixed(6)))} as React.CSSProperties):undefined}
+                        src={zoomedMedia} controls autoPlay playsInline controlsList='nofullscreen noremoteplayback' disablePictureInPicture
+                        onPointerDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
+                        onMouseDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
+                        onMouseUp={()=>{lightboxBackdropDownRef.current=false;}}
+                        onClick={event=>event.stopPropagation()}
+                        onLoadedMetadata={event=>{
+                            const el=event.currentTarget;
+                            if(el.videoWidth>0&&el.videoHeight>0){
+                                const ar=el.videoWidth/el.videoHeight;
+                                setZoomAspectRatio(ar);
+                                if(zoomMediaStateRef.current?.assetId===zoomedEntry.assetId){
+                                    zoomMediaStateRef.current={...zoomMediaStateRef.current,aspectRatio:ar};
+                                }
+                            }
+                            const saved=zoomMediaStateRef.current;
+                            if(saved&&saved.assetId===zoomedEntry.assetId){
+                                try{
+                                    el.volume=Math.max(0,Math.min(1,saved.volume));
+                                    el.muted=saved.muted;
+                                }catch{/* noop */}
+                                if(saved.currentTime>0&&(!Number.isFinite(el.duration)||saved.currentTime<el.duration-0.15)){
+                                    try{el.currentTime=saved.currentTime;}catch{/* noop */}
+                                }
+                            }
+                            zoomRestoredSrcRef.current=zoomedMedia;
+                            const playPromise=el.play?.();
+                            if(playPromise&&typeof playPromise.catch==='function')playPromise.catch(()=>undefined);
+                        }}
+                        onTimeUpdate={event=>{
+                            const el=event.currentTarget;
+                            if(zoomRestoredSrcRef.current!==zoomedMedia||el.readyState<1)return;
+                            if(zoomMediaStateRef.current?.assetId===zoomedEntry.assetId){
+                                zoomMediaStateRef.current={...zoomMediaStateRef.current,currentTime:el.currentTime};
+                            }
+                        }}
+                        onVolumeChange={event=>{
+                            const el=event.currentTarget;
+                            if(zoomMediaStateRef.current?.assetId===zoomedEntry.assetId){
+                                zoomMediaStateRef.current={...zoomMediaStateRef.current,volume:el.volume,muted:el.muted};
+                            }
+                        }}/>
+                    :<img key={zoomedEntry.assetId} className='nmx-library-lightbox-media' src={zoomedMedia} alt={zoomedEntry.assetName}
+                        onPointerDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
+                        onMouseDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
+                        onMouseUp={()=>{lightboxBackdropDownRef.current=false;}}
+                        onClick={event=>event.stopPropagation()}/>}
+            </div>
+        </div>}
     </div>;
 }

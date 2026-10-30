@@ -240,20 +240,8 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--nmx-focus-ring, #d74470) 22%, transparent);
 }
 
-/* ---- Account card: visible browser sign-in (device link) state ---- */
+/* ---- Account card: visible browser sign-in state ---- */
 .nmx-device-link-actions { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
-.nmx-device-link-code {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 6px;
-    padding: 4px 9px;
-    border: 1px dashed var(--nmx-border-strong);
-    border-radius: 8px;
-    color: var(--nmx-text);
-    animation: nmx-shell-fade-in 180ms ease-out;
-}
-.nmx-device-link-code > small { color: var(--nmx-muted); font-size: 11px; }
-.nmx-device-link-code > bdi { font: 600 13px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .06em; }
 .nmx-shell .nmx-settings-page .nmx-device-link-actions > button {
     min-height: 30px;
     padding: 0 12px;
@@ -268,7 +256,6 @@
 .nmx-shell .nmx-settings-page .nmx-device-link-actions > button:hover:not(:disabled) { background: var(--nmx-control-hover, var(--nmx-hover)); }
 .nmx-shell .nmx-settings-page .nmx-device-link-actions > button:disabled { opacity: .55; cursor: progress; }
 @keyframes nmx-shell-fade-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) { .nmx-device-link-code { animation: none; } }
 /* The avatar rule (.nmx-profile-card > span) must not shape the action group. */
 .nmx-profile-card > span.nmx-device-link-actions {
     width: auto;
@@ -280,7 +267,6 @@
     color: inherit;
     background: transparent;
 }
-.nmx-device-link-code, .nmx-device-link-code > * { white-space: nowrap; }
 .nmx-comic-character-sheet .nmx-character-new {
     border: 1px dashed var(--nmx-border-strong);
     color: var(--nmx-text);

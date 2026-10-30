@@ -706,11 +706,12 @@ export function ComicMaterialsPanel(props: {
             const raw = event.target as Node | null;
             const target = raw instanceof Element ? raw : raw?.parentElement ?? null;
             if (!target || panel.current?.contains(target)) return;
-            if (target.closest('[data-nmx-library-button], .nmx-comic-materials-btn')) return;
+            if (target.closest('[data-nmx-library-button], .nmx-comic-materials-btn, .nmx-comic-chat-viewer, .nmx-attachment-lightbox')) return;
             props.onClose();
         };
         const handleKeyDown = (event: KeyboardEvent): void => {
             if (event.key === 'Escape') {
+                if (document.querySelector('.nmx-comic-chat-viewer, .nmx-attachment-lightbox, .nmx-comic-chat-menu')) return;
                 event.preventDefault();
                 props.onClose();
             }
@@ -736,7 +737,7 @@ export function ComicMaterialsPanel(props: {
         : [['all', 'all'], ['image', 'images'], ['character', 'character'], ['video', 'videos'], ['audio', 'audio']];
     const scopeLabel: Readonly<Record<ComicMaterialScope, ComicChatTextKey>> = { chat: 'scopeChat', project: 'scopeProject', all: 'scopeAll' };
     return <aside ref={panel} tabIndex={-1} className={`nmx-comic-materials ${props.pick ? 'is-picking' : ''}`} aria-label={t('materials')}
-        onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); props.onClose(); } }}>
+        onKeyDown={event => { if (event.key === 'Escape') { if (document.querySelector('.nmx-comic-chat-viewer, .nmx-attachment-lightbox, .nmx-comic-chat-menu')) return; event.preventDefault(); props.onClose(); } }}>
         <header>
             <div><strong>{props.pick ? t('fromMaterials') : t('materials')}</strong><small>{t('materialsLead')}</small></div>
             <button type='button' className='nmx-comic-materials-close' aria-label={t('close')} title={t('close')} onClick={props.onClose}><i className='codicon codicon-close' aria-hidden='true'></i></button>

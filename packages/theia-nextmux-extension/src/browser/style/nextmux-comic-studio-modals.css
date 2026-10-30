@@ -825,6 +825,10 @@
     background: repeating-conic-gradient(rgba(128, 128, 136, 0.08) 0% 25%, transparent 0% 50%) 50% / 16px 16px;
 }
 
+.nmx-comic-studio-dropzone-media.is-zoomable {
+    cursor: zoom-in;
+}
+
 .nmx-comic-studio-dropzone-media > :is(img, video) {
     max-width: 100%;
     max-height: 100%;
@@ -866,6 +870,50 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-dropzone-zoom,
+.nmx-comic-studio-dropzone-zoom {
+    position: absolute;
+    top: 8px;
+    inset-inline-end: 8px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    min-width: 0;
+    height: 26px;
+    min-height: 0;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.22) !important;
+    border-radius: 999px;
+    background: rgba(16, 16, 20, 0.78) !important;
+    background-color: rgba(16, 16, 20, 0.78) !important;
+    color: #ffffff !important;
+    cursor: zoom-in;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    transition: background-color 120ms ease, transform 120ms ease, border-color 120ms ease;
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-dropzone-zoom.has-remove,
+.nmx-comic-studio-dropzone-zoom.has-remove {
+    inset-inline-end: 39px;
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-dropzone-zoom:hover:not(:disabled),
+.nmx-comic-studio-dropzone-zoom:hover:not(:disabled) {
+    background: rgba(34, 34, 42, 0.94) !important;
+    background-color: rgba(34, 34, 42, 0.94) !important;
+    border-color: rgba(255, 255, 255, 0.42) !important;
+    color: #ffffff !important;
+    transform: scale(1.05);
+}
+
+.nmx-comic-studio-modal .nmx-comic-studio-dropzone-zoom > .codicon,
+.nmx-comic-studio-dropzone-zoom > .codicon {
+    font-size: 12.5px;
+    color: #ffffff !important;
 }
 
 .nmx-comic-studio-modal .nmx-comic-studio-dropzone-remove,
@@ -1045,7 +1093,8 @@
 .nmx-comic-studio-lib-check {
     position: absolute;
     top: 3px;
-    inset-inline-end: 3px;
+    inset-inline-start: 3px;
+    z-index: 2;
     display: grid;
     place-items: center;
     width: 17px;
@@ -1055,11 +1104,49 @@
     color: var(--st-active-fg) !important;
     font-size: 10px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.34);
+    pointer-events: none;
 }
 
 .nmx-comic-studio-lib-check > .codicon {
     color: var(--st-active-fg) !important;
     font-size: 10px;
+}
+
+.nmx-comic-studio-lib-thumb > .nmx-comic-studio-lib-zoom {
+    position: absolute;
+    top: 3px;
+    inset-inline-end: 3px;
+    z-index: 3;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(15, 23, 42, 0.76);
+    color: #ffffff !important;
+    cursor: zoom-in;
+    opacity: 0.86;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+    transition: opacity 120ms ease, background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.nmx-comic-studio-lib-thumb > .nmx-comic-studio-lib-zoom > .codicon {
+    font-size: 11px;
+    color: #ffffff !important;
+}
+
+.nmx-comic-studio-lib-item:is(:hover, :focus-within) .nmx-comic-studio-lib-thumb > .nmx-comic-studio-lib-zoom,
+.nmx-comic-studio-lib-thumb > .nmx-comic-studio-lib-zoom:is(:hover, :focus-visible) {
+    opacity: 1;
+    background: rgba(15, 23, 42, 0.94);
+    border-color: rgba(255, 255, 255, 0.42);
+    color: #ffffff !important;
+}
+
+.nmx-comic-studio-lib-thumb > .nmx-comic-studio-lib-zoom:hover {
+    transform: scale(1.06);
 }
 
 .nmx-comic-studio-lib-item > small {
@@ -2251,7 +2338,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 0 18px;
+    padding: 0 18px 0 84px;
     background: rgba(14, 14, 20, 0.88);
     border-bottom: 1px solid rgba(255, 255, 255, 0.12);
     cursor: default;
@@ -2372,6 +2459,13 @@
 
 .nmx-comic-studio-lightbox-video {
     background: #000000;
+}
+
+.nmx-comic-studio-lightbox-video.is-responsive-video {
+    width: max(min(360px, calc(100vw - 48px)), min(1240px, 94vw, calc((100dvh - 96px) * var(--nmx-studio-zoom-ar, 1.7778))));
+    height: min(calc(100dvh - 96px), calc(min(1240px, 94vw) / var(--nmx-studio-zoom-ar, 1.7778)));
+    max-width: min(1240px, 94vw);
+    max-height: calc(100dvh - 96px);
 }
 
 .nmx-comic-studio-lightbox-audio {

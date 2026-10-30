@@ -1071,6 +1071,14 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
     const [showTopicAssets, setShowTopicAssets] = React.useState(false);
     const [contextMenu, setContextMenu] = React.useState<StudioContextMenuState | undefined>(undefined);
     const [lightboxOpen, setLightboxOpen] = React.useState(false);
+    const [sourceZoomItem, setSourceZoomItem] = React.useState<{
+        readonly id?: string;
+        readonly path?: string;
+        readonly title: string;
+        readonly kind: 'image' | 'video';
+        readonly url: string;
+    } | null>(null);
+    const [sourceZoomAspectRatio, setSourceZoomAspectRatio] = React.useState<number | undefined>(undefined);
     const [isLightTheme, setIsLightTheme] = React.useState(() => {
         if (typeof props.isLightTheme === 'boolean') {
             return props.isLightTheme;
@@ -1096,6 +1104,21 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
     const filmstripRef = React.useRef<HTMLDivElement | null>(null);
     const wheelAccumRef = React.useRef<number>(0);
     const wheelLastResetRef = React.useRef<number>(0);
+    const lightboxBackdropDownRef = React.useRef(false);
+    const sourceLightboxBackdropDownRef = React.useRef(false);
+    const sourceZoomMediaStateRef = React.useRef<{
+        restoredUrl: string;
+        currentTime: number;
+        volume: number;
+        muted: boolean;
+    }>({ restoredUrl: '', currentTime: 0, volume: 1, muted: false });
+
+    const closeSourceZoom = React.useCallback((): void => {
+        sourceLightboxBackdropDownRef.current = false;
+        sourceZoomMediaStateRef.current = { restoredUrl: '', currentTime: 0, volume: 1, muted: false };
+        setSourceZoomItem(null);
+        setSourceZoomAspectRatio(undefined);
+    }, []);
 
     const [isPlaying, setIsPlaying] = React.useState(false);
     const [currentTime, setCurrentTime] = React.useState(0);
@@ -1192,6 +1215,7 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
         if (!props.open) {
             setContextMenu(undefined);
             setLightboxOpen(false);
+            closeSourceZoom();
             setDraggingFiles(false);
             return;
         }
@@ -1308,6 +1332,13 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                 setContextMenu(undefined);
                 return;
             }
+            if (sourceZoomItem) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                closeSourceZoom();
+                return;
+            }
             if (lightboxOpen) {
                 event.preventDefault();
                 event.stopPropagation();
@@ -1337,7 +1368,7 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
             document.removeEventListener('pointerdown', onPointerDown, true);
             window.removeEventListener('keydown', onKeyDown, true);
         };
-    }, [props.open, props.generating, props.onClose, contextMenu, lightboxOpen, closeLightbox]);
+    }, [props.open, props.generating, props.onClose, contextMenu, sourceZoomItem, closeSourceZoom, lightboxOpen, closeLightbox]);
 
     if (!props.open) {
         return null;
@@ -1580,6 +1611,73 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                                     <i className='codicon codicon-check' />
                                                 </em>
                                             )}
+                                            {(item.kind === 'image' || item.kind === 'video') && item.previewUrl && (
+                                                <span
+                                                    role='button'
+                                                    tabIndex={0}
+                                                    className='nmx-comic-studio-lib-zoom'
+                                                    title={t('zoomPreview')}
+                                                    aria-label={t('zoomPreview')}
+                                                    onPointerDown={event => event.stopPropagation()}
+                                                    onMouseDown={event => event.stopPropagation()}
+                                                    onClick={event => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+                                                        const thumbVideo =
+                                                            item.kind === 'video'
+                                                                ? event.currentTarget.parentElement?.querySelector('video')
+                                                                : null;
+                                                        const ar =
+                                                            thumbVideo && thumbVideo.videoWidth > 0 && thumbVideo.videoHeight > 0
+                                                                ? thumbVideo.videoWidth / thumbVideo.videoHeight
+                                                                : undefined;
+                                                        sourceZoomMediaStateRef.current = {
+                                                            restoredUrl: '',
+                                                            currentTime: 0,
+                                                            volume: 1,
+                                                            muted: false
+                                                        };
+                                                        setSourceZoomAspectRatio(ar);
+                                                        setSourceZoomItem({
+                                                            id: item.id,
+                                                            path: item.path,
+                                                            title: item.name,
+                                                            kind: item.kind === 'video' ? 'video' : 'image',
+                                                            url: item.previewUrl || ''
+                                                        });
+                                                    }}
+                                                    onKeyDown={event => {
+                                                        if (event.key === 'Enter' || event.key === ' ') {
+                                                            event.preventDefault();
+                                                            event.stopPropagation();
+                                                            const thumbVideo =
+                                                                item.kind === 'video'
+                                                                    ? event.currentTarget.parentElement?.querySelector('video')
+                                                                    : null;
+                                                            const ar =
+                                                                thumbVideo && thumbVideo.videoWidth > 0 && thumbVideo.videoHeight > 0
+                                                                    ? thumbVideo.videoWidth / thumbVideo.videoHeight
+                                                                    : undefined;
+                                                            sourceZoomMediaStateRef.current = {
+                                                                restoredUrl: '',
+                                                                currentTime: 0,
+                                                                volume: 1,
+                                                                muted: false
+                                                            };
+                                                            setSourceZoomAspectRatio(ar);
+                                                            setSourceZoomItem({
+                                                                id: item.id,
+                                                                path: item.path,
+                                                                title: item.name,
+                                                                kind: item.kind === 'video' ? 'video' : 'image',
+                                                                url: item.previewUrl || ''
+                                                            });
+                                                        }
+                                                    }}
+                                                >
+                                                    <i className='codicon codicon-screen-full' aria-hidden='true' />
+                                                </span>
+                                            )}
                                         </span>
                                         <small data-nmx-literal>{item.name}</small>
                                     </button>
@@ -1637,7 +1735,37 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                     </>
                 ) : (
                     <div className='nmx-comic-studio-dropzone-preview' data-source-kind={activeSource.kind}>
-                        <div className='nmx-comic-studio-dropzone-media'>
+                        <div
+                            className={`nmx-comic-studio-dropzone-media${(activeSource.kind === 'image' || activeSource.kind === 'video') && activeSource.previewUrl ? ' is-zoomable' : ''}`}
+                            onClick={
+                                (activeSource.kind === 'image' || activeSource.kind === 'video') && activeSource.previewUrl
+                                    ? event => {
+                                          const previewVideo =
+                                              activeSource.kind === 'video'
+                                                  ? event.currentTarget.querySelector('video')
+                                                  : null;
+                                          const ar =
+                                              previewVideo && previewVideo.videoWidth > 0 && previewVideo.videoHeight > 0
+                                                  ? previewVideo.videoWidth / previewVideo.videoHeight
+                                                  : undefined;
+                                          sourceZoomMediaStateRef.current = {
+                                              restoredUrl: '',
+                                              currentTime: 0,
+                                              volume: 1,
+                                              muted: false
+                                          };
+                                          setSourceZoomAspectRatio(ar);
+                                          setSourceZoomItem({
+                                              id: activeSource.id,
+                                              path: activeSource.path,
+                                              title: activeSource.name,
+                                              kind: activeSource.kind as 'image' | 'video',
+                                              url: activeSource.previewUrl!
+                                          });
+                                      }
+                                    : undefined
+                            }
+                        >
                             {activeSource.kind === 'image' && activeSource.previewUrl ? (
                                 <img src={activeSource.previewUrl} alt={activeSource.name} draggable={false} />
                             ) : activeSource.kind === 'video' && activeSource.previewUrl ? (
@@ -1654,6 +1782,44 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                         <div className='nmx-comic-studio-dropzone-caption' title={activeSource.name}>
                             <span data-nmx-literal>{activeSource.name}</span>
                         </div>
+                        {(activeSource.kind === 'image' || activeSource.kind === 'video') && activeSource.previewUrl && (
+                            <button
+                                type='button'
+                                className={`nmx-comic-studio-dropzone-zoom nmx-comic-studio-lib-zoom${props.onRemoveSourceFile ? ' has-remove' : ''}`}
+                                aria-label={t('zoomPreview')}
+                                title={t('zoomPreview')}
+                                onPointerDown={event => event.stopPropagation()}
+                                onMouseDown={event => event.stopPropagation()}
+                                onClick={event => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    const previewVideo =
+                                        activeSource.kind === 'video'
+                                            ? event.currentTarget.parentElement?.querySelector('video')
+                                            : null;
+                                    const ar =
+                                        previewVideo && previewVideo.videoWidth > 0 && previewVideo.videoHeight > 0
+                                            ? previewVideo.videoWidth / previewVideo.videoHeight
+                                            : undefined;
+                                    sourceZoomMediaStateRef.current = {
+                                        restoredUrl: '',
+                                        currentTime: 0,
+                                        volume: 1,
+                                        muted: false
+                                    };
+                                    setSourceZoomAspectRatio(ar);
+                                    setSourceZoomItem({
+                                        id: activeSource.id,
+                                        path: activeSource.path,
+                                        title: activeSource.name,
+                                        kind: activeSource.kind as 'image' | 'video',
+                                        url: activeSource.previewUrl!
+                                    });
+                                }}
+                            >
+                                <i className='codicon codicon-screen-full' aria-hidden='true' />
+                            </button>
+                        )}
                         {props.onRemoveSourceFile && (
                             <button
                                 type='button'
@@ -1804,11 +1970,25 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
         }
     };
 
+    const resolvedSourceZoomUrl = sourceZoomItem
+        ? props.sourceFiles.find(
+              item =>
+                  (Boolean(sourceZoomItem.id) && (item.id === sourceZoomItem.id || item.id === `lib:${sourceZoomItem.id}`)) ||
+                  (Boolean(sourceZoomItem.path) && item.path === sourceZoomItem.path)
+          )?.previewUrl ||
+          (props.libraryItems ?? []).find(
+              item =>
+                  (Boolean(sourceZoomItem.id) && item.id === sourceZoomItem.id) ||
+                  (Boolean(sourceZoomItem.path) && item.path === sourceZoomItem.path)
+          )?.previewUrl ||
+          sourceZoomItem.url
+        : '';
+
     return (
         <div
             className={`nmx-comic-studio-modal-backdrop is-${props.kind}${effectiveLightTheme ? ' nmx-theme-light' : ''}`}
             dir={props.locale === 'ar' ? 'rtl' : undefined}
-            data-lightbox-open={lightboxOpen ? 'true' : undefined}
+            data-lightbox-open={lightboxOpen || Boolean(sourceZoomItem) ? 'true' : undefined}
             data-context-menu-open={contextMenu ? 'true' : undefined}
             onMouseDown={event => {
                 if (event.target === event.currentTarget) {
@@ -2776,20 +2956,35 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                     role='dialog'
                     aria-modal='true'
                     aria-label={activeTake.title}
+                    onPointerDown={event => {
+                        event.stopPropagation();
+                        lightboxBackdropDownRef.current = event.target === event.currentTarget;
+                    }}
                     onMouseDown={event => {
-                        if (event.target === event.currentTarget) {
-                            closeLightbox();
-                        }
+                        event.stopPropagation();
+                        lightboxBackdropDownRef.current = event.target === event.currentTarget;
                     }}
                     onClick={event => {
-                        if (event.target === event.currentTarget) {
+                        event.stopPropagation();
+                        const shouldClose =
+                            (lightboxBackdropDownRef.current || event.detail === 0) &&
+                            event.target === event.currentTarget;
+                        lightboxBackdropDownRef.current = false;
+                        if (shouldClose) {
                             closeLightbox();
                         }
                     }}
                 >
                     <header
                         className='nmx-comic-studio-lightbox-bar'
-                        onMouseDown={event => event.stopPropagation()}
+                        onPointerDown={event => {
+                            event.stopPropagation();
+                            lightboxBackdropDownRef.current = false;
+                        }}
+                        onMouseDown={event => {
+                            event.stopPropagation();
+                            lightboxBackdropDownRef.current = false;
+                        }}
                         onClick={event => event.stopPropagation()}
                     >
                         <strong data-nmx-literal>{activeTake.title}</strong>
@@ -2826,13 +3021,21 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                     </header>
                     <div
                         className='nmx-comic-studio-lightbox-body'
+                        onPointerDown={event => {
+                            event.stopPropagation();
+                            lightboxBackdropDownRef.current = event.target === event.currentTarget;
+                        }}
                         onMouseDown={event => {
-                            if (event.target === event.currentTarget) {
-                                closeLightbox();
-                            }
+                            event.stopPropagation();
+                            lightboxBackdropDownRef.current = event.target === event.currentTarget;
                         }}
                         onClick={event => {
-                            if (event.target === event.currentTarget) {
+                            event.stopPropagation();
+                            const shouldClose =
+                                (lightboxBackdropDownRef.current || event.detail === 0) &&
+                                event.target === event.currentTarget;
+                            lightboxBackdropDownRef.current = false;
+                            if (shouldClose) {
                                 closeLightbox();
                             }
                         }}
@@ -2844,13 +3047,33 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                 src={activeTake.mediaUrl}
                                 alt={activeTake.title}
                                 draggable={false}
-                                onMouseDown={event => event.stopPropagation()}
+                                onPointerDown={event => {
+                                    event.stopPropagation();
+                                    lightboxBackdropDownRef.current = false;
+                                }}
+                                onMouseDown={event => {
+                                    event.stopPropagation();
+                                    lightboxBackdropDownRef.current = false;
+                                }}
+                                onMouseUp={() => {
+                                    lightboxBackdropDownRef.current = false;
+                                }}
                                 onClick={event => event.stopPropagation()}
                             />
                         ) : isAudioStage ? (
                             <div
                                 className='nmx-comic-studio-lightbox-audio'
-                                onMouseDown={event => event.stopPropagation()}
+                                onPointerDown={event => {
+                                    event.stopPropagation();
+                                    lightboxBackdropDownRef.current = false;
+                                }}
+                                onMouseDown={event => {
+                                    event.stopPropagation();
+                                    lightboxBackdropDownRef.current = false;
+                                }}
+                                onMouseUp={() => {
+                                    lightboxBackdropDownRef.current = false;
+                                }}
                                 onClick={event => event.stopPropagation()}
                             >
                                 <div className='nmx-comic-studio-audio-disc is-large'>
@@ -2898,7 +3121,19 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                 controls
                                 autoPlay
                                 playsInline
-                                onMouseDown={event => event.stopPropagation()}
+                                controlsList='nofullscreen noremoteplayback'
+                                disablePictureInPicture
+                                onPointerDown={event => {
+                                    event.stopPropagation();
+                                    lightboxBackdropDownRef.current = false;
+                                }}
+                                onMouseDown={event => {
+                                    event.stopPropagation();
+                                    lightboxBackdropDownRef.current = false;
+                                }}
+                                onMouseUp={() => {
+                                    lightboxBackdropDownRef.current = false;
+                                }}
                                 onClick={event => event.stopPropagation()}
                                 onLoadedMetadata={event => {
                                     const resume = stageResumeTimeRef.current;
@@ -2917,6 +3152,175 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                 onTimeUpdate={event => {
                                     stageResumeTimeRef.current = event.currentTarget.currentTime;
                                 }}
+                            />
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Source / Inner Asset Library Zoom Lightbox */}
+            {sourceZoomItem && resolvedSourceZoomUrl && (
+                <div
+                    className='nmx-comic-studio-lightbox is-source-zoom'
+                    role='dialog'
+                    aria-modal='true'
+                    aria-label={sourceZoomItem.title}
+                    onPointerDown={event => {
+                        event.stopPropagation();
+                        sourceLightboxBackdropDownRef.current = event.target === event.currentTarget;
+                    }}
+                    onMouseDown={event => {
+                        event.stopPropagation();
+                        sourceLightboxBackdropDownRef.current = event.target === event.currentTarget;
+                    }}
+                    onClick={event => {
+                        event.stopPropagation();
+                        const shouldClose =
+                            (sourceLightboxBackdropDownRef.current || event.detail === 0) &&
+                            event.target === event.currentTarget;
+                        sourceLightboxBackdropDownRef.current = false;
+                        if (shouldClose) {
+                            closeSourceZoom();
+                        }
+                    }}
+                >
+                    <header
+                        className='nmx-comic-studio-lightbox-bar'
+                        onPointerDown={event => {
+                            event.stopPropagation();
+                            sourceLightboxBackdropDownRef.current = false;
+                        }}
+                        onMouseDown={event => {
+                            event.stopPropagation();
+                            sourceLightboxBackdropDownRef.current = false;
+                        }}
+                        onClick={event => event.stopPropagation()}
+                    >
+                        <strong data-nmx-literal>{sourceZoomItem.title}</strong>
+                        <div className='nmx-comic-studio-lightbox-actions'>
+                            <button
+                                type='button'
+                                className='nmx-comic-studio-close-btn'
+                                aria-label={t('close')}
+                                title={t('close')}
+                                onClick={() => closeSourceZoom()}
+                            >
+                                <i className='codicon codicon-close' aria-hidden='true' />
+                            </button>
+                        </div>
+                    </header>
+                    <div
+                        className='nmx-comic-studio-lightbox-body'
+                        onPointerDown={event => {
+                            event.stopPropagation();
+                            sourceLightboxBackdropDownRef.current = event.target === event.currentTarget;
+                        }}
+                        onMouseDown={event => {
+                            event.stopPropagation();
+                            sourceLightboxBackdropDownRef.current = event.target === event.currentTarget;
+                        }}
+                        onClick={event => {
+                            event.stopPropagation();
+                            const shouldClose =
+                                (sourceLightboxBackdropDownRef.current || event.detail === 0) &&
+                                event.target === event.currentTarget;
+                            sourceLightboxBackdropDownRef.current = false;
+                            if (shouldClose) {
+                                closeSourceZoom();
+                            }
+                        }}
+                    >
+                        {sourceZoomItem.kind === 'video' ? (
+                            <video
+                                key={sourceZoomItem.id || sourceZoomItem.path || sourceZoomItem.title}
+                                className='nmx-comic-studio-lightbox-video is-responsive-video'
+                                style={
+                                    sourceZoomAspectRatio
+                                        ? ({
+                                              '--nmx-studio-zoom-ar': String(Number(sourceZoomAspectRatio.toFixed(6)))
+                                          } as React.CSSProperties)
+                                        : undefined
+                                }
+                                src={resolvedSourceZoomUrl}
+                                controls
+                                autoPlay
+                                playsInline
+                                controlsList='nofullscreen noremoteplayback'
+                                disablePictureInPicture
+                                onPointerDown={event => {
+                                    event.stopPropagation();
+                                    sourceLightboxBackdropDownRef.current = false;
+                                }}
+                                onMouseDown={event => {
+                                    event.stopPropagation();
+                                    sourceLightboxBackdropDownRef.current = false;
+                                }}
+                                onMouseUp={() => {
+                                    sourceLightboxBackdropDownRef.current = false;
+                                }}
+                                onClick={event => event.stopPropagation()}
+                                onLoadedMetadata={event => {
+                                    const el = event.currentTarget;
+                                    if (el.videoWidth > 0 && el.videoHeight > 0) {
+                                        setSourceZoomAspectRatio(el.videoWidth / el.videoHeight);
+                                    }
+                                    const saved = sourceZoomMediaStateRef.current;
+                                    try {
+                                        el.volume = Math.max(0, Math.min(1, saved.volume));
+                                        el.muted = saved.muted;
+                                    } catch {
+                                        // Ignore volume restore error
+                                    }
+                                    if (
+                                        saved.currentTime > 0 &&
+                                        (!Number.isFinite(el.duration) || saved.currentTime < el.duration - 0.15)
+                                    ) {
+                                        try {
+                                            el.currentTime = saved.currentTime;
+                                        } catch {
+                                            // Ignore seek error
+                                        }
+                                    }
+                                    saved.restoredUrl = resolvedSourceZoomUrl;
+                                    const playPromise = el.play?.();
+                                    if (playPromise && typeof playPromise.catch === 'function') {
+                                        playPromise.catch(() => undefined);
+                                    }
+                                }}
+                                onTimeUpdate={event => {
+                                    const el = event.currentTarget;
+                                    if (
+                                        sourceZoomMediaStateRef.current.restoredUrl === resolvedSourceZoomUrl &&
+                                        el.readyState >= 1
+                                    ) {
+                                        sourceZoomMediaStateRef.current.currentTime = el.currentTime;
+                                    }
+                                }}
+                                onVolumeChange={event => {
+                                    const el = event.currentTarget;
+                                    sourceZoomMediaStateRef.current.volume = el.volume;
+                                    sourceZoomMediaStateRef.current.muted = el.muted;
+                                }}
+                            />
+                        ) : (
+                            <img
+                                key={sourceZoomItem.id || sourceZoomItem.path || resolvedSourceZoomUrl}
+                                className='nmx-comic-studio-lightbox-image'
+                                src={resolvedSourceZoomUrl}
+                                alt={sourceZoomItem.title}
+                                draggable={false}
+                                onPointerDown={event => {
+                                    event.stopPropagation();
+                                    sourceLightboxBackdropDownRef.current = false;
+                                }}
+                                onMouseDown={event => {
+                                    event.stopPropagation();
+                                    sourceLightboxBackdropDownRef.current = false;
+                                }}
+                                onMouseUp={() => {
+                                    sourceLightboxBackdropDownRef.current = false;
+                                }}
+                                onClick={event => event.stopPropagation()}
                             />
                         )}
                     </div>
