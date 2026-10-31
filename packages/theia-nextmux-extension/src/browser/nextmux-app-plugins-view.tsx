@@ -1347,21 +1347,33 @@ export function AppPluginRunBar(props: AppPluginInlineControlsProps & { readonly
 /** The plugin's readings drawn over the tab's live picture (dry runs, or with 显示读数 on). */
 export function AppPluginOverlay(props: { readonly items: readonly AppPluginOverlayItem[] }): React.ReactElement {
     const value = (item: AppPluginOverlayItem): string => {
-        const reading = item.value as { found?: boolean; count?: number } | number | boolean | string | null;
+        const reading = item.value as { found?: boolean; count?: number; score?: number; variant?: number } | number | boolean | string | null;
         if (reading === null || reading === undefined) return '—';
         if (typeof reading === 'number') return item.type === 'bar' ? `${Math.round(reading * 100)}%` : String(Math.round(reading * 100) / 100);
         if (typeof reading === 'boolean') return reading ? '✓' : '✗';
-        if (typeof reading === 'object') return reading.found ? `×${reading.count}` : '—';
+        if (typeof reading === 'object') {
+            if (!reading.found) return '—';
+            // A template's best match also shows how close it is (to tune a threshold in a dry run) and which picture.
+            const score = typeof reading.score === 'number' ? ` ${Math.round(reading.score * 100)}%` : '';
+            const variant = item.variants && typeof reading.variant === 'number' && reading.variant >= 0 ? ` ${reading.variant + 1}/${item.variants}` : '';
+            return `×${reading.count}${score}${variant}`;
+        }
         return String(reading).slice(0, 24);
     };
+    const off = (item: AppPluginOverlayItem): string => item.active === false ? ' is-off' : '';
     return <div className='nmx-plugin-overlay' aria-hidden='true'>
-        {props.items.map(item => <React.Fragment key={item.id}>
-            {item.rect && <div className={`nmx-plugin-overlay-box is-${item.type}`} style={{ left: `${item.rect[0] * 100}%`, top: `${item.rect[1] * 100}%`, width: `${item.rect[2] * 100}%`, height: `${item.rect[3] * 100}%` }}>
-                <span data-nmx-literal>{item.id} {value(item)}</span></div>}
-            {(item.type === 'template' || item.type === 'text') && ((item.value as { items?: { x: number; y: number }[] } | null)?.items || []).map((found, index) =>
-                <div key={index} className='nmx-plugin-overlay-hit' style={{ left: `${found.x * 100}%`, top: `${found.y * 100}%` }}></div>)}
-            {item.points && item.points.map(([x, y], index) => <div key={`p${index}`} className='nmx-plugin-overlay-point' style={{ left: `${x * 100}%`, top: `${y * 100}%` }}></div>)}
-        </React.Fragment>)}
+        {props.items.map(item => {
+            // Every area the signal read this frame; only the first carries the label.
+            const areas = item.rects?.length ? item.rects : item.rect ? [item.rect] : [];
+            return <React.Fragment key={item.id}>
+                {areas.map((rect, index) => <div key={`r${index}`} className={`nmx-plugin-overlay-box is-${item.type}${off(item)}`}
+                    style={{ left: `${rect[0] * 100}%`, top: `${rect[1] * 100}%`, width: `${rect[2] * 100}%`, height: `${rect[3] * 100}%` }}>
+                    {index === 0 && <span data-nmx-literal>{item.id} {value(item)}</span>}</div>)}
+                {(item.type === 'template' || item.type === 'text') && ((item.value as { items?: { x: number; y: number }[] } | null)?.items || []).map((found, index) =>
+                    <div key={index} className='nmx-plugin-overlay-hit' style={{ left: `${found.x * 100}%`, top: `${found.y * 100}%` }}></div>)}
+                {item.points && item.points.map(([x, y], index) => <div key={`p${index}`} className={`nmx-plugin-overlay-point${off(item)}`} style={{ left: `${x * 100}%`, top: `${y * 100}%` }}></div>)}
+            </React.Fragment>;
+        })}
     </div>;
 }
 

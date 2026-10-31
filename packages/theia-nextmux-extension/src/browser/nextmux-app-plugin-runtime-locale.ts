@@ -9,6 +9,8 @@ const en = {
     keyChordUnsupported: 'This computer cannot press the key combination this plugin requires.',
     modifierUnsupported: 'This computer cannot press a modifier key on its own.',
     pointerMoveUnsupported: 'This computer cannot move the pointer without clicking. Aim-and-cast actions are unavailable.',
+    pointerModifierUnsupported: 'This computer cannot hold modifier keys such as Shift while clicking or dragging in the background. Actions that click with modifier keys are unavailable.',
+    pointerButtonUnsupported: 'This computer cannot click with the middle mouse button, or drag with the right or middle button, in the background.',
     modelChangesImmediate: 'Model changes are saved and applied immediately to running plugins.',
     requestLimit: 'request limit reached',
     paramPathInvalid: 'The selected folder path is invalid or does not exist. Choose an existing folder.',
@@ -20,6 +22,8 @@ export const APP_PLUGIN_RUNTIME_TEXT: Readonly<Record<NextMuxDesktopLocale, Read
     en,
     'zh-CN': {
         pointerMoveUnsupported: '这台电脑不支持只移动鼠标指针，无法执行先瞄准再按键的动作。',
+        pointerModifierUnsupported: '这台电脑不支持在后台点击或拖拽时按住 Shift 等修饰键，需要修饰键的点击动作不可用。',
+        pointerButtonUnsupported: '这台电脑不支持在后台用鼠标中键点击，或用右键、中键拖拽。',
         modelChangesImmediate: '模型修改保存后会立即应用到正在运行的插件。',
         costUnknown: '费用未知 · 无法执行美元预算上限',
         budgetUnknown: '这个来源的费用未知，无法按美元预算上限停止。运行时间和请求次数上限仍然有效。',
@@ -31,6 +35,8 @@ export const APP_PLUGIN_RUNTIME_TEXT: Readonly<Record<NextMuxDesktopLocale, Read
     },
     'zh-TW': {
         pointerMoveUnsupported: '這台電腦不支援只移動滑鼠指標，無法執行先瞄準再按鍵的動作。',
+        pointerModifierUnsupported: '這台電腦不支援在背景點擊或拖曳時按住 Shift 等輔助鍵，需要輔助鍵的點擊動作無法使用。',
+        pointerButtonUnsupported: '這台電腦不支援在背景以滑鼠中鍵點擊，或以右鍵、中鍵拖曳。',
         modelChangesImmediate: '模型變更儲存後會立即套用到執行中的外掛。',
         costUnknown: '費用未知 · 無法執行美元預算上限',
         budgetUnknown: '這個來源的費用未知，無法按美元預算上限停止。執行時間和請求次數上限仍然有效。',
@@ -42,6 +48,8 @@ export const APP_PLUGIN_RUNTIME_TEXT: Readonly<Record<NextMuxDesktopLocale, Read
     },
     ja: {
         pointerMoveUnsupported: 'このコンピューターはクリックせずにポインターを移動できません。照準を合わせてからキーを押す操作は使えません。',
+        pointerModifierUnsupported: 'このコンピューターはバックグラウンドでのクリックやドラッグ中に Shift などの修飾キーを押したままにできません。修飾キー付きのクリック操作は使えません。',
+        pointerButtonUnsupported: 'このコンピューターはバックグラウンドで中ボタンのクリックや、右ボタン・中ボタンでのドラッグができません。',
         modelChangesImmediate: 'モデルの変更は保存後、実行中のプラグインにすぐに適用されます。',
         costUnknown: '費用不明 · ドル予算の上限は適用できません',
         budgetUnknown: 'この接続の費用は不明のため、ドル予算の上限では停止できません。時間とリクエスト回数の上限は引き続き有効です。',
@@ -53,6 +61,8 @@ export const APP_PLUGIN_RUNTIME_TEXT: Readonly<Record<NextMuxDesktopLocale, Read
     },
     ko: {
         pointerMoveUnsupported: '이 컴퓨터는 클릭 없이 포인터를 이동할 수 없습니다. 조준 후 키 입력 동작을 사용할 수 없습니다.',
+        pointerModifierUnsupported: '이 컴퓨터는 백그라운드에서 클릭하거나 드래그하는 동안 Shift 같은 보조 키를 누르고 있을 수 없습니다. 보조 키를 쓰는 클릭 동작을 사용할 수 없습니다.',
+        pointerButtonUnsupported: '이 컴퓨터는 백그라운드에서 가운데 버튼으로 클릭하거나 오른쪽·가운데 버튼으로 드래그할 수 없습니다.',
         modelChangesImmediate: '모델 변경은 저장 후 실행 중인 플러그인에 즉시 적용됩니다.',
         costUnknown: '비용 알 수 없음 · 달러 예산 한도 적용 불가',
         budgetUnknown: '이 소스의 비용을 알 수 없어 달러 예산 한도로 중지할 수 없습니다. 시간 및 요청 횟수 한도는 계속 적용됩니다.',
@@ -64,6 +74,8 @@ export const APP_PLUGIN_RUNTIME_TEXT: Readonly<Record<NextMuxDesktopLocale, Read
     },
     es: {
         pointerMoveUnsupported: 'Este equipo no puede mover el puntero sin hacer clic. Las acciones de apuntar y pulsar una tecla no están disponibles.',
+        pointerModifierUnsupported: 'Este equipo no puede mantener teclas modificadoras como Mayús al hacer clic o arrastrar en segundo plano. Las acciones de clic con teclas modificadoras no están disponibles.',
+        pointerButtonUnsupported: 'Este equipo no puede hacer clic con el botón central ni arrastrar con el botón derecho o central en segundo plano.',
         modelChangesImmediate: 'Los cambios de modelo se guardan y se aplican de inmediato a los plugins en ejecución.',
         costUnknown: 'Coste desconocido · presupuesto en dólares sin aplicar',
         budgetUnknown: 'Se desconoce el coste de esta fuente, por lo que no se puede aplicar el presupuesto en dólares. Los límites de tiempo y solicitudes siguen vigentes.',
@@ -75,6 +87,8 @@ export const APP_PLUGIN_RUNTIME_TEXT: Readonly<Record<NextMuxDesktopLocale, Read
     },
     fr: {
         pointerMoveUnsupported: 'Cet ordinateur ne peut pas déplacer le pointeur sans cliquer. Les actions de visée suivie d’une touche ne sont pas disponibles.',
+        pointerModifierUnsupported: 'Cet ordinateur ne peut pas maintenir une touche de modification comme Maj pendant un clic ou un glisser en arrière-plan. Les clics avec touches de modification ne sont pas disponibles.',
+        pointerButtonUnsupported: 'Cet ordinateur ne peut pas cliquer avec le bouton du milieu ni glisser avec le bouton droit ou du milieu en arrière-plan.',
         modelChangesImmediate: 'Les changements de modèle sont enregistrés et appliqués immédiatement aux plugins en cours.',
         costUnknown: 'Coût inconnu · budget en dollars non appliqué',
         budgetUnknown: 'Le coût de cette source est inconnu ; le budget en dollars ne peut donc pas être appliqué. Les limites de durée et de requêtes restent actives.',
@@ -86,6 +100,8 @@ export const APP_PLUGIN_RUNTIME_TEXT: Readonly<Record<NextMuxDesktopLocale, Read
     },
     de: {
         pointerMoveUnsupported: 'Dieser Computer kann den Mauszeiger nicht ohne Klick bewegen. Zielen mit anschließendem Tastendruck ist nicht verfügbar.',
+        pointerModifierUnsupported: 'Dieser Computer kann beim Klicken oder Ziehen im Hintergrund keine Zusatztasten wie Umschalt gedrückt halten. Klicks mit Zusatztasten sind nicht verfügbar.',
+        pointerButtonUnsupported: 'Dieser Computer kann im Hintergrund weder mit der mittleren Maustaste klicken noch mit der rechten oder mittleren Maustaste ziehen.',
         modelChangesImmediate: 'Modelländerungen werden gespeichert und sofort auf laufende Plugins angewendet.',
         costUnknown: 'Kosten unbekannt · Dollarbudget wird nicht eingehalten',
         budgetUnknown: 'Die Kosten dieser Quelle sind unbekannt. Das Dollarbudget kann daher nicht durchgesetzt werden. Zeit- und Anfragelimits gelten weiterhin.',
@@ -97,6 +113,8 @@ export const APP_PLUGIN_RUNTIME_TEXT: Readonly<Record<NextMuxDesktopLocale, Read
     },
     'pt-BR': {
         pointerMoveUnsupported: 'Este computador não pode mover o ponteiro sem clicar. Ações de mirar e pressionar uma tecla não estão disponíveis.',
+        pointerModifierUnsupported: 'Este computador não consegue manter teclas modificadoras como Shift pressionadas ao clicar ou arrastar em segundo plano. Cliques com teclas modificadoras não estão disponíveis.',
+        pointerButtonUnsupported: 'Este computador não consegue clicar com o botão do meio nem arrastar com o botão direito ou do meio em segundo plano.',
         modelChangesImmediate: 'As alterações do modelo são salvas e aplicadas imediatamente aos plugins em execução.',
         costUnknown: 'Custo desconhecido · orçamento em dólares não aplicado',
         budgetUnknown: 'O custo desta fonte é desconhecido, então o orçamento em dólares não pode ser aplicado. Os limites de tempo e solicitações continuam valendo.',
@@ -108,6 +126,8 @@ export const APP_PLUGIN_RUNTIME_TEXT: Readonly<Record<NextMuxDesktopLocale, Read
     },
     ru: {
         pointerMoveUnsupported: 'Этот компьютер не может перемещать указатель без щелчка. Действия с наведением и последующим нажатием клавиши недоступны.',
+        pointerModifierUnsupported: 'Этот компьютер не может удерживать клавиши-модификаторы, например Shift, при щелчке или перетаскивании в фоновом режиме. Щелчки с модификаторами недоступны.',
+        pointerButtonUnsupported: 'Этот компьютер не может в фоновом режиме щёлкать средней кнопкой мыши или перетаскивать правой или средней кнопкой.',
         modelChangesImmediate: 'Изменения модели сохраняются и сразу применяются к работающим плагинам.',
         costUnknown: 'Стоимость неизвестна · бюджет в долларах не применяется',
         budgetUnknown: 'Стоимость этого источника неизвестна, поэтому ограничить расходы долларовым бюджетом нельзя. Ограничения времени и числа запросов остаются в силе.',
@@ -119,6 +139,8 @@ export const APP_PLUGIN_RUNTIME_TEXT: Readonly<Record<NextMuxDesktopLocale, Read
     },
     ar: {
         pointerMoveUnsupported: 'لا يستطيع هذا الكمبيوتر تحريك المؤشر دون النقر. إجراءات التصويب ثم الضغط على مفتاح غير متاحة.',
+        pointerModifierUnsupported: 'لا يستطيع هذا الكمبيوتر إبقاء مفاتيح التعديل مثل Shift مضغوطة أثناء النقر أو السحب في الخلفية. إجراءات النقر مع مفاتيح التعديل غير متاحة.',
+        pointerButtonUnsupported: 'لا يستطيع هذا الكمبيوتر النقر بالزر الأوسط أو السحب بالزر الأيمن أو الأوسط في الخلفية.',
         modelChangesImmediate: 'تُحفظ تغييرات النموذج وتُطبّق فورًا على الإضافات قيد التشغيل.',
         costUnknown: 'التكلفة غير معروفة · لا يُطبّق حد الميزانية بالدولار',
         budgetUnknown: 'تكلفة هذا المصدر غير معروفة، لذا لا يمكن تطبيق حد الميزانية بالدولار. تظل حدود الوقت وعدد الطلبات سارية.',
@@ -130,6 +152,8 @@ export const APP_PLUGIN_RUNTIME_TEXT: Readonly<Record<NextMuxDesktopLocale, Read
     },
     hi: {
         pointerMoveUnsupported: 'यह कंप्यूटर क्लिक किए बिना पॉइंटर नहीं हिला सकता। निशाना लगाकर कुंजी दबाने वाली क्रियाएँ उपलब्ध नहीं हैं।',
+        pointerModifierUnsupported: 'यह कंप्यूटर बैकग्राउंड में क्लिक या ड्रैग करते समय Shift जैसी मॉडिफ़ायर कुंजियाँ दबाए नहीं रख सकता। मॉडिफ़ायर कुंजी वाले क्लिक उपलब्ध नहीं हैं।',
+        pointerButtonUnsupported: 'यह कंप्यूटर बैकग्राउंड में बीच वाले बटन से क्लिक या दाएँ/बीच वाले बटन से ड्रैग नहीं कर सकता।',
         modelChangesImmediate: 'मॉडल के बदलाव सहेजे जाने के बाद चल रहे प्लगइन पर तुरंत लागू होते हैं।',
         costUnknown: 'लागत अज्ञात · डॉलर बजट लागू नहीं है',
         budgetUnknown: 'इस स्रोत की लागत अज्ञात है, इसलिए डॉलर बजट लागू नहीं किया जा सकता। समय और अनुरोधों की संख्या की सीमाएँ लागू रहेंगी।',
@@ -146,15 +170,15 @@ export const appPluginRuntimeText = (locale: NextMuxDesktopLocale, key: Key): st
 /** Keep the plugin's action/step location, but describe the platform limitation in the user's language. */
 export function appPluginInputError(locale: NextMuxDesktopLocale, error: unknown): string | undefined {
     if (typeof error !== 'string') return undefined;
-    const match = /^(?:(.{1,140}): )?(computer_input_unsupported|plugin_input_unsupported|computer_key_hold_unsupported|computer_key_chord_unsupported|computer_modifier_key_unsupported|computer_pointer_move_unsupported|param_path_invalid|param_file_empty|text_empty)$/.exec(error);
+    const match = /^(?:(.{1,140}): )?(computer_input_unsupported|plugin_input_unsupported|computer_key_hold_unsupported|computer_key_chord_unsupported|computer_modifier_key_unsupported|computer_pointer_move_unsupported|computer_pointer_modifier_unsupported|computer_pointer_button_unsupported|param_path_invalid|param_file_empty|text_empty)$/.exec(error);
     if (!match) return undefined;
-    const key = match[2] === 'computer_key_hold_unsupported' ? 'keyHoldUnsupported'
-        : match[2] === 'computer_key_chord_unsupported' ? 'keyChordUnsupported'
-            : match[2] === 'computer_modifier_key_unsupported' ? 'modifierUnsupported'
-                : match[2] === 'computer_pointer_move_unsupported' ? 'pointerMoveUnsupported'
-                    : match[2] === 'param_path_invalid' ? 'paramPathInvalid'
-                        : match[2] === 'param_file_empty' ? 'paramFileEmpty'
-                            : match[2] === 'text_empty' ? 'textEmpty' : 'inputUnsupported';
+    const keys: Readonly<Record<string, Key>> = {
+        computer_key_hold_unsupported: 'keyHoldUnsupported', computer_key_chord_unsupported: 'keyChordUnsupported',
+        computer_modifier_key_unsupported: 'modifierUnsupported', computer_pointer_move_unsupported: 'pointerMoveUnsupported',
+        computer_pointer_modifier_unsupported: 'pointerModifierUnsupported', computer_pointer_button_unsupported: 'pointerButtonUnsupported',
+        param_path_invalid: 'paramPathInvalid', param_file_empty: 'paramFileEmpty', text_empty: 'textEmpty'
+    };
+    const key = keys[match[2]] || 'inputUnsupported';
     return `${match[1] ? `${match[1]}: ` : ''}${appPluginRuntimeText(locale, key)}`;
 }
 

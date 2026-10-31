@@ -1119,15 +1119,20 @@
 .nmx-plugin-runbar-actions > button.is-danger { border-color: transparent; color: #fff; background: var(--nmxv-danger-fill, #c64541); }
 .nmx-plugin-runbar-actions > button.is-danger:hover { background: var(--nmxv-danger-fill-hover, #b23a36); }
 .nmx-shell .nmx-visual-tab-overlay { position: absolute; pointer-events: none; }
+/* Readings drawn over the app's own picture: their colours keep their meaning in both themes, so the outlines are
+   important against the light theme's border guard (.nmx-theme-light * turns every border one hairline grey). */
 .nmx-plugin-overlay { position: absolute; inset: 0; }
-.nmx-plugin-overlay-box { position: absolute; border: 1.5px solid rgba(59, 130, 246, .9); border-radius: 3px; background: rgba(59, 130, 246, .08); }
-.nmx-plugin-overlay-box.is-bar { border-color: rgba(239, 68, 68, .9); background: rgba(239, 68, 68, .08); }
-.nmx-plugin-overlay-box.is-template { border-style: dashed; }
-.nmx-plugin-overlay-box.is-change { border-color: rgba(168, 85, 247, .8); background: transparent; }
-.nmx-plugin-overlay-box.is-text { border-color: rgba(34, 197, 94, .9); background: rgba(34, 197, 94, .08); }
-.nmx-plugin-overlay-box > span { position: absolute; top: -18px; inset-inline-start: -1px; padding: 1px 5px; border-radius: 4px 4px 4px 0; color: #fff; background: rgba(17, 24, 39, .85); font: 10.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
-.nmx-plugin-overlay-hit { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid #facc15; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0, 0, 0, .35); }
-.nmx-plugin-overlay-point { position: absolute; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #22d3ee; box-shadow: 0 0 0 2px rgba(0, 0, 0, .35); }
+.nmx-plugin-overlay .nmx-plugin-overlay-box { position: absolute; border: 1.5px solid; border-color: rgba(59, 130, 246, .9) !important; border-radius: 3px; background: rgba(59, 130, 246, .08); }
+.nmx-plugin-overlay .nmx-plugin-overlay-box.is-bar { border-color: rgba(239, 68, 68, .9) !important; background: rgba(239, 68, 68, .08); }
+.nmx-plugin-overlay .nmx-plugin-overlay-box.is-template { border-style: dashed; }
+.nmx-plugin-overlay .nmx-plugin-overlay-box.is-change { border-color: rgba(168, 85, 247, .8) !important; background: transparent; }
+.nmx-plugin-overlay .nmx-plugin-overlay-box.is-text { border-color: rgba(34, 197, 94, .9) !important; background: rgba(34, 197, 94, .08); }
+/* A signal its condition or a missing anchor switched off this frame: where it would read, faint and unfilled. */
+.nmx-plugin-overlay .nmx-plugin-overlay-box.is-off { border-style: dotted; background: transparent; opacity: .45; }
+.nmx-plugin-overlay .nmx-plugin-overlay-box > span { position: absolute; top: -18px; inset-inline-start: -1px; padding: 1px 5px; border-radius: 4px 4px 4px 0; color: #fff; background: rgba(17, 24, 39, .85); font: 10.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nmx-plugin-overlay .nmx-plugin-overlay-hit { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid; border-color: #facc15 !important; border-radius: 50%; box-shadow: 0 0 0 2px rgba(0, 0, 0, .35); }
+.nmx-plugin-overlay .nmx-plugin-overlay-point { position: absolute; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #22d3ee; box-shadow: 0 0 0 2px rgba(0, 0, 0, .35); }
+.nmx-plugin-overlay .nmx-plugin-overlay-point.is-off { opacity: .45; }
 .nmx-plugin-rules > section { margin: 0; padding: 0; border: 0; }
 .nmx-plugins-settings .nmx-plugin-rules small { color: var(--nmx-muted); font-size: 11px; }
 .nmx-plugins-tabs { display: inline-flex; align-self: flex-start; gap: 2px; padding: 3px; border: 1px solid var(--nmx-border); border-radius: 10px; }
