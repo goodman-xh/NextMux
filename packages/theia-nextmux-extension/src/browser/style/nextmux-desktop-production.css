@@ -691,7 +691,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)[dir='rtl']) :where(
         padding-inline: 16px;
     }
 
-    .nmx-settings-page label {
+    .nmx-settings-page label:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
         grid-template-columns: minmax(0, 1fr);
         gap: 6px;
     }

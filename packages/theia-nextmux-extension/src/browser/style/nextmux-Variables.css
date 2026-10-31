@@ -1373,9 +1373,16 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
 .nmx-plugin-modal {
     display: flex;
     flex-direction: column;
+    box-sizing: border-box;
     width: min(560px, 100%);
+    max-width: 100%;
     max-height: min(720px, calc(100vh - 48px));
+    margin: 0;
+    padding: 0;
     overflow: hidden;
+    font-family: var(--nmxv-font-ui);
+    font-size: var(--nmxv-text-sm);
+    line-height: var(--nmxv-leading-sm);
     border: 1px solid var(--nmxv-line-2, rgba(255, 255, 255, .14));
     border-radius: 16px;
     background: var(--nmxv-surface, #1d1d1e);
@@ -1386,6 +1393,11 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
 
 .nmx-plugin-modal.is-details {
     width: min(640px, 100%);
+}
+
+/* The dialog itself only holds focus for its trap; its controls draw their own focus rings. */
+.nmx-shell .nmx-plugin-modal:is(:focus, :focus-visible) {
+    outline: none;
 }
 
 .nmx-plugin-modal-header {
@@ -1419,9 +1431,11 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
     min-width: 0;
 }
 
+.nmx-shell .nmx-plugin-modal-titles h2,
 .nmx-plugin-modal-titles h2 {
     margin: 0;
     overflow: hidden;
+    color: var(--nmxv-fg);
     font-size: 15px;
     font-weight: 600;
     line-height: 20px;
@@ -1429,9 +1443,13 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
     white-space: nowrap;
 }
 
+.nmx-shell .nmx-plugin-modal-titles p,
 .nmx-plugin-modal-titles p {
     margin: 2px 0 0;
-    color: var(--nmxv-fg-3);
+    overflow: hidden;
+    color: var(--nmxv-plugin-quiet, var(--nmxv-fg-3));
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: var(--nmxv-text-xs);
     line-height: 16px;
 }
@@ -1458,7 +1476,8 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
-    padding: 16px 18px;
+    overscroll-behavior: contain;
+    padding: 16px 18px 18px;
     font-size: var(--nmxv-text-sm);
     line-height: 19px;
 }
@@ -1499,21 +1518,22 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
     font-size: 11.5px;
 }
 
-/* Plugin folder parameter ('path'): read-only path pill + native folder picker. */
-#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-path-control {
+/* Plugin folder parameter ('path'): read-only path pill + native folder picker. Scoped to the shell, not the widget
+   id, so the Options dialog drawn into the shell and a tab's plugin bar share it. */
+.nmx-shell .nmx-plugin-path-control {
     display: flex;
     align-items: center;
     gap: 8px;
     min-width: 0;
 }
 
-#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-path-control > .nmx-plugin-path-value {
+.nmx-shell .nmx-plugin-path-control > .nmx-plugin-path-value {
     flex: 0 1 auto;
     min-width: 0;
     cursor: default;
 }
 
-#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-path-empty {
+.nmx-shell .nmx-plugin-path-empty {
     flex: 0 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -1523,7 +1543,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
     white-space: nowrap;
 }
 
-#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-path-pick {
+.nmx-shell .nmx-plugin-path-pick {
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
@@ -1539,11 +1559,11 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
     cursor: pointer;
 }
 
-#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-path-pick:hover:not(:disabled) {
+.nmx-shell .nmx-plugin-path-pick:hover:not(:disabled) {
     background: var(--nmxv-hover) !important;
 }
 
-#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-path-pick:disabled {
+.nmx-shell .nmx-plugin-path-pick:disabled {
     opacity: .45;
     cursor: default;
 }
@@ -1889,6 +1909,9 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
 .nmx-shell .nmx-plugin-modal-body .nmx-plugin-options-section {
     display: grid;
     gap: 10px;
+    box-sizing: border-box;
+    width: auto;
+    max-width: none;
     min-width: 0;
     margin: 0;
     padding: 12px 14px 14px;
@@ -1914,47 +1937,340 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
     font-size: 13px;
 }
 
+/* Quiet secondary copy in the plugin dialogs (descriptions, ranges, empty choices): 66% of the text colour keeps
+   ≥ 4.5:1 on the cards in both themes (measured: 62% gave 4.38:1 on the light card), where the 50% token falls short. */
+.nmx-shell :is(.nmx-plugin-modal, .nmx-plugin-params-bar.is-form) {
+    --nmxv-plugin-quiet: color-mix(in srgb, var(--nmxv-fg) 66%, transparent);
+}
+
 /* The decision model is one row inside its card: the model, then the way to change it. */
 .nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-options-section > .nmx-plugin-model {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
     gap: 12px;
+    min-height: 30px;
+    margin: 0;
     padding: 0;
     border: 0;
     background: transparent;
 }
 
 .nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-options-section > .nmx-plugin-model > b {
-    font-size: 13px;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--nmxv-fg);
+    font-size: var(--nmxv-text-sm);
+    font-weight: 500;
+    line-height: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-options-section > .nmx-plugin-model > b.is-empty {
-    color: var(--nmxv-fg-3);
+    color: var(--nmxv-plugin-quiet);
+    font-weight: 400;
+}
+
+/* Options dialog parameters: one settings row per parameter. The label names the control and the plugin's own
+   description sits under it; switches, numbers and choices keep to the right, text fields, files and folders take
+   the row's width under the label. Rows share one left edge and a hairline between them. */
+.nmx-shell .nmx-plugin-params-bar.is-form {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    min-width: 0;
+    container: nmx-plugin-params / inline-size;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form > .nmx-plugin-param-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px 20px;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 11px 0;
+    color: var(--nmxv-fg);
+    font-size: var(--nmxv-text-sm);
+    line-height: 18px;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form > .nmx-plugin-param-row + .nmx-plugin-param-row {
+    border-top: 1px solid var(--nmxv-line);
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form > .nmx-plugin-param-row:first-child {
+    padding-top: 2px;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form > .nmx-plugin-param-row:last-child {
+    padding-bottom: 0;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form > .nmx-plugin-param-row:is(.is-string, .is-file, .is-path) {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form > .nmx-plugin-param-row.is-boolean {
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form > .nmx-plugin-param-row.is-boolean.is-disabled {
+    cursor: default;
+}
+
+.nmx-shell .nmx-plugin-param-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-param-label {
+    display: block;
+    width: auto;
+    margin: 0;
+    padding: 0;
+    color: var(--nmxv-fg);
+    font-size: var(--nmxv-text-sm);
+    font-weight: 500;
+    line-height: 18px;
+    overflow-wrap: anywhere;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-param-help {
+    display: block;
+    color: var(--nmxv-plugin-quiet);
+    font-size: var(--nmxv-text-xs);
+    line-height: 17px;
+    overflow-wrap: anywhere;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-param-control {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    min-width: 0;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form > .nmx-plugin-param-row:is(.is-string, .is-file, .is-path) > .nmx-plugin-param-control {
+    justify-content: flex-start;
+}
+
+/* Fields: one height, radius and focus ring; a number is as wide as its longest declared value, right-aligned. */
+.nmx-shell .nmx-plugin-params-bar.is-form :is(input:not([type='checkbox']), select) {
+    height: 30px;
+    font-size: 12.5px;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form > .nmx-plugin-param-row.is-number input {
+    flex: 0 0 auto;
+    width: clamp(64px, calc(var(--nmx-param-chars, 4) * 1ch + 38px), 136px);
+    text-align: end;
+    font-variant-numeric: tabular-nums;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form > .nmx-plugin-param-row.is-select select {
+    flex: 0 1 auto;
+    width: auto;
+    min-width: 132px;
+    max-width: min(240px, 100%);
+}
+
+.nmx-shell .nmx-plugin-param-range {
+    flex: 0 0 auto;
+    color: var(--nmxv-plugin-quiet);
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    line-height: 16px;
+    white-space: nowrap;
+}
+
+/* On/off: the app's switch, on the right of its row. */
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-switch {
+    display: inline-block;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-switch > input:not(:checked) + i {
+    /* An off switch keeps a visible outline on the card in both themes. */
+    border-color: color-mix(in srgb, var(--nmxv-fg) 34%, transparent);
+}
+
+/* The light card is close to the light track: a firmer outline gives an off switch ≈ 2.7:1 there, as 34% does on dark.
+   Important because the light theme's global border guard (.nmx-theme-light * in nextmux.css) forces every border to
+   one hairline colour, which left an off switch at 1.2:1 on the card. */
+.nmx-shell.nmx-theme-light .nmx-plugin-params-bar.is-form .nmx-plugin-switch > input:not(:checked) + i {
+    border-color: color-mix(in srgb, var(--nmxv-fg) 44%, transparent) !important;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form > .nmx-plugin-param-row.is-boolean:hover:not(.is-disabled) .nmx-plugin-switch > input:not(:checked) + i {
+    border-color: color-mix(in srgb, var(--nmxv-fg) 56%, transparent) !important;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-switch > input:disabled + i {
+    opacity: .5;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-switch > input:focus-visible + i {
+    outline: 2px solid var(--nmxv-focus);
+    outline-offset: 2px;
+}
+
+/* Files and folders: the current choice (or a quiet "none"), then the way to choose and to clear it. */
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-param-value {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-width: 0;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-file-value,
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-param-value > .nmx-file-path-pill {
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    height: 28px;
+    margin: 0;
+    padding: 0 10px;
+    border-radius: 8px;
+    background: var(--nmxv-path-bg);
+    color: var(--nmxv-path-fg);
+    line-height: 28px;
+    cursor: default;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-file-value {
+    gap: 6px;
+    font-size: 12.5px;
     font-weight: 500;
 }
 
-/* Parameters reflow with the dialog; labels sit over 30px controls and checkboxes line up with those controls. */
-.nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-params-bar {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    align-items: end;
-    gap: 12px 14px;
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-file-value > .codicon {
+    flex: 0 0 auto;
+    font-size: 14px;
 }
 
-/* Presets: one quiet list of what each preset asks the plugin to do. */
-.nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-preset-goals:has(> p) {
-    gap: 0;
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-file-value > span {
+    min-width: 0;
     overflow: hidden;
-    border: 1px solid var(--nmxv-line);
-    border-radius: 10px;
-    background: var(--nmxv-field);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-param-value > .nmx-file-path-pill {
+    font-size: 12px;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-param-value > .nmx-file-path-pill:hover {
+    background: var(--nmxv-path-bg);
+}
+
+/* A long folder keeps its name and gives up the start of its directory (…/parent/). */
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-param-value > .nmx-file-path-pill > .nmx-file-path-dir {
+    max-width: none;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-param-empty {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--nmxv-plugin-quiet);
+    font-size: 12.5px;
+    line-height: 28px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-param-pick {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    margin: 0;
+    padding: 0 11px;
+    border: 1px solid var(--nmxv-line-2) !important;
+    border-radius: 8px;
+    background: transparent !important;
+    color: var(--nmxv-fg) !important;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 26px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-param-pick:hover:not(:disabled) {
+    background: var(--nmxv-hover) !important;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-param-pick:disabled {
+    opacity: .45;
+    cursor: default;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form .nmx-plugin-param-pick > .codicon {
+    color: var(--nmxv-fg-2);
+    font-size: 14px;
+}
+
+.nmx-shell .nmx-plugin-params-bar.is-form button.nmx-plugin-param-clear {
+    height: 28px;
+    margin: 0;
+    padding: 0 2px;
+    font-size: 12.5px;
+}
+
+/* A narrow dialog stacks every control under its label. */
+@container nmx-plugin-params (max-width: 360px) {
+    .nmx-shell .nmx-plugin-params-bar.is-form > .nmx-plugin-param-row:is(.is-number, .is-select) {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .nmx-shell .nmx-plugin-params-bar.is-form > .nmx-plugin-param-row:is(.is-number, .is-select) > .nmx-plugin-param-control {
+        justify-content: flex-start;
+    }
+}
+
+/* Presets: a read-only list of what each one asks for, the name over its goal, rows on one left edge. */
+.nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-preset-goals:has(> p) {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: none;
 }
 
 .nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-preset-goals > p {
-    display: grid;
-    grid-template-columns: minmax(84px, max-content) minmax(0, 1fr);
-    align-items: baseline;
-    gap: 2px 12px;
-    padding: 8px 12px;
-    font-size: 12.5px;
-    line-height: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    margin: 0;
+    padding: 10px 0;
+    color: var(--nmxv-plugin-quiet);
+    font-size: var(--nmxv-text-xs);
+    line-height: 17px;
+}
+
+.nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-preset-goals > p:first-child {
+    padding-top: 2px;
+}
+
+.nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-preset-goals > p:last-child {
+    padding-bottom: 0;
 }
 
 .nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-preset-goals > p + p {
@@ -1964,13 +2280,14 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
 .nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-preset-goals > p > strong {
     margin: 0;
     color: var(--nmxv-fg);
-    font-weight: 600;
+    font-size: var(--nmxv-text-sm);
+    font-weight: 500;
+    line-height: 18px;
+    overflow-wrap: anywhere;
 }
 
-@media (max-width: 520px) {
-    .nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-preset-goals > p {
-        grid-template-columns: minmax(0, 1fr);
-    }
+.nmx-shell .nmx-plugin-modal.is-options .nmx-plugin-preset-goals > p > span {
+    overflow-wrap: anywhere;
 }
 
 .nmx-shell .nmx-plugin-modal-body :is(h3, h4) {
@@ -2015,20 +2332,96 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
 }
 
 .nmx-shell .nmx-plugin-modal-body .nmx-plugin-details {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 12px;
+    min-width: 0;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-details > p {
+    color: var(--nmxv-fg-2);
+    font-size: var(--nmxv-text-sm);
+    line-height: 20px;
+    overflow-wrap: anywhere;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-details > h3 {
+    margin: 6px 0 -4px;
 }
 
 .nmx-shell .nmx-plugin-modal-body .nmx-plugin-details > button {
-    justify-self: start;
+    align-self: flex-start;
 }
 
+/* Facts and rules read as cards on the dialog, like the Options cards. */
 .nmx-shell .nmx-plugin-modal-body .nmx-plugin-facts {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 7px 16px;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--nmxv-line);
+    border-radius: 10px;
+    background: var(--nmxv-surface-2);
     font-size: 12.5px;
+    line-height: 18px;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-facts > div {
+    display: contents;
 }
 
 .nmx-shell .nmx-plugin-modal-body .nmx-plugin-facts dt {
-    color: var(--nmxv-fg-3);
+    color: var(--nmxv-plugin-quiet);
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-facts dd {
+    min-width: 0;
+    margin: 0;
+    color: var(--nmxv-fg);
+    overflow-wrap: anywhere;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-rules {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    font-size: 12.5px;
+    line-height: 18px;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-rules > section {
+    box-sizing: border-box;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--nmxv-line);
+    border-radius: 10px;
+    background: var(--nmxv-surface-2);
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-rules > section > h4 {
+    margin: 0 0 6px;
+    color: var(--nmxv-fg-2);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    letter-spacing: .01em;
+    text-transform: none;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-rules ul {
+    margin: 0;
+    padding-inline-start: 16px;
+    color: var(--nmxv-fg);
+    overflow-wrap: anywhere;
+}
+
+.nmx-shell .nmx-plugin-modal-body .nmx-plugin-rules small {
+    color: var(--nmxv-plugin-quiet);
+    font-size: 11px;
 }
 
 .nmx-shell .nmx-plugin-modal-body .nmx-plugin-manifest > summary {

@@ -13,7 +13,7 @@
 /* ---- Layout: nested sections fill their card (a global 680px section cap
    left MCP, conversation transfer and installed Skills narrower than the card).
    Modal permission sheets render inside the panel but keep their own width. ---- */
-.nmx-shell .nmx-settings-page .nmx-settings-panel section:not(.nmx-permission-sheet) {
+.nmx-shell .nmx-settings-page .nmx-settings-panel section:not(.nmx-permission-sheet):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     width: auto;
     max-width: 100%;
 }
@@ -105,32 +105,32 @@
     box-shadow: 0 1px 6px rgba(0, 0, 0, .18);
 }
 
-.nmx-shell .nmx-settings-page :is(.nmx-local-data-list > article > button.is-confirm, button.is-danger) {
+.nmx-shell .nmx-settings-page :is(.nmx-local-data-list > article > button.is-confirm, button.is-danger):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     border-color: color-mix(in srgb, var(--nmx-danger, #c2464f) 55%, transparent);
     color: var(--nmx-danger, #e1b0b8);
     background: color-mix(in srgb, var(--nmx-danger, #c2464f) 12%, transparent);
 }
 
-.nmx-shell .nmx-settings-page button:active:not(:disabled) {
+.nmx-shell .nmx-settings-page button:active:not(:disabled):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     transform: scale(.97);
 }
 
-.nmx-shell .nmx-settings-page button:disabled {
+.nmx-shell .nmx-settings-page button:disabled:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     cursor: default;
     opacity: .46;
 }
 
-.nmx-shell .nmx-settings-page button:focus-visible {
+.nmx-shell .nmx-settings-page button:focus-visible:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     outline: 2px solid var(--nmx-focus-ring, currentColor);
     outline-offset: 2px;
 }
 
 /* Inputs keep the app-wide “no browser blue ring” rule but still show a
    themed focus state (§4.2 hover / focus). */
-.nmx-shell .nmx-settings-page :is(input:not([type=checkbox]):not([type=radio]), select, textarea) {
+.nmx-shell .nmx-settings-page :is(input:not([type=checkbox]):not([type=radio]), select, textarea):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     transition: border-color 140ms ease, background-color 140ms ease;
 }
-.nmx-shell .nmx-settings-page :is(input:not([type=checkbox]):not([type=radio]), select, textarea):focus-visible,
+.nmx-shell .nmx-settings-page :is(input:not([type=checkbox]):not([type=radio]), select, textarea):focus-visible:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)),
 .nmx-shell .nmx-settings-page label:focus-within:is(.nmx-skill-install-link > label, .nmx-community-skills-toolbar > label) {
     border-color: var(--nmx-focus-ring, var(--nmx-border-strong));
 }
@@ -252,12 +252,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .nmx-shell .nmx-settings-page button:active:not(:disabled) { transform: none; }
-    .nmx-shell .nmx-settings-page :is(button, input, select, textarea) { transition: none; }
+    .nmx-shell .nmx-settings-page button:active:not(:disabled):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) { transform: none; }
+    .nmx-shell .nmx-settings-page :is(button, input, select, textarea):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) { transition: none; }
 }
 
 /* Nested sections: the page-level 28px section rhythm is too loose inside a card. */
-.nmx-shell .nmx-settings-page .nmx-settings-panel section + section {
+.nmx-shell .nmx-settings-page .nmx-settings-panel section + section:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     margin-top: 12px;
 }
 .nmx-shell .nmx-settings-page .nmx-skills-settings > section + section {

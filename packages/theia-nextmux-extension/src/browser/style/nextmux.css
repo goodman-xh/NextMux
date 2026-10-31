@@ -195,7 +195,7 @@
 }
 
 /* Newer surfaces size their own <small> text (the ID selector here would otherwise override every class rule). */
-#nextmux\.desktop\.widget small:not(:is(.nmx-cast-sheet, .nmx-permission-wait, .nmx-comic-setup, .nmx-step-summary, .nmx-music-lyrics, .nmx-music-song, .nmx-music-output, .nmx-music-mv, .nmx-comic-kind-sheet, .nmx-comic-cats, .nmx-plugins-settings, .nmx-plugin-dialog, .nmx-plugin-menu, .nmx-comic-chat-popover, .nmx-comic-library-anchor, .nmx-comic-chat-drawers, .nmx-comic-chat-refs, .nmx-comic-materials, .nmx-cut-bin-group-head, .nmx-desk-review, .nmx-desk-source-editor, .nmx-comic-export-check, .nmx-board, .nmx-desk-canvas-notice) small) {
+#nextmux\.desktop\.widget small:not(:is(.nmx-cast-sheet, .nmx-permission-wait, .nmx-comic-setup, .nmx-step-summary, .nmx-music-lyrics, .nmx-music-song, .nmx-music-output, .nmx-music-mv, .nmx-comic-kind-sheet, .nmx-comic-cats, .nmx-plugins-settings, .nmx-plugin-dialog, .nmx-plugin-modal-backdrop, .nmx-plugin-menu, .nmx-comic-chat-popover, .nmx-comic-library-anchor, .nmx-comic-chat-drawers, .nmx-comic-chat-refs, .nmx-comic-materials, .nmx-cut-bin-group-head, .nmx-desk-review, .nmx-desk-source-editor, .nmx-comic-export-check, .nmx-board, .nmx-desk-canvas-notice) small) {
     font-size: inherit;
 }
 :where(.nmx-cast-sheet, .nmx-comic-setup, .nmx-step-summary, .nmx-music-lyrics, .nmx-music-song, .nmx-music-output, .nmx-music-mv, .nmx-comic-kind-sheet, .nmx-comic-cats, .nmx-plugins-settings, .nmx-plugin-dialog, .nmx-plugin-menu) small { font-size: 11.5px; }
@@ -533,7 +533,7 @@
 }
 
 .nmx-context-search input,
-.nmx-settings-page input,
+.nmx-settings-page input:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)),
 .nmx-inspector input,
 .nmx-inspector select,
 .nmx-inspector textarea {
@@ -5684,13 +5684,13 @@
     padding: 30px 34px 60px;
 }
 
-.nmx-settings-page section {
+.nmx-settings-page section:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     width: min(680px, 100%);
     padding-bottom: 28px;
     border-bottom: 1px solid var(--nmx-border);
 }
 
-.nmx-settings-page section + section {
+.nmx-settings-page section + section:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     margin-top: 28px;
 }
 
@@ -5699,13 +5699,13 @@
     font-size: 18px;
 }
 
-.nmx-settings-page section > p {
+.nmx-settings-page section > p:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     margin: 0 0 18px;
     color: var(--nmx-subtle);
     font-size: 14px;
 }
 
-.nmx-settings-page label:not(.nmx-same-model-switch) {
+.nmx-settings-page label:not(.nmx-same-model-switch):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     display: grid;
     grid-template-columns: 150px 1fr;
     align-items: center;
@@ -5714,7 +5714,7 @@
     color: var(--nmx-subtle);
 }
 
-.nmx-settings-page input:not([type='checkbox']):not([type='radio']) {
+.nmx-settings-page input:not([type='checkbox']):not([type='radio']):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     height: 34px;
     padding: 0 9px;
 }
@@ -9404,7 +9404,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     border-bottom: 0;
 }
 
-.nmx-settings-panel button,
+.nmx-settings-panel button:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)),
 .nmx-settings-actions button {
     min-height: 31px;
     padding: 0 10px;
@@ -9417,21 +9417,21 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
 }
 
-.nmx-settings-panel button:hover:not(:disabled),
+.nmx-settings-panel button:hover:not(:disabled):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)),
 .nmx-settings-actions button:hover:not(:disabled) {
     border-color: #5b5558;
     color: #eeebec;
     background: #343032;
 }
 
-.nmx-settings-panel button.is-primary,
+.nmx-settings-panel button.is-primary:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)),
 .nmx-settings-actions button.is-primary {
     border-color: #d5d2d3;
     color: #242223;
     background: #dedcdd;
 }
 
-.nmx-settings-panel button:disabled {
+.nmx-settings-panel button:disabled:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     cursor: default;
     opacity: .46;
 }
@@ -9951,7 +9951,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     grid-template-columns: 125px minmax(0, 1fr);
 }
 
-.nmx-settings-panel select {
+.nmx-settings-panel select:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     min-width: 170px;
     height: 32px;
     padding: 0 8px;
@@ -14638,7 +14638,7 @@ body.theia-dark .nmx-file-editor-tabs:hover::-webkit-scrollbar-thumb,
 }
 
 .nmx-settings-panel .nmx-setting-row strong,
-.nmx-settings-panel button,
+.nmx-settings-panel button:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)),
 .nmx-settings-actions button,
 .nmx-settings-nav button,
 .nmx-billing-toolbar nav button {
@@ -15395,7 +15395,7 @@ body.theia-dark .nmx-file-editor-tabs:hover::-webkit-scrollbar-thumb,
 .nmx-settings-panel .nmx-setting-row small,
 .nmx-settings-group > header strong,
 .nmx-settings-group > header small,
-.nmx-settings-panel small,
+.nmx-settings-panel small:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)),
 .nmx-settings-note,
 .nmx-settings-inline-error,
 .nmx-model-toggle-list small,
@@ -15407,10 +15407,10 @@ body.theia-dark .nmx-file-editor-tabs:hover::-webkit-scrollbar-thumb,
     font-size: 15px;
 }
 
-.nmx-settings-panel button,
-.nmx-settings-panel input,
-.nmx-settings-panel textarea,
-.nmx-settings-panel select,
+.nmx-settings-panel button:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)),
+.nmx-settings-panel input:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)),
+.nmx-settings-panel textarea:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)),
+.nmx-settings-panel select:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)),
 .nmx-settings-actions button {
     font-size: 15px;
 }
@@ -18898,7 +18898,7 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
 }
 
 .nmx-theme-light .nmx-model-center :is(small, .nmx-setting-state),
-.nmx-theme-light .nmx-settings-page :is(small, .nmx-setting-state) {
+.nmx-theme-light .nmx-settings-page :is(small, .nmx-setting-state):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     color: #655f63 !important;
 }
 
@@ -19181,7 +19181,7 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     .nmx-comic-agent-bar,
     .nmx-coding-secondary-page,
     .nmx-tool-trace
-) :is(p, small, time),
+) :is(p, small, time):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)),
 .nmx-shell:not(.nmx-theme-light) .nmx-task-turn time,
 .nmx-shell:not(.nmx-theme-light) .nmx-context-nav > p,
 .nmx-shell:not(.nmx-theme-light) .nmx-context-actions small,

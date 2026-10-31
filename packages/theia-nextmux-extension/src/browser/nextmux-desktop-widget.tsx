@@ -44767,7 +44767,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const tab = this.codingPluginsTab();
         const tabs = this.codingPluginTabs();
         const current = tabs.find(([id]) => id === tab) || tabs[0];
-        return <div className='nmx-workspace-scroll nmx-settings-page nmx-coding-plugins'>
+        // The plugin dialogs draw beside the scrolling page, as in Settings: inside it they took the page's section and
+        // control rules and sat at the top of the scrolled content instead of over the visible page.
+        return <><div className='nmx-workspace-scroll nmx-settings-page nmx-coding-plugins'>
             <section className='nmx-settings-heading nmx-coding-plugins-heading'>
                 <div className='nmx-settings-heading-copy'><span>插件</span><h2>{current[1]}</h2></div>
                 <div className='nmx-coding-plugins-tabs' role='tablist' aria-label='插件'>
@@ -44776,8 +44778,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 </div>
             </section>
             <React.Fragment key={tab}>{tab === 'plugins' ? this.renderAppPluginsPanel() : tab === 'skills' ? this.renderSkillsPanel() : this.renderMcpPanel()}</React.Fragment>
-            {this.guard('plugin-dialogs', () => this.renderAppPluginDialogs())}
-        </div>;
+        </div>
+        {this.guard('plugin-dialogs', () => this.renderAppPluginDialogs())}</>;
     }
 
     /** Settings → Skills, also the Skills tab of the coding 插件 page. */

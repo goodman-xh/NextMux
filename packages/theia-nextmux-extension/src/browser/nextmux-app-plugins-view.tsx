@@ -2,6 +2,7 @@ import { decisionPluginCompatibility, isTevDecisionModel } from '@nextmux/model-
 import { appPluginDiagnostics as originalAppPluginDiagnostics, appPluginReplayName } from './nextmux-app-plugin-diagnostics-locale';
 import { modelFailure } from './nextmux-model-errors';
 import * as React from '@theia/core/shared/react';
+import { createPortal } from '@theia/core/shared/react-dom';
 import type { NextMuxDesktopLocale } from './nextmux-locale';
 import { ImeInput } from './nextmux-ime-field';
 import { SurfaceTooltips } from './nextmux-surface-tooltips';
@@ -398,7 +399,7 @@ export function AppPluginBuyDialog(props: {
 export function AppPluginsSettings(props: AppPluginsSettingsProps): React.ReactElement {
     const { locale } = props;
     const [filter, setFilter] = React.useState('');
-    const [modal, setModal] = React.useState<{ id: string; kind: 'options' | 'details' }>();
+    const [modal, setModal] = React.useState<{ id: string; kind: 'options' | 'details'; host?: HTMLElement }>();
     const modalPlugin = props.plugins.find(plugin => plugin.id === modal?.id);
     const words = filter.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
     const shown = !words.length ? props.plugins : props.plugins.filter(plugin => {
@@ -462,9 +463,9 @@ export function AppPluginsSettings(props: AppPluginsSettingsProps): React.ReactE
                             </div>
                         </div>
                         <div className='nmx-plugin-card-actions'>
-                            <button type='button' className='nmx-plugin-card-options' aria-haspopup='dialog' onClick={() => setModal({ id: plugin.id, kind: 'options' })}>
+                            <button type='button' className='nmx-plugin-card-options' aria-haspopup='dialog' onClick={event => setModal({ id: plugin.id, kind: 'options', host: pluginDialogHost(event.currentTarget) })}>
                                 <i className='codicon codicon-settings' aria-hidden='true' />{appPluginOptionsText(locale, 'options')}</button>
-                            <button type='button' className='nmx-plugin-card-details' aria-haspopup='dialog' onClick={() => setModal({ id: plugin.id, kind: 'details' })}>
+                            <button type='button' className='nmx-plugin-card-details' aria-haspopup='dialog' onClick={event => setModal({ id: plugin.id, kind: 'details', host: pluginDialogHost(event.currentTarget) })}>
                                 <i className='codicon codicon-info' aria-hidden='true' />{t(locale, 'details')}</button>
                             {plugin.dev && <button type='button' disabled={busy} onClick={() => props.onReload(plugin.id)}><i className='codicon codicon-refresh' aria-hidden='true'></i>{t(locale, 'reload')}</button>}
                             <button type='button' className='is-danger-text' disabled={busy || Boolean(plugin.running?.length)} onClick={() => props.onUninstall(plugin.id)}><i className='codicon codicon-trash' aria-hidden='true'></i>{t(locale, 'uninstall')}</button>
@@ -472,15 +473,26 @@ export function AppPluginsSettings(props: AppPluginsSettingsProps): React.ReactE
                     </li>;
                 })}</ul>}
         </>}
-        {modal && modalPlugin && <AppPluginOptionsModal {...props} plugin={modalPlugin} kind={modal.kind}
+        {modal && modalPlugin && <AppPluginOptionsModal {...props} plugin={modalPlugin} kind={modal.kind} portalHost={modal.host}
             onClose={() => setModal(undefined)} onChooseModel={id => { setModal(undefined); props.onChooseModel(id); }} />}
         <SurfaceTooltips scope='.nmx-plugins-settings .nmx-plugin-description[data-help]' />
     </section>;
 }
 
+/**
+ * Where an installed card's dialog draws: the app shell around it, so the theme and design tokens still apply while the
+ * settings page's own section, label and control rules (meant for its cards) never reach into the dialog. A page without
+ * the shell (server rendering, a bare test page) draws the dialog in place.
+ */
+function pluginDialogHost(from: Element | null | undefined): HTMLElement | undefined {
+    return from?.closest<HTMLElement>('.nmx-shell') || undefined;
+}
+
 /** Installed-card dialogs never dispatch a start/stop command. Tab controls retain those actions. */
 export function AppPluginOptionsModal(props: AppPluginsSettingsProps & {
     plugin: AppPluginInfo; kind: 'options' | 'details'; onClose(): void;
+    /** The app shell to draw into (see pluginDialogHost); without it the dialog draws in place. */
+    readonly portalHost?: HTMLElement;
 }): React.ReactElement {
     const { plugin, locale, kind } = props;
     const summary = plugin.summary;
@@ -492,7 +504,9 @@ export function AppPluginOptionsModal(props: AppPluginsSettingsProps & {
         return () => { if (trigger?.isConnected) trigger.focus({ preventScroll: true }); };
     }, []);
     const tests = props.testResults[plugin.id];
-    return <div className='nmx-plugin-modal-backdrop' onMouseDown={event => { if (event.target === event.currentTarget) props.onClose(); }}>
+    // A press on the backdrop closes the dialog; its default focus change is cancelled so the focus handed back to the
+    // button that opened the dialog stays there.
+    const dialog = <div className='nmx-plugin-modal-backdrop' onMouseDown={event => { if (event.target === event.currentTarget) { event.preventDefault(); props.onClose(); } }}>
         <section ref={panel} tabIndex={-1} className={`nmx-plugin-modal is-${kind}`} role='dialog' aria-modal='true' aria-labelledby={titleId}
             onKeyDown={event => {
                 if (event.nativeEvent.isComposing || event.keyCode === 229) return;
@@ -507,7 +521,7 @@ export function AppPluginOptionsModal(props: AppPluginsSettingsProps & {
             <header className='nmx-plugin-modal-header'>
                 <span className='nmx-plugin-modal-icon'><PluginIcon icon={plugin.icon} /></span>
                 <div className='nmx-plugin-modal-titles'><h2 id={titleId} data-nmx-literal>{summary?.name || plugin.id}</h2>
-                    <p data-nmx-literal>{[summary?.version, summary?.author.name].filter(Boolean).join(' · ')}</p></div>
+                    <p data-nmx-literal>{[summary?.version ? `v${summary.version}` : '', summary?.author.name].filter(Boolean).join(' · ')}</p></div>
                 <button type='button' className='nmx-plugin-modal-close' aria-label={t(locale, 'close')} onClick={props.onClose}><i className='codicon codicon-close' aria-hidden='true' /></button>
             </header>
             <div className='nmx-plugin-modal-body'>
@@ -522,7 +536,7 @@ export function AppPluginOptionsModal(props: AppPluginsSettingsProps & {
                     </section> : null}
                     <section className='nmx-plugin-options-section is-params' aria-labelledby={`${titleId}-params`}>
                         <h4 id={`${titleId}-params`}><i className='codicon codicon-settings' aria-hidden='true' />{appPluginOptionsText(locale, 'parameters')}</h4>
-                        {summary?.params?.length ? <AppPluginParamsBar locale={locale} plugin={plugin} onConfigureParams={props.onConfigureParams} onPickParamFile={props.onPickParamFile} /> : <p className='nmx-plugin-muted'>{appPluginOptionsText(locale, 'noOptions')}</p>}
+                        {summary?.params?.length ? <AppPluginParamsBar locale={locale} plugin={plugin} layout='form' onConfigureParams={props.onConfigureParams} onPickParamFile={props.onPickParamFile} /> : <p className='nmx-plugin-muted'>{appPluginOptionsText(locale, 'noOptions')}</p>}
                     </section>
                     <section className='nmx-plugin-options-section is-presets nmx-plugin-presets' aria-labelledby={`${titleId}-presets`}>
                         <h4 id={`${titleId}-presets`}><i className='codicon codicon-target' aria-hidden='true' />{appPluginOptionsText(locale, 'presets')}</h4>
@@ -559,6 +573,7 @@ export function AppPluginOptionsModal(props: AppPluginsSettingsProps & {
             <footer className='nmx-plugin-modal-footer'><button type='button' onClick={props.onClose}>{t(locale, 'close')}</button></footer>
         </section>
     </div>;
+    return props.portalHost ? createPortal(dialog, props.portalHost) : dialog;
 }
 
 function AppPluginFormats({ locale }: { locale: Locale }): React.ReactElement {
@@ -985,11 +1000,17 @@ function AppPluginGoalControls(props: AppPluginInlineControlsProps & {
     </div>;
 }
 
+/** What a preset asks for, unless that is just its label again (presets made from goal examples are named by their goal). */
+function presetDetail(preset: AppPluginPreset): string {
+    const detail = (preset.description || preset.goal || '').trim();
+    return detail && detail !== preset.label.trim() ? detail : '';
+}
+
 function AppPluginPresetChoices(props: { locale: Locale; plugin: AppPluginInfo; appName: string; disabled?: boolean; onChoose?(goal: string): void }): React.ReactElement {
     return <div className='nmx-plugin-chips nmx-plugin-preset-goals' aria-label={appPluginOptionsText(props.locale, 'presets')}>
         {appPluginGoalPresets(props.plugin, props.appName, props.locale).map(preset => props.onChoose
             ? <button type='button' key={preset.id} data-nmx-literal disabled={props.disabled} title={preset.description || preset.goal} onClick={() => props.onChoose?.(preset.goal)}>{preset.label}</button>
-            : <p key={preset.id} data-nmx-literal><strong>{preset.label}</strong> {preset.description || preset.goal}</p>)}
+            : <p key={preset.id} data-nmx-literal><strong>{preset.label}</strong>{presetDetail(preset) && <span>{presetDetail(preset)}</span>}</p>)}
     </div>;
 }
 
@@ -1000,6 +1021,9 @@ function AppPluginPresetChoices(props: { locale: Locale; plugin: AppPluginInfo; 
 function ParamDraftInput(props: {
     readonly value: string; readonly type: 'text' | 'number'; readonly min?: number; readonly max?: number; readonly step?: number;
     readonly disabled: boolean; commit(value: string): boolean;
+    readonly id?: string; readonly describedBy?: string;
+    /** A number field is as wide as its longest declared value (form rows), not the whole row. */
+    readonly chars?: number;
 }): React.ReactElement {
     const [draft, setDraft] = React.useState(props.value);
     const editing = React.useRef(false);
@@ -1009,6 +1033,8 @@ function ParamDraftInput(props: {
         if (!props.commit(draft)) setDraft(props.value);
     };
     const shared = {
+        id: props.id,
+        'aria-describedby': props.describedBy,
         disabled: props.disabled,
         onFocus: () => { editing.current = true; },
         onBlur: () => { editing.current = false; commit(); },
@@ -1019,28 +1045,80 @@ function ParamDraftInput(props: {
         }
     };
     return props.type === 'number'
-        ? <input type='number' inputMode='decimal' min={props.min} max={props.max} step={props.step} value={draft} onChange={event => setDraft(event.currentTarget.value)} {...shared} />
+        ? <input type='number' inputMode='decimal' min={props.min} max={props.max} step={props.step} value={draft} onChange={event => setDraft(event.currentTarget.value)}
+            style={props.chars ? { '--nmx-param-chars': props.chars } as React.CSSProperties : undefined} {...shared} />
         : <ImeInput value={draft} maxLength={500} onChange={event => setDraft(event.currentTarget.value)} {...shared} />;
 }
+
+const pathBaseName = (path: string): string => path.split(/[\\/]/).filter(Boolean).pop() || path;
+
+/**
+ * The file a file parameter holds. The host reports an unchosen file as `{ path: '', name: '', count: 0 }`: only a name
+ * or a path makes it chosen, so an empty but real file (`{ name: 'empty.txt', count: 0 }`) is still chosen and clearable.
+ */
+function chosenParamFile(raw: AppPluginParamValue | undefined): { readonly name: string; readonly path: string; readonly count?: number } | undefined {
+    if (raw && typeof raw === 'object' && 'count' in raw) {
+        const value = raw as AppPluginParamFileValue;
+        const path = value.path || '';
+        const name = value.name || (path ? pathBaseName(path) : '');
+        return name ? { name, path, count: value.count } : undefined;
+    }
+    return typeof raw === 'string' && raw ? { name: pathBaseName(raw), path: raw } : undefined;
+}
+
+const finiteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
 export function AppPluginParamsBar(props: {
     readonly locale: Locale; readonly plugin: AppPluginInfo; readonly values?: Readonly<Record<string, AppPluginParamValue>>;
     readonly disabled?: boolean;
+    /**
+     * 'compact' (a tab's plugin bar, the plugin market, the start dialog): a grid of small labelled fields that reflows
+     * with the width. 'form' (the Options dialog): one settings row per parameter with the plugin's description under
+     * its label, switches for on/off, fields sized to their values, files and folders with their current choice.
+     */
+    readonly layout?: 'compact' | 'form';
     onConfigureParams?(id: string, params: Readonly<Record<string, unknown>>): void;
     onPickParamFile?(id: string, paramId: string, label?: string): void;
 }): React.ReactElement | null {
     const [busy, setBusy] = React.useState<string>('');
+    const idBase = React.useId();
     const { locale, plugin } = props;
     const params: readonly AppPluginParam[] = plugin.summary?.params || [];
     if (!params.length) return null;
+    const form = props.layout === 'form';
     const current = props.values || plugin.params || {};
+    const editable = !props.disabled && Boolean(props.onConfigureParams);
     const updateParam = (paramId: string, value: unknown): void => {
         props.onConfigureParams?.(plugin.id, { [paramId]: value });
     };
-    return <div className='nmx-plugin-params-bar' role='group' aria-label={appPluginOptionsText(locale, 'parameters')}>
-        {params.map(param => {
+    const text = (key: Parameters<typeof appPluginOptionsText>[1], values?: Parameters<typeof appPluginOptionsText>[2]): string => appPluginOptionsText(locale, key, values);
+    return <div className={`nmx-plugin-params-bar${form ? ' is-form' : ''}`} role='group' aria-label={text('parameters')}>
+        {params.map((param, index) => {
             const rawVal = current[param.id] !== undefined ? current[param.id] : param.default;
+            // Form rows: the label names the control, the plugin's description (when it says more than the label) describes it.
+            const id = `${idBase}-${index}`, labelId = `${id}-label`, controlId = `${id}-control`;
+            const description = (param.description || '').trim();
+            const help = description && description !== param.label.trim() ? description : '';
+            const helpId = help ? `${id}-help` : undefined;
+            const copy = (labelFor?: string): React.ReactElement => <span className='nmx-plugin-param-copy'>
+                {labelFor ? <label id={labelId} htmlFor={labelFor} className='nmx-plugin-param-label' data-nmx-literal>{param.label}</label>
+                    : <span id={labelId} className='nmx-plugin-param-label' data-nmx-literal>{param.label}</span>}
+                {help && <span id={helpId} className='nmx-plugin-param-help' data-nmx-literal>{help}</span>}
+            </span>;
             if (param.type === 'boolean') {
+                if (form) {
+                    // The whole row is the switch's label: a click anywhere on it toggles, Space toggles the focused switch.
+                    return <label key={param.id} className={`nmx-plugin-param-row is-boolean${editable ? '' : ' is-disabled'}`} data-param-id={param.id}>
+                        {copy()}
+                        <span className='nmx-plugin-param-control'>
+                            <span className='nmx-switch nmx-plugin-switch'>
+                                <input type='checkbox' role='switch' checked={Boolean(rawVal)} disabled={!editable} aria-labelledby={labelId} aria-describedby={helpId}
+                                    onChange={event => updateParam(param.id, event.currentTarget.checked)} />
+                                <i aria-hidden='true'></i>
+                            </span>
+                        </span>
+                    </label>;
+                }
                 return <label key={param.id} className='nmx-plugin-check nmx-plugin-param-item' title={param.description || param.label}>
                     <input type='checkbox' checked={Boolean(rawVal)} disabled={props.disabled || !props.onConfigureParams}
                         onChange={event => updateParam(param.id, event.currentTarget.checked)} />
@@ -1049,43 +1127,78 @@ export function AppPluginParamsBar(props: {
             }
             if (param.type === 'number') {
                 const numVal = typeof rawVal === 'number' ? rawVal : Number(param.default ?? param.min ?? 1);
+                const commit = (draft: string): boolean => {
+                    const next = Number(draft);
+                    if (!draft.trim() || !Number.isFinite(next)) return false;
+                    updateParam(param.id, Math.min(param.max ?? Number.POSITIVE_INFINITY, Math.max(param.min ?? Number.NEGATIVE_INFINITY, next)));
+                    return true;
+                };
+                if (form) {
+                    const range = finiteNumber(param.min) && finiteNumber(param.max) ? `${param.min}–${param.max}`
+                        : finiteNumber(param.min) ? `≥ ${param.min}` : finiteNumber(param.max) ? `≤ ${param.max}` : '';
+                    const rangeId = range ? `${id}-range` : undefined;
+                    const chars = Math.max(2, ...[param.min, param.max, numVal].filter(finiteNumber).map(value => String(value).length));
+                    return <div key={param.id} className='nmx-plugin-param-row is-number' data-param-id={param.id}>
+                        {copy(controlId)}
+                        <span className='nmx-plugin-param-control'>
+                            {range && <span id={rangeId} className='nmx-plugin-param-range' dir='ltr'>{range}</span>}
+                            <ParamDraftInput id={controlId} describedBy={[helpId, rangeId].filter(Boolean).join(' ') || undefined} chars={chars}
+                                type='number' value={String(numVal)} min={param.min} max={param.max} step={param.step ?? 1} disabled={!editable} commit={commit} />
+                        </span>
+                    </div>;
+                }
                 return <label key={param.id} className='nmx-plugin-field nmx-plugin-param-item is-number' title={param.description || param.label}>
                     <span data-nmx-literal>{param.label}</span>
                     <ParamDraftInput type='number' value={String(numVal)} min={param.min} max={param.max} step={param.step ?? 1}
-                        disabled={Boolean(props.disabled || !props.onConfigureParams)}
-                        commit={draft => {
-                            const next = Number(draft);
-                            if (!draft.trim() || !Number.isFinite(next)) return false;
-                            updateParam(param.id, Math.min(param.max ?? Number.POSITIVE_INFINITY, Math.max(param.min ?? Number.NEGATIVE_INFINITY, next)));
-                            return true;
-                        }} />
+                        disabled={Boolean(props.disabled || !props.onConfigureParams)} commit={commit} />
                 </label>;
             }
             if (param.type === 'select' && param.options?.length) {
                 const strVal = typeof rawVal === 'string' ? rawVal : String(param.default ?? param.options[0].value);
+                const select = (selectId?: string): React.ReactElement => <select id={selectId} aria-describedby={selectId ? helpId : undefined} value={strVal}
+                    disabled={props.disabled || !props.onConfigureParams} onChange={event => updateParam(param.id, event.currentTarget.value)}>
+                    {param.options!.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>;
+                if (form) return <div key={param.id} className='nmx-plugin-param-row is-select' data-param-id={param.id}>
+                    {copy(controlId)}
+                    <span className='nmx-plugin-param-control'>{select(controlId)}</span>
+                </div>;
                 return <label key={param.id} className='nmx-plugin-field nmx-plugin-param-item is-select' title={param.description || param.label}>
                     <span data-nmx-literal>{param.label}</span>
-                    <select value={strVal} disabled={props.disabled || !props.onConfigureParams}
-                        onChange={event => updateParam(param.id, event.currentTarget.value)}>
-                        {param.options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                    </select>
+                    {select()}
                 </label>;
             }
             if (param.type === 'file') {
-                const fileVal = rawVal && typeof rawVal === 'object' && 'count' in rawVal ? rawVal as AppPluginParamFileValue : undefined;
-                const buttonText = fileVal?.name
-                    ? appPluginOptionsText(locale, 'fileLines', { name: fileVal.name, count: fileVal.count.toLocaleString(locale) })
-                    : typeof rawVal === 'string' && rawVal ? rawVal : appPluginOptionsText(locale, 'chooseFile');
+                const chosen = chosenParamFile(rawVal);
+                const chosenText = chosen ? chosen.count !== undefined
+                    ? text('fileLines', { name: chosen.name, count: chosen.count.toLocaleString(locale) }) : chosen.path || chosen.name : '';
+                const pick = (): void => props.onPickParamFile?.(plugin.id, param.id, param.label);
+                if (form) {
+                    return <div key={param.id} className='nmx-plugin-param-row is-file' role='group' aria-labelledby={labelId} aria-describedby={helpId} data-param-id={param.id}>
+                        {copy()}
+                        <span className='nmx-plugin-param-control'>
+                            <span className='nmx-plugin-param-value'>
+                                {chosen ? <span className='nmx-plugin-file-value' title={chosen.path || chosenText} data-nmx-literal>
+                                    <i className='codicon codicon-file-text' aria-hidden='true'></i><span>{chosenText}</span>
+                                </span> : <span className='nmx-plugin-param-empty'>{text('noFile')}</span>}
+                            </span>
+                            <button type='button' className='nmx-plugin-param-pick' disabled={props.disabled || !props.onPickParamFile} onClick={pick}>
+                                <i className='codicon codicon-file-text' aria-hidden='true'></i><span>{text(chosen ? 'changeFile' : 'chooseFile')}</span>
+                            </button>
+                            {chosen && <button type='button' className='is-link nmx-plugin-param-clear' disabled={!editable} onClick={() => updateParam(param.id, null)}>{text('clear')}</button>}
+                        </span>
+                    </div>;
+                }
+                const buttonText = chosenText || text('chooseFile');
                 return <div key={param.id} className='nmx-plugin-field nmx-plugin-param-item is-file' title={param.description || param.label}>
                     <span data-nmx-literal>{param.label}</span>
                     <div className='nmx-plugin-inline'>
-                        <button type='button' className={fileVal || typeof rawVal === 'string' && rawVal ? 'has-file' : ''} title={buttonText} disabled={props.disabled || !props.onPickParamFile}
-                            onClick={() => props.onPickParamFile?.(plugin.id, param.id)}>
+                        <button type='button' className={chosen ? 'has-file' : ''} title={buttonText} disabled={props.disabled || !props.onPickParamFile} onClick={pick}>
                             <i className='codicon codicon-file-text' aria-hidden='true'></i>
                             <b data-nmx-literal>{buttonText}</b>
                         </button>
-                        {fileVal || typeof rawVal === 'string' && rawVal ? <button type='button' className='is-link' disabled={props.disabled || !props.onConfigureParams}
-                            onClick={() => updateParam(param.id, null)}>{appPluginOptionsText(locale, 'clear')}</button> : null}
+                        {chosen ? <button type='button' className='is-link' disabled={props.disabled || !props.onConfigureParams}
+                            onClick={() => updateParam(param.id, null)}>{text('clear')}</button> : null}
                     </div>
                 </div>;
             }
@@ -1106,32 +1219,43 @@ export function AppPluginParamsBar(props: {
                         }
                         return;
                     }
-                    props.onPickParamFile?.(plugin.id, param.id);
+                    props.onPickParamFile?.(plugin.id, param.id, param.label);
                 };
                 const separator = Math.max(pathVal.lastIndexOf('/'), pathVal.lastIndexOf('\\'));
+                const value = pathVal
+                    ? <span className='nmx-file-path-pill nmx-plugin-path-value' title={pathVal} data-path={pathVal}>
+                        {separator > 0 && <span className='nmx-file-path-dir'><span>{pathVal.slice(0, separator + 1)}</span></span>}
+                        <span className='nmx-file-path-name'><span>{pathVal.slice(separator + 1) || pathVal}</span></span>
+                    </span>
+                    : <span className={form ? 'nmx-plugin-param-empty nmx-plugin-path-empty' : 'nmx-plugin-path-empty'}>{text('noFolder')}</span>;
+                const buttons = <>
+                    <button type='button' className={form ? 'nmx-plugin-param-pick nmx-plugin-path-pick' : 'nmx-plugin-path-pick'} disabled={props.disabled || !canPick || busy === param.id} onClick={() => void pick()}>
+                        <i className='codicon codicon-folder-opened' aria-hidden='true'></i>
+                        <span>{text(pathVal ? 'changeFolder' : 'chooseFolder')}</span>
+                    </button>
+                    {pathVal ? <button type='button' className={form ? 'is-link nmx-plugin-param-clear nmx-plugin-path-clear' : 'is-link nmx-plugin-path-clear'} disabled={props.disabled || !props.onConfigureParams || busy === param.id}
+                        onClick={() => updateParam(param.id, null)}>{text('clear')}</button> : null}
+                </>;
+                if (form) return <div key={param.id} className='nmx-plugin-param-row is-path' role='group' aria-labelledby={labelId} aria-describedby={helpId} data-param-id={param.id}>
+                    {copy()}
+                    <span className='nmx-plugin-param-control nmx-plugin-path-control'><span className='nmx-plugin-param-value'>{value}</span>{buttons}</span>
+                </div>;
                 return <div key={param.id} className='nmx-plugin-field nmx-plugin-param-item is-path' title={param.description || param.label}>
                     <span data-nmx-literal>{param.label}</span>
-                    <div className='nmx-plugin-path-control'>
-                        {pathVal
-                            ? <span className='nmx-file-path-pill nmx-plugin-path-value' title={pathVal} data-path={pathVal}>
-                                {separator > 0 && <span className='nmx-file-path-dir'><span>{pathVal.slice(0, separator + 1)}</span></span>}
-                                <span className='nmx-file-path-name'><span>{pathVal.slice(separator + 1) || pathVal}</span></span>
-                            </span>
-                            : <span className='nmx-plugin-path-empty'>{appPluginOptionsText(locale, 'noFolder')}</span>}
-                        <button type='button' className='nmx-plugin-path-pick' disabled={props.disabled || !canPick || busy === param.id} onClick={() => void pick()}>
-                            <i className='codicon codicon-folder-opened' aria-hidden='true'></i>
-                            <span>{appPluginOptionsText(locale, pathVal ? 'changeFolder' : 'chooseFolder')}</span>
-                        </button>
-                        {pathVal ? <button type='button' className='is-link nmx-plugin-path-clear' disabled={props.disabled || !props.onConfigureParams || busy === param.id}
-                            onClick={() => updateParam(param.id, null)}>{appPluginOptionsText(locale, 'clear')}</button> : null}
-                    </div>
+                    <div className='nmx-plugin-path-control'>{value}{buttons}</div>
                 </div>;
             }
             const textVal = typeof rawVal === 'string' ? rawVal : String(param.default ?? '');
+            const commitText = (draft: string): boolean => { updateParam(param.id, draft); return true; };
+            if (form) return <div key={param.id} className='nmx-plugin-param-row is-string' data-param-id={param.id}>
+                {copy(controlId)}
+                <span className='nmx-plugin-param-control'>
+                    <ParamDraftInput id={controlId} describedBy={helpId} type='text' value={textVal} disabled={!editable} commit={commitText} />
+                </span>
+            </div>;
             return <label key={param.id} className='nmx-plugin-field nmx-plugin-param-item is-string' title={param.description || param.label}>
                 <span data-nmx-literal>{param.label}</span>
-                <ParamDraftInput type='text' value={textVal} disabled={Boolean(props.disabled || !props.onConfigureParams)}
-                    commit={draft => { updateParam(param.id, draft); return true; }} />
+                <ParamDraftInput type='text' value={textVal} disabled={Boolean(props.disabled || !props.onConfigureParams)} commit={commitText} />
             </label>;
         })}
     </div>;

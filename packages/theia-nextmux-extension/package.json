@@ -1,6 +1,6 @@
 {
   "name": "@nextmux/theia-extension",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "description": "NextMux desktop UI views, styles, and 12-locale interface components",
   "keywords": [
