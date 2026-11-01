@@ -1,5 +1,6 @@
 import { NextMuxOwnedBrowserView, type OwnedBrowserSurface } from './nextmux-owned-browser-view';
 import { ownedBrowserText } from './nextmux-owned-browser-text';
+import { NextMuxBrowserAddressInput } from './nextmux-browser-address-input';
 import { NextMuxDurableRetryDialog, durableRecoveryText } from './nextmux-durable-retry-dialog';
 import { durableRecoveryDecision, type DurableRetrySelection } from './nextmux-durable-recovery';
 import { normalizeAgentCouncilConfigRoles, normalizeAgentCouncilRoleId, validateAgentCouncilConfig } from '@nextmux/agent-runtime/council';
@@ -636,7 +637,7 @@ import {
     agentDelegationRootIds,
     hydrateAgentDelegationLedger
 } from './nextmux-agent-delegation-hydration';
-import { normalizeSafeBrowserUrl } from './nextmux-browser-url';
+import { normalizeSafeBrowserUrl, normalizeUserBrowserInput } from './nextmux-browser-url';
 import { DesktopAccountLinkCoordinator } from './nextmux-account-link';
 import { FILE_DRAWER_TEXT_MAX_BYTES, filePreviewErrorText, filePreviewRequestIsCurrent, IMAGE_PREVIEW_MAX_BYTES } from './nextmux-file-preview';
 import { decodeTextAttachment, TextAttachmentDecodeError, TEXT_ATTACHMENT_MAX_BYTES } from '../common/nextmux-text-attachment';
@@ -5518,6 +5519,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         window.addEventListener('keydown', this.handleThreadFindShortcut, true);
         this.toDispose.push({ dispose: () => window.removeEventListener('keydown', this.handleThreadFindShortcut, true) });
+        window.addEventListener('keydown', this.handleBrowserAddressShortcut, true);
+        this.toDispose.push({ dispose: () => window.removeEventListener('keydown', this.handleBrowserAddressShortcut, true) });
         window.addEventListener('keydown', this.handleSurfaceEscape);
         this.toDispose.push({ dispose: () => window.removeEventListener('keydown', this.handleSurfaceEscape) });
         window.addEventListener('mousedown', this.handleNavigationMouseButton, true);
@@ -6276,6 +6279,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.codingPanel = saved.codingPanel === 'pull_requests' || saved.codingPanel === 'sites'
             ? 'thread' : saved.codingPanel;
         this.settingsPanel = normalizeDesktopSettingsPanel(saved.settingsPanel);
+        // Reopening onto a plugins page loads what it shows, as opening that page by hand does.
+        if (this.activeSection === 'coding' && this.codingPanel === 'extensions') this.loadCodingPluginsTab?.(this.codingPluginsTab?.() || 'plugins');
+        else if (this.activeSection === 'settings' && this.settingsPanel === 'plugins') void this.loadAppPlugins?.(true);
         this.billingTab = saved.billingTab;
         this.modelCenterView = saved.modelCenterView;
         this.modelCapabilityFilter = saved.modelCapabilityFilter;
@@ -6458,6 +6464,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             .then(capability => this.platformService.setDesktopComputerCapability(capability)).catch(() => undefined);
         const dispose = bridge.onUpdateState(state => this.applyDesktopUpdateState(state));
         this.toDispose.push({ dispose });
+        // Installed skill plugins are listed from startup (Windows and macOS alike): the Plugins page, the settings
+        // sidebar count and the app tabs' plugin menus never open on an empty list after a restart or an update.
+        if (bridge.listAppPlugins) void this.loadAppPlugins?.(false);
         void bridge.getUpdateState().then(state => this.applyDesktopUpdateState(state)).catch(() => {
             this.updateError = '无法读取更新状态';
             this.update();
@@ -6486,6 +6495,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.workContextMode = 'browser';
                 this.constrainPaneSizes();
                 this.update();
+                this.revealActiveBrowserTab();
                 return true;
             },
             close: (id: string) => {
@@ -8799,7 +8809,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     || !await browserWorkspaceMatchesCanonical(currentRoot, scope.workspaceRoot, (root, target) => this.platformService.resolveWorkspaceFile(root, target))
                     || this.codingSessionWorkspaceRoot(this.codingSessions.find(session => session.id === request.conversationId)) !== currentRoot
                     || !await isPending()) return fail('The browser ownership changed while the page was loading. No action was executed.');
-                return runBrowserPageAction(surface, { ...actionRequest, workspaceRoot: scope.workspaceRoot }, isPending);
+                // The attached live page is parked for the step (model input never takes the person's focus and is
+                // never refused as manual control) and returns live after the last step.
+                const run = () => runBrowserPageAction(surface, { ...actionRequest, workspaceRoot: scope.workspaceRoot }, isPending);
+                return surface.withAgentAccess ? surface.withAgentAccess(run, { destructive: actionRequest.action === 'close' }) : run();
             }
             return runBrowserPageAction(surface, actionRequest, isPending);
         };
@@ -8826,7 +8839,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (!url) return fail('Only HTTP or HTTPS pages are supported.');
             if (ownedBrowsers().length >= 24) return fail('This conversation has reached its browser tab limit. Close unused tabs.');
             const now = Date.now(), id = crypto.randomUUID();
-            this.setProjectBrowsers(key, [{ id, conversationId: owner.id, url, title: new URL(url).host, source: 'agent', createdAt: now, updatedAt: now }, ...ownedBrowsers()]);
+            this.setProjectBrowsers(key, [...ownedBrowsers(), { id, conversationId: owner.id, url, title: new URL(url).host, source: 'agent', createdAt: now, updatedAt: now }]);
             this.mountedBrowserIds.add(id);
             if (!this.revealAgentBrowser(owner.id, id)) this.update();
             const surface = await this.browserToolSurface(id);
@@ -8880,7 +8893,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected applyDesktopUpdateState(state: NextMuxDesktopUpdateState): void {
         if (!state || !['idle', 'checking', 'available', 'downloading', 'current', 'ready', 'error', 'unsupported'].includes(state.phase)) return;
         if ((state.revision || 0) < (this.updateState.revision || 0)) return;
-        const previousPhase = this.updateState.phase;
         this.updateState = {
             ...state,
             progress: Math.max(0, Math.min(100, Number(state.progress) || 0)),
@@ -8900,10 +8912,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         } else if (state.phase !== 'error') {
             this.updateError = '';
         }
+        // A finished download never closes or restarts NextMux: the update installs when the person quits (or closes
+        // the last window with nothing running), or right away only from an explicit "Restart to update" click.
         this.update();
-        if (previousPhase === 'downloading' && state.phase === 'ready' && !this.hasRunningConversationForExit?.()) {
-            void this.installDesktopUpdate?.();
-        }
     }
 
     protected async installDesktopUpdate(): Promise<void> {
@@ -8949,7 +8960,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // A failure is reported on 'available' with an errorCode: show the
             // details and the manual download option instead of a silent button.
             if (next?.errorCode || next?.error || this.updateError) this.openSettingsPanel('updates');
-            else if (next?.phase === 'ready' && !this.hasRunningConversationForExit?.()) await this.installDesktopUpdate?.();
         } catch {
             this.updateError = desktopUpdateText(this.desktopLocale, 'downloadFailed');
             this.openSettingsPanel('updates');
@@ -30089,20 +30099,91 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected addCodingBrowser(): void {
         this.captureThreadReadingAnchor();
         const workspacePath = this.browserWorkspacePath();
-        if (!workspacePath) return;
+        // The registry holds at most 24 pages per window (the button is disabled there too).
+        if (!workspacePath || this.currentCodingBrowsers().length >= 24) return;
         const now = Date.now();
         const browser: CodingBrowserRecord = {
             id: crypto.randomUUID(), conversationId: this.activeCodingSessionId || undefined, url: '', title: workbenchText(this.desktopLocale, 'newTab'), source: 'manual', createdAt: now, updatedAt: now
         };
-        this.setProjectBrowsers(workspacePath, [browser, ...this.currentCodingBrowsers()]);
+        // New tabs open at the end, beside the new-tab button (Chrome, Edge, VS Code), and scroll into view.
+        this.setProjectBrowsers(workspacePath, [...this.currentCodingBrowsers(), browser]);
         this.activeBrowserId = browser.id;
         this.workContextMode = 'browser';
         this.workContextOpen = true;
         this.constrainPaneSizes();
         this.update();
         this.schedulePaneResizeUpdate();
+        this.revealActiveBrowserTab();
         requestAnimationFrame(() => this.node.querySelector<HTMLInputElement>(`.nmx-browser-view[data-browser-id="${browser.id}"] input`)?.focus());
     }
+
+    /**
+     * A link the person opened in a new tab inside a page (target="_blank", window.open after their click, the page's
+     * context menu): a tab right after its opener, activated unless it was a background open (middle / Cmd+click).
+     */
+    protected openCodingBrowserTab(value: string, options: { readonly afterId?: string; readonly background?: boolean } = {}): void {
+        const url = this.normalizeBrowserUrl(value);
+        if (!url) return;
+        const entry = [...this.projectBrowsers.entries()].find(([, tabs]) => tabs.some(tab => tab.id === options.afterId));
+        const key = entry?.[0] || this.browserWorkspacePath();
+        if (!key) return;
+        const tabs = entry?.[1] || this.currentCodingBrowsers();
+        // The registry holds at most 24 pages per window; a page can never open a 25th.
+        if (tabs.length >= 24) return;
+        const opener = tabs.find(tab => tab.id === options.afterId);
+        const now = Date.now();
+        const browser: CodingBrowserRecord = { id: crypto.randomUUID(), conversationId: opener ? opener.conversationId : this.activeCodingSessionId || undefined,
+            url, title: new URL(url).host, source: 'manual', createdAt: now, updatedAt: now };
+        const index = opener ? tabs.indexOf(opener) + 1 : tabs.length;
+        this.setProjectBrowsers(key, [...tabs.slice(0, index), browser, ...tabs.slice(index)]);
+        if (!options.background && key === this.browserWorkspacePath()) {
+            this.activeBrowserId = browser.id;
+            this.persistActiveCodingSessionState();
+            this.revealActiveBrowserTab();
+        }
+        this.update();
+    }
+
+    /** The address bar of each mounted tab (Cmd/Ctrl+L focuses the active one). */
+    protected readonly browserAddressInputs = new Map<string, NextMuxBrowserAddressInput>();
+    /** Loading and history of each page, pushed by the page itself, for the toolbar. */
+    protected readonly browserPageStates = new Map<string, { readonly loading: boolean; readonly canGoBack: boolean; readonly canGoForward: boolean }>();
+
+    protected noteBrowserPageState(browserId: string, state: import('../common/nextmux-owned-browser').OwnedBrowserState): void {
+        const previous = this.browserPageStates.get(browserId);
+        if (previous && previous.loading === state.loading && previous.canGoBack === state.canGoBack && previous.canGoForward === state.canGoForward) return;
+        this.browserPageStates.set(browserId, { loading: state.loading, canGoBack: state.canGoBack, canGoForward: state.canGoForward });
+        this.update();
+    }
+
+    protected focusBrowserAddress(browserId = this.activeBrowserId): void {
+        if (!browserId || browserId !== this.activeBrowserId) return;
+        this.browserAddressInputs.get(browserId)?.focusAndSelect();
+    }
+
+    /** What the person typed in the address bar: an address, a development host or a web search. Enter on the same address reloads. */
+    protected navigateCodingBrowserFromInput(browserId: string, value: string): void {
+        const url = normalizeUserBrowserInput(value, this.desktopLocale);
+        if (!url) return;
+        const current = this.currentCodingBrowsers().find(browser => browser.id === browserId);
+        if (current?.url === url) { this.codingBrowserElement(browserId)?.reload?.(); return; }
+        this.navigateCodingBrowser(browserId, url);
+    }
+
+    /** Cmd/Ctrl+L in the browser drawer focuses and selects the active tab's address (inside the page, see the registry). */
+    protected readonly handleBrowserAddressShortcut = (event: KeyboardEvent): void => {
+        const mac = /Mac/i.test(navigator.platform || navigator.userAgent);
+        if (String(event.key).toLowerCase() !== 'l' || event.altKey || event.shiftKey || event.isComposing
+            || (mac ? !event.metaKey || event.ctrlKey : !event.ctrlKey || event.metaKey)) return;
+        if (!this.node.isConnected || !this.workContextOpen || this.workContextClosing || this.workContextMode !== 'browser') return;
+        const target = event.target instanceof Element ? event.target : undefined;
+        if (target && target !== document.body && !target.closest('.nmx-context-browser')) return;
+        const input = this.browserAddressInputs.get(this.activeBrowserId);
+        if (!input) return;
+        event.preventDefault();
+        event.stopPropagation();
+        input.focusAndSelect();
+    };
 
     protected navigateCodingBrowser(browserId: string, value: string): void {
         const workspacePath = this.browserWorkspacePath();
@@ -30138,8 +30219,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected codingBrowserElement(browserId: string): (import('./nextmux-browser-automation').BrowserAutomationSurface & {
-        canGoBack?: () => boolean; canGoForward?: () => boolean; goBack?: () => void; goForward?: () => void; reload?: () => void;
+        canGoBack?: () => boolean; canGoForward?: () => boolean; goBack?: () => void; goForward?: () => void; reload?: () => void; stop?: () => void;
         loadURL?: (url: string) => Promise<void>;
+        withAgentAccess?: OwnedBrowserSurface['withAgentAccess'];
         getWebContentsId?: () => number;
         executeJavaScript?: (source: string, userGesture?: boolean) => Promise<unknown>;
     }) | undefined {
@@ -30201,6 +30283,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.workContextOpen && this.workContextMode === 'browser' && this.activeBrowserId === browserId) return false;
         this.activeBrowserId = browserId;
         this.showBrowserWorkContext();
+        this.revealActiveBrowserTab?.();
         return true;
     }
 
@@ -32038,9 +32121,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected removeCodingBrowser(browserId: string, workspacePath = this.browserWorkspacePath()): void {
         if (!workspacePath) return;
-        this.setProjectBrowsers(workspacePath, (this.projectBrowsers.get(workspacePath) || []).filter(browser => browser.id !== browserId));
+        const tabs = this.projectBrowsers.get(workspacePath) || [];
+        const index = tabs.findIndex(browser => browser.id === browserId);
+        const remaining = tabs.filter(browser => browser.id !== browserId);
+        this.setProjectBrowsers(workspacePath, remaining);
         this.mountedBrowserIds.delete(browserId);
-        if (this.activeBrowserId === browserId) this.activeBrowserId = this.currentCodingBrowsers()[0]?.id || '';
+        this.browserPageStates.delete(browserId);
+        // Closing the active tab activates its neighbour (the next one, else the previous), as browsers do.
+        if (this.activeBrowserId === browserId) {
+            const current = this.currentCodingBrowsers();
+            const neighbour = workspacePath === this.browserWorkspacePath() && index >= 0 ? remaining[Math.min(index, remaining.length - 1)] : undefined;
+            this.activeBrowserId = neighbour?.id || current[0]?.id || '';
+            this.revealActiveBrowserTab();
+        }
         this.update();
     }
 
@@ -32141,28 +32234,120 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected renderCodingBrowserView(browser: CodingBrowserRecord, active: boolean): React.ReactNode {
         const browserTitle = browser.url ? browser.title : workbenchText(this.desktopLocale, 'newTab');
         const owner = this.codingBrowserOwner(browser);
+        // The page reports its history and loading itself; before it does, the buttons stay usable.
+        const page = this.browserPageStates.get(browser.id);
+        const loading = Boolean(browser.url && page?.loading);
+        const browserLabels = ownedBrowserText(this.desktopLocale);
         return <section key={browser.id} className={`nmx-browser-view${active ? '' : ' is-inactive'}${browser.mobile ? ' is-mobile' : ''}`} data-browser-id={browser.id} aria-label={browserTitle} aria-hidden={!active} ref={node => { if (node) node.inert = !active; }}
             style={active ? undefined : { display: 'flex', position: 'fixed', left: -10000, top: 0, width: 1024, height: 768, opacity: 0, pointerEvents: 'none' }}>
-            <form onSubmit={event => { event.preventDefault(); const input = event.currentTarget.elements.namedItem('url') as HTMLInputElement | null; if (input) this.navigateCodingBrowser(browser.id, input.value); }}>
-                <button type='button' aria-label={workbenchText(this.desktopLocale, 'back')} title={workbenchText(this.desktopLocale, 'back')} onClick={() => this.codingBrowserElement(browser.id)?.goBack?.()}><i className='codicon codicon-arrow-left'></i></button>
-                <button type='button' aria-label={workbenchText(this.desktopLocale, 'forward')} title={workbenchText(this.desktopLocale, 'forward')} onClick={() => this.codingBrowserElement(browser.id)?.goForward?.()}><i className='codicon codicon-arrow-right'></i></button>
-                <button type='button' aria-label={workbenchText(this.desktopLocale, 'refresh')} title={workbenchText(this.desktopLocale, 'refresh')} onClick={() => this.codingBrowserElement(browser.id)?.reload?.()}><i className='codicon codicon-refresh'></i></button>
-                <input key={`${browser.id}:${browser.url}`} name='url' spellCheck={false} defaultValue={browser.url} placeholder={workbenchText(this.desktopLocale, 'addressPlaceholder')} />
+            <form className={loading ? 'is-loading' : undefined} onSubmit={event => event.preventDefault()}>
+                <button type='button' disabled={page !== undefined && !page.canGoBack} aria-label={workbenchText(this.desktopLocale, 'back')} title={workbenchText(this.desktopLocale, 'back')} onClick={() => this.codingBrowserElement(browser.id)?.goBack?.()}><i className='codicon codicon-arrow-left'></i></button>
+                <button type='button' disabled={page !== undefined && !page.canGoForward} aria-label={workbenchText(this.desktopLocale, 'forward')} title={workbenchText(this.desktopLocale, 'forward')} onClick={() => this.codingBrowserElement(browser.id)?.goForward?.()}><i className='codicon codicon-arrow-right'></i></button>
+                {loading
+                    ? <button type='button' className='nmx-browser-stop' aria-label={browserLabels.stop} title={browserLabels.stop} onClick={() => this.codingBrowserElement(browser.id)?.stop?.()}><i className='codicon codicon-close'></i></button>
+                    : <button type='button' disabled={!browser.url} aria-label={workbenchText(this.desktopLocale, 'refresh')} title={workbenchText(this.desktopLocale, 'refresh')} onClick={() => this.codingBrowserElement(browser.id)?.reload?.()}><i className='codicon codicon-refresh'></i></button>}
+                <NextMuxBrowserAddressInput key={browser.id} url={browser.url} placeholder={workbenchText(this.desktopLocale, 'addressPlaceholder')} label={workbenchText(this.desktopLocale, 'addressPlaceholder')}
+                    ref={input => { if (input) this.browserAddressInputs.set(browser.id, input); else this.browserAddressInputs.delete(browser.id); }}
+                    onNavigate={value => this.navigateCodingBrowserFromInput(browser.id, value)} />
                 <button type='button' className={`nmx-browser-device${browser.mobile ? ' is-on' : ''}`} aria-pressed={Boolean(browser.mobile)}
                     aria-label={workbenchText(this.desktopLocale, browser.mobile ? 'desktopView' : 'mobileView')} title={workbenchText(this.desktopLocale, browser.mobile ? 'desktopView' : 'mobileView')}
                     onClick={() => this.setCodingBrowserMobile(browser.id, !browser.mobile)}><i className={`codicon codicon-${browser.mobile ? 'device-desktop' : 'device-mobile'}`}></i></button>
                 <button type='button' disabled={!browser.url} aria-label={workbenchText(this.desktopLocale, 'openExternal')} title={workbenchText(this.desktopLocale, 'openExternal')} onClick={() => this.openExternalUrl(browser.url)}><i className='codicon codicon-link-external'></i></button>
+                {loading && <span className='nmx-browser-progress' aria-hidden='true'></span>}
             </form>
             {browser.url && this.mountedBrowserIds.has(browser.id) ? window.nextmuxDesktop
                 ? owner ? <NextMuxOwnedBrowserView key={`${browser.id}:${owner.conversationId}:${owner.workspaceRoot}`} owner={owner} url={browser.url} title={browser.title}
-                    active={active} mobile={Boolean(browser.mobile)} labels={ownedBrowserText(this.desktopLocale)}
+                    active={active} mobile={Boolean(browser.mobile)} labels={browserLabels}
                     onLocation={url => this.updateCodingBrowserLocation(browser.id, url)} onTitle={title => this.updateCodingBrowserLocation(browser.id, undefined, title)}
-                    onSurface={surface => { if (surface) this.ownedBrowserSurfaces.set(browser.id, surface); else this.ownedBrowserSurfaces.delete(browser.id); }} />
-                    : <div className='nmx-browser-start' role='status'>{ownedBrowserText(this.desktopLocale).failed}</div>
+                    onSurface={surface => { if (surface) this.ownedBrowserSurfaces.set(browser.id, surface); else this.ownedBrowserSurfaces.delete(browser.id); }}
+                    onState={state => this.noteBrowserPageState(browser.id, state)}
+                    onOpenUrl={(url, background) => this.openCodingBrowserTab(url, { afterId: browser.id, background })}
+                    onFocusAddress={() => this.focusBrowserAddress(browser.id)} />
+                    : <div className='nmx-browser-start' role='status'>{browserLabels.failed}</div>
                 : <NextMuxBrowserView id={browser.id} url={browser.url} title={browser.title} active={active} mobile={Boolean(browser.mobile)}
                     onLocation={url => this.updateCodingBrowserLocation(browser.id, url)} onTitle={title => this.updateCodingBrowserLocation(browser.id, undefined, title)} />
                 : <div className='nmx-browser-start'><i className='codicon codicon-globe'></i><strong>{workbenchText(this.desktopLocale, 'startBrowsing')}</strong><span>{workbenchText(this.desktopLocale, 'addressPlaceholder')}</span></div>}
         </section>;
+    }
+
+    /**
+     * The drawer's browser tabs. They scroll sideways in their own lane (mouse wheel, trackpad, tilt wheel) while the
+     * new-tab button stays pinned right after the last tab, never scrolled out of reach; faded edges show that more
+     * tabs are there. A middle click closes a tab.
+     */
+    protected renderBrowserTabStrip(browsers: readonly CodingBrowserRecord[], activeBrowser: CodingBrowserRecord | undefined): React.ReactNode {
+        return <div className='nmx-browser-tabs-bar'>
+            <nav className='nmx-browser-tabs' ref={this.bindBrowserTabsWheel} role='tablist' aria-label={workbenchText(this.desktopLocale, 'browser')} onScroll={this.updateBrowserTabsOverflow}>{browsers.map(browser => {
+                const browserTitle = browser.url ? browser.title : workbenchText(this.desktopLocale, 'newTab');
+                const active = browser.id === activeBrowser?.id;
+                const loading = Boolean(browser.url && this.browserPageStates.get(browser.id)?.loading);
+                return <div className={`nmx-browser-tab-item${active ? ' is-active' : ''}`} key={browser.id} data-browser-tab-id={browser.id}>
+                    <button role='tab' aria-selected={active} title={browser.url || browserTitle} onClick={() => this.selectCodingBrowserTab(browser.id)}
+                        onAuxClick={event => { if (event.button === 1) { event.preventDefault(); this.removeCodingBrowser(browser.id); } }}>
+                        <i className={`codicon codicon-${loading ? 'loading codicon-modifier-spin' : 'globe'}`}></i><span data-nmx-literal={browser.url ? true : undefined}>{browserTitle}</span>
+                    </button>
+                    <button aria-label={localizeDesktopSurface(this.desktopLocale, `关闭 ${browserTitle}`)} title={workbenchText(this.desktopLocale, 'close')} onClick={() => this.removeCodingBrowser(browser.id)}><i className='codicon codicon-close'></i></button>
+                </div>;
+            })}</nav>
+            <button type='button' className='nmx-browser-new-tab' aria-label={workbenchText(this.desktopLocale, 'newTab')} title={workbenchText(this.desktopLocale, 'newTab')} disabled={browsers.length >= 24} onClick={() => this.addCodingBrowser()}><i className='codicon codicon-add'></i></button>
+        </div>;
+    }
+
+    protected selectCodingBrowserTab(browserId: string): void {
+        this.activeBrowserId = browserId;
+        this.persistActiveCodingSessionState();
+        this.update();
+        this.revealActiveBrowserTab();
+    }
+
+    protected browserTabsWheelSurface?: HTMLElement;
+    protected browserTabsMutationObserver?: MutationObserver;
+    protected browserTabsResizeObserver?: ResizeObserver;
+    /** Vertical wheels and horizontal trackpads both scroll the tab lane sideways (pinch zoom is left alone). */
+    protected readonly browserTabsWheel = (event: WheelEvent): void => {
+        const nav = this.browserTabsWheelSurface;
+        if (!nav || event.ctrlKey || event.metaKey || nav.scrollWidth <= nav.clientWidth + 1) return;
+        const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+        if (!Number.isFinite(delta) || delta === 0) return;
+        nav.scrollLeft += delta * (event.deltaMode === 1 ? 20 : event.deltaMode === 2 ? nav.clientWidth : 1);
+        event.preventDefault();
+        event.stopPropagation();
+    };
+    protected readonly bindBrowserTabsWheel = (nav: HTMLElement | null): void => {
+        if (nav === this.browserTabsWheelSurface) return;
+        this.browserTabsWheelSurface?.removeEventListener('wheel', this.browserTabsWheel);
+        this.browserTabsMutationObserver?.disconnect();
+        this.browserTabsResizeObserver?.disconnect();
+        this.browserTabsWheelSurface = nav || undefined;
+        if (!nav) return;
+        nav.addEventListener('wheel', this.browserTabsWheel, { passive: false });
+        // Tabs come and go without resizing a full lane: watch both.
+        this.browserTabsMutationObserver = new MutationObserver(this.updateBrowserTabsOverflow);
+        this.browserTabsMutationObserver.observe(nav, { childList: true });
+        this.browserTabsResizeObserver = new ResizeObserver(this.updateBrowserTabsOverflow);
+        this.browserTabsResizeObserver.observe(nav);
+        this.updateBrowserTabsOverflow();
+    };
+    /** Marks the bar when tabs overflow and on which side more of them are (styling only; React never owns these classes). */
+    protected readonly updateBrowserTabsOverflow = (): void => {
+        const nav = this.browserTabsWheelSurface, bar = nav?.parentElement;
+        if (!nav || !bar) return;
+        const overflow = nav.scrollWidth > nav.clientWidth + 1;
+        bar.classList.toggle('has-overflow', overflow);
+        bar.classList.toggle('has-more-before', overflow && nav.scrollLeft > 1);
+        bar.classList.toggle('has-more-after', overflow && nav.scrollLeft + nav.clientWidth < nav.scrollWidth - 1);
+    };
+    /** Brings the active tab fully into the lane after it was added, selected or reached by closing another one. */
+    protected revealActiveBrowserTab(): void {
+        requestAnimationFrame(() => {
+            const nav = this.browserTabsWheelSurface;
+            const tab = nav ? Array.from(nav.children).find(node => (node as HTMLElement).dataset?.browserTabId === this.activeBrowserId) as HTMLElement | undefined : undefined;
+            if (!nav || !tab) return;
+            const left = tab.offsetLeft, right = left + tab.offsetWidth;
+            if (left < nav.scrollLeft) nav.scrollTo({ left: Math.max(0, left - 8), behavior: 'smooth' });
+            else if (right > nav.scrollLeft + nav.clientWidth) nav.scrollTo({ left: right - nav.clientWidth + 8, behavior: 'smooth' });
+            this.updateBrowserTabsOverflow();
+        });
     }
 
     protected renderWorkContextTitlebar(): React.ReactNode {
@@ -32262,10 +32447,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             {<div id='nmx-context-panel-browser' role='tabpanel' aria-labelledby='nmx-context-tab-browser' className={`nmx-context-browser${artifactPreview ? ' has-artifact-preview' : ''}`} aria-hidden={fileMode || agentMode || !drawerVisible} ref={node => { if (node) node.inert = fileMode || agentMode || !drawerVisible; }}
                 style={fileMode || agentMode ? { position: 'fixed', left: -10000, top: 0, width: 1024, height: 768, opacity: 0, pointerEvents: 'none' } : undefined}>
                 {/* An artifact preview covers the tabs; the browser views stay mounted (hidden) so their pages survive it. */}
-                {!artifactPreview && <nav className='nmx-browser-tabs'>{browsers.map(browser => {
-                    const browserTitle = browser.url ? browser.title : workbenchText(this.desktopLocale, 'newTab');
-                    return <div className={browser.id === activeBrowser?.id ? 'is-active' : ''} key={browser.id}><button title={browser.url || browserTitle} onClick={() => { this.activeBrowserId = browser.id; this.persistActiveCodingSessionState(); this.update(); }}><i className='codicon codicon-globe'></i><span data-nmx-literal={browser.url ? true : undefined}>{browserTitle}</span></button><button aria-label={localizeDesktopSurface(this.desktopLocale, `关闭 ${browserTitle}`)} title={workbenchText(this.desktopLocale, 'close')} onClick={() => this.removeCodingBrowser(browser.id)}><i className='codicon codicon-close'></i></button></div>;
-                })}<button className='nmx-browser-new-tab' aria-label={workbenchText(this.desktopLocale, 'newTab')} title={workbenchText(this.desktopLocale, 'newTab')} onClick={() => this.addCodingBrowser()}><i className='codicon codicon-add'></i></button></nav>}
+                {!artifactPreview && this.renderBrowserTabStrip(browsers, activeBrowser)}
                 {retainedBrowsers.map(browser => this.renderCodingBrowserView(browser, !artifactPreview && drawerVisible && !this.workContextClosing && !fileMode && !agentMode && browser.id === activeBrowser?.id))}
                 {artifactPreview ? this.renderArtifactPreview(artifactPreview) : browsers.length > 0 ? null
                     : <div className='nmx-work-context-empty'><i className='codicon codicon-browser'></i><strong>{workbenchText(this.desktopLocale, 'projectBrowserEmpty')}</strong><span>{workbenchText(this.desktopLocale, 'projectBrowserEmptyBody')}</span><button onClick={() => this.addCodingBrowser()}>{workbenchText(this.desktopLocale, 'openBrowser')}</button></div>}
@@ -33808,6 +33990,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected selectCodingPanel(panel: CodingPanel): void {
         if (this.activeSection === 'coding' && this.codingPanel === panel) {
+            // A plugins page restored before its list arrived still loads it on the rail icon.
+            if (panel === 'extensions' && !this.appPluginsLoaded && !this.appPluginsLoading) this.loadCodingPluginsTab(this.codingPluginsTab());
             if (this.hasDismissibleSurface()) this.closeNavigationSurface();
             else this.update();
             return;
@@ -54943,7 +55127,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 {state.phase === 'downloading' && <div className='nmx-update-progress' role='progressbar' aria-label='更新下载进度' aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.progress)}><i style={{ width: `${state.progress}%` }}></i></div>}
                 {state.checkedAt > 0 && <div className='nmx-update-meta'><span>{text('checkedAt')}</span><strong>{new Date(state.checkedAt).toLocaleString(this.desktopLocale)}</strong></div>}
                 {(this.updateError || this.updateMessage) && <div className={`nmx-network-message ${this.updateError ? 'is-error' : ''}`}>{this.updateError || this.updateMessage}</div>}
-                <div className='nmx-settings-actions'><button disabled={this.updateBusy || state.phase === 'downloading' || state.phase === 'ready' || state.reason === 'development' || state.restartRequired} onClick={() => void this.checkForDesktopUpdates()}>{state.phase === 'checking' ? text('checking') : text('check')}</button><button onClick={() => void this.openDesktopDownloadPage()}>{text('downloadPage')}</button>{state.phase === 'available' && <button className='is-primary' disabled={this.updateBusy} onClick={() => void this.downloadDesktopUpdate()}>{text('download')}</button>}{state.phase === 'ready' && <button className='is-primary' disabled={this.updateBusy} onClick={() => void this.installDesktopUpdate()}>{localizeDesktopSurface(this.desktopLocale, '立即安装并重启')}</button>}</div>
+                <div className='nmx-settings-actions'><button disabled={this.updateBusy || state.phase === 'downloading' || state.phase === 'ready' || state.reason === 'development' || state.restartRequired} onClick={() => void this.checkForDesktopUpdates()}>{state.phase === 'checking' ? text('checking') : text('check')}</button><button onClick={() => void this.openDesktopDownloadPage()}>{text('downloadPage')}</button>{state.phase === 'available' && <button className='is-primary' disabled={this.updateBusy} onClick={() => void this.downloadDesktopUpdate()}>{text('download')}</button>}{state.phase === 'ready' && <button className='is-primary' data-nmx-literal disabled={this.updateBusy} onClick={() => void this.installDesktopUpdate()}>{text('restartNow')}</button>}</div>
             </section>;
         }
         return <>
@@ -54969,6 +55153,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** Cmd+Q asks only when a local run would be interrupted. */
     hasRunningConversationForExit(): boolean {
         return this.hasRunningCodingWork() || this.hasRunningComicWork();
+    }
+
+    /**
+     * Closing the last window quits NextMux to install a ready update only when this is false: no run or comic job,
+     * no enabled scheduled task (it could not start while NextMux is closed), no command still running in a terminal
+     * and no component download. Anything unknown counts as work, so NextMux stays in the tray.
+     */
+    async hasWorkKeepingAppOpen(): Promise<boolean> {
+        if (this.hasRunningConversationForExit()) return true;
+        if (this.scheduledTasks.some(task => task.enabled)) return true;
+        for (const record of this.terminalRecords) {
+            if (!record.widget || record.widget.isDisposed || record.widget.exitStatus) continue;
+            if (!await this.terminalRecordIsIdle(record)) return true;
+        }
+        try {
+            const downloads = await this.platformService.getDesktopComponents(this.desktopLocale);
+            return downloads.components.some(item => item.status === 'queued' || item.status === 'downloading' || item.status === 'installing');
+        } catch {
+            return true;
+        }
     }
 
     protected hasRunningCodingWork(): boolean {

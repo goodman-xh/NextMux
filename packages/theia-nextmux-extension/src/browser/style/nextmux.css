@@ -22423,3 +22423,196 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     background: rgba(15, 23, 42, 0.065) !important;
     border-color: rgba(15, 23, 42, 0.09) !important;
 }
+
+/* Browser tab strip: the bar owns the chrome; the tabs scroll sideways in their own lane (nav), sized to its tabs, and
+   the new-tab button is a pinned sibling right after the last tab — never scrolled out of reach (Chrome, Edge, VS Code).
+   When the lane overflows, its cut edges fade and a hairline sets the button apart. */
+.nmx-browser-tabs-bar {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    flex: 0 0 36px;
+    height: 36px;
+    min-width: 0;
+    padding: 0 4px;
+    border-bottom: 1px solid #2c292a;
+    background: #1c1a1b;
+}
+.nmx-browser-tabs-bar > .nmx-browser-tabs {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 0 1 auto;
+    gap: 2px;
+    min-width: 0;
+    height: 100%;
+    max-height: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+}
+.nmx-browser-tabs-bar > .nmx-browser-tabs::-webkit-scrollbar { display: none; }
+.nmx-browser-tabs-bar.has-more-after > .nmx-browser-tabs {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+.nmx-browser-tabs-bar.has-more-before > .nmx-browser-tabs {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 28px);
+    mask-image: linear-gradient(to right, transparent, #000 28px);
+}
+.nmx-browser-tabs-bar.has-more-before.has-more-after > .nmx-browser-tabs {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+}
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item {
+    position: relative;
+    width: min(176px, 40vw);
+    min-width: 96px;
+    height: 28px;
+    flex: 0 1 176px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 22px;
+    align-items: center;
+    padding-right: 3px;
+    border: 0;
+    border-radius: 7px;
+    transition: background-color 120ms ease;
+}
+/* Hairline separators between resting tabs, hidden beside the hovered or active one. */
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item + .nmx-browser-tab-item::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: -2px;
+    width: 1px;
+    background: #353133;
+    pointer-events: none;
+}
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item:is(:hover, .is-active)::before,
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item:is(:hover, .is-active) + .nmx-browser-tab-item::before { opacity: 0; }
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item:hover { background: #262325; }
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item.is-active {
+    background: #2b2829;
+    box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--nmx-accent, #ca3b68) 85%, transparent);
+}
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item > button:first-child {
+    min-width: 0;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 4px 0 9px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    cursor: pointer;
+}
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item > button:first-child > i { flex: none; font-size: 14px; }
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item > button:first-child span {
+    min-width: 0;
+    overflow: hidden;
+    color: #a9a3a6;
+    font-size: 12.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item.is-active > button:first-child span { color: #e7e3e5; }
+/* A 20 px close target: always on the active tab, on hover elsewhere, and reachable from the keyboard. */
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item > button:last-child {
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    color: #8f898c;
+    background: transparent;
+    opacity: 0;
+    cursor: pointer;
+}
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item > button:last-child > i { font-size: 13px; }
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item:is(:hover, :focus-within, .is-active) > button:last-child { opacity: 1; }
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item > button:last-child:hover { color: #ece8ea; background: #3a3537; }
+.nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item > button:focus-visible {
+    outline: 2px solid var(--nmx-focus-ring, #a9a2a7);
+    outline-offset: -2px;
+}
+.nmx-browser-tabs-bar > .nmx-browser-new-tab {
+    flex: 0 0 28px;
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    align-self: center;
+    margin-left: 2px;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    color: #aaa4a7;
+    background: transparent;
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+.nmx-browser-tabs-bar > .nmx-browser-new-tab > i { display: block; color: inherit; font-size: 16px; line-height: 1; }
+.nmx-browser-tabs-bar > .nmx-browser-new-tab:hover:not(:disabled) { color: #ece8ea; background: #2c292a; }
+.nmx-browser-tabs-bar > .nmx-browser-new-tab:active:not(:disabled) { background: #343032; }
+.nmx-browser-tabs-bar > .nmx-browser-new-tab:focus-visible { outline: 2px solid var(--nmx-focus-ring, #a9a2a7); outline-offset: -2px; }
+/* At the 24-tab limit the button keeps its place, quietly unavailable. */
+.nmx-browser-tabs-bar > .nmx-browser-new-tab:disabled { opacity: .38; cursor: default; background: transparent; }
+.nmx-browser-tabs-bar.has-overflow > .nmx-browser-new-tab {
+    margin-left: 4px;
+    box-shadow: -5px 0 0 -4px #3a3638;
+}
+
+/* Toolbar: Stop replaces Reload while the page loads; a thin running line marks loading along the toolbar's edge
+   (inside the toolbar, which the attached native page never covers). */
+.nmx-browser-view > form { position: relative; }
+.nmx-browser-view > form > .nmx-browser-stop:hover:not(:disabled) { color: #ece8ea; }
+.nmx-browser-view > form > .nmx-browser-progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    overflow: hidden;
+    pointer-events: none;
+}
+.nmx-browser-view > form > .nmx-browser-progress::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 38%;
+    background: linear-gradient(90deg, transparent, var(--nmx-accent, #ca3b68), transparent);
+    animation: nmx-browser-progress 1.15s cubic-bezier(.4, 0, .2, 1) infinite;
+}
+@keyframes nmx-browser-progress { from { transform: translateX(-100%); } to { transform: translateX(270%); } }
+@media (prefers-reduced-motion: reduce) {
+    .nmx-browser-view > form > .nmx-browser-progress::after { width: 100%; opacity: .5; animation: none; }
+    .nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item, .nmx-browser-tabs-bar > .nmx-browser-new-tab { transition: none; }
+}
+
+.nmx-theme-light .nmx-browser-tabs-bar {
+    background: #ebe8e5 !important;
+    border-color: #dfdad6 !important;
+}
+.nmx-theme-light .nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item + .nmx-browser-tab-item::before { background: #d3cdc9; }
+.nmx-theme-light .nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item.is-active {
+    box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--nmx-accent, #a82851) 80%, transparent) !important;
+}
+.nmx-theme-light .nmx-browser-tabs-bar > .nmx-browser-tabs > .nmx-browser-tab-item > button:last-child:hover { background: #d3cecb !important; }
+.nmx-theme-light .nmx-browser-tabs-bar > .nmx-browser-new-tab { color: #625c60 !important; }
+.nmx-theme-light .nmx-browser-tabs-bar > .nmx-browser-new-tab:hover:not(:disabled) {
+    color: #2c282b !important;
+    background: #dcd8d4 !important;
+}
+.nmx-theme-light .nmx-browser-tabs-bar > .nmx-browser-new-tab:disabled { background: transparent !important; }
+.nmx-theme-light .nmx-browser-tabs-bar.has-overflow > .nmx-browser-new-tab { box-shadow: -5px 0 0 -4px #cfc9c5; }

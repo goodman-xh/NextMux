@@ -154,9 +154,15 @@ export class NextMuxDesktopContribution extends AbstractViewContribution<NextMux
         const closeBridge = window.nextmuxDesktop?.onPrepareClose?.(token => this.prepareApplicationClose(token));
         const cancelBridge = window.nextmuxDesktop?.onPrepareCloseCancelled?.((token, reason) => this.cancelApplicationClose(token, reason));
         // Quit with a running task is confirmed once, by the main process's native dialog.
-        const quitCheck = window.nextmuxDesktop?.onQuitCheck?.(() => {
+        const quitCheck = window.nextmuxDesktop?.onQuitCheck?.(purpose => {
             const widget = this.tryGetWidget();
-            return { running: Boolean(widget?.hasRunningConversationForExit?.()), texts: quitConfirmTexts(readDesktopLocale()) };
+            const running = Boolean(widget?.hasRunningConversationForExit?.());
+            // Closing the last window quits (to install a ready update) only when nothing would stop.
+            if (purpose === 'close') {
+                return Promise.resolve(widget?.hasWorkKeepingAppOpen ? widget.hasWorkKeepingAppOpen() : false)
+                    .then(keepAlive => ({ running, keepAlive: running || keepAlive !== false }), () => ({ running, keepAlive: true }));
+            }
+            return { running, texts: quitConfirmTexts(readDesktopLocale()) };
         });
         const quitConfirmed = window.nextmuxDesktop?.onQuitConfirmed?.(() => { this.quitConfirmedAt = Date.now(); });
         this.closeBridgeDisposable = { dispose: () => { closeBridge?.(); cancelBridge?.(); quitCheck?.(); quitConfirmed?.(); } };

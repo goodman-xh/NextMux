@@ -1,6 +1,8 @@
 .nmx-shell .nmx-browser-view > form {
     grid-template-columns: 28px 28px 28px minmax(0, 1fr) 28px 28px;
 }
+/* The page owns the whole drawer below the toolbar: no status strip. While it is attached, the native page paints
+   over this viewport; the DOM below it is seen only while the page is parked (a still frame, an error, a note). */
 .nmx-shell .nmx-owned-browser {
     display: flex;
     flex-direction: column;
@@ -10,38 +12,6 @@
     overflow: hidden;
     background: var(--nmx-bg);
 }
-.nmx-shell .nmx-owned-browser-status {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex: 0 0 32px;
-    padding: 0 9px 0 12px;
-    border-bottom: 1px solid var(--nmx-border);
-    color: var(--nmx-muted);
-    font-size: 12px;
-    line-height: 1.3;
-}
-.nmx-shell .nmx-owned-browser-status > span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.nmx-shell .nmx-owned-browser-status > button {
-    flex: none;
-    min-height: 25px;
-    padding: 3px 8px;
-    border: 0;
-    border-radius: 4px;
-    color: var(--nmx-text);
-    background: transparent;
-    font: inherit;
-    white-space: nowrap;
-}
-.nmx-shell .nmx-owned-browser-status > button:hover:not(:disabled) { background: color-mix(in srgb, var(--nmx-text) 8%, transparent); }
-.nmx-shell .nmx-owned-browser-status > button:focus-visible { outline: 2px solid var(--nmx-muted); outline-offset: 1px; }
-.nmx-shell .nmx-owned-browser-status > button:disabled { opacity: .5; }
 .nmx-shell .nmx-owned-browser-viewport {
     position: relative;
     flex: 1;
@@ -51,6 +21,7 @@
     margin-left: 4px;
     overflow: hidden;
     isolation: isolate;
+    background: var(--nmx-bg);
 }
 .nmx-shell .nmx-owned-browser-viewport > img {
     display: block;
@@ -71,6 +42,94 @@
     color: var(--nmx-muted);
     font-size: 12px;
 }
+.nmx-shell .nmx-owned-browser-placeholder > .codicon { font-size: 14px; }
+
+/* A page that could not be opened: a quiet card in the middle, with the technical reason and one retry. */
+.nmx-shell .nmx-owned-browser-error {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 24px;
+    text-align: center;
+    background: var(--nmx-bg);
+}
+.nmx-shell .nmx-owned-browser-error > .codicon {
+    margin-bottom: 2px;
+    color: var(--nmx-muted);
+    font-size: 26px;
+}
+.nmx-shell .nmx-owned-browser-error > strong {
+    color: var(--nmx-text);
+    font-size: 14px;
+    font-weight: 600;
+}
+.nmx-shell .nmx-owned-browser-error > span {
+    max-width: 360px;
+    color: var(--nmx-muted);
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+.nmx-shell .nmx-owned-browser-error > button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    margin-top: 8px;
+    padding: 0 12px;
+    border: 1px solid var(--nmx-border-strong);
+    border-radius: 6px;
+    color: var(--nmx-text);
+    background: var(--nmx-control-background, transparent);
+    font-size: 12px;
+    cursor: pointer;
+}
+.nmx-shell .nmx-owned-browser-error > button:hover { background: var(--nmx-control-hover, var(--nmx-hover)); }
+.nmx-shell .nmx-owned-browser-error > button:focus-visible { outline: 2px solid var(--nmx-focus-ring); outline-offset: 2px; }
+
+/* While an AI step runs on the page: a small pill over its latest frame. Never a bar that takes page height. */
+.nmx-shell .nmx-owned-browser-agent {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: calc(100% - 20px);
+    padding: 5px 10px 5px 8px;
+    border: 1px solid color-mix(in srgb, var(--nmx-accent) 40%, transparent);
+    border-radius: 999px;
+    color: var(--nmx-text);
+    background: color-mix(in srgb, var(--nmx-panel) 88%, transparent);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .22);
+    backdrop-filter: blur(8px);
+    font-size: 12px;
+    line-height: 1.3;
+    pointer-events: none;
+    animation: nmx-owned-browser-agent-in 160ms ease-out;
+}
+.nmx-shell .nmx-owned-browser-agent > .codicon {
+    flex: none;
+    color: var(--nmx-accent);
+    font-size: 13px;
+    animation: nmx-owned-browser-agent-pulse 1.4s ease-in-out infinite;
+}
+.nmx-shell .nmx-owned-browser-agent > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@keyframes nmx-owned-browser-agent-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes nmx-owned-browser-agent-pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell .nmx-owned-browser-agent, .nmx-shell .nmx-owned-browser-agent > .codicon { animation: none; }
+}
+.nmx-shell.nmx-theme-light .nmx-owned-browser-agent {
+    border-color: color-mix(in srgb, var(--nmx-accent) 35%, transparent) !important;
+    box-shadow: 0 6px 18px rgba(53, 45, 49, .14);
+}
+
 .nmx-shell .nmx-owned-browser.is-mobile > .nmx-owned-browser-viewport {
     align-self: center;
     width: min(390px, calc(100% - 24px));

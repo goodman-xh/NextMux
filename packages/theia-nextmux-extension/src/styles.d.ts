@@ -55,7 +55,9 @@ interface NextMuxDesktopBridge {
     claimConversationRun(id: string, release?: boolean): Promise<boolean>;
     closeDesktopWindow(): Promise<boolean>;
     minimizeDesktopWindow?(): Promise<boolean>;
-    onQuitCheck?(callback: () => { readonly running: boolean; readonly texts?: { readonly title: string; readonly body: string; readonly quit: string; readonly stay: string } }): () => void;
+    /** 'close': the last window closed while an update waits; keepAlive says whether anything a quit would stop is under way. */
+    onQuitCheck?(callback: (purpose: 'quit' | 'close') => { readonly running: boolean; readonly keepAlive?: boolean; readonly texts?: { readonly title: string; readonly body: string; readonly quit: string; readonly stay: string } }
+        | Promise<{ readonly running: boolean; readonly keepAlive: boolean }>): () => void;
     onQuitConfirmed?(callback: () => void): () => void;
     /** The native “a task is still running” dialog (never a blocking in-page confirm); true to quit. */
     confirmRunningQuit?(texts: { readonly title: string; readonly body: string; readonly quit: string; readonly stay: string }): Promise<boolean>;
