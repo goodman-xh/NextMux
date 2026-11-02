@@ -4855,7 +4855,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
     /** Relays the capability-filtered directory lists for advanced mode (models load on demand). */
     protected comicStepDirectory = new Map<ComicStepCapability, { readonly loading: boolean; readonly relays: readonly ComicStepRelay[]; readonly revision?: number }>();
+    protected comicStepDirectoryByScope = new Map<string, { readonly loading: boolean; readonly relays: readonly ComicStepRelay[]; readonly revision?: number }>();
     protected comicStepRelayLoading = '';
+    protected comicStepRelayLoadingByScope = new Map<string, string>();
+    protected comicStepPaginationCursors = new Map<string, string>();
     protected comicAiButtonLandedAt = 0;
     protected comicStepRankCache: { readonly global: readonly PlatformRegistryModel[]; readonly registry: readonly PlatformRegistryModel[]; readonly ranks: ReadonlyMap<string, number> } | undefined;
     /** What the creation bar generates; undefined follows the current step. */
@@ -7048,6 +7051,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected councilCandidateModelsForRelay(relayKey: string): readonly CouncilModelCandidate[] {
         const routes = this.councilRoutesForRelay(relayKey, true);
+        const relayOption = this.relayPickerOptions?.().find(item => item.key === relayKey) || this.relayOption?.(relayKey);
+        const relayLabel = relayOption?.label || '';
         const seen = new Set<string>();
         const result: CouncilModelCandidate[] = [];
         for (const route of routes) {
@@ -7055,10 +7060,24 @@ export class NextMuxDesktopWidget extends ReactWidget {
             seen.add(route.id);
             const offering = route.kind === 'managed_gateway' ? route.offering : undefined;
             const multiplier = offering ? offeringMultiplierBps(offering) : undefined;
+            const providerId = route.kind === 'managed_gateway'
+                ? (this.offeringMerchantId?.(route.offering) || route.offering.providerName)
+                : (route.connection?.providerId || route.connection?.providerName);
+            const contextWindowTokens = this.contextWindowForRoute?.(route, undefined, true);
+            const reasoningEffort = this.reasoningEffortForRoute?.(route);
+            const reasoningSettings = this.reasoningSettingsForRoute?.(route);
             result.push({
                 routeId: route.id,
                 modelId: this.modelKeyForRoute(route),
                 label: this.scheduleRouteModelLabel(route),
+                ...(relayKey ? { relayKey } : {}),
+                ...(relayLabel ? { relayLabel } : {}),
+                ...(providerId ? { providerId } : {}),
+                ...(contextWindowTokens !== undefined ? { contextWindowTokens } : {}),
+                ...(reasoningEffort ? { reasoningEffort } : {}),
+                ...(reasoningSettings?.reasoningEnabled !== undefined ? { reasoningEnabled: reasoningSettings.reasoningEnabled } : {}),
+                ...(reasoningSettings?.reasoningMode ? { reasoningMode: reasoningSettings.reasoningMode } : {}),
+                ...(reasoningSettings?.reasoningBudgetTokens !== undefined ? { reasoningBudgetTokens: reasoningSettings.reasoningBudgetTokens } : {}),
                 variantTag: offering ? offeringIsOwnPriced(offering) ? offeringPriceText(this.desktopLocale, 'ownTag')
                     : multiplier === undefined || multiplier === null ? undefined : relayMultiplierTag(this.desktopLocale, multiplier) || undefined : undefined,
                 detail: route.kind === 'managed_gateway' ? route.offering.providerName : route.connection.providerName
@@ -7078,29 +7097,65 @@ export class NextMuxDesktopWidget extends ReactWidget {
             return;
         }
         this.councilModalSlots = this.councilModalSlots.map((slot, index) => {
+            if (slot.relayKey && slot.relayKey !== relayKey && (slot.routeId || slot.modelId)) {
+                return slot;
+            }
             const legacyMatches = slot.routeId ? [] : candidates.filter(item => item.modelId === slot.modelId);
             const match = slot.routeId ? candidates.find(item => item.routeId === slot.routeId)
                 : slot.modelId ? (legacyMatches.length === 1 ? legacyMatches[0] : undefined)
                     : candidates[index % Math.max(1, candidates.length)];
             return match
-                ? { ...slot, routeId: match.routeId, modelId: match.modelId, label: match.label }
+                ? {
+                    ...slot,
+                    routeId: match.routeId,
+                    modelId: match.modelId,
+                    label: match.label,
+                    modelLabel: match.label,
+                    relayKey,
+                    ...(match.relayLabel ? { relayLabel: match.relayLabel } : {}),
+                    ...(match.providerId ? { providerId: match.providerId } : {}),
+                    ...(match.variantTag ? { variantTag: match.variantTag } : {}),
+                    ...(slot.contextWindowTokens === undefined && match.contextWindowTokens !== undefined ? { contextWindowTokens: match.contextWindowTokens } : {}),
+                    ...(!slot.reasoningEffort && match.reasoningEffort ? { reasoningEffort: match.reasoningEffort } : {}),
+                    ...(slot.reasoningEnabled === undefined && match.reasoningEnabled !== undefined ? { reasoningEnabled: match.reasoningEnabled } : {}),
+                    ...(!slot.reasoningMode && match.reasoningMode ? { reasoningMode: match.reasoningMode } : {}),
+                    ...(slot.reasoningBudgetTokens === undefined && match.reasoningBudgetTokens !== undefined ? { reasoningBudgetTokens: match.reasoningBudgetTokens } : {})
+                }
                 : slot;
         });
     }
 
     protected selectCouncilSlotModel(slotId: string, routeId: string): void {
-        const candidate = this.councilCandidateModelsForRelay(this.councilModalRelayKey).find(item => item.routeId === routeId);
+        const activeRelayKey = this.councilModalRelayKey;
+        const candidate = this.councilCandidateModelsForRelay(activeRelayKey).find(item => item.routeId === routeId);
         if (!candidate) {
             this.councilModalRouteError = true;
             this.update();
             return;
         }
+        const relayOption = this.relayPickerOptions?.().find(item => item.key === activeRelayKey) || this.relayOption?.(activeRelayKey);
+        const relayLabel = candidate.relayLabel || relayOption?.label || '';
         this.councilModalRelayDrawerOpen = false;
         this.councilModalModelPickerSlotId = '';
         this.councilModalRolePickerSlotId = '';
         this.councilModalRouteError = false;
         this.councilModalSlots = this.councilModalSlots.map(slot => slot.slotId === slotId
-            ? { ...slot, modelId: candidate.modelId, routeId: candidate.routeId, label: candidate.label }
+            ? {
+                ...slot,
+                modelId: candidate.modelId,
+                routeId: candidate.routeId,
+                label: candidate.label,
+                modelLabel: candidate.label,
+                ...(activeRelayKey ? { relayKey: activeRelayKey } : {}),
+                ...(relayLabel ? { relayLabel } : {}),
+                ...(candidate.providerId ? { providerId: candidate.providerId } : { providerId: undefined }),
+                ...(candidate.variantTag ? { variantTag: candidate.variantTag } : { variantTag: undefined }),
+                contextWindowTokens: candidate.contextWindowTokens,
+                reasoningEffort: candidate.reasoningEffort,
+                reasoningEnabled: candidate.reasoningEnabled,
+                reasoningMode: candidate.reasoningMode,
+                reasoningBudgetTokens: candidate.reasoningBudgetTokens
+            }
             : slot);
         this.update();
     }
@@ -7132,48 +7187,81 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         const existing = this.councilConfigForEditing(this.activeCodingSessionId);
         this.councilModalConfigWarning = this.invalidCouncilConfigMessage(this.activeCodingSessionId);
-        const fallbackOwnRelayKey = !this.platformSession?.linked
-            ? (() => {
-                const ownConn = this.officialModels?.connections?.find(conn => !isOfficialMediaProtocol(conn.protocol) && officialInvokableModelIds(conn).length > 0);
-                return ownConn ? officialConnectionRelayKey(ownConn.id) : '';
-            })()
-            : '';
-        const preferredRelayKey = existing?.relayKey
-            || existing?.sourceKey
-            || (this.activeRelayKey?.startsWith('official:') ? this.activeRelayKey : '')
-            || fallbackOwnRelayKey
-            || '';
-        // A new council never starts on a merchant that cannot take requests now; an existing one keeps its merchant.
-        const preferredRelayOption = preferredRelayKey && !existing
-            ? this.relayPickerOptions().find(option => option.key === preferredRelayKey) || this.relayOption(preferredRelayKey) : undefined;
-        const defaultRelayKey = preferredRelayOption && this.relayOptionIsFull?.(preferredRelayOption) ? '' : preferredRelayKey;
+        // A new council starts with no source until one is picked: it calls several models at once, so it never borrows
+        // the composer's provider. A saved council reopens on its own source (each slot keeps its own, see below); one
+        // saved before sources were recorded falls back to the composer's own connection, or the first usable one.
+        const legacyRelayKey = (): string => {
+            if (this.activeRelayKey?.startsWith('official:')) return this.activeRelayKey;
+            if (this.platformSession?.linked) return '';
+            const ownConn = this.officialModels?.connections?.find(conn => !isOfficialMediaProtocol(conn.protocol) && officialInvokableModelIds(conn).length > 0);
+            return ownConn ? officialConnectionRelayKey(ownConn.id) : '';
+        };
+        const existingLeadRelayKey = existing?.slots?.find(slot => slot.roles?.includes('lead'))?.relayKey || existing?.slots?.[0]?.relayKey || '';
+        const defaultRelayKey = existing ? existing.relayKey || existing.sourceKey || existingLeadRelayKey || legacyRelayKey() : '';
         this.councilModalRelayKey = defaultRelayKey;
-        if (defaultRelayKey.startsWith('managed:')) {
-            void this.loadSelectedMerchantCatalog(defaultRelayKey.slice('managed:'.length)).then(() => {
-                if (this.councilConfigModalOpen && this.councilModalRelayKey === defaultRelayKey) {
-                    this.syncCouncilModalSlotsWithRelay(defaultRelayKey);
+        const managedRelaysToLoad = new Set<string>(
+            [defaultRelayKey, ...(existing?.slots?.map(slot => slot.relayKey || '').filter(Boolean) || [])]
+                .filter(key => key.startsWith('managed:'))
+        );
+        for (const managedKey of managedRelaysToLoad) {
+            void this.loadSelectedMerchantCatalog(managedKey.slice('managed:'.length)).then(() => {
+                if (this.councilConfigModalOpen) {
+                    this.syncCouncilModalSlotsWithRelay(managedKey);
                     this.update();
                 }
             });
         }
-        const candidates = this.councilCandidateModelsForRelay(defaultRelayKey);
+        const candidatesByRelay = new Map<string, readonly CouncilModelCandidate[]>();
+        const candidatesFor = (key: string): readonly CouncilModelCandidate[] => {
+            if (!key) return [];
+            const cached = candidatesByRelay.get(key);
+            if (cached) return cached;
+            const list = this.councilCandidateModelsForRelay(key);
+            candidatesByRelay.set(key, list);
+            return list;
+        };
+        const defaultCandidates = candidatesFor(defaultRelayKey);
         this.councilModalSlots = !defaultRelayKey ? [] : existing?.slots.length
             ? existing.slots.map(slot => {
-                const legacyMatches = slot.routeId ? [] : candidates.filter(candidate => candidate.modelId === slot.modelId);
-                const candidate = slot.routeId ? candidates.find(candidate => candidate.routeId === slot.routeId)
+                const extra = slot as DesktopAgentCouncilSlot & {
+                    readonly relayLabel?: string;
+                    readonly providerId?: string;
+                    readonly reasoningEffort?: string;
+                    readonly reasoningEnabled?: boolean;
+                    readonly reasoningMode?: 'auto' | 'enabled' | 'disabled';
+                    readonly reasoningBudgetTokens?: number;
+                    readonly contextWindowTokens?: number;
+                };
+                const slotRelayKey = slot.relayKey || defaultRelayKey;
+                const slotCandidates = candidatesFor(slotRelayKey);
+                const legacyMatches = slot.routeId ? [] : slotCandidates.filter(candidate => candidate.modelId === slot.modelId);
+                const candidate = slot.routeId ? slotCandidates.find(candidate => candidate.routeId === slot.routeId)
                     : legacyMatches.length === 1 ? legacyMatches[0] : undefined;
+                const slotRelayOption = this.relayPickerOptions?.().find(option => option.key === slotRelayKey) || this.relayOption?.(slotRelayKey);
+                const slotRelayLabel = extra.relayLabel || candidate?.relayLabel || slotRelayOption?.label || '';
+                const resolvedLabel = slot.label || slot.modelLabel || candidate?.label || slot.modelId;
                 return {
                     slotId: slot.slotId,
                     routeId: slot.routeId || candidate?.routeId || '',
                     modelId: slot.modelId || candidate?.modelId || '',
-                    label: slot.label || slot.modelLabel || candidate?.label || slot.modelId,
+                    ...(slotRelayKey ? { relayKey: slotRelayKey } : {}),
+                    ...(slotRelayLabel ? { relayLabel: slotRelayLabel } : {}),
+                    ...(extra.providerId || candidate?.providerId ? { providerId: extra.providerId || candidate?.providerId } : {}),
+                    ...(candidate?.variantTag ? { variantTag: candidate.variantTag } : {}),
+                    ...(extra.contextWindowTokens !== undefined ? { contextWindowTokens: extra.contextWindowTokens } : candidate?.contextWindowTokens !== undefined ? { contextWindowTokens: candidate.contextWindowTokens } : {}),
+                    ...(extra.reasoningEffort || candidate?.reasoningEffort ? { reasoningEffort: extra.reasoningEffort || candidate?.reasoningEffort } : {}),
+                    ...(extra.reasoningEnabled !== undefined ? { reasoningEnabled: extra.reasoningEnabled } : candidate?.reasoningEnabled !== undefined ? { reasoningEnabled: candidate.reasoningEnabled } : {}),
+                    ...(extra.reasoningMode || candidate?.reasoningMode ? { reasoningMode: extra.reasoningMode || candidate?.reasoningMode } : {}),
+                    ...(extra.reasoningBudgetTokens !== undefined ? { reasoningBudgetTokens: extra.reasoningBudgetTokens } : candidate?.reasoningBudgetTokens !== undefined ? { reasoningBudgetTokens: candidate.reasoningBudgetTokens } : {}),
+                    label: resolvedLabel,
+                    modelLabel: resolvedLabel,
                     roles: [...new Set(slot.roles.flatMap(role => {
                         const normalized = normalizeAgentCouncilRoleId(role);
                         return normalized ? [normalized] : [];
                     }))]
                 };
             })
-            : createDefaultCouncilDraftSlots(candidates);
+            : createDefaultCouncilDraftSlots(defaultCandidates);
         this.councilModalRelayDrawerOpen = false;
         this.councilModalModelPickerSlotId = '';
         this.councilModalRolePickerSlotId = '';
@@ -7184,9 +7272,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected selectCouncilModalRelay(relayKey: string): void {
         const option = this.relayPickerOptions().find(item => item.key === relayKey) || this.relayOption(relayKey);
         if (option && this.relayOptionIsFull?.(option)) return;
-        if (relayKey !== this.councilModalRelayKey) {
-            this.councilModalSlots = this.councilModalSlots.map(slot => ({ ...slot, routeId: '', modelId: '', label: '' }));
-        }
         this.councilModalRelayKey = relayKey;
         this.councilModalRouteError = false;
         this.councilModalRelayDrawerOpen = false;
@@ -7213,23 +7298,43 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.update();
             return;
         }
-        const relayKey = this.councilModalRelayKey;
-        if (!relayKey) {
+        const modalRelayKey = this.councilModalRelayKey;
+        if (!modalRelayKey && this.councilModalSlots.some(slot => !slot.relayKey)) {
             this.councilModalRouteError = true;
             this.update();
             return;
         }
-        const relayOption = this.relayPickerOptions().find(option => option.key === relayKey) || this.relayOption(relayKey);
-        if (relayOption && this.relayOptionIsFull?.(relayOption)) {
-            this.councilModalRouteError = true;
-            this.councilModalRelayFullError = true;
-            this.update();
-            return;
-        }
-        const routes = this.councilRoutesForRelay(relayKey);
-        const sessionKey = this.sessionCouncilKey(this.activeCodingSessionId);
-        const builtSlots: DesktopAgentCouncilSlot[] = [];
+        const routesByRelay = new Map<string, readonly DesktopModelRoute[]>();
         for (const draft of this.councilModalSlots) {
+            const slotRelayKey = draft.relayKey || modalRelayKey;
+            if (!slotRelayKey) {
+                this.councilModalRouteError = true;
+                this.update();
+                return;
+            }
+            if (!routesByRelay.has(slotRelayKey)) {
+                const slotRelayOption = this.relayPickerOptions().find(option => option.key === slotRelayKey) || this.relayOption(slotRelayKey);
+                if (slotRelayOption && this.relayOptionIsFull?.(slotRelayOption)) {
+                    this.councilModalRouteError = true;
+                    this.councilModalRelayFullError = true;
+                    this.update();
+                    return;
+                }
+                routesByRelay.set(slotRelayKey, this.councilRoutesForRelay(slotRelayKey));
+            }
+        }
+        const sessionKey = this.sessionCouncilKey(this.activeCodingSessionId);
+        type CouncilSlotWithRuntimeOptions = DesktopAgentCouncilSlot & {
+            readonly reasoningEffort?: string;
+            readonly reasoningEnabled?: boolean;
+            readonly reasoningMode?: 'auto' | 'enabled' | 'disabled';
+            readonly reasoningBudgetTokens?: number;
+            readonly contextWindowTokens?: number;
+        };
+        const builtSlots: CouncilSlotWithRuntimeOptions[] = [];
+        for (const draft of this.councilModalSlots) {
+            const slotRelayKey = draft.relayKey || modalRelayKey;
+            const routes = routesByRelay.get(slotRelayKey) || [];
             const legacyMatches = draft.routeId ? [] : routes.filter(candidate => this.modelKeyForRoute(candidate) === draft.modelId);
             const route = draft.routeId ? routes.find(candidate => candidate.id === draft.routeId)
                 : legacyMatches.length === 1 ? legacyMatches[0] : undefined;
@@ -7245,13 +7350,34 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 return;
             }
             const resolvedLabel = draft.label || this.scheduleRouteModelLabel(route);
+            const supportedEfforts = this.reasoningEffortLevels?.(route);
+            const resolvedEffort = (() => {
+                const candidateEffort = draft.reasoningEffort || this.reasoningEffortForRoute?.(route);
+                if (!supportedEfforts) return candidateEffort;
+                if (!supportedEfforts.length) return undefined;
+                if (candidateEffort && supportedEfforts.includes(candidateEffort as AgentReasoningEffort)) return candidateEffort;
+                return this.reasoningEffortForRoute?.(route) || supportedEfforts[0];
+            })();
+            const resolvedSettings = this.reasoningSettingsForRoute?.(route);
+            const reasoningEnabled = draft.reasoningEnabled ?? resolvedSettings?.reasoningEnabled;
+            const rawReasoningMode = draft.reasoningMode ?? resolvedSettings?.reasoningMode;
+            const reasoningMode: 'auto' | 'enabled' | 'disabled' | undefined = rawReasoningMode === 'adaptive' ? 'auto' : rawReasoningMode;
+            const reasoningBudgetTokens = draft.reasoningBudgetTokens ?? resolvedSettings?.reasoningBudgetTokens;
+            const resolvedContextTokens = this.contextWindowForRoute
+                ? this.contextWindowForRoute(route, draft.contextWindowTokens, true)
+                : draft.contextWindowTokens;
             builtSlots.push({
                 slotId: draft.slotId,
                 modelLabel: resolvedLabel,
                 label: resolvedLabel,
                 modelId: this.modelKeyForRoute(route),
                 routeId: route.id,
-                relayKey,
+                relayKey: slotRelayKey,
+                ...(resolvedEffort ? { reasoningEffort: resolvedEffort } : {}),
+                ...(reasoningEnabled !== undefined ? { reasoningEnabled } : {}),
+                ...(reasoningMode ? { reasoningMode } : {}),
+                ...(reasoningBudgetTokens !== undefined ? { reasoningBudgetTokens } : {}),
+                ...(resolvedContextTokens !== undefined ? { contextWindowTokens: resolvedContextTokens } : {}),
                 roles: [...draft.roles],
                 route: route.kind === 'managed_gateway'
                     ? {
@@ -7267,14 +7393,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
             });
         }
         const leadSlot = builtSlots.find(slot => slot.roles.includes('lead'))!;
+        const leadRelayKey = leadSlot.relayKey || modalRelayKey;
+        const primaryRelayKey = modalRelayKey || leadRelayKey;
+        const primaryRelayOption = this.relayPickerOptions().find(option => option.key === primaryRelayKey) || this.relayOption(primaryRelayKey);
         const existing = this.councilConfigForEditing(sessionKey);
-        const resolvedRelayLabel = relayOption?.label || relayKey;
+        const resolvedRelayLabel = primaryRelayOption?.label || primaryRelayKey;
         const config: DesktopAgentCouncilConfig = {
             enabled: true,
             revision: (existing?.revision || 0) + 1,
-            sourceKey: relayKey,
+            sourceKey: primaryRelayKey,
             sourceLabel: resolvedRelayLabel,
-            relayKey,
+            relayKey: primaryRelayKey,
             relayLabel: resolvedRelayLabel,
             leadSlotId: leadSlot.slotId,
             slots: builtSlots,
@@ -7289,10 +7418,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.pendingCouncilConfigsBySession.delete(sessionKey);
             this.councilConfigsBySession.set(sessionKey, config);
             this.persistCouncilConfigs();
-            const quoteId = leadSlot.route?.kind === 'managed_gateway'
-                ? optionalKeyPriceQuoteId(leadSlot.route.route?.keyPriceQuoteId)
-                : undefined;
-            if (relayKey) this.activeRelayKey = relayKey;
+            const rawQuoteId = leadSlot.route?.kind === 'managed_gateway' ? leadSlot.route.route?.keyPriceQuoteId : undefined;
+            const quoteId = typeof optionalKeyPriceQuoteId === 'function'
+                ? optionalKeyPriceQuoteId(rawQuoteId)
+                : (typeof rawQuoteId === 'string' && rawQuoteId.trim() ? rawQuoteId.trim() : undefined);
+            if (leadRelayKey) this.activeRelayKey = leadRelayKey;
             if (leadSlot.routeId) this.activeModelRouteId = leadSlot.routeId;
             this.activeKeyPriceQuoteId = quoteId;
             if (leadSlot.modelId && this.selectedModelIds) {
@@ -7301,7 +7431,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (sessionKey && this.codingSessions?.some(item => item.id === sessionKey)) {
                 this.codingSessions = this.codingSessions.map(item => item.id === sessionKey ? {
                     ...item,
-                    relayKey,
+                    relayKey: leadRelayKey,
                     routeId: leadSlot.routeId,
                     modelId: leadSlot.modelId,
                     keyPriceQuoteId: quoteId
@@ -7520,6 +7650,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
         else delete next[modelKey];
         this.contextWindowByModel = next;
         try { window.localStorage.setItem('nextmux.desktop.contextWindow.v1', JSON.stringify(next)); } catch { /* kept for this window */ }
+        const resolved = this.contextWindowForRoute?.(route, normalized, true) ?? normalized ?? maximum;
+        // Draft slots already on this model take the new size; there are none before a source is picked.
+        if (this.councilModalSlots?.length) this.councilModalSlots = this.councilModalSlots.map(slot =>
+            (!slot.relayKey || slot.relayKey === this.councilModalRelayKey) && (slot.routeId === route.id || (!slot.routeId && slot.modelId === modelKey))
+                ? { ...slot, contextWindowTokens: resolved }
+                : slot
+        );
         this.cancelModelEffortPickerClose?.();
         this.update();
     }
@@ -7530,13 +7667,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!route || !this.reasoningDepthChoicesForRoute(route).options.some(item => item.id === option.id)) return;
         if (displayedQuote && (route.kind !== 'managed_gateway' || route.offering.keyPriceQuoteId !== displayedQuote.id)) { this.update(); return; }
         const modelKey = this.modelKeyForRoute(route);
-        this.reasoningSettingsByModel = { ...this.reasoningSettingsByModel,
-            [modelKey]: declaredReasoningSettings(this.modelReasoningContract(route)?.reasoningControls, option.settings) };
+        const declared = declaredReasoningSettings(this.modelReasoningContract(route)?.reasoningControls, option.settings);
+        this.reasoningSettingsByModel = { ...this.reasoningSettingsByModel, [modelKey]: declared };
         try { window.localStorage.setItem('nextmux.desktop.reasoningSettings.v1', JSON.stringify(this.reasoningSettingsByModel)); } catch { /* kept for this window */ }
-        if (option.effort && this.reasoningEffortLevels(route).includes(option.effort)) {
-            this.reasoningEffortByModel = { ...this.reasoningEffortByModel, [modelKey]: option.effort };
+        const validEffort = option.effort && this.reasoningEffortLevels(route).includes(option.effort) ? option.effort : undefined;
+        if (validEffort) {
+            this.reasoningEffortByModel = { ...this.reasoningEffortByModel, [modelKey]: validEffort };
             try { window.localStorage.setItem('nextmux.desktop.reasoningEffort.v1', JSON.stringify(this.reasoningEffortByModel)); } catch { /* kept for this window */ }
         }
+        if (this.councilModalSlots?.length) this.councilModalSlots = this.councilModalSlots.map(slot =>
+            (!slot.relayKey || slot.relayKey === this.councilModalRelayKey) && (slot.routeId === route.id || (!slot.routeId && slot.modelId === modelKey))
+                ? {
+                    ...slot,
+                    reasoningEffort: validEffort ?? slot.reasoningEffort,
+                    reasoningEnabled: declared.reasoningEnabled,
+                    reasoningMode: declared.reasoningMode,
+                    reasoningBudgetTokens: declared.reasoningBudgetTokens
+                }
+                : slot
+        );
         this.cancelModelEffortPickerClose?.();
         this.update();
     }
@@ -7712,13 +7861,24 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     if (!relayKey || this.councilModalSlots.length >= 8) return;
                     const nextIndex = this.councilModalSlots.length;
                     const candidate = candidates[nextIndex % Math.max(1, candidates.length)] || candidates[0];
+                    const resolvedRelayLabel = candidate?.relayLabel || relayOption?.label || '';
                     this.councilModalSlots = [
                         ...this.councilModalSlots,
                         {
                             slotId: `slot-${Date.now()}-${nextIndex + 1}`,
                             routeId: candidate?.routeId || '',
                             modelId: candidate?.modelId || '',
+                            ...(relayKey ? { relayKey } : {}),
+                            ...(resolvedRelayLabel ? { relayLabel: resolvedRelayLabel } : {}),
+                            ...(candidate?.providerId ? { providerId: candidate.providerId } : {}),
+                            ...(candidate?.variantTag ? { variantTag: candidate.variantTag } : {}),
+                            ...(candidate?.contextWindowTokens !== undefined ? { contextWindowTokens: candidate.contextWindowTokens } : {}),
+                            ...(candidate?.reasoningEffort ? { reasoningEffort: candidate.reasoningEffort } : {}),
+                            ...(candidate?.reasoningEnabled !== undefined ? { reasoningEnabled: candidate.reasoningEnabled } : {}),
+                            ...(candidate?.reasoningMode ? { reasoningMode: candidate.reasoningMode } : {}),
+                            ...(candidate?.reasoningBudgetTokens !== undefined ? { reasoningBudgetTokens: candidate.reasoningBudgetTokens } : {}),
                             label: candidate?.label || '',
+                            modelLabel: candidate?.label || '',
                             roles: ['generalist']
                         }
                     ];
@@ -8941,10 +9101,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected async downloadDesktopUpdate(): Promise<void> {
         const bridge = window.nextmuxDesktop;
         if (!bridge || this.updateBusy) return;
-        if (this.updateState.phase === 'ready') {
-            await this.installDesktopUpdate?.();
-            return;
-        }
         if (this.updateState.phase !== 'available') return;
         this.updateBusy = true;
         this.updateError = '';
@@ -16259,25 +16415,60 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.update();
     }
 
+    protected comicStepRelayLoadingFor(kind: ComicProjectKind = this.comicModelKind?.() ?? 'novel', capability?: ComicStepCapability): string {
+        if (capability) {
+            return this.comicStepRelayLoadingByScope?.get(`${kind}:${capability}`) || '';
+        }
+        const setupLoading = this.comicStepRelayLoadingByScope?.get(`${kind}:setup`);
+        if (setupLoading) return setupLoading;
+        if (this.comicStepRelayLoadingByScope) {
+            const prefix = `${kind}:`;
+            for (const [scopeKey, relayKey] of this.comicStepRelayLoadingByScope.entries()) {
+                if (scopeKey.startsWith(prefix) && relayKey) return relayKey;
+            }
+        }
+        return this.comicStepRelayLoading || '';
+    }
+
     /**
-     * Step 1 of the AI 模型 panel: every function this source can do now follows it (its best model), a function it
-     * cannot do keeps what it uses. A relay whose models are not loaded yet is read first (every page of its catalog).
+     * Step 1 of the AI 模型 panel: switches the active browsing source/relay so the user can pick models for individual
+     * steps from different sources without wiping out already-configured steps from other sources. Only steps whose
+     * specific connection/source was deleted are cleared.
      */
     protected selectComicSetupSource(key: string): void {
         const kind = this.comicModelKind();
         const prefs = this.comicStepPrefsFor(kind);
-        const choices = { ...prefs.choices };
-        let textFollows = false;
-        for (const step of this.comicModelSetupSteps(kind)) {
-            if (!step.candidates.some(candidate => candidate.source.key === key)) continue;
-            delete choices[step.capability];
-            if (step.capability === 'text') textFollows = true;
+        const choices: Partial<Record<ComicStepCapability, string>> = { ...prefs.choices };
+        const relays: Partial<Record<ComicStepCapability, string>> = { ...prefs.relays };
+        const hadPreviousSource = Boolean(prefs.global && prefs.global !== key);
+        const steps = this.comicModelSetupSteps(kind);
+        for (const step of steps) {
+            const storedChoice = choices[step.capability];
+            if (storedChoice) {
+                const storedSourcePrefix = storedChoice.includes('::') ? storedChoice.slice(0, storedChoice.indexOf('::')) : '';
+                const deletedOfficial = storedSourcePrefix.startsWith('official:')
+                    && !(this.officialModels?.connections || []).some(conn => `official:${conn.id}` === storedSourcePrefix);
+                const deletedManaged = storedSourcePrefix.startsWith('managed:')
+                    && Boolean(this.catalogRemovedMerchants?.has(storedSourcePrefix.slice('managed:'.length)));
+                if (deletedOfficial || deletedManaged) {
+                    delete choices[step.capability];
+                    if (relays[step.capability] === storedSourcePrefix) delete relays[step.capability];
+                    if (step.capability === 'text') this.forgetComicTextRouteForKind(kind);
+                }
+                continue;
+            }
+            if (hadPreviousSource && step.resolution.candidate && step.resolution.candidate.source.key !== key) {
+                choices[step.capability] = step.resolution.candidate.key;
+                relays[step.capability] = step.resolution.candidate.source.key;
+                if (step.capability === 'text' && kind !== 'image' && kind !== 'music') {
+                    this.setComicTextRouteForKind(kind, step.resolution.candidate.routeId);
+                }
+            }
         }
-        this.saveComicStepPrefs({ global: key, choices, auto: false }, kind);
-        if (textFollows) this.forgetComicTextRouteForKind(kind);
+        this.saveComicStepPrefs({ global: key, choices, relays, auto: false }, kind);
         for (const capability of ['image', 'video', 'speech', 'music'] as const) this.syncMediaSheetToStep(capability);
         const merchantId = key.startsWith('managed:') ? key.slice('managed:'.length) : '';
-        if (merchantId && !this.merchantPickerSnapshots.has(merchantId)) void this.loadComicSetupSource(merchantId, choices);
+        if (merchantId && !this.merchantPickerSnapshots.has(merchantId)) void this.loadComicSetupSource(merchantId, choices, kind);
         this.update();
     }
 
@@ -16308,115 +16499,178 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /**
      * A relay's whole catalog, so models past its first page are not missing from the comic menus. The first page is
      * stored at once (the menus fill in right away); later pages are appended as they arrive, off the waiting path.
+     * Pagination cursors are keyed by `${kind}:${step}:${merchantId}` so switching project kinds never mixes stale pages.
      */
-    protected async fetchComicMerchantCatalog(merchantId: string, onMore?: () => void): Promise<PlatformMerchantCatalogPage> {
+    protected async fetchComicMerchantCatalog(merchantId: string, onMore?: () => void, scopeKey = `${this.comicModelKind?.() ?? 'novel'}:setup`): Promise<PlatformMerchantCatalogPage> {
         const revision = this.catalogSnapshotRevision;
+        const cursorKey = `${scopeKey}:${merchantId}`;
+        this.comicStepPaginationCursors?.delete(cursorKey);
         const first = await this.platformService.getMerchantCatalog(merchantId);
-        if (first.nextCursor) void (async () => {
-            const offerings = [...first.offerings];
-            let page = first;
-            for (let more = 0; page.nextCursor && more < 9; more++) {
-                try { page = await this.platformService.getMerchantCatalog(merchantId, page.nextCursor); } catch { return; }
-                if (revision !== this.catalogSnapshotRevision || this.catalogRemovedMerchants.has(merchantId)) return;
-                const known = new Set(offerings.map(offering => offering.id));
-                offerings.push(...page.offerings.filter(offering => !known.has(offering.id)));
-                const { nextCursor: _next, ...rest } = page;
-                this.merchantPickerSnapshots.set(merchantId, { catalog: { ...rest, offerings: [...offerings] }, updatedAt: Date.now() });
-                onMore?.();
-                this.update();
-            }
-        })();
+        if (first.nextCursor) {
+            this.comicStepPaginationCursors?.set(cursorKey, first.nextCursor);
+            void (async () => {
+                const offerings = [...first.offerings];
+                let page = first;
+                for (let more = 0; page.nextCursor && more < 9; more++) {
+                    const expectedCursor = page.nextCursor;
+                    if (this.comicStepPaginationCursors && this.comicStepPaginationCursors.get(cursorKey) !== expectedCursor) return;
+                    try { page = await this.platformService.getMerchantCatalog(merchantId, expectedCursor); } catch {
+                        this.comicStepPaginationCursors?.delete(cursorKey);
+                        return;
+                    }
+                    if (revision !== this.catalogSnapshotRevision || this.catalogRemovedMerchants.has(merchantId)) {
+                        this.comicStepPaginationCursors?.delete(cursorKey);
+                        return;
+                    }
+                    if (page.nextCursor) this.comicStepPaginationCursors?.set(cursorKey, page.nextCursor);
+                    else this.comicStepPaginationCursors?.delete(cursorKey);
+                    const known = new Set(offerings.map(offering => offering.id));
+                    offerings.push(...page.offerings.filter(offering => !known.has(offering.id)));
+                    const { nextCursor: _next, ...rest } = page;
+                    this.merchantPickerSnapshots.set(merchantId, { catalog: { ...rest, offerings: [...offerings] }, updatedAt: Date.now() });
+                    onMore?.();
+                    this.update();
+                }
+            })();
+        }
         return first;
     }
 
-    /** Reads a chosen relay's models; the functions it turns out to do then follow it (unless picked meanwhile). */
-    protected async loadComicSetupSource(merchantId: string, chosenWith: Partial<Record<ComicStepCapability, string>>): Promise<void> {
+    /** Reads a chosen relay's models scoped to `kind` without wiping steps already configured on other sources. */
+    protected async loadComicSetupSource(
+        merchantId: string,
+        _chosenWith?: Partial<Record<ComicStepCapability, string>>,
+        kind: ComicProjectKind = this.comicModelKind?.() ?? 'novel'
+    ): Promise<void> {
         const key = managedRelayKey(merchantId);
-        if (this.comicStepRelayLoading === key || this.catalogRemovedMerchants?.has(merchantId)) return;
-        this.comicStepRelayLoading = key;
+        const scopeKey = `${kind}:setup`;
+        if (this.comicStepRelayLoadingByScope?.get(scopeKey) === key || this.catalogRemovedMerchants?.has(merchantId)) return;
+        this.comicStepRelayLoadingByScope?.set(scopeKey, key);
+        this.comicStepRelayLoading = this.comicStepRelayLoadingFor(this.comicModelKind?.() ?? kind);
         const revision = this.catalogSnapshotRevision;
         this.update();
-        // Functions the relay turns out to do follow it, also when its models arrive on a later page (audit A12-005);
-        // a choice the user made meanwhile stays.
         const follow = (): void => {
-            if (this.comicStepPrefs.global !== key) return;
-            const choices = { ...this.comicStepPrefs.choices };
-            let changed = false, textFollows = false;
-            for (const step of this.comicModelSetupSteps()) {
-                if (!choices[step.capability] || choices[step.capability] !== chosenWith[step.capability] || !step.candidates.some(candidate => candidate.source.key === key)) continue;
-                delete choices[step.capability];
-                changed = true;
-                if (step.capability === 'text') textFollows = true;
-            }
-            if (changed) {
-                this.saveComicStepPrefs({ choices });
+            const prefs = this.comicStepPrefsFor(kind);
+            if (prefs.global !== key) return;
+            if (this.comicModelKind?.() === kind) {
                 for (const capability of ['image', 'video', 'speech', 'music'] as const) this.syncMediaSheetToStep?.(capability);
             }
-            if (textFollows) this.forgetComicTextRoute();
         };
         try {
-            const catalog = await this.fetchComicMerchantCatalog(merchantId, follow);
-            if (revision === this.catalogSnapshotRevision && !this.catalogRemovedMerchants.has(merchantId)) this.merchantPickerSnapshots.set(merchantId, { catalog, updatedAt: Date.now() });
+            const catalog = await this.fetchComicMerchantCatalog(merchantId, follow, scopeKey);
+            if (revision === this.catalogSnapshotRevision && !this.catalogRemovedMerchants.has(merchantId)) {
+                this.merchantPickerSnapshots.set(merchantId, { catalog, updatedAt: Date.now() });
+            }
         } catch { /* the relay stays without models; the panel says what it cannot do */ }
-        finally { if (this.comicStepRelayLoading === key) this.comicStepRelayLoading = ''; }
+        finally {
+            if (this.comicStepRelayLoadingByScope?.get(scopeKey) === key) this.comicStepRelayLoadingByScope.delete(scopeKey);
+            this.comicStepRelayLoading = this.comicStepRelayLoadingFor(this.comicModelKind?.() ?? kind);
+        }
         follow();
         this.update();
     }
 
-    /** Advanced mode: a relay first; its best model for this step becomes the choice. */
+    /** Advanced mode: a relay first; its best model for this step becomes the choice (scoped to the active project kind). */
     protected selectComicStepRelay(capability: ComicStepCapability, relayKey: string): void {
-        this.saveComicStepPrefs({ relays: { ...this.comicStepPrefs.relays, [capability]: relayKey } });
-        const models = this.comicStepCandidates(capability).filter(candidate => candidate.source.key === relayKey)
+        const kind = this.comicModelKind?.() ?? 'novel';
+        const prefs = this.comicStepPrefsFor(kind);
+        this.saveComicStepPrefs({ relays: { ...prefs.relays, [capability]: relayKey } }, kind);
+        const models = this.comicStepCandidatesForKind(kind, capability).filter(candidate => candidate.source.key === relayKey)
             .sort((left, right) => left.rank - right.rank);
-        if (models[0]) { this.selectComicStepModel(capability, models[0].key); return; }
-        if (relayKey.startsWith('managed:')) void this.loadComicStepRelay(capability, relayKey.slice('managed:'.length));
+        if (models[0]) { this.selectComicStepModelForKind(kind, capability, models[0].key); return; }
+        if (relayKey.startsWith('managed:')) void this.loadComicStepRelay(capability, relayKey.slice('managed:'.length), kind);
         this.update();
     }
 
     /** Relays with executable models of this kind (server-filtered), for the advanced relay menu. */
-    protected async loadComicStepDirectory(capability: ComicStepCapability, force = false): Promise<boolean> {
+    protected async loadComicStepDirectory(capability: ComicStepCapability, force = false, kind?: ComicProjectKind): Promise<boolean> {
         // Managed music is available by its exact capability; sound effects still require an own API.
         if (capability === 'sound_effect') return true;
+        const resolvedKind = kind ?? this.comicModelKind?.() ?? 'novel';
+        const scopeKey = `${resolvedKind}:${capability}`;
         const revision = this.catalogSnapshotRevision;
-        const current = this.comicStepDirectory.get(capability);
+        const current = this.comicStepDirectoryByScope?.get(scopeKey) ?? this.comicStepDirectory.get(capability);
         if (current?.loading) return false;
         // An answer for this catalogue revision stands, an empty one too (no relay sells this yet): reading it again on
         // every open only made the panel say “正在读取模型…” for seconds. A failed read has no revision and is retried.
         if (!force && current && !current.loading && current.revision === revision) return true;
-        this.comicStepDirectory.set(capability, { loading: true, relays: current?.relays || [], revision });
+        const loadingEntry = { loading: true, relays: current?.relays || [], revision };
+        this.comicStepDirectoryByScope?.set(scopeKey, loadingEntry);
+        this.comicStepDirectory.set(capability, loadingEntry);
         try {
             const page = await this.platformService.getPublicMerchantDirectory({
                 capability: capability === 'text' ? 'coding' : capability === 'speech' ? 'audio' : capability === 'music' ? 'music_generation' : capability, sort: 'quality', direction: 'desc'
             });
             if (revision !== this.catalogSnapshotRevision) return false;
-            this.comicStepDirectory.set(capability, { loading: false, relays: page.merchants.filter(merchant => !this.catalogRemovedMerchants.has(merchant.id)).map(merchant => ({ key: managedRelayKey(merchant.id), label: merchant.name })), revision });
+            const readyEntry = {
+                loading: false,
+                relays: page.merchants.filter(merchant => !this.catalogRemovedMerchants.has(merchant.id)).map(merchant => ({ key: managedRelayKey(merchant.id), label: merchant.name })),
+                revision
+            };
+            this.comicStepDirectoryByScope?.set(scopeKey, readyEntry);
+            this.comicStepDirectory.set(capability, readyEntry);
             return true;
         } catch {
-            if (revision === this.catalogSnapshotRevision) this.comicStepDirectory.set(capability, { loading: false, relays: current?.relays || [] });
+            if (revision === this.catalogSnapshotRevision) {
+                const fallbackEntry = { loading: false, relays: current?.relays || [] };
+                this.comicStepDirectoryByScope?.set(scopeKey, fallbackEntry);
+                this.comicStepDirectory.set(capability, fallbackEntry);
+            }
             return false;
         } finally { this.update(); }
     }
 
-    protected async loadComicStepRelay(capability: ComicStepCapability, merchantId: string): Promise<void> {
-        if (this.comicStepRelayLoading || this.catalogRemovedMerchants?.has(merchantId)) return;
-        this.comicStepRelayLoading = managedRelayKey(merchantId);
+    protected async loadComicStepRelay(
+        capability: ComicStepCapability,
+        merchantId: string,
+        kind: ComicProjectKind = this.comicModelKind?.() ?? 'novel'
+    ): Promise<void> {
+        const relayKey = managedRelayKey(merchantId);
+        const scopeKey = `${kind}:${capability}`;
+        if (this.comicStepRelayLoadingByScope?.get(scopeKey) || this.catalogRemovedMerchants?.has(merchantId)) return;
+        this.comicStepRelayLoadingByScope?.set(scopeKey, relayKey);
+        this.comicStepRelayLoading = this.comicStepRelayLoadingFor(this.comicModelKind?.() ?? kind);
         const revision = this.catalogSnapshotRevision;
         this.update();
+        const applyBestForKind = (): void => {
+            if (revision !== this.catalogSnapshotRevision) return;
+            const prefs = this.comicStepPrefsFor(kind);
+            if (prefs.relays[capability] !== relayKey) return;
+            const best = this.comicStepCandidatesForKind(kind, capability)
+                .filter(candidate => candidate.source.key === relayKey)
+                .sort((left, right) => left.rank - right.rank)[0];
+            if (best) this.selectComicStepModelForKind(kind, capability, best.key);
+        };
         try {
-            const catalog = await this.fetchComicMerchantCatalog(merchantId);
+            const catalog = await this.fetchComicMerchantCatalog(merchantId, applyBestForKind, scopeKey);
             if (revision !== this.catalogSnapshotRevision || this.catalogRemovedMerchants.has(merchantId)) return;
             this.merchantPickerSnapshots.set(merchantId, { catalog, updatedAt: Date.now() });
         } catch { /* the relay stays without models */ }
-        finally { this.comicStepRelayLoading = ''; }
+        finally {
+            if (this.comicStepRelayLoadingByScope?.get(scopeKey) === relayKey) this.comicStepRelayLoadingByScope.delete(scopeKey);
+            this.comicStepRelayLoading = this.comicStepRelayLoadingFor(this.comicModelKind?.() ?? kind);
+        }
         if (revision !== this.catalogSnapshotRevision) return;
-        const relayKey = managedRelayKey(merchantId);
-        const best = this.comicStepCandidates(capability).filter(candidate => candidate.source.key === relayKey).sort((left, right) => left.rank - right.rank)[0];
-        if (best && this.comicStepPrefs.relays[capability] === relayKey) this.selectComicStepModel(capability, best.key);
+        const prefs = this.comicStepPrefsFor(kind);
+        const best = this.comicStepCandidatesForKind(kind, capability)
+            .filter(candidate => candidate.source.key === relayKey)
+            .sort((left, right) => left.rank - right.rank)[0];
+        if (best && prefs.relays[capability] === relayKey) this.selectComicStepModelForKind(kind, capability, best.key);
         else if (!best) {
-            // No model here can do this step: drop the relay from the list, as if it never qualified.
+            // No model here can do this step: drop the relay from the list, as if it never qualified. The capability-wide
+            // entry mirrors the kind loaded last: it is pruned only while it is this kind's list (another kind may qualify).
+            const scopedDir = this.comicStepDirectoryByScope?.get(scopeKey);
+            const pruned = scopedDir ? { ...scopedDir, relays: scopedDir.relays.filter(relay => relay.key !== relayKey) } : undefined;
+            if (pruned) this.comicStepDirectoryByScope?.set(scopeKey, pruned);
             const directory = this.comicStepDirectory.get(capability);
-            if (directory) this.comicStepDirectory.set(capability, { ...directory, relays: directory.relays.filter(relay => relay.key !== relayKey) });
-            if (this.comicStepPrefs.relays[capability] === relayKey) this.saveComicStepPrefs({ relays: { ...this.comicStepPrefs.relays, [capability]: this.comicStepChoice(capability)?.source.key || '' } });
+            if (directory && (!scopedDir || directory === scopedDir)) {
+                this.comicStepDirectory.set(capability, pruned ?? { ...directory, relays: directory.relays.filter(relay => relay.key !== relayKey) });
+            }
+            if (prefs.relays[capability] === relayKey) {
+                this.saveComicStepPrefs({
+                    relays: { ...prefs.relays, [capability]: this.comicStepChoiceForKind(kind, capability)?.source.key || '' }
+                }, kind);
+            }
         }
         this.update();
     }
@@ -16468,13 +16722,96 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return names[this.desktopLocale];
     }
 
+    protected resolveComicDesktopModelRoute(agentRoute: DesktopAgentRunRequest['route'], explicit?: DesktopModelRoute): DesktopModelRoute | undefined {
+        if (explicit) return explicit;
+        const matches = (candidate: DesktopModelRoute): boolean => {
+            if (agentRoute.kind === 'official_connection') {
+                return candidate.kind === 'official_connection'
+                    && candidate.connection.id === agentRoute.connectionId
+                    && candidate.connection.model === agentRoute.model;
+            }
+            if (candidate.kind !== 'managed_gateway') return false;
+            return agentRoute.route.mode === 'fixed'
+                ? candidate.offering.id === agentRoute.route.offeringId
+                : candidate.offering.canonicalModel === agentRoute.route.registryModelId;
+        };
+        const current = this.comicTextRoute?.()?.route;
+        if (current && matches(current)) return current;
+        const fromChoices = this.comicTextRouteChoices?.().find(item => matches(item.route))?.route;
+        if (fromChoices) return fromChoices;
+        return this.allModelRoutes?.('comic')?.find(matches) || this.allModelRoutes?.('coding')?.find(matches);
+    }
+
+    protected comicTextRunOptions(
+        agentRoute: DesktopAgentRunRequest['route'],
+        desktopRoute?: DesktopModelRoute,
+        options?: { readonly fallbackEffort?: AgentReasoningEffort; readonly kind?: ComicProjectKind }
+    ): Pick<DesktopAgentRunRequest, 'reasoningEnabled' | 'reasoningMode' | 'reasoningEffort' | 'reasoningBudgetTokens' | 'contextWindowTokens' | 'creativityMode' | 'switchPolicy'> {
+        const resolvedRoute = this.resolveComicDesktopModelRoute(agentRoute, desktopRoute);
+        const reasoningSettings = resolvedRoute ? this.reasoningSettingsForRoute?.(resolvedRoute) : undefined;
+        const levels = resolvedRoute ? (this.reasoningEffortLevels?.(resolvedRoute) || []) : [];
+        const userEffort = resolvedRoute ? this.reasoningEffortForRoute?.(resolvedRoute) : undefined;
+        const fallbackEffort = options?.fallbackEffort && levels.includes(options.fallbackEffort)
+            ? options.fallbackEffort
+            : levels[0];
+        const reasoningEffort = userEffort && (!levels.length || levels.includes(userEffort))
+            ? userEffort
+            : fallbackEffort;
+        const contextWindowTokens = resolvedRoute ? this.contextWindowForRoute?.(resolvedRoute, undefined, true) : undefined;
+        const creativity = this.creativityRunField?.() ?? {};
+        const managedRoute = agentRoute.kind === 'managed_gateway'
+            ? agentRoute.route
+            : (resolvedRoute?.kind === 'managed_gateway' ? this.managedModelRoute?.(resolvedRoute) : undefined);
+        const kind = options?.kind ?? this.comicModelKind?.() ?? 'novel';
+        const prefs = this.comicStepPrefsFor?.(kind);
+        const stepRelayKey = prefs?.relays?.text || prefs?.global || (resolvedRoute?.kind === 'managed_gateway'
+            ? (resolvedRoute.automatic ? 'auto' : managedRelayKey(this.offeringMerchantId(resolvedRoute.offering)))
+            : undefined);
+        const switchPolicy = managedRoute && typeof sameModelRelayPolicy === 'function'
+            ? sameModelRelayPolicy(
+                managedRoute,
+                typeof automaticRelaySource === 'function' ? automaticRelaySource(this.automaticRelaySource, stepRelayKey) : (this.automaticRelaySource || 'off'),
+                this.modelSwitchSettings?.get(managedRoute)
+            )
+            : undefined;
+        return {
+            ...(reasoningSettings?.reasoningEnabled !== undefined ? { reasoningEnabled: reasoningSettings.reasoningEnabled } : {}),
+            ...(reasoningSettings?.reasoningMode ? { reasoningMode: reasoningSettings.reasoningMode } : {}),
+            ...(reasoningEffort ? { reasoningEffort } : {}),
+            ...(reasoningSettings?.reasoningBudgetTokens !== undefined ? { reasoningBudgetTokens: reasoningSettings.reasoningBudgetTokens } : {}),
+            ...(contextWindowTokens !== undefined ? { contextWindowTokens } : {}),
+            ...creativity,
+            ...(switchPolicy ? { switchPolicy } : {})
+        };
+    }
+
+    /**
+     * The window and relay policy the text run will use (comicTextRunOptions), for getComicTextModelLimits: a planner
+     * that budgets against the model's default window could build a prompt larger than the size chosen for the step.
+     */
+    protected comicTextLimitOptions(
+        agentRoute: DesktopAgentRunRequest['route'], desktopRoute?: DesktopModelRoute
+    ): Parameters<NextMuxPlatformService['getComicTextModelLimits']>[1] {
+        const { contextWindowTokens, switchPolicy } = this.comicTextRunOptions(agentRoute, desktopRoute);
+        return { ...(contextWindowTokens !== undefined ? { contextWindowTokens } : {}), ...(switchPolicy ? { switchPolicy } : {}) };
+    }
+
     /** Private, tool-free text planning uses the project's selected text route. */
     protected async comicPlanText(prompt: string, attachments?: readonly AgentMessageAttachment[], workspaceRoot = this.activeComicWorkspaceRoot): Promise<string> {
         const choice = this.comicTextRoute();
         if (attachments?.some(attachment => !routeSupportsModelAttachment(attachment, choice?.route))) throw new Error(comicShotFieldText(this.desktopLocale, 'motionVisionRequired'));
         const route = choice ? this.comicAgentRoute(choice, window.crypto.randomUUID()) : undefined;
         if (!route) throw new Error(this.ct('noTextModel'));
-        const raw = await this.platformService.planComicText({ workspaceRoot, route, prompt, ...(attachments ? { attachments } : {}) });
+        const { reasoningMode: runReasoningMode, ...restRunOptions } = this.comicTextRunOptions(route, choice?.route);
+        const planReasoningMode: 'auto' | 'enabled' | 'disabled' | undefined = runReasoningMode === 'adaptive' ? 'auto' : runReasoningMode;
+        const raw = await this.platformService.planComicText({
+            workspaceRoot,
+            route,
+            prompt,
+            ...restRunOptions,
+            ...(planReasoningMode ? { reasoningMode: planReasoningMode } : {}),
+            ...(attachments ? { attachments } : {})
+        });
         return typeof raw === 'string'
             ? raw.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '').replace(/<think(?:ing)?>[\s\S]*$/gi, '').trim()
             : raw;
@@ -16490,13 +16827,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!route) throw new Error(this.ct('noTextModel'));
         this.comicAdaptation = { status: 'running', purpose, workspaceRoot, message: '', progress: purpose === 'adapt' ? this.ct('adaptRunning') : this.ct('rewriting') };
         this.update();
-        // Splitting a written script into shots is bookkeeping, not invention: a long think only makes it slow.
-        const levels = this.reasoningEffortLevels(choice.route);
-        const wanted: AgentReasoningEffort = toolScope === 'comic-shots' ? 'low' : 'medium';
-        const reasoningEffort = levels.includes(wanted) ? wanted : levels[0];
+        const fallbackEffort: AgentReasoningEffort = toolScope === 'comic-shots' ? 'low' : 'medium';
         const started = await this.platformService.startAgentRun({
-            route, conversationId, workbench: 'comic', ...this.reasoningSettingsForRoute(choice.route, false), ...(toolScope ? { toolScope } : {}), ...(reasoningEffort ? { reasoningEffort } : {}),
-            prompt, comicMaximumOutputTokens: 16_384, history: [], workspaceRoot, permissionMode: 'workspace_write'
+            route,
+            conversationId,
+            workbench: 'comic',
+            ...this.comicTextRunOptions?.(route, choice.route, { fallbackEffort }),
+            ...(toolScope ? { toolScope } : {}),
+            prompt,
+            comicMaximumOutputTokens: 16_384,
+            history: [],
+            workspaceRoot,
+            permissionMode: 'workspace_write'
         });
         this.comicAdaptation = { ...this.comicAdaptation, runId: started.runId };
         let cursor = 0;
@@ -16784,7 +17126,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const valid=():boolean=>workspaceRoot===this.activeComicWorkspaceRoot&&(!options?.isCurrent||options.isCurrent());
         if(!valid())throw new Error('CANVAS_SOURCE_CHANGED');
         const started = options?.resumeRunId?{runId:options.resumeRunId}:await this.platformService.startAgentRun({ route, workbench: 'comic', toolScope: 'comic-json',
-            prompt, comicMaximumOutputTokens: maxOutputTokens, history: [], workspaceRoot, permissionMode: 'read_only' });
+            ...this.comicTextRunOptions?.(route), prompt, comicMaximumOutputTokens: maxOutputTokens, history: [], workspaceRoot, permissionMode: 'read_only' });
         if(!valid()){await this.platformService.cancelAgentRun(started.runId).catch(()=>undefined);throw new Error('CANVAS_SOURCE_CHANGED');}
         if(!options?.resumeRunId)await options?.onStarted?.(started.runId);
         if(!valid())throw new Error('CANVAS_SOURCE_CHANGED');
@@ -16948,7 +17290,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 const choice = this.comicTextRoute();
                 const route = choice && this.comicAgentRoute(choice, window.crypto.randomUUID());
                 if (!route) throw new Error(this.ct('noTextModel'));
-                const limits = await this.platformService.getComicTextModelLimits(route);
+                const limits = await this.platformService.getComicTextModelLimits(route, this.comicTextLimitOptions?.(route, choice?.route));
                 let result: { ok: boolean; text: string };
                 if ((limits.contextWindowTokens || 0) >= 32000 && comicPlanningTokens(prompt) < limits.contextWindowTokens! / 2) {
                     result = await this.runComicTextAgent(desk.workspaceRoot, 'adapt', prompt, 'comic-shots');
@@ -17096,7 +17438,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const cancelled = (): Error => Object.assign(new Error(this.ct('adaptStop')), { code: 'AGENT_CANCELLED' });
         if (isCancelled()) throw cancelled();
         const started = await this.platformService.startAgentRun({ route, workbench: 'comic', toolScope: 'comic-json',
-            prompt, comicMaximumOutputTokens: maxOutputTokens, history: [], workspaceRoot, permissionMode: 'read_only' });
+            ...this.comicTextRunOptions?.(route), prompt, comicMaximumOutputTokens: maxOutputTokens, history: [], workspaceRoot, permissionMode: 'read_only' });
         onRun?.(started.runId);
         let cursor = 0;
         for (;;) {
@@ -17211,7 +17553,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const story = this.comicState.production?.script?.text || '';
             // A story edited since the adaptation no longer matches the saved range: rewrite from the script itself.
             const episode = current.sourceRange && current.sourceRange.end > story.length ? { ...current, sourceRange: undefined } : current;
-            const limits = await this.platformService.getComicTextModelLimits(route);
+            const limits = await this.platformService.getComicTextModelLimits(route, this.comicTextLimitOptions?.(route));
             const previous = episodes[index - 1], next = episodes[index + 1];
             const rewritten = await rewriteComicEpisodeScript({
                 sourceText: story, episode, settings: project.adaptSettings || normalizeComicAdaptSettings(this.comicAdaptSettings), styleBible: project.styleBible,
@@ -19229,7 +19571,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.comicAdaptation = { status: 'running', purpose: 'adapt', workspaceRoot: session.workspaceRoot, message: '', progress: '' };
         this.update();
         try {
-            const limits = await this.platformService.getComicTextModelLimits(route);
+            const limits = await this.platformService.getComicTextModelLimits(route, this.comicTextLimitOptions?.(route, choice?.route));
             assertSource();
             const output = Math.min(16_384, limits.modelOutputTokenLimit || 4096, Math.floor((limits.contextWindowTokens ?? 32_768) / 3));
             const inputBudget=Math.min((limits.contextWindowTokens??32768)-output,limits.modelInputTokenLimit??Number.MAX_SAFE_INTEGER)-6000;
@@ -27124,7 +27466,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected readonly compactedSessionTurnCounts = new Map<string, number>();
     protected readonly compactingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-    protected codingConversationHistory(session: CodingSessionRecord | undefined, route?: DesktopModelRoute): readonly AgentModelMessage[] {
+    /** `windowTokens`: the window the run itself will use (a scheduled plan's), so the history is cut for that one. */
+    protected codingConversationHistory(session: CodingSessionRecord | undefined, route?: DesktopModelRoute, windowTokens?: number): readonly AgentModelMessage[] {
         if (!session) return [];
         const activeRoute = route ?? this.activeModelRoute?.();
         const maxWindowTokens = this.modelContextWindowTokens?.(activeRoute)
@@ -27133,7 +27476,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 : activeRoute?.kind === 'managed_gateway'
                     ? modelContextWindowTokens(this.globalModels || [], { registryModelId: activeRoute.registryModelId, model: activeRoute.canonicalModel })
                     : undefined);
-        const preferredTokens = this.contextWindowForRoute?.(activeRoute, session.contextWindowTokens ?? this.contextWindowTokens);
+        const isBackgroundSession = Boolean(this.activeCodingSessionId && session.id !== this.activeCodingSessionId);
+        const preferredTokens = this.contextWindowForRoute?.(
+            activeRoute,
+            windowTokens ?? session.contextWindowTokens ?? (isBackgroundSession ? undefined : this.contextWindowTokens),
+            isBackgroundSession
+        );
         const contextWindowTokens = effectiveContextWindowTokens(preferredTokens, maxWindowTokens) ?? maxWindowTokens;
         const maxContextCharacters = contextWindowTokens !== undefined
             ? Math.max(24_000, Math.min(2_400_000, Math.floor(contextWindowTokens * 2.5)))
@@ -27143,7 +27491,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const compactedAtTurnCount = isCompacted ? this.compactedSessionTurnCounts?.get(session.id) : undefined;
         const eligibleTurnCount = session.turns.filter(turn => !(turn as { excludedFromContext?: boolean }).excludedFromContext && turn.prompt).length;
         return compactedConversationHistory(session.turns, {
-            recentTurns: isCompacted && (compactedAtTurnCount === undefined || eligibleTurnCount <= compactedAtTurnCount) ? 2 : 10,
+            recentTurns: isCompacted && (compactedAtTurnCount === undefined || eligibleTurnCount <= compactedAtTurnCount) ? 2 : 30,
             ...(compactedAtTurnCount !== undefined ? { compactedAtTurnCount } : {}),
             ...(contextWindowTokens !== undefined ? { contextWindowTokens } : {}),
             maxContextCharacters,
@@ -32650,16 +32998,49 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.rememberNavigation();
         this.clearNavigationSurfaces();
         this.scheduleDraftError = '';
-        this.scheduleDraft = task ? { ...task } : {
-            title: '', prompt: '', cadence: 'daily', runAt: '09:00',
-            workspacePath: this.activeWorkspaceRoot || this.scheduledTaskWorkspaceOptions()[0]?.path || '',
-            relayKey: this.activeRelayKey, routeId: this.activeModelRouteId,
-            keyPriceQuoteId: this.activeKeyPriceQuoteId,
-            reasoningEffort: this.reasoningEffort,
-            reasoningSettings: this.reasoningSettingsForRoute(this.activeModelRoute()),
-            contextWindowTokens: this.contextWindowForRoute?.(this.activeModelRoute()),
-            permissionMode: this.permissionMode, automaticRelaySource: this.automaticRelaySource
-        };
+        if (task) {
+            const validWeekday = typeof task.weekday === 'number' && Number.isInteger(task.weekday) && task.weekday >= 0 && task.weekday <= 6;
+            const matchedRoute = (!task.relayKey || task.relayKey === 'auto') && task.routeId
+                ? this.allModelRoutes?.('coding')?.find(candidate => candidate.id === task.routeId)
+                : undefined;
+            const resolvedRelayKey = task.relayKey && task.relayKey !== 'auto'
+                ? task.relayKey
+                : task.modelRoute?.kind === 'official_connection'
+                    ? `official:${task.modelRoute.connectionId}`
+                    : matchedRoute?.kind === 'managed_gateway' && !matchedRoute.automatic
+                        ? `managed:${this.offeringMerchantId?.(matchedRoute.offering) || ''}`
+                        : task.relayKey;
+            this.scheduleDraft = {
+                ...task,
+                ...(resolvedRelayKey ? { relayKey: resolvedRelayKey } : {}),
+                ...(task.cadence === 'weekly' && !validWeekday ? { weekday: new Date(task.createdAt || Date.now()).getDay() } : {})
+            };
+        } else {
+            const activeRoute = this.activeModelRoute?.();
+            const nonAutoRelays = this.relayOptions?.('coding')?.filter(option => option.kind !== 'automatic') || [];
+            const activeConcreteRelayKey = activeRoute?.kind === 'official_connection'
+                ? `official:${activeRoute.connection.id}`
+                : activeRoute?.kind === 'managed_gateway' && !activeRoute.automatic
+                    ? `managed:${this.offeringMerchantId?.(activeRoute.offering) || activeRoute.offering.merchantId || ''}`
+                    : (this.activeRelayKey && this.activeRelayKey !== 'auto' ? this.activeRelayKey : '');
+            const defaultRelayKey = activeConcreteRelayKey && (!nonAutoRelays.length || nonAutoRelays.some(option => option.key === activeConcreteRelayKey))
+                ? activeConcreteRelayKey
+                : (nonAutoRelays[0]?.key || '');
+            const keepActiveRoute = Boolean(activeRoute && !((activeRoute as { automatic?: boolean }).automatic) && defaultRelayKey === activeConcreteRelayKey);
+            const seedRoute = keepActiveRoute ? activeRoute : undefined;
+            this.scheduleDraft = {
+                title: '', prompt: '', cadence: 'daily', runAt: '09:00',
+                workspacePath: this.activeWorkspaceRoot || this.scheduledTaskWorkspaceOptions?.()?.[0]?.path || '',
+                relayKey: defaultRelayKey,
+                routeId: seedRoute ? seedRoute.id : undefined,
+                keyPriceQuoteId: seedRoute?.kind === 'managed_gateway' ? (this.activeKeyPriceQuoteId ?? seedRoute.offering.keyPriceQuoteId) : undefined,
+                reasoningEffort: seedRoute ? (this.reasoningEffortForRoute?.(seedRoute) ?? this.reasoningEffort) : undefined,
+                reasoningSettings: seedRoute ? this.reasoningSettingsForRoute?.(seedRoute) : undefined,
+                contextWindowTokens: undefined,
+                permissionMode: this.permissionMode || this.defaultPermissionMode,
+                automaticRelaySource: this.automaticRelaySource
+            };
+        }
         this.scheduleDialogOpen = true;
         void this.loadScheduleModels();
         this.update();
@@ -32947,7 +33328,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 ? `${route.connection.modelFamily} · ${route.connection.providerName}`
                 : route?.kind === 'managed_gateway' ? `${route.offering.modelFamily} · ${route.offering.providerName}` : '');
             const permissionMode = task.permissionMode || this.defaultPermissionMode;
-            const history = this.codingConversationHistory(session, route);
+            // The plan's own window; an older plan without one takes its conversation's window (never the composer of
+            // whatever conversation is on screen). The history is cut for the same window the run will use.
+            const scheduledContextWindowTokens = task.contextWindowTokens ?? this.contextWindowForRoute?.(route, session.contextWindowTokens, true);
+            const history = this.codingConversationHistory(session, route, scheduledContextWindowTokens);
             turn = this.appendCodingTurn(session, task.prompt, permissionMode, task.routeId || route?.id || '', routeSummary, [], undefined, [], task.keyPriceQuoteId, true);
             this.scheduledAgentRuns.set(session.id, scheduledState);
             await this.scheduledTasksPersistence;
@@ -32960,6 +33344,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 : undefined);
             const skills = await this.prepareAgentSkills(task.workspacePath);
             if (scheduledState.cancelRequested) throw Object.assign(new Error('任务已停止'), { code: 'AGENT_CANCELLED' });
+            const resolvedBindings = this.conversationWorkspaceBindings?.(session)
+                ?? (session.workspaceBindings?.length
+                    ? session.workspaceBindings
+                    : (session.privateWorkspacePath || session.workspacePath || task.workspacePath
+                        ? [{ id: 'primary', path: session.privateWorkspacePath || session.workspacePath || task.workspacePath, kind: 'project' as const, status: 'available' as const, permission: permissionMode }]
+                        : []));
+            const activeWorkspaceBindings = resolvedBindings
+                .filter(binding => binding.status !== 'unlinked')
+                .map(binding => ({ id: binding.id, path: binding.path, permissionMode: binding.permission || permissionMode }));
+            const unlinkedPrivateWorkspaceBindingIds = resolvedBindings
+                .filter(binding => binding.kind === 'private' && binding.status === 'unlinked')
+                .map(binding => binding.id);
+            const terminalProfileId = this.selectedTerminalProfile?.()?.id;
             const started = await this.platformService.startAgentRun({
                 route: task.modelRoute ? task.modelRoute.kind === 'managed_gateway'
                     ? { ...task.modelRoute, conversationId: session.id } : task.modelRoute
@@ -32974,6 +33371,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 ...(scheduledSwitchPolicy ? { switchPolicy: scheduledSwitchPolicy } : {}),
                 history,
                 workspaceRoot: task.workspacePath,
+                ...(activeWorkspaceBindings.length ? { workspaceBindings: activeWorkspaceBindings } : {}),
+                ...(unlinkedPrivateWorkspaceBindingIds.length ? { unlinkedPrivateWorkspaceBindingIds } : {}),
+                ...(terminalProfileId ? { terminalProfileId } : {}),
                 permissionMode,
                 reasoningEffort: task.reasoningEffort,
                 // Filtered by the model's declared controls when they are known; before the catalog is back, the
@@ -32981,7 +33381,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 ...(this.modelReasoningContract(route)?.reasoningControls
                     ? declaredReasoningSettings(this.modelReasoningContract(route)?.reasoningControls, task.reasoningSettings || {})
                     : task.reasoningSettings || {}),
-                contextWindowTokens: task.contextWindowTokens,
+                contextWindowTokens: scheduledContextWindowTokens,
                 skills
             });
             scheduledState.runId = started.runId;
@@ -33014,6 +33414,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 verification: result.verification,
                 checkpointWarnings: result.checkpointWarnings
             });
+            if (runCompleted) {
+                const settledTurn = this.codingSessions?.find(item => item.id === session!.id)?.turns?.find(item => item.id === turn!.id)
+                    ?? { ...turn, stage: 'complete' as const, events: result.events };
+                this.scheduleTurnWakeupFromEvents?.(session.id, settledTurn);
+            }
             this.updateScheduledTask(task.id, {
                 enabled: task.cadence === 'once' || !runCompleted ? false : (this.scheduledTasks.find(current => current.id === task.id)?.enabled ?? false),
                 ...(!runCompleted ? { pauseReason: stoppedMessage } : {}),
@@ -34095,7 +34500,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.modelPickerHiddenPopoverOpen = false;
         this.modelPickerHiddenPopoverExpanded = false;
         this.modelPickerHiddenVisibleLimit = 10;
-        this.modelPickerHiddenPopoverTicked.clear();
+        this.modelPickerHiddenPopoverTicked?.clear();
         this.relayMetricTooltip = undefined;
         this.modelEvidenceTooltip = undefined;
         this.closeModelEffortPickerImmediately();
@@ -34603,7 +35008,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 permissionMode,
                 reasoningEffort: session.reasoningEffort ?? this.reasoningEffortForRoute(route),
                 ...declaredReasoningSettings(this.modelReasoningContract(route)?.reasoningControls, session.reasoningSettings || this.reasoningSettingsForRoute(route)),
-                contextWindowTokens: this.contextWindowForRoute?.(route, session.contextWindowTokens),
+                // A sub-agent's conversation is often not the one on screen: never borrow that composer's window.
+                contextWindowTokens: this.contextWindowForRoute?.(route, session.contextWindowTokens, Boolean(this.activeCodingSessionId && session.id !== this.activeCodingSessionId)),
                 terminalProfileId: this.selectedTerminalProfile()?.id,
                 ...(sharedTerminal?.widget ? { terminalId: sharedTerminal.widget.terminalId } : {}),
                 skills,
@@ -38118,14 +38524,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
         } as unknown as PlatformOffering;
     }
 
-    protected contextWindowForRoute(route: DesktopModelRoute | undefined, preferredTokens?: number): number | undefined {
+    protected contextWindowForRoute(route: DesktopModelRoute | undefined, preferredTokens?: number, ignoreActiveComposer = false): number | undefined {
         if (!route) return undefined;
         const maximum = this.modelContextWindowTokens(route);
         if (maximum === undefined) return undefined;
         const modelKey = this.modelKeyForRoute?.(route) || '';
         const candidate = normalizeContextWindowTokens(
             preferredTokens
-            ?? (route.id === this.activeModelRouteId ? this.contextWindowTokens : undefined)
+            ?? (!ignoreActiveComposer && route.id === this.activeModelRouteId ? this.contextWindowTokens : undefined)
             ?? this.contextWindowByModel?.[modelKey]
         );
         return effectiveContextWindowTokens(candidate, maximum) ?? maximum;
@@ -40236,7 +40642,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
             reasoningSettings: goalOwner?.reasoningSettings || this.reasoningSettingsForRoute(route),
             reasoningEffort: goalOwner ? (goalOwner.reasoningEffort && this.reasoningEffortLevels(route).includes(goalOwner.reasoningEffort)
                 ? goalOwner.reasoningEffort : undefined) : this.reasoningEffortForRoute(route),
-            contextWindowTokens: this.contextWindowForRoute?.(route, goalOwner?.contextWindowTokens),
+            contextWindowTokens: this.contextWindowForRoute?.(
+                route,
+                goalOwner?.contextWindowTokens,
+                Boolean(goalOwner && this.activeCodingSessionId && goalOwner.id !== this.activeCodingSessionId)
+            ),
             // A goal runs with its conversation's own permission, resolved the
             // same way as when that conversation is opened.
             permissionMode: goalOwner ? goalOwner.permissionMode || goalOwner.turns.at(-1)?.permissionMode || this.defaultPermissionMode : this.permissionMode,
@@ -40981,7 +41391,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.update();
                 return;
             }
-            if (this.enqueueFollowUpTask(sessionId, 'coding', prompt.trim(), [])) {
+            if (this.enqueueFollowUpTask(sessionId, 'coding', prompt.trim(), [], { automaticGoal: true })) {
                 this.requestFollowUpQueueDrain(sessionId);
             }
             this.update();
@@ -42527,14 +42937,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         : this.reasoningEffortForRoute(route);
             runReasoningSettings = declaredReasoningSettings(this.modelReasoningContract(route)?.reasoningControls,
                 queuedExecution?.task.reasoningSettings || resumedExecution?.turn.reasoningSettings || submission?.reasoningSettings || this.reasoningSettingsForRoute(route));
+            const isBackgroundSession = Boolean(currentSession && this.activeCodingSessionId && currentSession.id !== this.activeCodingSessionId);
             runContextWindowTokens = effectiveContextWindowTokens(
                 normalizeContextWindowTokens(
                     historicalExecution?.contextWindowTokens
                     ?? queuedExecution?.task.contextWindowTokens
                     ?? (submission ? submission.contextWindowTokens : undefined)
                     ?? currentSession?.contextWindowTokens
-                    ?? this.contextWindowTokens
-                    ?? this.contextWindowForRoute?.(route)
+                    ?? (isBackgroundSession ? undefined : this.contextWindowTokens)
+                    ?? this.contextWindowForRoute?.(route, undefined, isBackgroundSession)
                 ),
                 this.modelContextWindowTokens?.(route)
             );
@@ -49498,11 +49909,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const conversationId = entry.chat?.id || chatId || `comic-${this.activeComicProjectId || 'default'}-${this.activeComicEpisodeId || 'ep1'}`;
             const route = this.comicAgentRoute(choice, conversationId);
             if (!route) throw new Error(this.comicChatT('noModel'));
-            const levels = this.reasoningEffortLevels(choice.route);
-            const reasoningEffort = levels.includes('medium') ? 'medium' : levels[0];
             const started = await this.platformService.startAgentRun({
-                route, conversationId, workbench: 'comic', ...this.reasoningSettingsForRoute(choice.route, false), toolScope: 'comic', ...(reasoningEffort ? { reasoningEffort } : {}),
-                ...(this.creativityRunField?.() ?? {}),
+                route, conversationId, workbench: 'comic', toolScope: 'comic',
+                ...this.comicTextRunOptions?.(route, choice.route, { fallbackEffort: 'medium' }),
                 prompt: this.comicChatAgentPrompt(entry.chat, turnId), history: [], workspaceRoot: root, permissionMode: 'workspace_write'
             });
             agent.runId = started.runId;
@@ -51989,9 +52398,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
             soundVideoModel={this.comicModelKind() !== 'music' && this.comicVideoMakesSound(this.comicStepMediaRoute('video')) ? this.comicStepChoice('video')?.label : undefined}
             refreshing={Boolean(this.modelListsRefreshing)} onRefresh={() => void this.refreshAllModelLists()}
             // Still reading: the catalogues, or the relay directory the source list is built from.
-            busy={this.catalogLoading || this.registryModelsLoading || this.officialModelsLoading || [...this.comicStepDirectory.values()].some(entry => entry.loading)}
-            pendingRelays={Object.fromEntries(COMIC_STEP_CAPABILITIES.map(capability => [capability, this.comicStepDirectory.get(capability)?.relays || []]))}
-            {...(this.comicStepRelayLoading ? { loadingRelayKey: this.comicStepRelayLoading } : {})}
+            busy={this.catalogLoading || this.registryModelsLoading || this.officialModelsLoading
+                || COMIC_STEP_CAPABILITIES.some(capability => Boolean((this.comicStepDirectoryByScope?.get(`${this.comicModelKind()}:${capability}`) ?? this.comicStepDirectory.get(capability))?.loading))}
+            pendingRelays={Object.fromEntries(COMIC_STEP_CAPABILITIES.map(capability => [
+                capability,
+                (this.comicStepDirectoryByScope?.get(`${this.comicModelKind()}:${capability}`) ?? this.comicStepDirectory.get(capability))?.relays || []
+            ]))}
+            {...(this.comicStepRelayLoadingFor(this.comicModelKind()) ? { loadingRelayKey: this.comicStepRelayLoadingFor(this.comicModelKind()) } : {})}
             closeRequest={this.comicModelSetupCloseRequest}
             onAutoChange={auto => this.setComicStepAuto(auto)}
             onSourceSelect={key => this.selectComicSetupSource(key)}

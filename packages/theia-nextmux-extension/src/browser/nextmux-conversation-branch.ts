@@ -473,12 +473,12 @@ function conversationHistoryTurnEligible(turn: ConversationTurnLike): boolean {
 }
 
 function projectConversationHistory(
-    turns: readonly ConversationTurnLike[], maxTurns = 12, maxCharacters = 150_000, maxMessages = 24
+    turns: readonly ConversationTurnLike[], maxTurns = 32, maxCharacters = 150_000, maxMessages = 64
 ): { readonly messages: readonly ConversationHistoryMessage[]; readonly retainedTurns: number } {
-    const bounded = Math.max(1, Math.min(500, Math.floor(maxTurns) || 12));
+    const bounded = Math.max(1, Math.min(500, Math.floor(maxTurns) || 32));
     const characterBudget = Math.max(4_000, Math.min(2_400_000, Math.floor(maxCharacters) || 150_000));
     const perMessageLimit = characterBudget > 150_000 ? Math.min(600_000, Math.max(20_000, Math.floor(characterBudget / 4))) : 20_000;
-    const messageBudget = Math.max(2, Math.min(24, Math.floor(maxMessages) || 24));
+    const messageBudget = Math.max(2, Math.min(64, Math.floor(maxMessages) || 64));
     const completed = turns.filter(conversationHistoryTurnEligible).slice(-bounded);
     const history: ConversationHistoryMessage[] = [];
     let totalCharacters = 0, retainedTurns = 0;
@@ -530,7 +530,7 @@ function projectConversationHistory(
 
 /** Compatibility name: settled user messages no longer depend on reply success. */
 export function completedConversationHistory(
-    turns: readonly ConversationTurnLike[], maxTurns = 12, maxCharacters = 150_000, maxMessages = 24
+    turns: readonly ConversationTurnLike[], maxTurns = 32, maxCharacters = 150_000, maxMessages = 64
 ): readonly ConversationHistoryMessage[] {
     return projectConversationHistory(turns, maxTurns, maxCharacters, maxMessages).messages;
 }
@@ -611,7 +611,7 @@ export function compactedConversationHistory(
     const recentBudget = Math.max(4_000, Math.floor((totalBudget * 100_000) / 150_000));
 
     const eligible = turns.filter(conversationHistoryTurnEligible);
-    const recentCount = Math.max(1, Math.min(10, Math.floor(options.recentTurns ?? 10) || 10));
+    const recentCount = Math.max(1, Math.min(31, Math.floor(options.recentTurns ?? 10) || 10));
     const rawOlderCount = Math.max(0, eligible.length - recentCount);
     const compactedTurnCount = typeof options.compactedAtTurnCount === 'number' && Number.isFinite(options.compactedAtTurnCount) && options.compactedAtTurnCount > 0
         ? Math.floor(options.compactedAtTurnCount)
@@ -630,7 +630,7 @@ export function compactedConversationHistory(
     const recentTail = eligible.slice(olderCount);
     const recentTailSet = new Set(recentTail);
     const recentSource = eligible.filter(turn => Boolean(turn.pinned) || recentTailSet.has(turn));
-    const projection = projectConversationHistory(recentSource, Math.max(recentCount, recentSource.length), recentBudget, 22);
+    const projection = projectConversationHistory(recentSource, Math.max(recentCount, recentSource.length), recentBudget, recentCount > 10 ? 62 : 22);
     const recent = projection.messages;
     // The projection keeps the newest turns of recentSource word for word. Every other turn, a pinned one that did not
     // fit included, goes into the memory, so nothing is dropped and nothing is sent twice.

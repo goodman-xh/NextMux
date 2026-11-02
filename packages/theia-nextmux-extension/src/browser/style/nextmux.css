@@ -195,7 +195,7 @@
 }
 
 /* Newer surfaces size their own <small> text (the ID selector here would otherwise override every class rule). */
-#nextmux\.desktop\.widget small:not(:is(.nmx-cast-sheet, .nmx-permission-wait, .nmx-comic-setup, .nmx-step-summary, .nmx-music-lyrics, .nmx-music-song, .nmx-music-output, .nmx-music-mv, .nmx-comic-kind-sheet, .nmx-comic-cats, .nmx-plugins-settings, .nmx-plugin-dialog, .nmx-plugin-modal-backdrop, .nmx-plugin-menu, .nmx-comic-chat-popover, .nmx-comic-library-anchor, .nmx-comic-chat-drawers, .nmx-comic-chat-refs, .nmx-comic-materials, .nmx-cut-bin-group-head, .nmx-desk-review, .nmx-desk-source-editor, .nmx-comic-export-check, .nmx-board, .nmx-desk-canvas-notice) small) {
+#nextmux\.desktop\.widget small:not(:is(.nmx-cast-sheet, .nmx-permission-wait, .nmx-comic-setup, .nmx-step-summary, .nmx-music-lyrics, .nmx-music-song, .nmx-music-output, .nmx-music-mv, .nmx-comic-kind-sheet, .nmx-comic-cats, .nmx-plugins-settings, .nmx-plugin-dialog, .nmx-plugin-modal-backdrop, .nmx-plugin-menu, .nmx-comic-chat-popover, .nmx-comic-library-anchor, .nmx-comic-chat-drawers, .nmx-comic-chat-refs, .nmx-comic-materials, .nmx-cut-bin-group-head, .nmx-desk-review, .nmx-desk-source-editor, .nmx-comic-export-check, .nmx-board, .nmx-desk-canvas-notice, .nmx-council-step-label, .nmx-council-assignments, .nmx-council-popover) small) {
     font-size: inherit;
 }
 :where(.nmx-cast-sheet, .nmx-comic-setup, .nmx-step-summary, .nmx-music-lyrics, .nmx-music-song, .nmx-music-output, .nmx-music-mv, .nmx-comic-kind-sheet, .nmx-comic-cats, .nmx-plugins-settings, .nmx-plugin-dialog, .nmx-plugin-menu) small { font-size: 11.5px; }

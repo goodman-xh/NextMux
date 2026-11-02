@@ -482,6 +482,7 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
     const renderModels = (current: ComicModelSetupStep): React.ReactNode => {
         const selected = current.resolution.candidate;
         const covered = coveredBy(current);
+        const elsewhere = Boolean(selected && !covered && chosen && selected.source.key !== chosen);
         const here = current.candidates.filter(candidate => candidate.source.key === chosen).sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label));
         const sourceLabel = chosenSource ? sourceName(chosenSource) : '';
         // The same model at this source for every function it serves: function → its key there.
@@ -503,6 +504,7 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
         };
         return <div className='nmx-comic-setup-models' role='tabpanel' id={`${id}-pane`} aria-labelledby={`${id}-step-${current.capability}`}>
             {covered && <p className='nmx-comic-setup-covered'><i className='codicon codicon-check' aria-hidden='true'></i>{p('covered', { model: props.soundVideoModel! })}</p>}
+            {elsewhere && here.length > 0 && <p className='nmx-comic-setup-covered is-elsewhere' data-nmx-literal><i className='codicon codicon-check' aria-hidden='true'></i>{p('usingOther', { model: selected!.label, source: comicStepSourceLabel(props.locale, selected!.source) })}</p>}
             {here.length ? <div className='nmx-comic-setup-list' role='listbox' aria-label={label(current.capability)}>
                 {here.map((candidate, index) => {
                     const isChosen = !covered && selected?.key === candidate.key;

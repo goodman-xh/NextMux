@@ -21,8 +21,17 @@ export interface CouncilDraftSlot {
     readonly slotId: string;
     readonly modelId: string;
     readonly routeId?: string;
+    readonly relayKey?: string;
+    readonly relayLabel?: string;
+    readonly providerId?: string;
+    readonly variantTag?: string;
     readonly label?: string;
     readonly modelLabel?: string;
+    readonly reasoningEffort?: string;
+    readonly reasoningEnabled?: boolean;
+    readonly reasoningMode?: 'adaptive' | 'auto' | 'enabled' | 'disabled';
+    readonly reasoningBudgetTokens?: number;
+    readonly contextWindowTokens?: number;
     readonly roles: readonly AgentCouncilRole[];
 }
 
@@ -32,8 +41,16 @@ export interface CouncilModelCandidate {
     readonly modelId: string;
     readonly label: string;
     readonly routeId: string;
+    readonly relayKey?: string;
+    readonly relayLabel?: string;
+    readonly providerId?: string;
     readonly detail?: string;
     readonly variantTag?: string;
+    readonly reasoningEffort?: string;
+    readonly reasoningEnabled?: boolean;
+    readonly reasoningMode?: 'adaptive' | 'auto' | 'enabled' | 'disabled';
+    readonly reasoningBudgetTokens?: number;
+    readonly contextWindowTokens?: number;
 }
 
 export type CouncilSubConversationPhase =
@@ -457,21 +474,40 @@ export function createDefaultCouncilDraftSlots(
     existingSlots?: readonly DesktopAgentCouncilSlot[]
 ): readonly CouncilDraftSlot[] {
     if (existingSlots && existingSlots.length >= MIN_COUNCIL_SLOTS) {
-        return existingSlots.map(slot => ({
-            slotId: slot.slotId,
-            modelId: slot.modelId || slot.modelLabel || slot.slotId,
-            routeId: slot.routeId || (slot.route.kind === 'managed_gateway'
-                ? (slot.route.route.mode === 'fixed'
-                    ? `managed:fixed:${slot.route.route.offeringId}`
-                    : `managed:auto:${slot.route.route.registryModelId}`)
-                : `official:${slot.route.connectionId}:${slot.route.model}`),
-            label: slot.modelLabel,
-            modelLabel: slot.modelLabel,
-            roles: [...new Set(slot.roles.flatMap(role => {
-                const normalized = normalizeAgentCouncilRoleId(role);
-                return normalized ? [normalized] : [];
-            }))]
-        }));
+        return existingSlots.map(slot => {
+            const extra = slot as DesktopAgentCouncilSlot & {
+                readonly relayLabel?: string;
+                readonly providerId?: string;
+                readonly reasoningEffort?: string;
+                readonly reasoningEnabled?: boolean;
+                readonly reasoningMode?: 'auto' | 'enabled' | 'disabled';
+                readonly reasoningBudgetTokens?: number;
+                readonly contextWindowTokens?: number;
+            };
+            return {
+                slotId: slot.slotId,
+                modelId: slot.modelId || slot.modelLabel || slot.slotId,
+                routeId: slot.routeId || (slot.route.kind === 'managed_gateway'
+                    ? (slot.route.route.mode === 'fixed'
+                        ? `managed:fixed:${slot.route.route.offeringId}`
+                        : `managed:auto:${slot.route.route.registryModelId}`)
+                    : `official:${slot.route.connectionId}:${slot.route.model}`),
+                ...(slot.relayKey ? { relayKey: slot.relayKey } : {}),
+                ...(extra.relayLabel ? { relayLabel: extra.relayLabel } : {}),
+                ...(extra.providerId ? { providerId: extra.providerId } : {}),
+                ...(extra.reasoningEffort ? { reasoningEffort: extra.reasoningEffort } : {}),
+                ...(extra.reasoningEnabled !== undefined ? { reasoningEnabled: extra.reasoningEnabled } : {}),
+                ...(extra.reasoningMode ? { reasoningMode: extra.reasoningMode } : {}),
+                ...(extra.reasoningBudgetTokens !== undefined ? { reasoningBudgetTokens: extra.reasoningBudgetTokens } : {}),
+                ...(extra.contextWindowTokens !== undefined ? { contextWindowTokens: extra.contextWindowTokens } : {}),
+                label: slot.modelLabel,
+                modelLabel: slot.modelLabel,
+                roles: [...new Set(slot.roles.flatMap(role => {
+                    const normalized = normalizeAgentCouncilRoleId(role);
+                    return normalized ? [normalized] : [];
+                }))]
+            };
+        });
     }
     const defaultRoles: readonly (readonly AgentCouncilRole[])[] = [
         ['lead', 'planning'],
@@ -484,6 +520,15 @@ export function createDefaultCouncilDraftSlots(
             slotId: `slot-${index + 1}`,
             modelId: candidate?.modelId || candidate?.id || '',
             routeId: candidate?.routeId || '',
+            ...(candidate?.relayKey ? { relayKey: candidate.relayKey } : {}),
+            ...(candidate?.relayLabel ? { relayLabel: candidate.relayLabel } : {}),
+            ...(candidate?.providerId ? { providerId: candidate.providerId } : {}),
+            ...(candidate?.variantTag ? { variantTag: candidate.variantTag } : {}),
+            ...(candidate?.reasoningEffort ? { reasoningEffort: candidate.reasoningEffort } : {}),
+            ...(candidate?.reasoningEnabled !== undefined ? { reasoningEnabled: candidate.reasoningEnabled } : {}),
+            ...(candidate?.reasoningMode ? { reasoningMode: candidate.reasoningMode } : {}),
+            ...(candidate?.reasoningBudgetTokens !== undefined ? { reasoningBudgetTokens: candidate.reasoningBudgetTokens } : {}),
+            ...(candidate?.contextWindowTokens !== undefined ? { contextWindowTokens: candidate.contextWindowTokens } : {}),
             label: candidate?.label || '',
             modelLabel: candidate?.label || '',
             roles: defaultRoles[index] || ['generalist']
@@ -776,15 +821,20 @@ export const CouncilConfigModal: React.FC<CouncilConfigModalProps> = props => {
                                 const modelPickerOpen = openModelPickerSlotId === slot.slotId;
                                 const rolePickerOpen = openRolePickerSlotId === slot.slotId;
                                 const normalizedSlotModelId = (slot.modelId || '').trim().toLowerCase();
-                                const selectedCandidate = (slot.routeId
-                                    ? models.find(model => model.routeId === slot.routeId)
-                                    : undefined) ?? models.find(model => {
-                                    const optionId = (model.modelId || model.id || '').trim().toLowerCase();
-                                    return Boolean(optionId && normalizedSlotModelId === optionId);
-                                });
+                                const sameRelayAsBrowse = !slot.relayKey || !relayKey || slot.relayKey === relayKey;
+                                const selectedCandidate = sameRelayAsBrowse
+                                    ? ((slot.routeId
+                                        ? models.find(model => model.routeId === slot.routeId)
+                                        : undefined) ?? models.find(model => {
+                                        const optionId = (model.modelId || model.id || '').trim().toLowerCase();
+                                        return Boolean(optionId && normalizedSlotModelId === optionId);
+                                    }))
+                                    : undefined;
                                 const selectedModelLabel = selectedCandidate
                                     ? selectedCandidate.label
                                     : (slot.label || slot.modelLabel || slot.modelId || '');
+                                const slotProviderLabel = (slot.relayLabel || selectedCandidate?.relayLabel || selectedCandidate?.detail || slot.providerId || (sameRelayAsBrowse && selectedModelLabel ? relayLabel : '') || '').trim();
+                                const slotVariantTag = selectedCandidate?.variantTag || slot.variantTag;
                                 return (
                                     <div
                                         key={slot.slotId}
@@ -821,7 +871,8 @@ export const CouncilConfigModal: React.FC<CouncilConfigModalProps> = props => {
                                                 <span className={`nmx-council-model-trigger-label ${selectedModelLabel ? '' : 'is-placeholder'}`}>
                                                     {selectedModelLabel || councilModeText(locale, 'selectModelPlaceholder')}
                                                 </span>
-                                                {selectedCandidate?.variantTag && <small className='nmx-model-price-variant nmx-council-model-price' dir='ltr'>{selectedCandidate.variantTag}</small>}
+                                                {selectedModelLabel && slotProviderLabel && <small className='nmx-council-selected-relay-badge' data-council-slot-provider={slot.slotId}>{slotProviderLabel}</small>}
+                                                {slotVariantTag && <small className='nmx-model-price-variant nmx-council-model-price' dir='ltr'>{slotVariantTag}</small>}
                                                 <i className={`codicon codicon-chevron-${modelPickerOpen ? 'up' : 'down'} nmx-council-select-chevron`} aria-hidden='true' />
                                             </button>
 

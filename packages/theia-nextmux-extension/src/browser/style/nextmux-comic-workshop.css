@@ -642,6 +642,13 @@
 .nmx-comic-setup-functions > button.is-missing > small { color: #b45309; }
 .nmx-comic-setup-functions > button.is-covered > small { color: #16794b; }
 .nmx-comic-setup-models { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 6px; border: 1px solid var(--nmx-border); border-radius: 12px; background: var(--nmx-panel-2); }
+/* A note above a step's models: covered by the video model (done: green), or a model from another source than the
+   one browsed (neutral: picking one below switches to it). Long model names wrap rather than overflow. */
+.nmx-comic-setup-covered { display: flex; align-items: flex-start; gap: 7px; margin: 0; padding: 7px 10px; border-radius: 9px; color: #0e6238;
+    background: color-mix(in srgb, #16794b 9%, transparent); font-size: 12px; font-weight: 500; line-height: 1.55; overflow-wrap: anywhere; }
+.nmx-comic-setup-covered > .codicon { flex: none; margin-top: 2px; font-size: 13px; }
+.nmx-shell .nmx-comic-setup-models > .nmx-comic-setup-covered.is-elsewhere { color: var(--nmx-subtle); background: color-mix(in srgb, var(--nmx-text) 6%, transparent); font-weight: 400; }
+.nmx-shell .nmx-comic-setup-models > .nmx-comic-setup-covered.is-elsewhere > .codicon { color: var(--nmx-muted); }
 .nmx-comic-setup-model { display: flex; align-items: center; gap: 6px; border: 1px solid transparent; border-radius: 9px; transition: background-color 120ms ease; }
 .nmx-comic-setup-model:hover { background: var(--nmx-panel); }
 .nmx-comic-setup-model.is-selected { border-color: var(--nmx-text); background: var(--nmx-panel); }
@@ -692,7 +699,7 @@
 .nmx-shell.nmx-theme-dark .nmx-comic-setup-functions > button.is-covered > small { color: #6ee7a0; }
 .nmx-shell.nmx-theme-dark .nmx-comic-setup-tabs > button.is-active > em { color: var(--nmx-bg); }
 .nmx-shell.nmx-theme-dark .nmx-comic-setup-badge { color: var(--nmx-text); background: var(--nmx-panel-2); }
-.nmx-shell.nmx-theme-dark .nmx-comic-setup-covered { color: #6ee7a0; }
+.nmx-shell.nmx-theme-dark .nmx-comic-setup-covered { color: #6ee7a0; background: color-mix(in srgb, #6ee7a0 8%, transparent); }
 
 @media (prefers-reduced-motion: reduce) {
     .nmx-comic-setup { transition: opacity 120ms ease; }
