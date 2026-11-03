@@ -21388,138 +21388,51 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     font-weight: 500;
 }
 
-.nmx-model-picker-relay-view .nmx-relay-option-metrics {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 2px;
-    padding-inline-end: 18px;
-}
-
-.nmx-model-picker-relay-view .nmx-relay-option-metrics > .nmx-relay-metric-dial {
-    position: relative;
-    display: grid;
-    place-items: center;
-    place-content: center;
-    min-width: 0;
-    width: 24px;
-    height: 24px;
-    color: var(--nmx-muted);
-    cursor: default;
-}
-.nmx-model-picker-relay-view .nmx-relay-option-metrics > .nmx-relay-metric-dial.is-signal {
-    /* Four quiet bars communicate the same five-band health score without
-       turning the compact merchant row into a collection of circular gauges. */
-    align-items: end;
-    grid-auto-flow: column;
-}
-.nmx-model-picker-relay-view .nmx-relay-signal-bars {
-    position: absolute;
-    inset: 5px 3px;
-    display: flex;
-    align-items: end;
-    justify-content: center;
-    gap: 2px;
-    pointer-events: none;
-}
-.nmx-model-picker-relay-view .nmx-relay-signal-bars > span {
-    display: block;
-    width: 3px;
-    height: calc(5px + (var(--nmx-relay-bar-index, 1) * 3px));
-    border-radius: 1px 1px 0 0;
-    background: currentColor;
-    opacity: .22;
-}
-.nmx-model-picker-relay-view .nmx-relay-signal-bars > span:nth-child(1) { --nmx-relay-bar-index: 1; }
-.nmx-model-picker-relay-view .nmx-relay-signal-bars > span:nth-child(2) { --nmx-relay-bar-index: 2; }
-.nmx-model-picker-relay-view .nmx-relay-signal-bars > span:nth-child(3) { --nmx-relay-bar-index: 3; }
-.nmx-model-picker-relay-view .nmx-relay-signal-bars > span:nth-child(4) { --nmx-relay-bar-index: 4; }
-.nmx-model-picker-relay-view .nmx-relay-signal-bars > span.is-filled { opacity: 1; }
-.nmx-model-picker-relay-view .nmx-relay-metric-dial.is-value {
-    /* Keep the hit target and grid width stable while displaying the precise
-       latency/multiplier as a compact, plain value rather than a signal arc. */
-    overflow: visible;
-}
-.nmx-model-picker-relay-view .nmx-relay-metric-dial.is-value::after {
-    content: attr(data-display);
-    position: absolute;
-    inset-inline-start: 25px;
-    top: 50%;
-    max-width: 46px;
-    overflow: hidden;
-    color: currentColor;
-    font-size: 8px;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    transform: translateY(-50%) scaleX(.82);
-    /* `inline-start` is not supported as a transform-origin keyword in all
-       Electron/WebKit versions; keep the visual anchored to the left edge. */
-    transform-origin: 0 50%;
-    pointer-events: none;
-}
-.nmx-model-picker-relay-view .nmx-relay-metric-dial.is-value > svg,
-.nmx-model-picker-relay-view .nmx-relay-metric-dial.is-signal > svg {
-    /* Retain the semantic SVG fallback for high-contrast/legacy renderers;
-       the visible compact treatment is bars or plain text above. */
-    opacity: 0;
-}
-.nmx-model-picker-relay-view .nmx-relay-option-metrics > .nmx-relay-metric-dial.is-good { color: var(--nmx-signal-good); }
-.nmx-model-picker-relay-view .nmx-relay-option-metrics > .nmx-relay-metric-dial.is-medium { color: var(--nmx-signal-medium); }
-.nmx-model-picker-relay-view .nmx-relay-option-metrics > .nmx-relay-metric-dial.is-poor { color: var(--nmx-signal-poor); }
-.nmx-model-picker-relay-view .nmx-relay-metric-dial > svg { position: absolute; inset: 0; width: 24px; height: 24px; overflow: visible; }
-.nmx-model-picker-relay-view .nmx-relay-metric-dial circle { fill: none; stroke: currentColor; stroke-width: 1.5; }
-.nmx-model-picker-relay-view .nmx-relay-dial-track { opacity: .18; }
-.nmx-model-picker-relay-view .nmx-relay-dial-value { transform: rotate(-90deg); transform-origin: center; stroke-linecap: round; }
-.nmx-model-picker-relay-view .nmx-relay-metric-dial > .codicon { font-size: 10px; line-height: 1; color: inherit; }
-.nmx-model-picker-relay-view .nmx-relay-metric-dial.is-unknown > .codicon { opacity: .6; }
-/* The compact row communicates quality/availability with the four bars and
-   latency/price with the adjacent text.  Keep the icon in the DOM for
-   accessibility/legacy renderers, but do not let it compete visually with
-   either representation. */
-.nmx-model-picker-relay-view .nmx-relay-metric-dial.is-signal > .codicon,
-.nmx-model-picker-relay-view .nmx-relay-metric-dial.is-value > .codicon {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    clip-path: inset(50%);
-    white-space: nowrap;
-}
-.nmx-model-picker-relay-view .nmx-relay-favorite { right: auto; inset-inline-end: 0; width: 18px; height: 28px; }
-.nmx-model-picker-relay-view .nmx-relay-favorite > i { font-size: 12px; }
-.nmx-model-picker-relay-view .nmx-relay-favorite.is-favorite { background: transparent; }
-.nmx-model-picker-relay-view .nmx-relay-directory-page:empty { display: none; }
-
-/* Merchant rows use one stable table-like grid. The name owns roughly half
-   the row, the four values share equal columns, and the star always gets its
-   own column so it cannot cover a value at narrow widths. */
+/* Source rows are one table: the column head is padded and spaced exactly like a row's button, so each title sits
+   over its values. The name keeps about a third of the row, the four values take equal columns and the heart has
+   its own, so it never covers a value. There is no column gap: every value is centred in its column, and the 264px
+   drawer then leaves the narrowest column (a 15px classic scrollbar) 36px, enough for "320 ms" or "<0.01×". */
 .nmx-model-picker-relay-view .nmx-relay-grid-head,
 .nmx-model-picker-relay-view .nmx-relay-option-row {
     display: grid;
-    grid-template-columns: minmax(0, 1.32fr) repeat(4, minmax(28px, .67fr)) 20px;
+    grid-template-columns: minmax(0, 1.28fr) repeat(4, minmax(30px, .68fr)) 20px;
     align-items: center;
-    column-gap: 2px;
+    column-gap: 0;
 }
 .nmx-model-picker-relay-view .nmx-relay-grid-head {
     min-height: 24px;
-    padding: 0 4px 2px 6px;
+    padding-block: 0 2px;
+    padding-inline: 6px 0;
     color: var(--nmx-muted);
-    font-size: 10px;
-    line-height: 1;
     white-space: nowrap;
 }
-.nmx-model-picker-relay-view .nmx-relay-grid-head > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.nmx-model-picker-relay-view .nmx-relay-grid-head > span:not(:first-child) { text-align: center; }
-.nmx-model-picker-relay-view .nmx-relay-grid-head > span:last-child { text-align: end; }
+/* Titles and values restate their type over the pickers' blanket 13px / 18px (`.nmx-relay-picker-popover *` and
+   `.nmx-model-picker-portal *`, both !important), which cut every one of them off in its column. */
+.nmx-model-picker-relay-view .nmx-relay-grid-head > span {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 10px !important;
+    font-weight: 500;
+    line-height: 12px !important;
+    text-align: center;
+    text-overflow: ellipsis;
+}
+.nmx-model-picker-relay-view .nmx-relay-grid-head > span:first-child { text-align: start; }
+/* The head's heart sits where each row's heart button centres its icon. */
+.nmx-model-picker-relay-view .nmx-relay-grid-head:not(.is-own) > span:last-child { display: flex; justify-content: center; }
+/* A four-character CJK title (平均倍率, 평균 배율) is slightly wider than its column: it shows whole, centred over its
+   values, across the blank edges beside it (a two-character title, or the heart's column). Long Latin titles end in an
+   ellipsis; the head's tooltip names them. */
+.nmx-model-picker-relay-view .nmx-relay-grid-head > span:is(:lang(zh), :lang(ja), :lang(ko)) { overflow: visible; text-overflow: clip; }
 .nmx-model-picker-relay-view .nmx-relay-option-select {
     grid-column: 1 / 6;
-    grid-template-columns: minmax(0, 1.32fr) repeat(4, minmax(28px, .67fr));
+    grid-template-columns: minmax(0, 1.28fr) repeat(4, minmax(30px, .68fr));
     min-width: 0;
-    gap: 2px;
+    gap: 0;
     padding-inline: 6px 0;
 }
 .nmx-model-picker-relay-view .nmx-relay-option-name { grid-column: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 14px), transparent 100%); mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 14px), transparent 100%); }
+.nmx-model-picker-relay-view .nmx-relay-option-name:dir(rtl) { -webkit-mask-image: linear-gradient(270deg, #000 0, #000 calc(100% - 14px), transparent 100%); mask-image: linear-gradient(270deg, #000 0, #000 calc(100% - 14px), transparent 100%); }
 .nmx-model-picker-relay-view .nmx-relay-option-metrics { display: contents !important; }
 .nmx-relay-option-metrics.is-delisted,
 .nmx-model-picker-relay-view .nmx-relay-option-metrics.is-delisted {
@@ -21531,7 +21444,8 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     padding-inline-end: 6px;
 }
 .nmx-relay-option-metrics.is-delisted > em[data-relay-delisted] {
-    /* A block (not flex) container so a long label in a very narrow drawer ends in an ellipsis inside the pill. */
+    /* A block (not flex) container so a long label in a very narrow drawer ends in an ellipsis inside the pill.
+       Its type is restated over the pickers' blanket 13px / 18px, which made the pill as tall as the row. */
     display: block;
     flex: 0 1 auto;
     width: max-content;
@@ -21545,10 +21459,10 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.07);
     color: var(--nmx-muted);
-    font-size: 11px;
+    font-size: 11px !important;
     font-style: normal;
     font-weight: 500;
-    line-height: 14px;
+    line-height: 14px !important;
     text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -21559,40 +21473,83 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     background: rgba(15, 23, 42, 0.06);
     color: #655f63;
 }
+/* A value cell: the exact value over four bars that fill to its band (relayMetricSignal), both in the band's colour,
+   so a column reads at a glance and to the digit. */
 .nmx-model-picker-relay-view .nmx-relay-option-metrics > .nmx-relay-metric-dial {
+    --nmx-relay-tone: var(--nmx-muted);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
     grid-column: auto;
     width: auto;
     min-width: 0;
-    justify-content: center;
-    gap: 3px;
+    height: 24px;
+    cursor: default;
 }
+.nmx-model-picker-relay-view .nmx-relay-option-metrics > .nmx-relay-metric-dial.is-good { --nmx-relay-tone: var(--nmx-signal-good); }
+.nmx-model-picker-relay-view .nmx-relay-option-metrics > .nmx-relay-metric-dial.is-medium { --nmx-relay-tone: var(--nmx-signal-medium); }
+.nmx-model-picker-relay-view .nmx-relay-option-metrics > .nmx-relay-metric-dial.is-poor { --nmx-relay-tone: var(--nmx-signal-poor); }
+/* Outranks the older popover's `.nmx-relay-option-select:hover .nmx-relay-option-metrics > span { color: inherit }`,
+   so hovering a row does not recolour its bars. */
+.nmx-model-picker-relay-view .nmx-relay-option-metrics > .nmx-relay-metric-dial[data-relay-metric] { color: var(--nmx-relay-tone); }
+/* 10px tabular figures, a little tighter around the unit's space. The band colours are made for marks; mixed a fifth
+   of the way toward the text colour they read at 4.8:1 or better on a hovered or selected row in both themes. */
 .nmx-model-picker-relay-view .nmx-relay-metric-dial .nmx-relay-metric-value {
     position: static;
     display: block;
     max-width: 100%;
     overflow: hidden;
-    color: currentColor;
-    font-size: 9.5px;
-    letter-spacing: -0.02em;
+    color: color-mix(in oklab, var(--nmx-relay-tone, currentColor) 80%, var(--nmx-text));
+    font-size: 10px !important;
+    font-weight: 550;
     font-variant-numeric: tabular-nums;
-    line-height: 1;
+    letter-spacing: -0.01em;
+    line-height: 11px !important;
     text-overflow: ellipsis;
     white-space: nowrap;
+    word-spacing: -0.12em;
 }
-.nmx-model-picker-relay-view .nmx-relay-metric-dial[data-relay-metric='latency'] .nmx-relay-metric-value {
-    font-size: 8.5px;
-    letter-spacing: -0.04em;
+.nmx-model-picker-relay-view .nmx-relay-metric-dial .nmx-relay-signal-bars {
+    display: grid;
+    flex: none;
+    grid-template-columns: repeat(4, 4px);
+    gap: 2px;
+    height: 2px;
+    pointer-events: none;
 }
-.nmx-model-picker-relay-view .nmx-relay-option-metrics > .nmx-relay-metric-dial.is-signal .nmx-relay-signal-bars,
-.nmx-model-picker-relay-view .nmx-relay-option-metrics > .nmx-relay-metric-dial > svg,
-.nmx-model-picker-relay-view .nmx-relay-option-metrics > .nmx-relay-metric-dial::after { display: none; }
+.nmx-model-picker-relay-view .nmx-relay-signal-bars > span { border-radius: 1px; background: currentColor; opacity: .22; }
+.nmx-model-picker-relay-view .nmx-relay-signal-bars > span.is-filled { opacity: 1; }
+.nmx-model-picker-relay-view .nmx-relay-metric-dial.is-unknown .nmx-relay-signal-bars > span { opacity: .14; }
+/* A value supplied for want of a current measurement (data-fallback: the past week's latest latency, or the authenticity
+   of the store's other listed models) reads quieter than a current one, and its tooltip says what it is. The muted
+   colour is mixed toward the text so it still reads at 4.5:1 on a selected row. */
+.nmx-model-picker-relay-view .nmx-relay-metric-dial[data-fallback] .nmx-relay-metric-value { color: color-mix(in oklab, var(--nmx-muted) 85%, var(--nmx-text)); }
+.nmx-model-picker-relay-view .nmx-relay-metric-dial[data-fallback] .nmx-relay-signal-bars { opacity: .5; }
+/* The former arc and the metric glyph stay in the DOM for accessibility tooling, out of sight. */
+.nmx-model-picker-relay-view .nmx-relay-metric-dial > svg { display: none; }
+.nmx-model-picker-relay-view .nmx-relay-metric-dial > .codicon {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
 .nmx-model-picker-relay-view .nmx-relay-favorite {
     position: static;
     grid-column: 6;
-    width: 22px;
+    justify-self: center;
+    width: 20px;
     height: 28px;
     transform: none;
 }
+.nmx-model-picker-relay-view .nmx-relay-favorite > i { font-size: 12px; }
+.nmx-model-picker-relay-view .nmx-relay-favorite.is-favorite { background: transparent; }
+.nmx-model-picker-relay-view .nmx-relay-directory-page:empty { display: none; }
 .nmx-model-picker-relay-view .nmx-relay-option-select.is-automatic { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr); }
 .nmx-model-picker-relay-view .nmx-relay-option-row.is-unavailable .nmx-relay-option-select {
     color: var(--nmx-muted);
@@ -21606,15 +21563,6 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     cursor: not-allowed;
 }
 .nmx-model-picker-relay-view .nmx-relay-option-row.is-unknown .nmx-relay-option-select:hover { background: transparent; }
-
-@media (max-width: 520px) {
-    .nmx-model-picker-relay-view .nmx-relay-grid-head,
-    .nmx-model-picker-relay-view .nmx-relay-option-row { grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(26px, .65fr)) 22px; column-gap: 2px; }
-    .nmx-model-picker-relay-view .nmx-relay-option-select { grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(26px, .65fr)); gap: 2px; }
-    .nmx-model-picker-relay-view .nmx-relay-grid-head { font-size: 9px; }
-    .nmx-model-picker-relay-view .nmx-relay-metric-dial .nmx-relay-metric-value { font-size: 9px; }
-    .nmx-model-picker-relay-view .nmx-relay-metric-dial[data-relay-metric='latency'] .nmx-relay-metric-value { font-size: 8px; letter-spacing: -0.04em; }
-}
 
 /* Shared, quiet picker chrome. These scoped rules intentionally replace the
    generic composer button styling without affecting the Model Center. */

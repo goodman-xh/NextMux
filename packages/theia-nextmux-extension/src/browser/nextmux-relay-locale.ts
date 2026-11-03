@@ -227,8 +227,23 @@ const delisted: Readonly<Record<NextMuxDesktopLocale, string>> = {
     de: 'Nicht mehr gelistet', 'pt-BR': 'Removido', ru: 'Снят с каталога', ar: 'أُزيل من القائمة', hi: 'सूची से हटाया गया'
 };
 
-export function relayDelistedText(locale: NextMuxDesktopLocale): string {
-    return delisted[locale];
+/** Why a listed relay cannot be chosen: the platform finds its API down, or (coding) it sells no text model. */
+export type RelayUnavailableReason = 'unavailable' | 'no-coding-models';
+
+const relayUnavailable: Readonly<Record<RelayUnavailableReason, Readonly<Record<NextMuxDesktopLocale, string>>>> = {
+    unavailable: {
+        en: 'Currently unavailable', 'zh-CN': '当前不可用', 'zh-TW': '目前無法使用', ja: '現在利用不可', ko: '현재 사용 불가', es: 'No disponible',
+        fr: 'Actuellement indisponible', de: 'Derzeit nicht verfügbar', 'pt-BR': 'Indisponível no momento', ru: 'Сейчас недоступно', ar: 'غير متاح حالياً', hi: 'अभी उपलब्ध नहीं'
+    },
+    'no-coding-models': {
+        en: 'No coding models', 'zh-CN': '暂无编程模型', 'zh-TW': '暫無程式設計模型', ja: 'コーディング非対応', ko: '코딩 모델 없음', es: 'Sin modelos de código',
+        fr: 'Aucun modèle de code', de: 'Keine Coding-Modelle', 'pt-BR': 'Sem modelos de código', ru: 'Нет моделей для кода', ar: 'لا توجد نماذج برمجة', hi: 'कोडिंग मॉडल नहीं'
+    }
+};
+
+/** The label of a relay row that cannot be chosen: delisted from the public directory, or the reason it is listed but unusable. */
+export function relayDelistedText(locale: NextMuxDesktopLocale, reason?: RelayUnavailableReason): string {
+    return (reason ? relayUnavailable[reason] : delisted)[locale];
 }
 
 /** Text lookups that never throw: an unknown key or language falls back (see nextmux-copy-fallback.ts). */

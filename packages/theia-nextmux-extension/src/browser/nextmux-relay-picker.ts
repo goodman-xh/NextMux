@@ -30,6 +30,44 @@ export function relayMeasurementExplanation(locale: NextMuxDesktopLocale, measur
     return 'No measurement data yet';
 }
 
+const measurementNotes: Readonly<Record<NextMuxDesktopLocale, readonly [string, string, string]>> = {
+    en: ['No probe in the last day: the latest of the past 7 days', 'No probe in the last day: the latest of the past 7 days ({time})',
+        'Its models on sale are not checked yet: this is the result of its other listed models'],
+    'zh-CN': ['近一天没有测速，这是 7 天内最近一次的结果', '近一天没有测速，这是 7 天内最近一次的结果（{time}）', '在售模型尚未检测，这是该商家其他已上架模型的结果'],
+    'zh-TW': ['近一天沒有測速，這是 7 天內最近一次的結果', '近一天沒有測速，這是 7 天內最近一次的結果（{time}）', '在售模型尚未檢測，這是該商家其他已上架模型的結果'],
+    ja: ['直近 1 日の測定がないため、過去 7 日間で最新の結果です', '直近 1 日の測定がないため、過去 7 日間で最新の結果です（{time}）',
+        '販売中のモデルはまだ検証されていないため、このストアの他の掲載モデルの結果です'],
+    ko: ['최근 하루 동안 측정이 없어 지난 7일 중 가장 최근 결과입니다', '최근 하루 동안 측정이 없어 지난 7일 중 가장 최근 결과입니다({time})',
+        '판매 중인 모델은 아직 검증되지 않아 이 스토어의 다른 등록 모델 결과입니다'],
+    es: ['Sin medición en el último día: la más reciente de los últimos 7 días', 'Sin medición en el último día: la más reciente de los últimos 7 días ({time})',
+        'Sus modelos a la venta aún no se han verificado: es el resultado de sus otros modelos publicados'],
+    fr: ['Aucune mesure ce dernier jour : la plus récente des 7 derniers jours', 'Aucune mesure ce dernier jour : la plus récente des 7 derniers jours ({time})',
+        'Ses modèles en vente ne sont pas encore vérifiés : c’est le résultat de ses autres modèles publiés'],
+    de: ['Keine Messung am letzten Tag: die neueste der letzten 7 Tage', 'Keine Messung am letzten Tag: die neueste der letzten 7 Tage ({time})',
+        'Die angebotenen Modelle sind noch nicht geprüft: Das ist das Ergebnis der übrigen gelisteten Modelle'],
+    'pt-BR': ['Sem medição no último dia: a mais recente dos últimos 7 dias', 'Sem medição no último dia: a mais recente dos últimos 7 dias ({time})',
+        'Os modelos à venda ainda não foram verificados: este é o resultado dos outros modelos publicados'],
+    ru: ['За последние сутки замеров нет: последний результат за 7 дней', 'За последние сутки замеров нет: последний результат за 7 дней ({time})',
+        'Модели в продаже ещё не проверены: это результат других размещённых моделей магазина'],
+    ar: ['لا قياس خلال اليوم الأخير: أحدث نتيجة خلال آخر 7 أيام', 'لا قياس خلال اليوم الأخير: أحدث نتيجة خلال آخر 7 أيام ({time})',
+        'لم تُفحص النماذج المعروضة للبيع بعد: هذه نتيجة النماذج الأخرى المدرجة للمتجر'],
+    hi: ['पिछले एक दिन में कोई माप नहीं: पिछले 7 दिनों का सबसे नया परिणाम', 'पिछले एक दिन में कोई माप नहीं: पिछले 7 दिनों का सबसे नया परिणाम ({time})',
+        'बिक्री वाले मॉडल अभी जाँचे नहीं गए: यह इस स्टोर के अन्य सूचीबद्ध मॉडलों का परिणाम है']
+};
+
+/**
+ * Why a shown value is not a current measurement of what the store sells (public-merchant-ranking.js): a latency with
+ * no probe in the last day is the latest of the past 7 days (`observedAt` is when), and an authenticity with no model on
+ * sale scored yet is that of the store's other listed models.
+ */
+export function relayMeasurementNote(locale: NextMuxDesktopLocale, kind: 'latencyStale' | 'authenticityListed', observedAt?: number): string {
+    const notes = measurementNotes[locale] || measurementNotes.en;
+    if (kind === 'authenticityListed') return notes[2];
+    if (typeof observedAt !== 'number' || !Number.isFinite(observedAt) || observedAt <= 0) return notes[0];
+    const time = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(observedAt);
+    return notes[1].replace('{time}', time);
+}
+
 /** UI bands, not a statistical confidence estimate. Raw measurements remain in the tooltip. */
 export function relayMetricSignal(kind: RelayMetricKind, value: number | undefined): {
     readonly level: number; readonly tone: 'unknown' | 'good' | 'medium' | 'poor';
@@ -64,6 +102,19 @@ export function relayMultiplierText(locale: NextMuxDesktopLocale, value: number 
     if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) return '—';
     const format = (multiplier: number): string => new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(multiplier);
     return value > 0 && value < 50 ? `<${format(0.01)}` : format(value / 10_000);
+}
+
+/**
+ * A latency for the source drawer's narrow value column, as usage analytics writes durations: whole milliseconds under
+ * a second ("320 ms"), seconds from there ("1.25 s", "12.5 s", "125 s"), so a slow relay's value is never cut off.
+ * The tooltip keeps the exact milliseconds.
+ */
+export function relayLatencyText(locale: NextMuxDesktopLocale, value: number | undefined): string {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '—';
+    const milliseconds = Math.round(value);
+    const format = (number: number, digits: number): string => new Intl.NumberFormat(locale, { maximumFractionDigits: digits, useGrouping: false }).format(number);
+    return milliseconds < 1_000 ? `${format(milliseconds, 0)} ms`
+        : `${format(milliseconds / 1_000, milliseconds < 10_000 ? 2 : milliseconds < 100_000 ? 1 : 0)} s`;
 }
 
 const MAX_FAVORITE_MERCHANTS = 256;
@@ -108,12 +159,12 @@ interface RelayPickerSource {
 /** A view of the existing user-visible routes, never an additional routing source. */
 /**
  * The source drawer's height besides its 32px rows, as Chrome lays it out: source tabs, search and the panel's
- * padding (91px); the merchant tab adds its sort row and column header (65px), the own-API tab its column header
- * (24px); signed out, the merchant and favorite tabs carry the sign-in note, at most two 15px lines with its margin
- * (34px). Too small an estimate leaves a scrollbar on a list the window has room for.
+ * padding (91px); the merchant tab adds its sort row and column header (65px), the favorite and own-API tabs their
+ * column header (24px); signed out, the merchant and favorite tabs carry the sign-in note, at most two 15px lines with
+ * its margin (34px). Too small an estimate leaves a scrollbar on a list the window has room for.
  */
 export function relayDrawerChromeHeight(tab: RelaySourceTab, signedIn: boolean): number {
-    return (tab === 'merchant' ? 156 : tab === 'my-api' ? 115 : 91) + (tab !== 'my-api' && !signedIn ? 34 : 0);
+    return (tab === 'merchant' ? 156 : 115) + (tab !== 'my-api' && !signedIn ? 34 : 0);
 }
 
 export function filterRelayPickerSources<T extends RelayPickerSource>(

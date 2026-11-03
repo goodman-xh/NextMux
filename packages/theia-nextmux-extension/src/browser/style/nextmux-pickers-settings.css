@@ -54,10 +54,11 @@
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.07);
     color: var(--nmx-muted);
-    font-size: 11px;
+    /* Restated over the pickers' blanket 13px / 18px (see the sign-in note above). */
+    font-size: 11px !important;
     font-style: normal;
     font-weight: 500;
-    line-height: 14px;
+    line-height: 14px !important;
     text-align: center;
     overflow: hidden;
     text-overflow: ellipsis;

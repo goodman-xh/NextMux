@@ -5,6 +5,7 @@
     --mc-muted: #b7b0bb;
     --mc-line: #514b56;
     --mc-accent: #ee7ea5;
+    --mc-warning: #e4a653;
     color: var(--mc-text);
     min-width: 0;
     container-type: inline-size;
@@ -16,6 +17,7 @@
     --mc-muted: #6b606f;
     --mc-line: #d7cedb;
     --mc-accent: #a73862;
+    --mc-warning: #a7671f;
 }
 .nmx-shell .nmx-mc-directory button,
 .nmx-mc-directory button {
@@ -67,6 +69,10 @@
 .nmx-mc-identity strong { min-width: 0; flex: 1 1 auto; max-width: 100%; font-size: 14px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: clip; -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }
 .nmx-mc-capabilities { gap: 5px; flex-wrap: wrap; }
 .nmx-mc-capabilities small { border: 0; background: color-mix(in srgb, var(--mc-text) 5%, transparent); padding: 1px 4px; border-radius: 3px; }
+/* Some of the store's APIs are off sale, or every check of the last day failed (apiStatus.detailReason). The amber is
+   mixed toward the text colour to read at 4.5:1 on its tint in both themes. */
+.nmx-mc-capabilities small.nmx-mc-api-alert { display: inline-flex; align-items: center; gap: 3px; color: color-mix(in oklab, var(--mc-warning) 80%, var(--mc-text)); background: color-mix(in srgb, var(--mc-warning) 12%, transparent); }
+.nmx-mc-capabilities .nmx-mc-api-alert .codicon { color: inherit; font-size: 10px; }
 .nmx-mc-identity > span { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .nmx-mc-identity code, .nmx-mc-identity small { color: var(--mc-muted); font-size: 10px; }
 .nmx-mc-identity code { min-width: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }
@@ -77,6 +83,9 @@
 .nmx-mc-metrics strong { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
 /* Nothing measured yet ("—"): reads as absent, not as a value beside the measured ones. */
 .nmx-mc-metrics strong[data-unmeasured] { color: var(--mc-muted); font-weight: 400; }
+/* A value supplied for want of a current measurement (the past week's latency, or the authenticity of the store's other
+   listed models) reads quieter than a measured one; its hint says what it is. */
+.nmx-mc-metrics strong[data-fallback] { color: color-mix(in oklab, var(--mc-muted) 85%, var(--mc-text)); }
 .nmx-mc-metrics .codicon { color: var(--mc-muted); font-size: 12px; flex-shrink: 0; }
 .nmx-mc-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
 .nmx-shell .nmx-mc-actions button[aria-pressed='true'] { color: var(--mc-accent); }
