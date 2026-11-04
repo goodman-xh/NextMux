@@ -215,7 +215,8 @@ export class NextMuxDesktopContribution extends AbstractViewContribution<NextMux
         return operation;
     }
 
-    protected cancelApplicationClose(token: string, reason: 'timeout' | 'failed' | 'navigated'): void {
+    /** 'declined': the person kept a running task (no "could not save" notice); the others come from the main process. */
+    protected cancelApplicationClose(token: string, reason: 'timeout' | 'failed' | 'navigated' | 'declined'): void {
         const attempt = this.closeAttempts.get(token) || (this.activeCloseAttempt?.token === token ? this.activeCloseAttempt : undefined);
         if (!attempt || attempt.cancelled) return;
         attempt.cancelled = true;
@@ -245,8 +246,10 @@ export class NextMuxDesktopContribution extends AbstractViewContribution<NextMux
             const quitAlreadyConfirmed = Date.now() - this.quitConfirmedAt < 60_000;
             if (!quitAlreadyConfirmed && attempt.widget?.hasRunningConversationForExit?.() && !await wait(bridge.confirmRunningQuit
                 ? bridge.confirmRunningQuit(quitConfirmTexts(readDesktopLocale())) : Promise.resolve(attempt.widget.confirmApplicationExit?.() ?? true))) {
+                // Cancelled here first: the main process's own "cancelled" message that follows is then ignored, and
+                // keeping a task is not reported as a save that failed.
+                this.cancelApplicationClose(attempt.token, 'declined');
                 await bridge.completePrepareClose(attempt.token, 'failed');
-                this.cancelApplicationClose(attempt.token, 'failed');
                 return;
             }
             // Cancellation releases the previous wait. Its durable writes may

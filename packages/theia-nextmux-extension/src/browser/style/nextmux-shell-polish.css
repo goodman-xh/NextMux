@@ -1467,6 +1467,68 @@
     line-height: 16px;
 }
 
+/* A model row reads [name] [multiplier] [authenticity] on its one 32px line in the 264px drawer (coding, comic chat,
+   comic studio; the Council dialog lists the same tags). Both tags restate their type over the pickers' blanket
+   13px / 18px (`.nmx-model-picker-portal *`, !important), which had drawn the multiplier chip at 13px: at 11px the two
+   take about 80px and the name keeps about 130px, fading out when it is longer. The authenticity is no second chip:
+   the verified mark and the measured share in its band's colour (relayMetricSignal, the relay drawer's 真实性 bands),
+   or a muted "—" while unmeasured. Its text mixes a fifth of the way toward the text colour, as the relay drawer's
+   values do, for 4.5:1 or better on hovered and selected rows in both themes. */
+.nmx-model-option > button > span:has(> .nmx-model-authenticity) {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-auto-columns: auto;
+    grid-auto-flow: column;
+    align-items: center !important;
+    gap: 5px !important;
+}
+.nmx-model-option > button > span:has(> .nmx-model-authenticity) > strong {
+    text-overflow: clip;
+    mask-image: linear-gradient(to right, #000 calc(100% - 12px), transparent);
+}
+.nmx-model-option:dir(rtl) > button > span:has(> .nmx-model-authenticity) > strong {
+    mask-image: linear-gradient(to left, #000 calc(100% - 12px), transparent);
+}
+.nmx-model-option .nmx-model-price-variant,
+.nmx-council-modal .nmx-model-price-variant {
+    font-size: 11px !important;
+    line-height: 16px !important;
+}
+.nmx-model-authenticity {
+    --nmx-relay-tone: var(--nmx-muted);
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-self: end;
+    gap: 2px;
+    color: color-mix(in oklab, var(--nmx-relay-tone) 80%, var(--nmx-text));
+    font-weight: 550;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+}
+.nmx-model-option .nmx-model-authenticity,
+.nmx-council-modal .nmx-model-authenticity {
+    font-size: 11px !important;
+    line-height: 16px !important;
+}
+.nmx-model-authenticity[data-tone='good'] { --nmx-relay-tone: var(--nmx-signal-good); }
+.nmx-model-authenticity[data-tone='medium'] { --nmx-relay-tone: var(--nmx-signal-medium); }
+.nmx-model-authenticity[data-tone='poor'] { --nmx-relay-tone: var(--nmx-signal-poor); }
+/* "—" mixes a tenth toward the text colour: 4.9:1 on a selected light row, where plain muted is 4.46:1. */
+.nmx-model-authenticity[data-tone='unknown'] { color: color-mix(in oklab, var(--nmx-muted) 90%, var(--nmx-text)); font-weight: 500; }
+.nmx-model-option .nmx-model-authenticity > .codicon,
+.nmx-council-modal .nmx-model-authenticity > .codicon {
+    flex: none;
+    color: var(--nmx-relay-tone);
+    font-size: 11px !important;
+    line-height: 16px !important;
+}
+.nmx-model-authenticity[data-tone='unknown'] > .codicon { opacity: .55; }
+/* The Council dialog has no picker palette of its own: it gets the pickers' band colours (nextmux.css) for its tags. */
+.nmx-shell .nmx-council-modal { --nmx-signal-good: #1fbc9b; --nmx-signal-medium: #e4a653; --nmx-signal-poor: #de6c77; }
+.nmx-shell.nmx-theme-light .nmx-council-modal { --nmx-signal-good: #18866c; --nmx-signal-medium: #a7671f; --nmx-signal-poor: #b64551; }
+.nmx-shell .nmx-council-modal .nmx-model-authenticity { align-self: center; }
+
 /* Model center: the multiplier line in an expanded model row. */
 .nmx-mc-model-expanded .nmx-mc-model-multiplier { margin: 4px 0 6px; font-size: 12px; color: var(--nmx-muted); }
 .nmx-mc-model-expanded .nmx-mc-model-multiplier strong { color: var(--nmx-text); font-weight: 600; }
@@ -1580,3 +1642,23 @@
     display: none !important;
     pointer-events: none !important;
 }
+
+/* Picker drawers and their sub-drawers (the model list, the relay list, hidden models, a model's hover card and its
+   official-price drawer, the Council lists) scroll on a 4px rounded thumb over a transparent track. `.nmx-shell
+   :where(*)` sets scrollbar-width / scrollbar-color, and while either is set Chromium draws its standard scrollbar and
+   ignores ::-webkit-scrollbar (nextmux-markdown.css): about 11px on Windows, taken out of a 264px drawer. Both are reset
+   here, and no gutter is reserved, so a scrollbar costs 4px and only appears when the list really scrolls. */
+:is(.nmx-model-picker-list, .nmx-relay-options, .nmx-model-picker-hidden-popover-list, .nmx-model-effort-menu, .nmx-council-popover) {
+    scrollbar-width: auto !important;
+    scrollbar-color: auto !important;
+    scrollbar-gutter: auto !important;
+}
+:is(.nmx-model-picker-list, .nmx-relay-options, .nmx-model-picker-hidden-popover-list, .nmx-model-effort-menu, .nmx-council-popover)::-webkit-scrollbar { width: 4px; height: 4px; background: transparent; }
+:is(.nmx-model-picker-list, .nmx-relay-options, .nmx-model-picker-hidden-popover-list, .nmx-model-effort-menu, .nmx-council-popover)::-webkit-scrollbar-track,
+:is(.nmx-model-picker-list, .nmx-relay-options, .nmx-model-picker-hidden-popover-list, .nmx-model-effort-menu, .nmx-council-popover)::-webkit-scrollbar-corner { background: transparent; }
+:is(.nmx-model-picker-list, .nmx-relay-options, .nmx-model-picker-hidden-popover-list, .nmx-model-effort-menu, .nmx-council-popover)::-webkit-scrollbar-thumb {
+    border: 0;
+    border-radius: 999px;
+    background: var(--nmx-scroll-thumb, rgba(128, 122, 132, .55));
+}
+:is(.nmx-model-picker-list, .nmx-relay-options, .nmx-model-picker-hidden-popover-list, .nmx-model-effort-menu, .nmx-council-popover)::-webkit-scrollbar-thumb:hover { background: var(--nmx-scroll-thumb-hover, rgba(128, 122, 132, .8)); }

@@ -26,6 +26,33 @@ const copy: Readonly<Record<NextMuxDesktopLocale, Copy>> = {
     hi: ['बैलेंस और प्लेटफ़ॉर्म रूट उपयोग करने के लिए साइन इन करें', 'ब्राउज़र खोला जा रहा है…', 'अपने ब्राउज़र में साइन-इन पूरा करें; NextMux अपने-आप अपडेट हो जाएगा।', 'यह ब्राउज़र साइन-इन लिंक समाप्त हो गया है। जारी रखने के लिए फिर से क्लिक करें।', 'फिर से खोलें', 'रद्द करें', 'फिर से साइन इन करें']
 };
 
+/**
+ * When NextMux cannot reach the platform (offline, blocked, too slow), "Sign in" still opens the sign-in page in the
+ * browser at once. 'unreachable' explains why; 'hint' follows another error message. Signing in there does not connect
+ * this device by itself, so both say to click Sign in again once signed in.
+ */
+type FallbackCopy = readonly [unreachable: string, hint: string];
+
+const fallbackCopy: Readonly<Record<NextMuxDesktopLocale, FallbackCopy>> = {
+    'zh-CN': ['暂时连不上 NextMux 服务，已在浏览器中打开登录页面。在浏览器登录后，回到这里再点一次「登录/注册」即可连接本机。', '已在浏览器中打开登录页面。在浏览器登录后，回到这里再点一次「登录/注册」即可连接本机。'],
+    'zh-TW': ['暫時連不上 NextMux 服務，已在瀏覽器中開啟登入頁面。在瀏覽器登入後，回到這裡再點一次「登入/註冊」即可連接本機。', '已在瀏覽器中開啟登入頁面。在瀏覽器登入後，回到這裡再點一次「登入/註冊」即可連接本機。'],
+    en: ['NextMux couldn’t reach its server, so the sign-in page opened in your browser. After you sign in there, click Sign in here again to connect this device.', 'The sign-in page opened in your browser. After you sign in there, click Sign in here again to connect this device.'],
+    ja: ['NextMux のサーバーに接続できなかったため、ブラウザーでサインインページを開きました。ブラウザーでサインインした後、ここでもう一度「サインイン」をクリックするとこのデバイスが接続されます。', 'ブラウザーでサインインページを開きました。ブラウザーでサインインした後、ここでもう一度「サインイン」をクリックするとこのデバイスが接続されます。'],
+    ko: ['NextMux 서버에 연결할 수 없어 브라우저에서 로그인 페이지를 열었습니다. 브라우저에서 로그인한 뒤 여기에서 로그인을 다시 클릭하면 이 기기가 연결됩니다.', '브라우저에서 로그인 페이지를 열었습니다. 브라우저에서 로그인한 뒤 여기에서 로그인을 다시 클릭하면 이 기기가 연결됩니다.'],
+    es: ['NextMux no pudo conectar con su servidor, así que la página de inicio de sesión se abrió en tu navegador. Cuando inicies sesión allí, vuelve a hacer clic en Iniciar sesión aquí para conectar este dispositivo.', 'La página de inicio de sesión se abrió en tu navegador. Cuando inicies sesión allí, vuelve a hacer clic en Iniciar sesión aquí para conectar este dispositivo.'],
+    fr: ['NextMux n’a pas pu joindre son serveur : la page de connexion s’est ouverte dans votre navigateur. Une fois connecté, cliquez à nouveau sur Se connecter ici pour relier cet appareil.', 'La page de connexion s’est ouverte dans votre navigateur. Une fois connecté, cliquez à nouveau sur Se connecter ici pour relier cet appareil.'],
+    de: ['NextMux konnte seinen Server nicht erreichen, deshalb wurde die Anmeldeseite im Browser geöffnet. Melde dich dort an und klicke danach hier erneut auf Anmelden, um dieses Gerät zu verbinden.', 'Die Anmeldeseite wurde im Browser geöffnet. Melde dich dort an und klicke danach hier erneut auf Anmelden, um dieses Gerät zu verbinden.'],
+    'pt-BR': ['O NextMux não conseguiu acessar o servidor, então a página de login foi aberta no navegador. Depois de entrar por lá, clique em Entrar aqui novamente para conectar este dispositivo.', 'A página de login foi aberta no navegador. Depois de entrar por lá, clique em Entrar aqui novamente para conectar este dispositivo.'],
+    ru: ['NextMux не удалось связаться с сервером, поэтому страница входа открыта в браузере. Войдите там, а затем снова нажмите «Войти» здесь, чтобы подключить это устройство.', 'Страница входа открыта в браузере. Войдите там, а затем снова нажмите «Войти» здесь, чтобы подключить это устройство.'],
+    ar: ['تعذّر على NextMux الوصول إلى خادمه، لذا فُتحت صفحة تسجيل الدخول في المتصفح. بعد تسجيل الدخول هناك، انقر على تسجيل الدخول هنا مجدداً لربط هذا الجهاز.', 'فُتحت صفحة تسجيل الدخول في المتصفح. بعد تسجيل الدخول هناك، انقر على تسجيل الدخول هنا مجدداً لربط هذا الجهاز.'],
+    hi: ['NextMux अपने सर्वर तक नहीं पहुँच सका, इसलिए साइन-इन पेज आपके ब्राउज़र में खोल दिया गया है। वहाँ साइन इन करने के बाद इस डिवाइस को जोड़ने के लिए यहाँ फिर से साइन इन पर क्लिक करें।', 'साइन-इन पेज आपके ब्राउज़र में खोल दिया गया है। वहाँ साइन इन करने के बाद इस डिवाइस को जोड़ने के लिए यहाँ फिर से साइन इन पर क्लिक करें।']
+};
+
+export function deviceLinkFallbackText(locale: NextMuxDesktopLocale, kind: 'unreachable' | 'hint'): string {
+    const values = fallbackCopy[locale] || fallbackCopy.en;
+    return kind === 'hint' ? values[1] : values[0];
+}
+
 export function deviceLinkState(input: { readonly linked: boolean; readonly starting: boolean; readonly expiresAt?: number; readonly now?: number }): DeviceLinkState {
     if (input.linked) return 'idle';
     if (input.starting) return 'starting';

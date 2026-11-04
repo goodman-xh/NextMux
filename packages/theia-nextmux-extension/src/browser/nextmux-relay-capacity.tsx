@@ -21,6 +21,13 @@ export class RelayCapacityPoller {
     private onSnapshot?: (value: PublicMerchantCapacitySnapshot | undefined) => void;
     private snapshot?: PublicMerchantCapacitySnapshot;
     private readonly claims: CapacityClaim[] = [];
+    private readonly onVisibilityOrFocus = (): void => {
+        if (!this.running || this.pending) return;
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        clearTimeout(this.timer);
+        this.timer = undefined;
+        void this.refresh();
+    };
 
     constructor(private readonly read: (ids: readonly string[], scope: PublicMerchantCapacityScope) => Promise<PublicMerchantCapacitySnapshot>) { }
 
@@ -35,6 +42,10 @@ export class RelayCapacityPoller {
         this.scope = scope;
         this.onSnapshot = onSnapshot;
         this.running = this.ids.length > 0;
+        if (this.running) {
+            if (typeof document !== 'undefined') document.addEventListener?.('visibilitychange', this.onVisibilityOrFocus);
+            if (typeof window !== 'undefined') window.addEventListener?.('focus', this.onVisibilityOrFocus);
+        }
         this.emit(kept, this.revision);
         if (this.running && !this.pending) void this.refresh();
     }
@@ -42,6 +53,8 @@ export class RelayCapacityPoller {
     stop(): void {
         this.revision++;
         this.running = false;
+        if (typeof document !== 'undefined') document.removeEventListener?.('visibilitychange', this.onVisibilityOrFocus);
+        if (typeof window !== 'undefined') window.removeEventListener?.('focus', this.onVisibilityOrFocus);
         clearTimeout(this.timer); clearTimeout(this.expiryTimer);
         this.timer = this.expiryTimer = undefined;
         this.onSnapshot = undefined;
@@ -83,6 +96,7 @@ export class RelayCapacityPoller {
 
     private async refresh(): Promise<void> {
         if (!this.running || this.pending) return;
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
         this.pending = true;
         const revision = this.revision, ids = [...new Set(this.visibleIds())].filter(id => this.ids.includes(id)).slice(0, 32), scope = this.scope;
         try {
@@ -93,7 +107,11 @@ export class RelayCapacityPoller {
             if (this.running && revision === this.revision) this.emit(undefined, revision);
         } finally {
             this.pending = false;
-            if (this.running) this.timer = setTimeout(() => void this.refresh(), revision === this.revision ? 2000 : 0);
+            if (this.running) {
+                const hasRestricted = !this.snapshot || this.snapshot.merchants.some(item => item.state === 'full' || Boolean(item.fullOfferingIds?.length));
+                const nextIntervalMs = revision !== this.revision ? 0 : (hasRestricted ? 2000 : 10000);
+                this.timer = setTimeout(() => void this.refresh(), nextIntervalMs);
+            }
         }
     }
 }

@@ -21392,9 +21392,10 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
    over its values. The name keeps a third of the row and the heart has its own column, so it never covers a value.
    The multiplier column is the widest value column because its title is the longest in most languages (平均倍率,
    Avg. multiplier, Multiplicateur moyen, Средний множитель). There is no column gap: every value is centred in its
-   column. Beside a 15px classic scrollbar the 352px drawer (RELAY_DRAWER_WIDTH) gives the name 102px, quality,
-   authenticity and latency 44px each and the multiplier 64px; the Council setup's half-dialog list, and a window too
-   narrow for the drawer, still 40px and 48px at least: room for "320 ms" or "<0.01×" at 11px (40px). */
+   column. Even beside a 15px classic scrollbar (the drawers now draw a 4px one, nextmux-shell-polish.css) the 352px
+   drawer (RELAY_DRAWER_WIDTH) gives the name 102px, quality, authenticity and latency 44px each and the multiplier
+   64px; the Council setup's half-dialog list, and a window too narrow for the drawer, still 40px and 48px at least:
+   room for "320 ms" or "<0.01×" at 11px (40px). */
 .nmx-model-picker-relay-view .nmx-relay-grid-head,
 .nmx-model-picker-relay-view .nmx-relay-option-row {
     display: grid;

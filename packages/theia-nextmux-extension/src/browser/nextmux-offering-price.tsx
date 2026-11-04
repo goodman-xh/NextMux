@@ -11,6 +11,7 @@ import type { OfferingPriceDimensions, PlatformOffering } from '../common/nextmu
 import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
 import { mediaTierInputRates, mediaTierLabel, normalizeOfferingMediaTiers, type OfferingMediaTierQuality } from '../common/nextmux-media-price-tiers';
 import { offeringIsOwnPriced, offeringMultiplierBps } from '../common/nextmux-media-cost-estimator';
+import { naturalPanelHeight } from './nextmux-floating-panel';
 
 type Unit = 'mtok' | 'image' | 'second' | 'mchar' | 'request';
 type Metric = 'input' | 'output' | 'cacheRead' | 'cacheWrite' | 'imageOutput' | 'image' | 'video' | 'videoInputImage' | 'speech' | 'audio' | 'request';
@@ -249,7 +250,8 @@ export function OfferingPriceCard(props: OfferingPriceCardProps): React.ReactEle
         const { left, top, width, maxHeight, side } = placePriceOverlayDrawer({
             viewportWidth: window.innerWidth, viewportHeight: window.innerHeight,
             picker: pickerEl?.getBoundingClientRect(), detail: detailEl?.getBoundingClientRect(), trigger: triggerRef.current?.getBoundingClientRect(),
-            detailOnLeft: Boolean(detailEl?.classList.contains('is-left')), contentHeight: overlayRef.current?.scrollHeight || 0
+            // C's whole border-box height: its scrollHeight alone is the 2px of borders short, and C then scrolls.
+            detailOnLeft: Boolean(detailEl?.classList.contains('is-left')), contentHeight: overlayRef.current ? naturalPanelHeight(overlayRef.current) : 0
         });
         const detailZ = detailEl ? (Number.parseInt(window.getComputedStyle(detailEl).zIndex, 10) || 0) : 0;
         const zIndex = Math.max(2210, detailZ + 10);
@@ -297,6 +299,9 @@ export function OfferingPriceCard(props: OfferingPriceCardProps): React.ReactEle
             : undefined;
         if (observer && overlayRef.current) {
             observer.observe(overlayRef.current);
+            // The card inside grows even while C is held at its max-height (when C's own box does not change).
+            const card = overlayRef.current.firstElementChild;
+            if (card) observer.observe(card);
         }
         return () => {
             window.removeEventListener('resize', onResize);

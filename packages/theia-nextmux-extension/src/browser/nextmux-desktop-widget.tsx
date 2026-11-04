@@ -31,6 +31,7 @@ import { CatalogSnapshotRefresh, merchantSnapshotRemoved } from './nextmux-catal
 import { COMPUTER_USER_ESC_OBSERVATION, isDesktopPluginAction, isDesktopTabAction, type DesktopComputerCapability, type DesktopComputerToolRequest, type DesktopComputerToolResult } from '../common/nextmux-computer-automation';
 import { MODEL_VISIBILITY_KEY, parseModelVisibilityPreferences, isModelVisible as modelVisible, setModelsVisible, ModelVisibilityGroup, ModelVisibilityCategory, createModelVisibilityCatalog, migrateModelVisibilityPreferences, modelVisibilityCategories, resolveModelVisibilityId } from './nextmux-model-visibility';
 import { AnonymousModelsToggle, ModelVisibilitySettings, modelVisibilityCopy, type ModelCreativityMode } from './nextmux-model-visibility-settings';
+import { ModelAuthenticityTag } from './nextmux-model-authenticity';
 import {
     buildArtifactBrowserPreviewHtml,
     buildMermaidRepairPrompt,
@@ -111,7 +112,7 @@ import { MCP_SERVERS_PREF } from '@theia/ai-mcp/lib/common/mcp-preferences';
 import { McpAccessPanel } from './nextmux-mcp-access-panel';
 import { comicCountText, pluginSummaryText } from './nextmux-shell-surface-locale';
 import { ThemePreferenceIcon } from './nextmux-theme-icons';
-import { DeviceLinkActions, deviceLinkState, deviceLinkText, type DeviceLinkState } from './nextmux-device-link-status';
+import { DeviceLinkActions, deviceLinkFallbackText, deviceLinkState, deviceLinkText, type DeviceLinkState } from './nextmux-device-link-status';
 import { isHiddenPresetConfiguration } from './nextmux-open-source-mcp-presets';
 import { mcpUserCredentialConfigurable, saveMcpCredentialSettings } from './nextmux-mcp-credential-settings';
 import { writeMcpCredentialPreference } from './nextmux-mcp-credential-preference-writer';
@@ -455,7 +456,7 @@ import { archiveProjectText } from './nextmux-archive-project-locale';
 import type { ConversationArchiveImportResult } from '../common/nextmux-conversation-archive';
 import { archiveText } from './nextmux-conversation-archive-locale';
 import { compactConversationId } from './nextmux-conversation-identity';
-import { placeAdjacentFloatingPanel, placeAnchoredFloatingPanel, placeModelPickerPanels } from './nextmux-floating-panel';
+import { naturalPanelHeight, placeAdjacentFloatingPanel, placeAnchoredFloatingPanel, placeModelPickerPanels } from './nextmux-floating-panel';
 import type { AdjacentFloatingPanelPlacement } from './nextmux-floating-panel';
 import type { AnchoredFloatingPanelPlacement } from './nextmux-floating-panel';
 import type { PublicMerchantDirectoryPage, PublicMerchantDirectoryQuery, PublicMerchantIdentity } from '../common/nextmux-public-merchants';
@@ -4054,6 +4055,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected deviceLinkError = '';
     protected deviceLinkStarting = false;
     protected deviceLinkExpiryTimer = 0;
+    /** Each Sign in click: a link that arrives after a newer click (or after the browser fallback) is matched by it. */
+    protected deviceLinkAttempt = 0;
     protected accountLinkCoordinator: DesktopAccountLinkCoordinator | undefined;
     protected activeRelayKey = '';
     protected automaticRelaySource: AutomaticRelaySource = 'off';
@@ -4551,6 +4554,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected followUpTaskMenuId = '';
     protected readonly relayFeedbackSubmittingVotes = new Map<string, Exclude<RelayFeedbackVote, null>>();
     protected readonly pendingRelayFeedbackSubmissions = new Set<Promise<void>>();
+    /** The exit generation whose close stopped waiting for ratings still in flight: their late replies leave history alone. */
+    protected relayFeedbackLeftForExit = -1;
     protected readonly automaticResumeTurnIds = new Set<string>();
     /** Automatic resumes waiting to fire (by session:turn): when, which attempt of how many, and how to fire now. */
     protected readonly automaticResumeSchedule = new Map<string, { readonly dueAt: number; readonly attempt: number; readonly total: number;
@@ -7067,6 +7072,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return [];
     }
 
+    /** A relay offering's measured 真实性 (undefined while unmeasured), as every model picker row shows it. */
+    protected offeringAuthenticity(offering: PlatformOffering): number | undefined {
+        return measuredModelFidelity(offering.fidelity);
+    }
+
     protected councilCandidateModelsForRelay(relayKey: string): readonly CouncilModelCandidate[] {
         const routes = this.councilRoutesForRelay(relayKey, true);
         const relayOption = this.relayPickerOptions?.().find(item => item.key === relayKey) || this.relayOption?.(relayKey);
@@ -7098,6 +7108,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 ...(reasoningSettings?.reasoningBudgetTokens !== undefined ? { reasoningBudgetTokens: reasoningSettings.reasoningBudgetTokens } : {}),
                 variantTag: offering ? offeringIsOwnPriced(offering) ? offeringPriceText(this.desktopLocale, 'ownTag')
                     : multiplier === undefined || multiplier === null ? undefined : relayMultiplierTag(this.desktopLocale, multiplier) || undefined : undefined,
+                // A relay route always shows its 真实性 after the multiplier ("—" while unmeasured); an own API has none to show.
+                ...(offering ? { authenticity: { value: this.offeringAuthenticity?.(offering) } } : {}),
                 detail: route.kind === 'managed_gateway' ? route.offering.providerName : route.connection.providerName
             });
         }
@@ -7751,6 +7763,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 style={{ zIndex: 2200 }}
                 onPointerEnter={() => this.cancelModelEffortPickerClose()} onPointerLeave={() => this.scheduleModelEffortPickerClose()}>
                 <section className={`nmx-model-effort-menu nmx-model-evidence-menu is-${placement.side}`} data-model-id={candidate.routeId}
+                    ref={element => { if (element) this.fitCouncilModelHoverMenu?.(element); }}
                     data-compact={placement.width !== undefined && placement.width < 240 || undefined}
                     style={{ top: `${placement.top}px`, left: `${placement.left}px`, width: placement.width === undefined ? undefined : `${placement.width}px`, maxHeight: `${placement.maxHeight}px`, zIndex: 2200 }}
                     aria-label={candidate.label} onFocus={() => this.cancelModelEffortPickerClose()} onBlur={() => this.scheduleModelEffortPickerClose()} onPointerEnter={() => this.cancelModelEffortPickerClose()} onPointerLeave={() => this.scheduleModelEffortPickerClose()}>
@@ -13417,6 +13430,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                     const variantTag = offering
                                         ? (ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering)))
                                         : '';
+                                    const fidelity = offering ? measuredModelFidelity(offering.fidelity) : undefined;
                                     const hoverOpen = this.comicModelHoverKey === item.key;
                                     const hoverPlacement = hoverOpen ? this.comicModelHoverPlacement : undefined;
                                     const evidenceRows: { readonly label: string; readonly value: string }[] = [
@@ -13429,6 +13443,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                             value: offering?.providerName || comicStepSourceLabel(this.desktopLocale, item.source)
                                         }
                                     ];
+                                    if (offering) evidenceRows.push({ label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'), value: relayPercentText(this.desktopLocale, fidelity) });
                                     if (!offering) {
                                         evidenceRows.push({
                                             label: relayText(this.desktopLocale, 'price'),
@@ -13476,6 +13491,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                 <span>
                                                     <strong data-nmx-literal>{item.label}</strong>
                                                     {variantTag && <small className='nmx-model-price-variant' dir='ltr'>{variantTag}</small>}
+                                                    {offering && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} />}
                                                 </span>
                                                 {selected && <i className='codicon codicon-check' />}
                                             </button>
@@ -27602,6 +27618,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // Only opaque platform request IDs and the vote leave the device.
             // Conversation content and queued follow-ups are never part of feedback.
             const submitted = await this.platformService.submitRelayFeedbackBatch(requestIds, nextVote);
+            // Closing stopped waiting for this rating (settleRelayFeedbackForExit): the history it saved is final.
+            if (this.applicationExitPreparing && this.relayFeedbackLeftForExit === this.applicationExitGeneration) return;
             const currentTurn = this.codingSessions.find(session => session.id === sessionId)
                 ?.turns.find(candidate => candidate.id === turn.id);
             const currentRequestIds = normalizeRelayFeedbackRequestIds(
@@ -27618,6 +27636,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.updateCodingTurn(sessionId, turn.id, { relayFeedback: submitted.feedback.vote || undefined });
             void this.loadCatalog();
         } catch (error) {
+            // An offline rating that failed after the app stopped waiting for it is not news while it closes.
+            if (this.applicationExitPreparing && this.relayFeedbackLeftForExit === this.applicationExitGeneration) return;
             this.addNotification(
                 'error',
                 relayMarketplaceText(this.desktopLocale, 'feedbackFailed'),
@@ -35241,7 +35261,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected calculateModelEffortPlacement(anchor: HTMLElement, levelCount: number): AdjacentFloatingPanelPlacement {
         const rect = anchor.getBoundingClientRect();
         const menu = document.querySelector<HTMLElement>('.nmx-model-effort-menu:not(.nmx-model-price-overlay-drawer)');
-        const measuredHeight = menu && menu.dataset.modelId === anchor.dataset.modelId ? menu.scrollHeight : 0;
+        const measuredHeight = menu && menu.dataset.modelId === anchor.dataset.modelId ? naturalPanelHeight(menu) : 0;
         const viewport = { width: window.innerWidth, height: window.innerHeight };
         const detail = this.calculateModelPickerPlacement(1).detail;
         const width = detail?.width ?? 264;
@@ -35264,12 +35284,29 @@ export class NextMuxDesktopWidget extends ReactWidget {
             menu.style.width = `${detail.width}px`;
             menu.dataset.compact = String(detail.width < 240);
         }
-        const top = Math.max(edge, Math.min(placement.top, window.innerHeight - edge - menu.scrollHeight));
+        // The card's whole border-box height: scrollHeight alone is its 2px of borders short, and the card then scrolls.
+        const top = Math.max(edge, Math.min(placement.top, window.innerHeight - edge - naturalPanelHeight(menu)));
         const maxHeight = Math.max(1, window.innerHeight - top - edge);
         if (Math.abs(top - placement.top) < 1 && Math.abs(maxHeight - placement.maxHeight) < 1
             && (!detail || detail.left === placement.left && detail.width === placement.width && detail.side === placement.side)) return;
         this.modelPickerEffortPlacement = { ...placement, ...detail, top, maxHeight };
         // Paint the corrected geometry now; the state keeps it on the next render.
+        menu.style.top = `${top}px`;
+        menu.style.maxHeight = `${maxHeight}px`;
+    }
+
+    /**
+     * The Council card is placed from an estimate too (openCouncilModelHoverDrawer). Once rendered it moves up so all
+     * of it fits, as fitModelEffortMenu does, but keeps its own column: the Council list is not the model picker.
+     */
+    protected fitCouncilModelHoverMenu(menu: HTMLElement): void {
+        const placement = this.modelPickerEffortPlacement;
+        if (!placement) return;
+        const edge = 8;
+        const top = Math.max(edge, Math.min(placement.top, window.innerHeight - edge - naturalPanelHeight(menu)));
+        const maxHeight = Math.max(1, window.innerHeight - top - edge);
+        if (Math.abs(top - placement.top) < 1 && Math.abs(maxHeight - placement.maxHeight) < 1) return;
+        this.modelPickerEffortPlacement = { ...placement, top, maxHeight };
         menu.style.top = `${top}px`;
         menu.style.maxHeight = `${maxHeight}px`;
     }
@@ -37184,25 +37221,75 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.deviceLink = undefined;
         }
         this.update();
+        const attempt = ++this.deviceLinkAttempt;
+        const clickedAt = Date.now();
+        // The link comes from the platform through NextMux's own connection. Offline, blocked or slow, it is waited for
+        // at most 3 seconds: then the browser opens the sign-in page at once instead of the click doing nothing.
+        const starting = this.platformService.startDeviceLink('NextMux Desktop', fresh ? { fresh: true } : undefined);
+        let waitTimer: number | undefined;
         try {
-            const link = await this.platformService.startDeviceLink('NextMux Desktop', fresh ? { fresh: true } : undefined);
-            if (this.isDisposed || this.platformSession.linked) return;
-            this.deviceLink = link;
-            this.accountLinkCoordinator?.start(this.deviceLink);
-            this.openExternalUrl(this.deviceLink.verificationUrl);
-            // Re-render once the link expires so the card offers "Sign in again".
-            if (this.deviceLinkExpiryTimer) window.clearTimeout(this.deviceLinkExpiryTimer);
-            const remaining = Number(this.deviceLink.expiresAt) - Date.now();
-            this.deviceLinkExpiryTimer = remaining > 0 && remaining < 86_400_000 ? window.setTimeout(() => { this.deviceLinkExpiryTimer = 0; this.update(); }, remaining + 250) : 0;
-        } catch (error) {
-            this.deviceLinkError = error instanceof Error ? error.message : '无法创建设备连接';
-            if (!(this.activeSection === 'settings' && this.settingsPanel === 'profile')) {
-                this.addNotification?.('error', this.tx?.('account') || '账户', this.deviceLinkError);
+            const link = await Promise.race([starting, new Promise<undefined>(resolve => { waitTimer = window.setTimeout(() => resolve(undefined), 3_000); })]);
+            if (!this.isDisposed && !this.platformSession.linked) {
+                if (link) this.adoptDeviceLink(link, true);
+                else {
+                    this.openSignInPageFallback('unreachable');
+                    // A link that still arrives while the person waits finishes the sign-in in the browser after all.
+                    void starting.then(late => this.adoptLateDeviceLink(attempt, late, clickedAt), () => undefined);
+                }
             }
+        } catch (error) {
+            if (!this.isDisposed && !this.platformSession.linked) this.openSignInPageFallback('hint', error);
         } finally {
+            window.clearTimeout(waitTimer);
             this.deviceLinkStarting = false;
         }
         this.update();
+    }
+
+    protected adoptDeviceLink(link: PlatformDeviceLink, openBrowser: boolean): void {
+        this.deviceLink = link;
+        this.deviceLinkError = '';
+        this.accountLinkCoordinator?.start(link);
+        if (openBrowser) this.openExternalUrl(link.verificationUrl);
+        // Re-render once the link expires so the card offers "Sign in again".
+        if (this.deviceLinkExpiryTimer) window.clearTimeout(this.deviceLinkExpiryTimer);
+        const remaining = Number(link.expiresAt) - Date.now();
+        this.deviceLinkExpiryTimer = remaining > 0 && remaining < 86_400_000 ? window.setTimeout(() => { this.deviceLinkExpiryTimer = 0; this.update(); }, remaining + 250) : 0;
+    }
+
+    /**
+     * A link that arrives after the browser fallback opened (a slow connection). Only the latest click's link is taken,
+     * and only within 20 seconds, while the person is likely still at the browser; after that the fallback's "click
+     * Sign in again" stands and nothing opens out of the blue.
+     */
+    protected adoptLateDeviceLink(attempt: number, link: PlatformDeviceLink, clickedAt: number): void {
+        if (attempt !== this.deviceLinkAttempt || this.isDisposed || this.platformSession.linked || this.deviceLinkStarting
+            || Number(this.deviceLink?.expiresAt) > Date.now()) return;
+        if (Date.now() - clickedAt > 20_000 || !(Number(link?.expiresAt) > Date.now() + 1_000)) return;
+        this.adoptDeviceLink(link, true);
+        this.update();
+    }
+
+    /**
+     * "Sign in" never does nothing. When the platform cannot be reached (offline, blocked, too slow), the account page
+     * opens in the browser at once; the card says why and that one more click here connects this device afterwards.
+     */
+    protected openSignInPageFallback(kind: 'unreachable' | 'hint', error?: unknown): void {
+        const detail = kind === 'hint' && error instanceof Error && error.message.trim() ? `${error.message.trim()} ` : '';
+        this.deviceLinkError = detail + deviceLinkFallbackText(this.desktopLocale, kind);
+        if (!(this.activeSection === 'settings' && this.settingsPanel === 'profile')) {
+            this.addNotification?.('warning', this.tx?.('account') || '账户', this.deviceLinkError);
+        }
+        const fallback = 'https://nextmux.app/account';
+        let timer: number | undefined;
+        // The address is local to NextMux's backend; a backend that does not answer still opens the public account page.
+        void Promise.race([
+            Promise.resolve().then(() => this.platformService.getPlatformWebLinks()).then(links => links.account || fallback, () => fallback),
+            new Promise<string>(resolve => { timer = window.setTimeout(() => resolve(fallback), 1_000); })
+        ]).then(url => {
+            window.clearTimeout(timer);
+            this.openExternalUrl(url);
+        });
     }
 
     protected async openAccountPortal(): Promise<void> {
@@ -47635,7 +47722,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     if (optionRoute) this.openModelEffortPicker(model.id, event.currentTarget.closest('.nmx-model-option') as HTMLElement, settingsRowCount);
                     else this.completeNavigationSurface();
                     this.update();
-                }} aria-label={optionTitle}><span><strong>{model.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr'>{variantTag}</small>}</span>{selected && <i className='codicon codicon-check'></i>}</button>
+                }} aria-label={optionTitle}><span><strong>{model.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr'>{variantTag}</small>}
+                    {(offering || fidelity !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} />}</span>{selected && <i className='codicon codicon-check'></i>}</button>
                 {effortOpen && placement && ReactDOM.createPortal(
                     <div className={`nmx-model-effort-portal nmx-theme-${this.resolvedDesktopTheme()}`} dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'} lang={this.desktopLocale}
                         onPointerEnter={() => this.cancelModelEffortPickerClose()} onPointerLeave={() => this.scheduleModelEffortPickerClose()}>
@@ -49258,7 +49346,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.cancelComicModelHoverClose();
         const rect = anchor.getBoundingClientRect();
         const menu = document.querySelector<HTMLElement>('.nmx-comic-model-effort-portal .nmx-model-effort-menu:not(.nmx-model-price-overlay-drawer)');
-        const measuredHeight = menu && menu.dataset.modelId === key ? menu.scrollHeight : 0;
+        const measuredHeight = menu && menu.dataset.modelId === key ? naturalPanelHeight(menu) : 0;
         const viewport = { width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) };
         const width = detailGeometry?.width ?? 264;
         const initial = placeAdjacentFloatingPanel(rect, viewport, width, Math.max(measuredHeight, 200));
@@ -49284,7 +49372,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             menu.style.width = `${detailGeometry.width}px`;
             menu.dataset.compact = String(detailGeometry.width < 240);
         }
-        const top = Math.max(edge, Math.min(placement.top, window.innerHeight - edge - menu.scrollHeight));
+        // The card's whole border-box height: scrollHeight alone is its 2px of borders short, and the card then scrolls.
+        const top = Math.max(edge, Math.min(placement.top, window.innerHeight - edge - naturalPanelHeight(menu)));
         const maxHeight = Math.max(1, window.innerHeight - top - edge);
         if (Math.abs(top - placement.top) < 1 && Math.abs(maxHeight - placement.maxHeight) < 1
             && (!detailGeometry || detailGeometry.left === placement.left && detailGeometry.width === placement.width && detailGeometry.side === placement.side)) return;
@@ -49400,6 +49489,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                     const offering = item.offering;
                                     const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
                                     const variantTag = offering ? (ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering))) : '';
+                                    const fidelity = offering ? measuredModelFidelity(offering.fidelity) : undefined;
                                     const hoverOpen = this.comicModelHoverKey === item.key;
                                     const hoverPlacement = hoverOpen ? this.comicModelHoverPlacement : undefined;
                                     const evidenceRows: { readonly label: string; readonly value: string }[] = [
@@ -49409,6 +49499,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                             value: offering?.providerName || comicStepSourceLabel(this.desktopLocale, item.source)
                                         }
                                     ];
+                                    if (offering) evidenceRows.push({ label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'), value: relayPercentText(this.desktopLocale, fidelity) });
                                     if (!offering) {
                                         evidenceRows.push({
                                             label: relayText(this.desktopLocale, 'price'),
@@ -49443,7 +49534,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                 if (ui.mode !== activeTab) this.setComicChatMode(activeTab);
                                                 this.dismissComicChatModelPicker(true);
                                             }}>
-                                            <span><strong data-nmx-literal>{item.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr'>{variantTag}</small>}</span>
+                                            <span><strong data-nmx-literal>{item.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr'>{variantTag}</small>}
+                                                {offering && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} />}</span>
                                             {selected && <i className='codicon codicon-check'></i>}
                                         </button>
                                         {hoverOpen && hoverPlacement && ReactDOM.createPortal(
@@ -55699,15 +55791,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
         document.body.inert = true;
     }
 
-    cancelApplicationExit(reason: 'timeout' | 'failed' | 'navigated'): void {
+    /** 'declined': the person kept a running task. That is their choice, not a save that failed: no notice. */
+    cancelApplicationExit(reason: 'timeout' | 'failed' | 'navigated' | 'declined'): void {
+        const exitBegan = this.applicationExitPreparing;
         this.applicationExitGeneration += 1;
         this.applicationExitPreparing = false;
         this.node.inert = false;
         document.body.inert = false;
-        if (reason !== 'navigated') this.addNotification('error', closePersistenceText(this.desktopLocale, 'title'),
+        if (reason !== 'navigated' && reason !== 'declined') this.addNotification('error', closePersistenceText(this.desktopLocale, 'title'),
             closePersistenceText(this.desktopLocale, this.contextFileDirty ? 'file' : 'failed'));
         this.update();
-        if (reason !== 'navigated') {
+        if (reason !== 'navigated' && (reason !== 'declined' || exitBegan)) {
             for (const sessionId of this.followUpDrainReadySessionIds) this.requestFollowUpQueueDrain(sessionId);
             const session = this.activeCodingSession();
             const turn = session?.turns.at(-1);
@@ -55765,6 +55859,24 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return content(this.codingSessions) === content(initial.sessions);
     }
 
+    /**
+     * A rating is a network request, and offline it can hang until its own timeout, past the close's 5-second save limit.
+     * Closing waits half a second for ratings in flight, then leaves them behind: an unsent rating is a footer choice on
+     * a reply, never conversation content, and never a reason to keep NextMux open. Never rejects.
+     */
+    protected async settleRelayFeedbackForExit(): Promise<void> {
+        const pending = [...(this.pendingRelayFeedbackSubmissions || [])];
+        if (!pending.length) return;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        await Promise.race([
+            Promise.allSettled(pending),
+            new Promise<void>(resolve => { timer = setTimeout(resolve, 500); })
+        ]);
+        clearTimeout(timer);
+        this.relayFeedbackLeftForExit = this.applicationExitGeneration;
+        for (const submission of pending) this.pendingRelayFeedbackSubmissions.delete(submission);
+    }
+
     async shutdownForApplicationExit(signal?: AbortSignal): Promise<void> {
         this.recordConversationSyncDiagnostic?.('shutdown_start');
         // The renderer mirror is synchronous, then the durable store is
@@ -55790,7 +55902,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             Promise.allSettled([...this.pastedTextPersistence.values()]),
             Promise.allSettled([...this.pendingContextFileWrites]),
             Promise.allSettled([...this.pendingAttachmentImports.keys()]),
-            Promise.allSettled([...(this.pendingRelayFeedbackSubmissions || [])]),
+            // Ratings are network requests: offline they could hold the close until the main process gives up on it.
+            this.settleRelayFeedbackForExit?.() ?? Promise.allSettled([...(this.pendingRelayFeedbackSubmissions || [])]),
             // Read failures retain the original durable references and their
             // recovery notice; they must not silently erase the saved draft.
             Promise.allSettled(this.pendingDraftAttachmentRestores())

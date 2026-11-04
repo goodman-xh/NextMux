@@ -4,9 +4,9 @@ import { selectMainPriceDimensions, validSummaryRate, priceDisplayUnitSize } fro
 import * as React from '@theia/core/shared/react';
 import { createPortal } from '@theia/core/shared/react-dom';
 import type { NextMuxPlatformService, PlatformMerchantSupportCatalogPage, PlatformOffering } from '../common/nextmux-platform-protocol';
-import type { PublicMerchantDirectoryPage, PublicMerchantDirectoryQuery, PublicMerchantIdentity } from '../common/nextmux-public-merchants';
+import { publicMerchantApiDisplay, type PublicMerchantDirectoryPage, type PublicMerchantDirectoryQuery, type PublicMerchantIdentity } from '../common/nextmux-public-merchants';
 import { desktopText, type NextMuxDesktopLocale } from './nextmux-locale';
-import { modelCenterText, modelCenterPriceMetric, modelCenterPriceUnit, modelCenterApiDetail, modelCenterApiState } from './nextmux-model-center-locale';
+import { modelCenterText, modelCenterPriceMetric, modelCenterPriceUnit, modelCenterChecksFailing, modelCenterApiState } from './nextmux-model-center-locale';
 import { modelUsageText } from './nextmux-model-usage-locale';
 import { relayEvidenceText, relayMarketplaceText } from './nextmux-relay-marketplace-locale';
 import { relayDelistedText, relayText } from './nextmux-relay-locale';
@@ -430,11 +430,11 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
                 const publicCode = merchant.publicCode;
                 const rating = modelCenterRating(merchant);
                 const quality = rating.value === undefined ? relayEvidenceText(locale, 'unmeasured') : rating.initial ? text('initialRating') : text('votedRating', rating.samples);
-                const apiState = merchant.apiStatus?.state;
-                // Some APIs quarantined, or every check of the last day failed: said on the card, not only in the icon's hint.
-                const apiDetail = merchant.apiStatus?.detailReason;
-                const apiDetailCount = merchant.apiStatus?.unreachableApis ?? 1;
-                const statusLabel = `${text('apiStatus')} · ${modelCenterApiState(locale, apiState)}${apiDetail ? ` · ${modelCenterApiDetail(locale, apiDetail, apiDetailCount, 'hint')}` : ''}`;
+                // A quarantined API is never mentioned (no "N API(s) off sale", no warning of its own). Every check of the
+                // last day failing is said on the card, not only in the icon's hint.
+                const api = publicMerchantApiDisplay(merchant);
+                const apiState = api.state;
+                const statusLabel = `${text('apiStatus')} · ${modelCenterApiState(locale, apiState)}${api.checksFailing ? ` · ${modelCenterChecksFailing(locale, 'hint')}` : ''}`;
                 // Values the directory supplies for want of current ones read quieter, and their hint says what they are.
                 const latencyStale = merchant.metrics?.latencyMs !== undefined && merchant.measurement?.latency?.state === 'stale';
                 const authenticityListed = merchant.metrics?.authenticity !== undefined && merchant.measurement?.authenticity?.scope === 'listed_offerings';
@@ -451,8 +451,8 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
                         )}<span>{hint(<code dir='ltr'>{publicCode || '—'}</code>, publicCode || market('copyNumber'))}
                         {hint(<button type='button' disabled={!publicCode} aria-label={market('copyNumber')} onClick={() => { if (!publicCode) return; setCopyFailed(false); void onCopy(publicCode).catch(() => setCopyFailed(true)); }}><i className={`codicon codicon-${publicCode && props.copiedNumber === publicCode ? 'check' : 'copy'}`} aria-hidden='true' /></button>, market('copyHint'), false)}
                         {hint(<i className={`codicon codicon-${apiState === 'ready' ? 'pass' : apiState === 'refreshing' ? 'sync' : apiState === 'degraded' || apiState === 'unavailable' ? 'warning' : 'circle-outline'}`} data-api-state={apiState || 'unknown'} aria-hidden='true' />, statusLabel)}
-                    </span>{(outputs.length > 0 || apiDetail) && <span className='nmx-mc-capabilities'>{outputs.map(value => <small key={value}>{market(value === 'text' ? 'language' : value as 'image' | 'video' | 'audio')}</small>)}
-                        {apiDetail && hint(<small className='nmx-mc-api-alert' data-api-detail={apiDetail}><i className='codicon codicon-warning' aria-hidden='true' />{modelCenterApiDetail(locale, apiDetail, apiDetailCount, 'chip')}</small>, statusLabel)}</span>}</div>
+                    </span>{(outputs.length > 0 || api.checksFailing) && <span className='nmx-mc-capabilities'>{outputs.map(value => <small key={value}>{market(value === 'text' ? 'language' : value as 'image' | 'video' | 'audio')}</small>)}
+                        {api.checksFailing && hint(<small className='nmx-mc-api-alert' data-api-detail='probe_failures'><i className='codicon codicon-warning' aria-hidden='true' />{modelCenterChecksFailing(locale, 'chip')}</small>, statusLabel)}</span>}</div>
                     <div className='nmx-mc-metrics'>
                         {hint(<><i className='codicon codicon-star-full' aria-hidden='true' /><strong data-unmeasured={rating.value === undefined || undefined}>{percent(rating.value === undefined ? undefined : rating.value / 100)}</strong></>, `${market('rating')} · ${quality}`)}
                         {/* 真实性: the mean identity score of the relay's models that have one (availability stays in the platform's routing). */}

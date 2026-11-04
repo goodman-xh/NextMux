@@ -16,6 +16,8 @@ import type {
 import type { NextMuxDesktopLocale } from './nextmux-locale';
 import { councilModeText, councilRoleLabel } from './nextmux-council-mode-locale';
 import { councilValidationMessage } from './nextmux-council-validation';
+import { ModelAuthenticityTag } from './nextmux-model-authenticity';
+import { modelPickerEvidenceText, relayPercentText } from './nextmux-relay-picker';
 
 export interface CouncilDraftSlot {
     readonly slotId: string;
@@ -46,6 +48,8 @@ export interface CouncilModelCandidate {
     readonly providerId?: string;
     readonly detail?: string;
     readonly variantTag?: string;
+    /** A relay route's 真实性, shown after its multiplier (value undefined: unmeasured, "—"); absent for an own API. */
+    readonly authenticity?: { readonly value?: number };
     readonly reasoningEffort?: string;
     readonly reasoningEnabled?: boolean;
     readonly reasoningMode?: 'adaptive' | 'auto' | 'enabled' | 'disabled';
@@ -873,6 +877,7 @@ export const CouncilConfigModal: React.FC<CouncilConfigModalProps> = props => {
                                                 </span>
                                                 {selectedModelLabel && slotProviderLabel && <small className='nmx-council-selected-relay-badge' data-council-slot-provider={slot.slotId}>{slotProviderLabel}</small>}
                                                 {slotVariantTag && <small className='nmx-model-price-variant nmx-council-model-price' dir='ltr'>{slotVariantTag}</small>}
+                                                {selectedModelLabel && selectedCandidate?.authenticity && <ModelAuthenticityTag locale={locale} value={selectedCandidate.authenticity.value} />}
                                                 <i className={`codicon codicon-chevron-${modelPickerOpen ? 'up' : 'down'} nmx-council-select-chevron`} aria-hidden='true' />
                                             </button>
 
@@ -883,7 +888,8 @@ export const CouncilConfigModal: React.FC<CouncilConfigModalProps> = props => {
                                                     {models.map(model => {
                                                         const optionId = model.modelId || model.id || '';
                                                         const selected = selectedCandidate === model;
-                                                        const optionTitle = [model.label, model.detail, model.variantTag].filter(Boolean).join(' · ');
+                                                        const optionTitle = [model.label, model.detail, model.variantTag,
+                                                            model.authenticity && `${modelPickerEvidenceText(locale, 'authenticity')} ${relayPercentText(locale, model.authenticity.value)}`].filter(Boolean).join(' · ');
                                                         return (
                                                             <React.Fragment key={`${model.routeId}:${optionId}`}>
                                                                 <button
@@ -892,6 +898,7 @@ export const CouncilConfigModal: React.FC<CouncilConfigModalProps> = props => {
                                                                     aria-selected={selected}
                                                                     data-council-model-option={optionId}
                                                                     title={optionTitle}
+                                                                    aria-label={optionTitle}
                                                                     data-nmx-tip={optionTitle}
                                                                     className={`nmx-council-model-option ${selected ? 'is-selected' : ''}`}
                                                                     onPointerEnter={event => props.onModelOptionPointerEnter?.(model, event.currentTarget)}
@@ -915,6 +922,7 @@ export const CouncilConfigModal: React.FC<CouncilConfigModalProps> = props => {
                                                                         )}
                                                                     </span>
                                                                     {model.variantTag && <small className='nmx-model-price-variant nmx-council-model-price' dir='ltr'>{model.variantTag}</small>}
+                                                                    {model.authenticity && <ModelAuthenticityTag locale={locale} value={model.authenticity.value} />}
                                                                 </button>
                                                                 {props.renderModelOptionHoverPortal?.(model)}
                                                             </React.Fragment>

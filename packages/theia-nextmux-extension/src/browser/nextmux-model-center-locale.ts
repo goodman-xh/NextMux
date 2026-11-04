@@ -88,39 +88,28 @@ const apiStates: Record<NextMuxDesktopLocale, readonly [string, string, string, 
     ar: ['بيانات API واكتشاف النماذج متاحان', 'تحديث النماذج المصادق عليها', 'التحقق من API يحتاج إلى انتباه', 'لا توجد API موثقة قابلة للاستخدام'],
     hi: ['API क्रेडेंशियल और मॉडल खोज उपलब्ध हैं', 'प्रमाणित मॉडल सूची रीफ़्रेश हो रही है', 'API सत्यापन पर ध्यान दें', 'अभी उपयोग योग्य सत्यापित API नहीं है']
 };
-/** [chip, hint] for apiStatus.detailReason api_unreachable ({count} quarantined APIs), then for probe_failures. */
-const apiDetails: Record<NextMuxDesktopLocale, readonly [string, string, string, string]> = {
-    en: ['{count} API(s) off sale', '{count} API(s) failed several checks in a row and are off sale; the others keep serving',
-        'Recent checks failing', 'Every check in the last day failed; the relay pickers leave this store out until a check passes'],
-    'zh-CN': ['{count} 个 API 暂停销售', '{count} 个 API 连续检测失败，已暂停销售；其余 API 照常提供服务',
-        '近一天检测全部失败', '近一天的检测全部失败，编程与漫剧的「选择中转商」暂不列出该商家；检测通过后自动恢复'],
-    'zh-TW': ['{count} 個 API 暫停販售', '{count} 個 API 連續檢測失敗，已暫停販售；其餘 API 照常提供服務',
-        '近一天檢測全部失敗', '近一天的檢測全部失敗，程式與漫劇的「選擇中轉商」暫不列出此商家；檢測通過後自動恢復'],
-    ja: ['{count} 件の API が販売停止中', '{count} 件の API が連続してチェックに失敗し販売停止中です。他の API は通常どおり利用できます',
-        '直近のチェックがすべて失敗', '直近 1 日のチェックがすべて失敗したため、中継選択には一時的に表示されません。チェックに合格すると自動で戻ります'],
-    ko: ['API {count}개 판매 중지', 'API {count}개가 연속으로 점검에 실패해 판매가 중지되었습니다. 다른 API는 정상적으로 제공됩니다',
-        '최근 점검 모두 실패', '최근 하루 동안의 점검이 모두 실패해 중계 선택에서 잠시 제외됩니다. 점검을 통과하면 자동으로 돌아옵니다'],
-    es: ['{count} API fuera de venta', '{count} API fallaron varias comprobaciones seguidas y están fuera de venta; las demás siguen funcionando',
-        'Fallan las últimas comprobaciones', 'Todas las comprobaciones del último día fallaron; los selectores de relays no muestran esta tienda hasta que una se supere'],
-    fr: ['{count} API hors vente', '{count} API ont échoué à plusieurs vérifications d’affilée et ne sont plus en vente ; les autres continuent de fonctionner',
-        'Vérifications récentes en échec', 'Toutes les vérifications du dernier jour ont échoué ; les sélecteurs de relais n’affichent pas cette boutique tant qu’aucune ne réussit'],
-    de: ['{count} API nicht im Verkauf', '{count} API sind bei mehreren Prüfungen in Folge durchgefallen und nicht im Verkauf; die übrigen arbeiten weiter',
-        'Letzte Prüfungen fehlgeschlagen', 'Alle Prüfungen des letzten Tages sind fehlgeschlagen; die Relay-Auswahl zeigt diesen Shop erst wieder, wenn eine besteht'],
-    'pt-BR': ['{count} API fora de venda', '{count} API falharam em várias verificações seguidas e estão fora de venda; as demais continuam funcionando',
-        'Verificações recentes falharam', 'Todas as verificações do último dia falharam; os seletores de relays não mostram esta loja até uma verificação passar'],
-    ru: ['Снято с продажи API: {count}', 'Несколько проверок подряд не прошли, и API сняты с продажи ({count}); остальные продолжают работать',
-        'Последние проверки не прошли', 'Все проверки за последние сутки не прошли; выбор релея не показывает этот магазин, пока проверка не пройдёт'],
-    ar: ['{count} API خارج البيع', 'فشلت {count} API في عدة فحوصات متتالية وأُوقف بيعها؛ وتواصل البقية العمل',
-        'فشلت الفحوصات الأخيرة', 'فشلت كل فحوصات اليوم الأخير؛ لا يعرض منتقي الوسيط هذا المتجر حتى ينجح أحد الفحوصات'],
-    hi: ['{count} API बिक्री से बाहर', '{count} API लगातार कई जाँचों में विफल रहे और बिक्री से बाहर हैं; बाकी API सामान्य रूप से काम कर रहे हैं',
-        'हाल की जाँचें विफल', 'पिछले एक दिन की सभी जाँचें विफल रहीं; किसी जाँच के पास होने तक रिले चयन में यह स्टोर नहीं दिखेगा']
+/**
+ * [chip, hint] when every check of the last day failed. Such a store stays selectable: the relay pickers mark it until
+ * a check passes. A quarantined API is never mentioned to buyers (publicMerchantApiDisplay).
+ */
+const checksFailingTexts: Record<NextMuxDesktopLocale, readonly [string, string]> = {
+    en: ['Recent checks failing', 'Every check in the last day failed. The store can still be chosen; the relay pickers mark it until a check passes'],
+    'zh-CN': ['近一天检测全部失败', '近一天的检测全部失败。该商家仍可选用，编程与漫剧的「选择中转商」会为它加上提示标记，检测通过后自动消失'],
+    'zh-TW': ['近一天檢測全部失敗', '近一天的檢測全部失敗。此商家仍可選用，程式與漫劇的「選擇中轉商」會為它加上提示標記，檢測通過後自動消失'],
+    ja: ['直近のチェックがすべて失敗', '直近 1 日のチェックがすべて失敗しました。このストアは引き続き選択できます。中継選択ではチェックに合格するまで印が付きます'],
+    ko: ['최근 점검 모두 실패', '최근 하루 동안의 점검이 모두 실패했습니다. 이 스토어는 계속 선택할 수 있으며, 점검을 통과할 때까지 중계 선택에 표시가 붙습니다'],
+    es: ['Fallan las últimas comprobaciones', 'Todas las comprobaciones del último día fallaron. La tienda se puede elegir igualmente; los selectores de relays la marcan hasta que una comprobación se supere'],
+    fr: ['Vérifications récentes en échec', 'Toutes les vérifications du dernier jour ont échoué. La boutique reste sélectionnable ; les sélecteurs de relais la signalent jusqu’à ce qu’une vérification réussisse'],
+    de: ['Letzte Prüfungen fehlgeschlagen', 'Alle Prüfungen des letzten Tages sind fehlgeschlagen. Der Shop bleibt auswählbar; die Relay-Auswahl markiert ihn, bis eine Prüfung besteht'],
+    'pt-BR': ['Verificações recentes falharam', 'Todas as verificações do último dia falharam. A loja continua selecionável; os seletores de relays a marcam até uma verificação passar'],
+    ru: ['Последние проверки не прошли', 'Все проверки за последние сутки не прошли. Магазин по-прежнему можно выбрать; выбор релея помечает его, пока проверка не пройдёт'],
+    ar: ['فشلت الفحوصات الأخيرة', 'فشلت كل فحوصات اليوم الأخير. لا يزال اختيار المتجر ممكناً؛ ويضع منتقي الوسيط عليه علامة حتى ينجح أحد الفحوصات'],
+    hi: ['हाल की जाँचें विफल', 'पिछले एक दिन की सभी जाँचें विफल रहीं। यह स्टोर अब भी चुना जा सकता है; किसी जाँच के पास होने तक रिले चयन में इस पर निशान रहेगा']
 };
 
-/** Why a store is degraded beyond model discovery (apiStatus.detailReason), as a short chip or the full hint. */
-export function modelCenterApiDetail(locale: NextMuxDesktopLocale, detail: 'api_unreachable' | 'probe_failures', count: number, form: 'chip' | 'hint'): string {
-    const texts = apiDetails[locale] || apiDetails.en;
-    const text = texts[(detail === 'api_unreachable' ? 0 : 2) + (form === 'hint' ? 1 : 0)];
-    return text.replace('{count}', new Intl.NumberFormat(locale).format(Math.max(1, Math.trunc(count) || 1)));
+/** Every check of the last day failed: a short chip on the card, or the full hint. */
+export function modelCenterChecksFailing(locale: NextMuxDesktopLocale, form: 'chip' | 'hint'): string {
+    return (checksFailingTexts[locale] || checksFailingTexts.en)[form === 'hint' ? 1 : 0];
 }
 
 export function modelCenterApiState(locale: NextMuxDesktopLocale, state?: 'ready' | 'refreshing' | 'degraded' | 'unavailable'): string {

@@ -114,6 +114,18 @@ export function placeAnchoredFloatingPanel(
 }
 
 /**
+ * The full border-box height a floating panel needs to show all of its content: its scroll height (content and
+ * padding) plus its top and bottom borders, rounded up, plus one pixel for a fractional content height that
+ * scrollHeight rounds down. scrollHeight leaves the borders out, so a border-box panel given only its scrollHeight as
+ * max-height is the borders short (2px) and scrolls although the window has room for all of it.
+ */
+export function naturalPanelHeight(element: HTMLElement): number {
+    const style = element.ownerDocument?.defaultView?.getComputedStyle(element);
+    const borders = style ? (Number.parseFloat(style.borderTopWidth) || 0) + (Number.parseFloat(style.borderBottomWidth) || 0) : 0;
+    return Math.ceil(element.scrollHeight + borders) + 1;
+}
+
+/**
  * Place a fixed panel beside a row. As with Floating UI shift/size, fit the
  * full measured menu before limiting its scrollable height at the viewport.
  */
