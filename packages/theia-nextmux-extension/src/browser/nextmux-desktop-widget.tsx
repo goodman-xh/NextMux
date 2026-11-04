@@ -578,8 +578,11 @@ import {
     relayMultiplierText,
     relayPercentText,
     parseRelayFavoriteMerchants,
+    relayColumnTitle,
     relayDrawerChromeHeight,
+    RELAY_DRAWER_WIDTH,
     serializeRelayFavoriteMerchants,
+    usableRelaysFirst,
     RelaySourceTab
 } from './nextmux-relay-picker';
 import { FavoriteHeartIcon } from './nextmux-favorite-icon';
@@ -1593,10 +1596,13 @@ interface RelayOption {
     /** A missing API can be confirmed, or remain unknown while its directory is unavailable. */
     readonly directoryStatus?: 'unavailable' | 'unknown';
     /**
-     * Listed, but nothing can run on it here: the platform finds its API down, or (coding) all its executable models
-     * make pictures, video or sound. It leaves the relay list and stays a disabled row among favorites until that changes.
+     * Listed, but nothing can run on it here: the platform quarantined its APIs and none of its models is executable, or
+     * (coding) all its executable models make pictures, video or sound. It stays a row, disabled with this reason, below
+     * the relays that can serve (and among favorites) until that changes.
      */
     readonly unavailableReason?: RelayUnavailableReason;
+    /** Every check of the last day failed, but the store still has executable models: listed and selectable, marked. */
+    readonly checksFailing?: boolean;
     /** The latency is the past week's latest probe, none being from the last day (measurement.latency 'stale'). */
     readonly latencyStale?: boolean;
     readonly latencyObservedAt?: number;
@@ -13253,7 +13259,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const loading = this.relaySourceTab !== 'my-api' && (this.publicMerchantPageLoading || !directoryPage || this.publicMerchantPageError);
             const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked));
             const footerHeight = loading || (this.relaySourceTab === 'merchant' && this.publicMerchantPage?.nextCursor) ? 30 : 0;
-            const placement = this.calculateModelPickerPlacement(Math.max(300, chromeHeight + rows * 32 + footerHeight), 264, anchorSelector);
+            const placement = this.calculateModelPickerPlacement(Math.max(300, chromeHeight + rows * 32 + footerHeight), RELAY_DRAWER_WIDTH, anchorSelector);
             return ReactDOM.createPortal(
                 <div
                     className='nmx-model-picker-portal nmx-desktop-widget nmx-studio-isolated-picker-portal'
@@ -38009,11 +38015,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 : directory?.metrics?.quality !== undefined
                     ? directory.metrics.quality === INITIAL_RELAY_QUALITY && relayFeedbackVotes(values) === 0
                     : relayFeedbackVotes(values) === 0;
-            // The store cannot serve now: every probe of the last day failed, or the platform quarantined its APIs (three
-            // failed checks in a row) and none of its models is executable. A state of 'unavailable' is not that: it only
-            // means that no API is validated yet, and such a store stays listed.
-            const apiUnavailable = directory?.metrics?.availability === 0 && (directory.measurement?.availability?.sampleCount ?? 0) > 0
-                || (directory?.apiStatus?.unreachableApis ?? 0) > 0 && (directory?.stats?.executableCount ?? 0) === 0;
+            // The store cannot serve now only when none of its models is executable and its checks say why: the platform
+            // quarantined its APIs (three failed checks in a row), or every probe of the last day failed. While it has
+            // executable models it can serve, so it stays a normal row, marked when every check of the last day failed (a
+            // quarantined API beside a healthy one used to drag the whole store to 0% and hid it). A state of 'unavailable'
+            // is neither: it only means that no API is validated yet, and such a store stays listed.
+            const executableModels = (directory?.stats?.executableCount ?? 0) > 0;
+            const checksFailed = directory?.metrics?.availability === 0 && (directory.measurement?.availability?.sampleCount ?? 0) > 0;
+            const apiUnavailable = !executableModels && (checksFailed || (directory?.apiStatus?.unreachableApis ?? 0) > 0);
             // Values the directory supplies for want of current ones, which the drawer says: the past week's latest
             // probe latency, and the authenticity of the store's other listed models.
             const latencyStale = directory?.metrics?.latencyMs !== undefined && directory.measurement?.latency?.state === 'stale';
@@ -38037,6 +38046,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 qualityInitial, ...(qualityInitial ? { quality: INITIAL_RELAY_QUALITY } : {}),
                 ...(latencyStale ? { latencyStale, ...(latencyObservedAt !== undefined ? { latencyObservedAt } : {}) } : {}),
                 ...(authenticityListed ? { authenticityListed } : {}),
+                ...(executableModels && checksFailed ? { checksFailing: true } : {}),
                 ...(this.relaySourceTab === 'favorite' && (confirmedMissingFavorite || !values.length && directoryMerchants === undefined) ? {
                     directoryStatus: confirmedMissingFavorite ? 'unavailable' as const : 'unknown' as const,
                     ...(confirmedMissingFavorite ? { directoryOnly: true } : {})
@@ -38900,10 +38910,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const publicIds = new Set(this.publicMerchantPage?.merchants.map(merchant => merchant.id) || []);
         const automatic = options.filter(option => option.kind === 'automatic' && publicIds.size > 0
             && !this.relaySourceQuery.trim() && !this.publicMerchantPageLoading && !this.publicMerchantPageError);
-        // A relay nothing can run on (its API down, or only picture/video/sound models) is not offered, even the
-        // selected one; among favorites it stays, disabled, with the reason.
-        const byId = new Map(options.filter(option => option.kind === 'managed' && !option.unavailableReason).map(option => [option.merchantId, option]));
-        return [...automatic, ...[...publicIds].flatMap(id => byId.get(id) ? [byId.get(id)!] : [])];
+        // Every listed relay is a row, in the directory's order. One nothing can run on here (its APIs confirmed down, or
+        // only picture/video/sound models) follows the relays that can serve, disabled with its reason, so the drawer
+        // never turns blank without saying why.
+        const byId = new Map(options.filter(option => option.kind === 'managed').map(option => [option.merchantId, option]));
+        return [...automatic, ...usableRelaysFirst([...publicIds].flatMap(id => byId.get(id) ? [byId.get(id)!] : []))];
     }
 
     /**
@@ -38921,9 +38932,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 && sellsMedia(this.favoriteMerchantPage?.merchants.find(merchant => merchant.id === option.merchantId))),
             'favorite', this.relaySourceQuery, new Set(this.favoriteMerchantLabels.keys())
         );
-        const byId = new Map(options.filter(option => option.kind === 'managed' && !option.unavailableReason).map(option => [option.merchantId, option]));
-        return (this.publicMerchantPage?.merchants || []).filter(merchant => sellsMedia(merchant) || mediaSources.has(managedRelayKey(merchant.id)))
-            .flatMap(merchant => byId.get(merchant.id) ? [byId.get(merchant.id)!] : []);
+        const byId = new Map(options.filter(option => option.kind === 'managed').map(option => [option.merchantId, option]));
+        return usableRelaysFirst((this.publicMerchantPage?.merchants || []).filter(merchant => sellsMedia(merchant) || mediaSources.has(managedRelayKey(merchant.id)))
+            .flatMap(merchant => byId.get(merchant.id) ? [byId.get(merchant.id)!] : []));
     }
 
     protected toggleFavoriteMerchant(option: RelayOption): void {
@@ -44685,19 +44696,20 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 <i className='codicon codicon-account' aria-hidden='true'></i><span>{relayText(this.desktopLocale, 'signInNotice')}</span></p>}
             <div className={`nmx-relay-options is-${this.relaySourceTab}`} id='nmx-relay-source-panel' role='tabpanel' aria-labelledby={`nmx-relay-source-${this.relaySourceTab}`}
                 onScroll={event => this.handlePublicMerchantScroll(event)}>{directoryLoading && <div className='nmx-relay-loading-center' role='status'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i><span>{relayText(this.desktopLocale, 'directoryLoading')}</span></div>}{savedOfficialRelayUnavailable && <div className='nmx-route-empty is-warning'><span>{relayText(this.desktopLocale, 'savedRelayUnavailable')}</span></div>}
-            {(this.relaySourceTab === 'merchant' || this.relaySourceTab === 'favorite' && relayOptions.length > 0) && <div className='nmx-relay-grid-head' aria-hidden='true'>
+            {/* Column titles only over rows: an empty list shows its message alone, not five orphaned titles above it. */}
+            {(this.relaySourceTab === 'merchant' || this.relaySourceTab === 'favorite') && relayOptions.length > 0 && <div className='nmx-relay-grid-head' aria-hidden='true'>
                 {([
                     [this.desktopLocale === 'zh-CN' ? '商家信息' : this.desktopLocale === 'zh-TW' ? '商家資訊' : relayText(this.desktopLocale, 'merchantSources'), relayColumnExplanation('merchant')],
                     [relayText(this.desktopLocale, 'quality'), relayColumnExplanation('quality')],
                     [relayText(this.desktopLocale, 'authenticity'), relayColumnExplanation('authenticity')],
                     [relayText(this.desktopLocale, 'latency'), relayColumnExplanation('latency')],
                     [offeringPriceText(this.desktopLocale, 'averageMultiplier'), relayColumnExplanation('price')]
-                ] as const).map(([headLabel, headTooltip], index) => <span key={index} onPointerEnter={event => showMetric(`head:${index}`, headTooltip, event.currentTarget)} onPointerLeave={hideMetric}>{headLabel}</span>)}
+                ] as const).map(([headLabel, headTooltip], index) => <span key={index} onPointerEnter={event => showMetric(`head:${index}`, headTooltip, event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(headLabel)}</span>)}
                 <span onPointerEnter={event => showMetric('head:favorite', relayColumnExplanation('favorite'), event.currentTarget)} onPointerLeave={hideMetric}><FavoriteHeartIcon /></span>
             </div>}{this.relaySourceTab === 'my-api' && relayOptions.length > 0 && <div className='nmx-relay-grid-head is-own' aria-hidden='true'>
-                <span onPointerEnter={event => showMetric('head:own-api', relayColumnExplanation('apiName'), event.currentTarget)} onPointerLeave={hideMetric}>{relayText(this.desktopLocale, 'apiName')}</span>
-                <span onPointerEnter={event => showMetric('head:own-authenticity', relayColumnExplanation('authenticity'), event.currentTarget)} onPointerLeave={hideMetric}>{relayText(this.desktopLocale, 'authenticity')}</span>
-                <span onPointerEnter={event => showMetric('head:own-latency', relayColumnExplanation('latency'), event.currentTarget)} onPointerLeave={hideMetric}>{relayText(this.desktopLocale, 'latency')}</span>
+                <span onPointerEnter={event => showMetric('head:own-api', relayColumnExplanation('apiName'), event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(relayText(this.desktopLocale, 'apiName'))}</span>
+                <span onPointerEnter={event => showMetric('head:own-authenticity', relayColumnExplanation('authenticity'), event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(relayText(this.desktopLocale, 'authenticity'))}</span>
+                <span onPointerEnter={event => showMetric('head:own-latency', relayColumnExplanation('latency'), event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(relayText(this.desktopLocale, 'latency'))}</span>
             </div>}{relayOptions.map(option => <div data-relay-capacity={this.relayOptionIsFull(option) ? 'full' : undefined}
                 tabIndex={this.relayOptionIsFull(option) ? 0 : undefined}
                 onPointerEnter={event => { if (this.relayOptionIsFull(option)) showMetric(option.key, relayText(this.desktopLocale, 'relayFull'), event.currentTarget); else if (preloadable(option)) this.scheduleMerchantCatalogPreload?.(option.merchantId); }}
@@ -44706,15 +44718,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onBlur={() => { hideMetric(); this.cancelMerchantCatalogPreload?.(option.merchantId); }}
                 className={`nmx-relay-option-row${option.directoryOnly ? option.directoryStatus === 'unknown' ? ' is-unknown' : ' is-unavailable' : ''}`} key={option.key}>
                 <button className={`nmx-relay-option-select${option.kind === 'automatic' ? ' is-automatic' : ''}${option.key === activeRelayKey ? ' is-selected' : ''}`} data-relay-key={option.key} aria-pressed={option.key === activeRelayKey} disabled={option.directoryOnly || this.relayOptionIsFull(option)}
-                    aria-label={[option.label, this.relayOptionIsFull(option) ? relayText(this.desktopLocale, 'relayFull') : '', option.directoryStatus === 'unknown' ? relayText(this.desktopLocale, 'directoryUnavailable') : option.directoryStatus === 'unavailable' ? relayDelistedText(this.desktopLocale, option.unavailableReason) : option.directoryOnly ? modelCenterText(this.desktopLocale, 'unavailable') : '', ...metricsFor(option).map(metric => metric.label)].filter(Boolean).join(' · ')}
+                    aria-label={[option.label, this.relayOptionIsFull(option) ? relayText(this.desktopLocale, 'relayFull') : '', option.directoryStatus === 'unknown' ? relayText(this.desktopLocale, 'directoryUnavailable') : option.directoryStatus === 'unavailable' ? relayDelistedText(this.desktopLocale, option.unavailableReason) : option.directoryOnly ? modelCenterText(this.desktopLocale, 'unavailable') : '', option.checksFailing ? relayText(this.desktopLocale, 'checksFailing') : '', ...metricsFor(option).map(metric => metric.label)].filter(Boolean).join(' · ')}
                     onFocus={event => { if (option.kind !== 'automatic') showMetric(option.key, metricsFor(option).map(metric => metric.label).join('\n'), event.currentTarget); }}
                     onBlur={hideMetric} onPointerLeave={hideMetric} onClick={() => { if (option.directoryOnly || this.relayOptionIsFull(option)) return; hideMetric(); if (overrideSelection) overrideSelection.onSelect(option.key); else if (comicScope) this.selectComicChatRelay(option.key); else this.selectRelay(option.key); }}>
                 {/* The public merchant number tells same-named stores apart; the store intro follows it. */}
-                <strong className='nmx-relay-option-name' aria-label={(option.kind === 'managed'
-                    ? [option.label, option.publicCode, (option.storeTagline || option.storeDescription || '').trim() || modelCenterText(this.desktopLocale, 'noStoreIntro')]
+                <strong className={`nmx-relay-option-name${option.checksFailing ? ' is-failing' : ''}`} aria-label={(option.kind === 'managed'
+                    ? [option.label, option.publicCode, (option.storeTagline || option.storeDescription || '').trim() || modelCenterText(this.desktopLocale, 'noStoreIntro'),
+                        option.checksFailing ? relayText(this.desktopLocale, 'checksFailing') : '']
                     : [option.label, option.kind === 'official' ? option.detail : '']).filter(Boolean).join('\n')}
                     onPointerEnter={event => showMetric(option.key, event.currentTarget.getAttribute('aria-label') || option.label, event.currentTarget)}
-                    onPointerLeave={hideMetric}>{option.label}</strong>
+                    onPointerLeave={hideMetric}>{option.checksFailing && <i className='codicon codicon-warning' data-relay-checks='failing' aria-hidden='true'></i>}{option.label}</strong>
                 {option.kind !== 'automatic' && option.directoryStatus === 'unavailable' && <span className='nmx-relay-option-metrics is-delisted'>
                     <em data-relay-delisted={option.unavailableReason || 'delisted'}>{relayDelistedText(this.desktopLocale, option.unavailableReason)}</em>
                 </span>}
@@ -44755,7 +44768,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const loading = this.relaySourceTab !== 'my-api' && (this.publicMerchantPageLoading || !directoryPage || this.publicMerchantPageError);
         const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked));
         const footerHeight = loading || this.relaySourceTab === 'merchant' && this.publicMerchantPage?.nextCursor ? 30 : 0;
-        const placement = this.calculateModelPickerPlacement(Math.max(300, chromeHeight + rows * 32 + footerHeight), 264);
+        const placement = this.calculateModelPickerPlacement(Math.max(300, chromeHeight + rows * 32 + footerHeight), RELAY_DRAWER_WIDTH);
         return ReactDOM.createPortal(
             <div className='nmx-model-picker-portal nmx-desktop-widget' dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'} lang={this.desktopLocale}>
                 <div className={`nmx-model-picker-surface nmx-shell nmx-theme-${this.resolvedDesktopTheme()}`}>
@@ -49190,7 +49203,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const loading = this.relaySourceTab !== 'my-api' && (this.publicMerchantPageLoading || !directoryPage || this.publicMerchantPageError);
         const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked));
         const footerHeight = loading || this.relaySourceTab === 'merchant' && this.publicMerchantPage?.nextCursor ? 30 : 0;
-        const placement = this.calculateModelPickerPlacement(Math.max(300, chromeHeight + rows * 32 + footerHeight), 264, '.nmx-comic-chat-drawers .nmx-composer-relay-button');
+        const placement = this.calculateModelPickerPlacement(Math.max(300, chromeHeight + rows * 32 + footerHeight), RELAY_DRAWER_WIDTH, '.nmx-comic-chat-drawers .nmx-composer-relay-button');
         const close = (): void => this.dismissComicChatRelayPicker(true);
         return ReactDOM.createPortal(
             <div className='nmx-model-picker-portal nmx-desktop-widget nmx-comic-relay-portal' dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'} lang={this.desktopLocale}

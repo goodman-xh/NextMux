@@ -156,7 +156,39 @@ interface RelayPickerSource {
     readonly merchantId?: string;
 }
 
-/** A view of the existing user-visible routes, never an additional routing source. */
+/**
+ * The relay drawer's width. Five titled columns (the store, quality, authenticity, latency, average multiplier) and the
+ * favorite heart need it: at 264px a value column was 36px, narrower than a four-character CJK title such as 平均倍率
+ * (44px), which ran into the next one. A narrow window still gets min(width, viewport − 16).
+ */
+export const RELAY_DRAWER_WIDTH = 352;
+
+// Break points for the drawer's long column titles. A soft hyphen (a zero-width space in Devanagari, which is not
+// hyphenated) lets one word take its column's next line instead of running into the next column; a word that fits
+// stays whole, and the browser uses the last break that fits. CJK breaks between characters by itself, and Arabic
+// words stay whole (breaking one would undo its joined letters; the longest, الاستجابة, is 35px). Measured at 10px with SF
+// Pro and with Arial + 4% for Segoe UI, every title fits two lines of the drawer's columns and three of the Council
+// setup's 40px ones.
+const RELAY_COLUMN_TITLE_BREAKS: Readonly<Record<string, string>> = {
+    Authenticity: 'Authen\u00adticity', multiplier: 'multi\u00adplier',
+    Intermediarios: 'Interme\u00addiarios', Autenticidad: 'Auten\u00adticidad', Latencia: 'Laten\u00adcia', Multiplicador: 'Multi\u00adpli\u00adca\u00addor',
+    Authenticité: 'Authen\u00adticité', Multiplicateur: 'Multi\u00adpli\u00adca\u00adteur', Multiplikator: 'Multi\u00adpli\u00adka\u00adtor',
+    Qualidade: 'Quali\u00addade', Autenticidade: 'Autenti\u00adcidade', Latência: 'Latên\u00adcia',
+    Посредники: 'Посред\u00adники', Качество: 'Ка\u00adчест\u00adво', Подлинность: 'Под\u00adлин\u00adность', Задержка: 'За\u00adдерж\u00adка',
+    Средний: 'Сред\u00adний', множитель: 'мно\u00adжи\u00adтель',
+    गुणवत्ता: 'गुण\u200bवत्ता', प्रामाणिकता: 'प्रामा\u200bणिकता'
+};
+
+/** Relays that can serve come first, in their order; those that cannot (unavailableReason) follow, in theirs. */
+export function usableRelaysFirst<T extends { readonly unavailableReason?: unknown }>(options: readonly T[]): T[] {
+    return [...options.filter(option => !option.unavailableReason), ...options.filter(option => option.unavailableReason)];
+}
+
+/** A drawer column title with the break points its narrow column needs (RELAY_COLUMN_TITLE_BREAKS). */
+export function relayColumnTitle(title: string): string {
+    return title.split(' ').map(word => RELAY_COLUMN_TITLE_BREAKS[word] ?? word).join(' ');
+}
+
 /**
  * The source drawer's height besides its 32px rows, as Chrome lays it out: source tabs, search and the panel's
  * padding (91px); the merchant tab adds its sort row and column header (65px), the favorite and own-API tabs their
@@ -167,6 +199,7 @@ export function relayDrawerChromeHeight(tab: RelaySourceTab, signedIn: boolean):
     return (tab === 'merchant' ? 156 : 115) + (tab !== 'my-api' && !signedIn ? 34 : 0);
 }
 
+/** A view of the existing user-visible routes, never an additional routing source. */
 export function filterRelayPickerSources<T extends RelayPickerSource>(
     options: readonly T[], tab: RelaySourceTab, query: string, favoriteMerchantIds: ReadonlySet<string> = new Set()
 ): readonly T[] {
