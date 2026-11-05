@@ -58,7 +58,7 @@ export interface DesktopUpdateActionModel {
     readonly label: string;
     readonly hint: string;
     readonly tone: 'default' | 'warning';
-    readonly action: 'download' | 'details';
+    readonly action: 'download' | 'details' | 'restart';
     readonly disabled: boolean;
 }
 
@@ -75,25 +75,46 @@ export function resolveDesktopUpdateActionModel(state: NextMuxDesktopUpdateState
     const code = state.errorCode;
     const installFailed = Boolean(code?.startsWith('UPDATE_INSTALL_'));
     const failed = state.phase === 'available' && (installFailed || isUpdateDownloadErrorCode(code) || !code && Boolean(state.error));
-    // A ready update opens the Updates details panel rather than restarting without confirmation; closing NextMux installs it
-    // too. Its tooltip says so (readyDockHint); the panel's own sentence (readyHint) sits beside the restart button.
+    // A ready update restarts NextMux to install it, like the Updates panel's "Restart to update": the quit still asks
+    // first when work is running. Closing NextMux installs it too; the tooltip (readyHint) says both.
+    const ready = state.phase === 'ready';
     const label = downloading ? `${percent}%`
-        : desktopUpdateText(locale, state.phase === 'ready' ? 'ready' : failed ? 'retry' : 'update');
-    const baseHint = desktopUpdateText(locale, state.phase === 'ready' ? 'readyDockHint' : state.preparing ? 'preparing'
+        : desktopUpdateText(locale, ready ? 'restartDock' : failed ? 'retry' : 'update');
+    const baseHint = desktopUpdateText(locale, ready ? 'readyHint' : state.preparing ? 'preparing'
         : failed ? 'downloadFailed' : downloading ? 'backgroundHint' : 'availableHint');
     const detail = failed ? String(state.error || state.message || code || '').trim() : '';
     return {
         label,
         hint: installFailed && detail ? detail : detail ? `${baseHint} · ${detail}` : baseHint,
         tone: failed ? 'warning' : 'default',
-        action: state.phase === 'available' ? 'download' : 'details',
+        action: state.phase === 'available' ? 'download' : ready ? 'restart' : 'details',
         disabled: Boolean(busy) || downloading,
     };
 }
 
-export function DesktopUpdateAction({ state, locale, busy, onDownload, onDetails }: {
+/**
+ * "Restart to update" from the dock: the caller's handler when there is one, else the same desktop bridge call as the
+ * Updates panel's restart button (installUpdate quits through the normal quit check, so running work still gets its
+ * prompt). Without a bridge (a browser preview), or when the update can no longer be installed, the Updates panel opens.
+ */
+function restartToInstallUpdate(onRestart: (() => void) | undefined, onDetails: () => void): void {
+    if (onRestart) {
+        onRestart();
+        return;
+    }
+    const bridge = typeof window === 'undefined' ? undefined : window.nextmuxDesktop;
+    if (typeof bridge?.installUpdate !== 'function') {
+        onDetails();
+        return;
+    }
+    void bridge.installUpdate().then(started => { if (!started) onDetails(); }, () => onDetails());
+}
+
+export function DesktopUpdateAction({ state, locale, busy, onDownload, onDetails, onRestart }: {
     readonly state: NextMuxDesktopUpdateState; readonly locale: NextMuxDesktopLocale; readonly busy: boolean;
     readonly onDownload: () => void; readonly onDetails: () => void;
+    /** Restarts NextMux to install a ready update; without it the button asks the desktop bridge itself. */
+    readonly onRestart?: () => void;
 }): React.ReactElement | null {
     if (!updateAppearsInDock(state)) return null;
     const model = resolveDesktopUpdateActionModel(state, locale, busy);
@@ -102,6 +123,7 @@ export function DesktopUpdateAction({ state, locale, busy, onDownload, onDetails
         onClick={() => {
             if (model.disabled) return;
             if (model.action === 'download') onDownload();
+            else if (model.action === 'restart') restartToInstallUpdate(onRestart, onDetails);
             else onDetails();
         }}>
         <span>{model.label}</span>

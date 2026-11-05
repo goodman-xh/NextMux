@@ -157,27 +157,36 @@ interface RelayPickerSource {
 }
 
 /**
- * The relay drawer's width. Five titled columns (the store, quality, authenticity, latency, average multiplier) and the
- * favorite heart need it: at 264px a value column was 36px, narrower than a four-character CJK title such as 平均倍率
- * (44px), which ran into the next one. A narrow window still gets min(width, viewport − 16).
+ * The relay drawer's width: the same compact 264px as the model drawer beside it. Its table keeps the store name, the
+ * four values (quality, authenticity, latency, average multiplier) and the favorite heart side by side on fixed value
+ * columns (nextmux.css); the name takes what is left. A narrow window still gets min(width, viewport − 16).
  */
-export const RELAY_DRAWER_WIDTH = 352;
+export const RELAY_DRAWER_WIDTH = 264;
 
 // Break points for the drawer's long column titles. A soft hyphen (a zero-width space in Devanagari, which is not
 // hyphenated) lets one word take its column's next line instead of running into the next column; a word that fits
-// stays whole, and the browser uses the last break that fits. CJK breaks between characters by itself, and Arabic
-// words stay whole (breaking one would undo its joined letters; the longest, الاستجابة, is 35px). Measured at 10px with SF
-// Pro and with Arial + 4% for Segoe UI, every title fits two lines of the drawer's columns and three of the Council
-// setup's 40px ones.
+// stays whole, and the browser uses the last break that fits, so the finer breaks only matter where a font runs wider
+// than measured. CJK breaks between characters by itself, and Arabic words stay whole (breaking one would undo its
+// joined letters; shaped, the longest, الاستجابة, is 36px). Measured at 10px with SF Pro, Arial + 4% for Segoe UI and
+// HarfBuzz for Arabic and Devanagari, every title fits the 264px drawer's 35/40/39/46px columns in two lines, except
+// the average multiplier in es, fr and pt-BR and the longer Russian words, which take a third (RELAY_TALL_HEAD_LOCALES).
 const RELAY_COLUMN_TITLE_BREAKS: Readonly<Record<string, string>> = {
-    Authenticity: 'Authen\u00adticity', multiplier: 'multi\u00adplier',
-    Intermediarios: 'Interme\u00addiarios', Autenticidad: 'Auten\u00adticidad', Latencia: 'Laten\u00adcia', Multiplicador: 'Multi\u00adpli\u00adca\u00addor',
-    Authenticité: 'Authen\u00adticité', Multiplicateur: 'Multi\u00adpli\u00adca\u00adteur', Multiplikator: 'Multi\u00adpli\u00adka\u00adtor',
-    Qualidade: 'Quali\u00addade', Autenticidade: 'Autenti\u00adcidade', Latência: 'Latên\u00adcia',
-    Посредники: 'Посред\u00adники', Качество: 'Ка\u00adчест\u00adво', Подлинность: 'Под\u00adлин\u00adность', Задержка: 'За\u00adдерж\u00adка',
+    Quality: 'Qual\u00adi\u00adty', Authenticity: 'Au\u00adthen\u00adtic\u00adi\u00adty', Latency: 'La\u00adten\u00adcy', multiplier: 'multi\u00adplier',
+    Intermediarios: 'Interme\u00addiarios', Calidad: 'Ca\u00adli\u00addad', Autenticidad: 'Auten\u00adti\u00adci\u00addad', Latencia: 'Laten\u00adcia',
+    Multiplicador: 'Multi\u00adpli\u00adca\u00addor',
+    Qualité: 'Qua\u00adli\u00adté', Authenticité: 'Au\u00adthen\u00adti\u00adci\u00adté', Latence: 'La\u00adtence', Multiplicateur: 'Multi\u00adpli\u00adca\u00adteur',
+    Qualität: 'Qua\u00adli\u00adtät', Echtheit: 'Echt\u00adheit', Multiplikator: 'Multi\u00adpli\u00adka\u00adtor',
+    Qualidade: 'Quali\u00addade', Autenticidade: 'Au\u00adten\u00adti\u00adci\u00adda\u00adde', Latência: 'Latên\u00adcia',
+    Посредники: 'Посред\u00adники', Качество: 'Ка\u00adче\u00adство', Подлинность: 'Под\u00adлин\u00adность', Задержка: 'За\u00adдерж\u00adка',
     Средний: 'Сред\u00adний', множитель: 'мно\u00adжи\u00adтель',
     गुणवत्ता: 'गुण\u200bवत्ता', प्रामाणिकता: 'प्रामा\u200bणिकता'
 };
+
+/**
+ * Languages whose drawer column titles take a third line at RELAY_DRAWER_WIDTH, which makes the head 35px instead of
+ * 24px: the average multiplier in es, fr and pt-BR (Multiplicateur moyen), and ru's authenticity, latency and multiplier.
+ */
+const RELAY_TALL_HEAD_LOCALES: ReadonlySet<string> = new Set(['es', 'fr', 'pt-BR', 'ru']);
 
 /** Relays that can serve come first, in their order; those that cannot (unavailableReason) follow, in theirs. */
 export function usableRelaysFirst<T extends { readonly unavailableReason?: unknown }>(options: readonly T[]): T[] {
@@ -193,10 +202,13 @@ export function relayColumnTitle(title: string): string {
  * The source drawer's height besides its 32px rows, as Chrome lays it out: source tabs, search and the panel's
  * padding (91px); the merchant tab adds its sort row and column header (65px), the favorite and own-API tabs their
  * column header (24px); signed out, the merchant and favorite tabs carry the sign-in note, at most two 15px lines with
- * its margin (34px). Too small an estimate leaves a scrollbar on a list the window has room for.
+ * its margin (34px). In the languages whose titles take a third line (RELAY_TALL_HEAD_LOCALES) that header is 35px
+ * (the own-API header, over two wide columns, never is). Too small an estimate leaves a scrollbar on a list the window
+ * has room for.
  */
-export function relayDrawerChromeHeight(tab: RelaySourceTab, signedIn: boolean): number {
-    return (tab === 'merchant' ? 156 : 115) + (tab !== 'my-api' && !signedIn ? 34 : 0);
+export function relayDrawerChromeHeight(tab: RelaySourceTab, signedIn: boolean, locale?: string): number {
+    return (tab === 'merchant' ? 156 : 115) + (tab !== 'my-api' && !signedIn ? 34 : 0)
+        + (tab !== 'my-api' && locale !== undefined && RELAY_TALL_HEAD_LOCALES.has(locale) ? 11 : 0);
 }
 
 /** A view of the existing user-visible routes, never an additional routing source. */

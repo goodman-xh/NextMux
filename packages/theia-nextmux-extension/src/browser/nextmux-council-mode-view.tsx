@@ -17,7 +17,17 @@ import type { NextMuxDesktopLocale } from './nextmux-locale';
 import { councilModeText, councilRoleLabel } from './nextmux-council-mode-locale';
 import { councilValidationMessage } from './nextmux-council-validation';
 import { ModelAuthenticityTag } from './nextmux-model-authenticity';
+import { offeringPriceText } from './nextmux-offering-price';
+import { relayText } from './nextmux-relay-locale';
 import { modelPickerEvidenceText, relayPercentText } from './nextmux-relay-picker';
+
+/**
+ * What a model's price tag says when hovered: 倍率, or, for a price the relay sets itself (the tag reads 自定义价格), that
+ * the multiplier does not apply. data-nmx-tip makes the shell's hover tips label the tag itself, not the whole option.
+ */
+function priceTagTip(locale: NextMuxDesktopLocale, tag: string): string {
+    return tag === offeringPriceText(locale, 'ownTag') ? offeringPriceText(locale, 'own') : relayText(locale, 'price');
+}
 
 export interface CouncilDraftSlot {
     readonly slotId: string;
@@ -876,7 +886,8 @@ export const CouncilConfigModal: React.FC<CouncilConfigModalProps> = props => {
                                                     {selectedModelLabel || councilModeText(locale, 'selectModelPlaceholder')}
                                                 </span>
                                                 {selectedModelLabel && slotProviderLabel && <small className='nmx-council-selected-relay-badge' data-council-slot-provider={slot.slotId}>{slotProviderLabel}</small>}
-                                                {slotVariantTag && <small className='nmx-model-price-variant nmx-council-model-price' dir='ltr'>{slotVariantTag}</small>}
+                                                {slotVariantTag && <small className='nmx-model-price-variant nmx-council-model-price' dir='ltr'
+                                                    title={priceTagTip(locale, slotVariantTag)} data-nmx-tip={priceTagTip(locale, slotVariantTag)}>{slotVariantTag}</small>}
                                                 {selectedModelLabel && selectedCandidate?.authenticity && <ModelAuthenticityTag locale={locale} value={selectedCandidate.authenticity.value} />}
                                                 <i className={`codicon codicon-chevron-${modelPickerOpen ? 'up' : 'down'} nmx-council-select-chevron`} aria-hidden='true' />
                                             </button>
@@ -921,7 +932,8 @@ export const CouncilConfigModal: React.FC<CouncilConfigModalProps> = props => {
                                                                             <small className='nmx-council-model-option-detail'>{model.detail}</small>
                                                                         )}
                                                                     </span>
-                                                                    {model.variantTag && <small className='nmx-model-price-variant nmx-council-model-price' dir='ltr'>{model.variantTag}</small>}
+                                                                    {model.variantTag && <small className='nmx-model-price-variant nmx-council-model-price' dir='ltr'
+                                                                        title={priceTagTip(locale, model.variantTag)} data-nmx-tip={priceTagTip(locale, model.variantTag)}>{model.variantTag}</small>}
                                                                     {model.authenticity && <ModelAuthenticityTag locale={locale} value={model.authenticity.value} />}
                                                                 </button>
                                                                 {props.renderModelOptionHoverPortal?.(model)}

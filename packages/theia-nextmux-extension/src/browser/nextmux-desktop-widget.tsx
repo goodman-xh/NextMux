@@ -4116,16 +4116,32 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected relayMetricTooltip: { readonly key: string; readonly text: string; readonly anchor: HTMLElement } | undefined;
     protected modelEvidenceTooltip: { readonly text: string; readonly left: number; readonly top: number; readonly width: number } | undefined;
+    /** The anchor whose own title the portal tooltip holds back while it shows, as nextmux-hover-tips.ts does. */
+    protected modelEvidenceHeldTitle: { readonly anchor: HTMLElement; readonly title: string } | undefined;
     protected playbackFileUrlByPath = new Map<string, string>();
     protected playbackFileProbedPaths = new Set<string>();
 
     protected showModelEvidenceTooltip(text: string, anchor: HTMLElement | null | undefined): void {
         if (!text || !anchor || typeof window === 'undefined' || typeof anchor.getBoundingClientRect !== 'function') return;
+        // A tag's own title (倍率, 真实性) would open a second, system tooltip over this one: held back while this shows.
+        if (this.modelEvidenceHeldTitle?.anchor !== anchor) {
+            this.releaseModelEvidenceTitle?.();
+            const title = typeof anchor.getAttribute === 'function' ? anchor.getAttribute('title') : null;
+            if (title) {
+                this.modelEvidenceHeldTitle = { anchor, title };
+                anchor.removeAttribute('title');
+            }
+        }
         const rect = anchor.getBoundingClientRect();
         const viewportW = Math.max(200, window.innerWidth || 800);
         const viewportH = Math.max(200, window.innerHeight || 600);
         const maxWidth = Math.min(248, viewportW - 16);
-        const width = Math.max(120, Math.min(maxWidth, Math.ceil(text.length * 11) + 28));
+        // The box fits its 11px text: a CJK character is 11px, anything else about 6.6px, plus the 10px padding and 1px
+        // border each side. 倍率 or 真实性 gets a small label, not a 120px box with its word in one corner; a long note
+        // still wraps at the 248px maximum.
+        const textWidth = [...text].reduce((sum, character) => sum
+            + (/[\u1100-\u11ff\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]/u.test(character) ? 11 : 6.6), 0);
+        const width = Math.max(44, Math.min(maxWidth, Math.ceil(textWidth) + 24));
         const left = Math.max(8, Math.min(Math.round(rect.left + rect.width / 2 - width / 2), viewportW - width - 8));
         const belowTop = Math.round(rect.bottom + 6);
         const top = belowTop + 56 <= viewportH - 8
@@ -4142,9 +4158,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected hideModelEvidenceTooltip(): void {
+        this.releaseModelEvidenceTitle?.();
         if (!this.modelEvidenceTooltip) return;
         this.modelEvidenceTooltip = undefined;
         this.update();
+    }
+
+    /** Gives the held anchor its title back, unless a render has set one meanwhile or the anchor is gone. */
+    protected releaseModelEvidenceTitle(): void {
+        const held = this.modelEvidenceHeldTitle;
+        if (!held) return;
+        this.modelEvidenceHeldTitle = undefined;
+        if (held.anchor.isConnected && !held.anchor.hasAttribute('title')) held.anchor.setAttribute('title', held.title);
     }
 
     protected renderModelEvidenceTooltipPortal(): React.ReactNode {
@@ -7819,7 +7844,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
                         onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd></div>)}</dl>
                     {(offering || officialOffering) && <OfferingPriceCard locale={this.desktopLocale} offering={(offering || officialOffering)!} collapsible pullOutDrawer officialOnly={!offering && Boolean(officialOffering)} />}
-                    {this.renderModelEvidenceTooltipPortal?.()}
                 </section>
             </div>,
             document.body
@@ -13270,7 +13294,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const rows = Math.max(2, this.relayPickerOptions().length);
             const directoryPage = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage;
             const loading = this.relaySourceTab !== 'my-api' && (this.publicMerchantPageLoading || !directoryPage || this.publicMerchantPageError);
-            const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked));
+            const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked), this.desktopLocale);
             const footerHeight = loading || (this.relaySourceTab === 'merchant' && this.publicMerchantPage?.nextCursor) ? 30 : 0;
             const placement = this.calculateModelPickerPlacement(Math.max(300, chromeHeight + rows * 32 + footerHeight), RELAY_DRAWER_WIDTH, anchorSelector);
             return ReactDOM.createPortal(
@@ -13420,7 +13444,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                     if (this.comicModelHoverKey) {
                                         this.closeComicModelHoverImmediately();
                                         this.update();
-                                    }
+                                    } else this.hideModelEvidenceTooltip?.();
                                 }}
                             >
                                 {filtered.map(item => {
@@ -13431,6 +13455,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         ? (ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering)))
                                         : '';
                                     const fidelity = offering ? measuredModelFidelity(offering.fidelity) : undefined;
+                                    const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
                                     const hoverOpen = this.comicModelHoverKey === item.key;
                                     const hoverPlacement = hoverOpen ? this.comicModelHoverPlacement : undefined;
                                     const evidenceRows: { readonly label: string; readonly value: string }[] = [
@@ -13490,8 +13515,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                             >
                                                 <span>
                                                     <strong data-nmx-literal>{item.label}</strong>
-                                                    {variantTag && <small className='nmx-model-price-variant' dir='ltr'>{variantTag}</small>}
-                                                    {offering && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} />}
+                                                    {variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
+                                                        onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)}
+                                                        onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
+                                                    {offering && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}
                                                 </span>
                                                 {selected && <i className='codicon codicon-check' />}
                                             </button>
@@ -34540,6 +34567,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.modelPickerHiddenVisibleLimit = 10;
         this.modelPickerHiddenPopoverTicked?.clear();
         this.relayMetricTooltip = undefined;
+        this.releaseModelEvidenceTitle?.();
         this.modelEvidenceTooltip = undefined;
         this.closeModelEffortPickerImmediately();
         this.update();
@@ -35325,6 +35353,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.modelPickerEffortModelId = '';
         this.modelPickerEffortLevelCount = 0;
         this.modelPickerEffortPlacement = undefined;
+        this.releaseModelEvidenceTitle?.();
         this.modelEvidenceTooltip = undefined;
     }
 
@@ -44616,6 +44645,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     onPreviewTheme={theme => this.setDesktopTheme(theme)}
                     onAppearanceDone={(locale, theme) => this.finishOnboardingAppearance(locale, theme)}
                     onFinish={() => this.setOnboardingStep('done')} />}
+                {/* The model tooltip (a tag's 倍率 or 真实性, a depth, a context size or an evidence note) has one mount for the
+                    whole window: every model picker, its hover card and the Council dialog show it from here. */}
+                {this.renderModelEvidenceTooltipPortal?.()}
         </>;
     }
 
@@ -44853,7 +44885,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const rows = Math.max(2, this.relayPickerOptions().length);
         const directoryPage = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage;
         const loading = this.relaySourceTab !== 'my-api' && (this.publicMerchantPageLoading || !directoryPage || this.publicMerchantPageError);
-        const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked));
+        const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked), this.desktopLocale);
         const footerHeight = loading || this.relaySourceTab === 'merchant' && this.publicMerchantPage?.nextCursor ? 30 : 0;
         const placement = this.calculateModelPickerPlacement(Math.max(300, chromeHeight + rows * 32 + footerHeight), RELAY_DRAWER_WIDTH);
         return ReactDOM.createPortal(
@@ -44972,7 +45004,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             {!showUpdate && <button className={`nmx-account-settings-button ${this.activeSection === 'settings' ? 'is-active' : ''}`} aria-label={this.tx('settings')} title={this.tx('settings')}
                 onClick={() => this.toggleSettingsPanel('profile')}><i className='codicon codicon-settings-gear'></i></button>}
             <DesktopUpdateAction state={this.updateState} locale={this.desktopLocale} busy={this.updateBusy}
-                onDownload={() => void this.downloadDesktopUpdate()} onDetails={() => this.openSettingsPanel('updates')} />
+                onDownload={() => void this.downloadDesktopUpdate()} onDetails={() => this.openSettingsPanel('updates')}
+                onRestart={() => void this.installDesktopUpdate()} />
         </footer>;
     }
 
@@ -47706,6 +47739,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             ];
             // Every managed row carries its multiplier; the hover card has the full price.
             const variantTag = offering ? ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, multiplier) : '';
+            // Hovering the tag says what it is: 倍率, or for an own price that the multiplier does not apply (the hover card has the price).
+            const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
             const contextRow: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
             const evidenceRows = [...(offering || officialOffering ? metrics.slice(0, 2) : metrics), ...(!contextShown ? contextRow : [])];
             const optionTitle = [model.label, optionRouteLabel, ...[...metrics, ...contextRow].map(metric => `${metric.label}: ${metric.value}`), !supported && unavailableLabel].filter(Boolean).join(' · ');
@@ -47722,8 +47757,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     if (optionRoute) this.openModelEffortPicker(model.id, event.currentTarget.closest('.nmx-model-option') as HTMLElement, settingsRowCount);
                     else this.completeNavigationSurface();
                     this.update();
-                }} aria-label={optionTitle}><span><strong>{model.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr'>{variantTag}</small>}
-                    {(offering || fidelity !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} />}</span>{selected && <i className='codicon codicon-check'></i>}</button>
+                }} aria-label={optionTitle}><span><strong>{model.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
+                    onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)} onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
+                    {(offering || fidelity !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}</span>{selected && <i className='codicon codicon-check'></i>}</button>
                 {effortOpen && placement && ReactDOM.createPortal(
                     <div className={`nmx-model-effort-portal nmx-theme-${this.resolvedDesktopTheme()}`} dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'} lang={this.desktopLocale}
                         onPointerEnter={() => this.cancelModelEffortPickerClose()} onPointerLeave={() => this.scheduleModelEffortPickerClose()}>
@@ -47785,7 +47821,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd></div>)}</dl>
                             {(offering || officialOffering) && <OfferingPriceCard locale={this.desktopLocale} offering={(offering || officialOffering)!} collapsible pullOutDrawer officialOnly={!offering && Boolean(officialOffering)} />}
                             {!supported && <p className='nmx-model-evidence-note'>{unavailableLabel}</p>}
-                            {this.renderModelEvidenceTooltipPortal?.()}
                         </section>
                     </div>,
                     document.body
@@ -48248,7 +48283,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             defaultItemHeight={32}
                             endReached={() => this.loadMorePickerModels()}
                             rangeChanged={({ endIndex }) => { if (endIndex >= pickerRows.length - 4) this.loadMorePickerModels(); }}
-                            onScroll={() => { if (this.modelPickerEffortModelId) { this.closeModelEffortPickerImmediately(); this.update(); } }}
+                            onScroll={() => { if (this.modelPickerEffortModelId) { this.closeModelEffortPickerImmediately(); this.update(); } else this.hideModelEvidenceTooltip?.(); }}
                             increaseViewportBy={{ top: 96, bottom: 128 }}
                             onMouseDown={event => { if (event.target === event.currentTarget) this.closeNavigationSurface(); }}
                             itemContent={(_index, model) => renderModelPickerOption(model, modelRouteById.has(model.variantOf ?? model.id))}
@@ -49289,7 +49324,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const rows = Math.max(2, this.relayPickerOptions().length);
         const directoryPage = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage;
         const loading = this.relaySourceTab !== 'my-api' && (this.publicMerchantPageLoading || !directoryPage || this.publicMerchantPageError);
-        const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked));
+        const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked), this.desktopLocale);
         const footerHeight = loading || this.relaySourceTab === 'merchant' && this.publicMerchantPage?.nextCursor ? 30 : 0;
         const placement = this.calculateModelPickerPlacement(Math.max(300, chromeHeight + rows * 32 + footerHeight), RELAY_DRAWER_WIDTH, '.nmx-comic-chat-drawers .nmx-composer-relay-button');
         const close = (): void => this.dismissComicChatRelayPicker(true);
@@ -49339,6 +49374,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.cancelComicModelHoverClose();
         this.comicModelHoverKey = '';
         this.comicModelHoverPlacement = undefined;
+        this.releaseModelEvidenceTitle?.();
         this.modelEvidenceTooltip = undefined;
     }
 
@@ -49483,12 +49519,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 onChange={event => { this.comicModelPickerQuery = event.currentTarget.value; this.closeComicModelHoverImmediately(); this.update(); }} /></div>}
                         {filtered.length > 0 ? (
                             <div className='nmx-model-picker-list' role='listbox' aria-label={this.comicChatT(activeTab)}
-                                onScroll={() => { if (this.comicModelHoverKey) { this.closeComicModelHoverImmediately(); this.update(); } }}>
+                                onScroll={() => { if (this.comicModelHoverKey) { this.closeComicModelHoverImmediately(); this.update(); } else this.hideModelEvidenceTooltip?.(); }}>
                                 {filtered.map(item => {
                                     const selected = item.key === selectedCandidate?.key;
                                     const offering = item.offering;
                                     const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
                                     const variantTag = offering ? (ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering))) : '';
+                                    const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
                                     const fidelity = offering ? measuredModelFidelity(offering.fidelity) : undefined;
                                     const hoverOpen = this.comicModelHoverKey === item.key;
                                     const hoverPlacement = hoverOpen ? this.comicModelHoverPlacement : undefined;
@@ -49534,8 +49571,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                 if (ui.mode !== activeTab) this.setComicChatMode(activeTab);
                                                 this.dismissComicChatModelPicker(true);
                                             }}>
-                                            <span><strong data-nmx-literal>{item.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr'>{variantTag}</small>}
-                                                {offering && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} />}</span>
+                                            <span><strong data-nmx-literal>{item.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
+                                                onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)} onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
+                                                {offering && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}</span>
                                             {selected && <i className='codicon codicon-check'></i>}
                                         </button>
                                         {hoverOpen && hoverPlacement && ReactDOM.createPortal(
@@ -55718,22 +55756,30 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     /**
-     * Closing the last window quits NextMux to install a ready update only when this is false: no run or comic job,
-     * no enabled scheduled task (it could not start while NextMux is closed), no command still running in a terminal
-     * and no component download. Anything unknown counts as work, so NextMux stays in the tray.
+     * Closing the last window quits NextMux to install a ready update only when this is false. The main process asks
+     * only while an update is ready, and then only work that quitting now would cut off keeps NextMux in the tray: a
+     * run or comic job, a command running in a terminal (the shell's current command, or an agent's terminal lease)
+     * and a component download. An idle shell does not, though it can report a child process (the Windows ConPTY
+     * helper, a shell's own background helper), nor does an enabled scheduled task (it waits for NextMux to be opened
+     * again), nor a component check that fails: none of them may hold a downloaded update back for days. Before the
+     * renderer knows the update is ready, it keeps the stricter answer, where anything unknown counts as work.
      */
     async hasWorkKeepingAppOpen(): Promise<boolean> {
         if (this.hasRunningConversationForExit()) return true;
-        if (this.scheduledTasks.some(task => task.enabled)) return true;
+        const updateReady = this.updateState?.phase === 'ready';
+        if (!updateReady && this.scheduledTasks.some(task => task.enabled)) return true;
         for (const record of this.terminalRecords) {
             if (!record.widget || record.widget.isDisposed || record.widget.exitStatus) continue;
-            if (!await this.terminalRecordIsIdle(record)) return true;
+            const running = updateReady
+                ? Boolean(this.terminalRunLeases?.get(record.id)?.() || record.widget.commandHistoryState?.currentCommand.trim())
+                : !await this.terminalRecordIsIdle(record);
+            if (running) return true;
         }
         try {
             const downloads = await this.platformService.getDesktopComponents(this.desktopLocale);
             return downloads.components.some(item => item.status === 'queued' || item.status === 'downloading' || item.status === 'installing');
         } catch {
-            return true;
+            return !updateReady;
         }
     }
 

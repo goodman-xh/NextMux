@@ -21316,11 +21316,13 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     display: none;
 }
 
+/* No inline padding, like the model drawer's list: rows reach the popover's own 6px padding, and the 264px drawer's
+   table keeps every pixel for its columns. */
 .nmx-model-picker-relay-view .nmx-relay-options {
     min-height: 0;
     max-height: none;
     flex: 1 1 auto;
-    padding: 2px 2px 4px;
+    padding: 2px 0 4px;
     scrollbar-width: thin;
     scrollbar-color: var(--nmx-border-strong) transparent;
 }
@@ -21389,39 +21391,43 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
 }
 
 /* Source rows are one table: the column head is padded and spaced exactly like a row's button, so each title sits
-   over its values. The name keeps a third of the row and the heart has its own column, so it never covers a value.
-   The multiplier column is the widest value column because its title is the longest in most languages (平均倍率,
-   Avg. multiplier, Multiplicateur moyen, Средний множитель). There is no column gap: every value is centred in its
-   column. Even beside a 15px classic scrollbar (the drawers now draw a 4px one, nextmux-shell-polish.css) the 352px
-   drawer (RELAY_DRAWER_WIDTH) gives the name 102px, quality, authenticity and latency 44px each and the multiplier
-   64px; the Council setup's half-dialog list, and a window too narrow for the drawer, still 40px and 48px at least:
-   room for "320 ms" or "<0.01×" at 11px (40px). */
+   over its values, and the heart has its own column, so it never covers a value. In the 264px drawer
+   (RELAY_DRAWER_WIDTH) a row is 246px beside the 4px scrollbar (popover border 1px and padding 6px, no list padding):
+   6px in, the four value columns are fixed at what their values and titles need, and the store name takes the rest
+   (60px; 64px when the list does not scroll; the Council setup's wider half-dialog list gives it more).
+   - quality 35px and authenticity 40px: a percentage reads "99,5 %" at most (33.4px at 10px); authenticity is wider
+     for its title (Authen-ticity, Autenti-cidade).
+   - latency 39px: "999 ms" is the widest value (34.9px), and Latency / Latence keep one line.
+   - average multiplier 46px: "<0,01×" (35.2px), 平均倍率 on one 11px line (44px), Avg. / multiplier on two.
+   - the heart 20px.
+   Measured with SF Pro (tabular figures at 550 for values, 500 for titles) and with Arial + 4% for Segoe UI, keeping
+   1.5px spare beside each value; there is no column gap, every value is centred in its column. */
 .nmx-model-picker-relay-view .nmx-relay-grid-head,
 .nmx-model-picker-relay-view .nmx-relay-option-row {
     display: grid;
-    grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(40px, .7fr)) minmax(48px, 1fr) 24px;
+    grid-template-columns: minmax(0, 1fr) 35px 40px 39px 46px 20px;
     align-items: center;
     column-gap: 0;
 }
 .nmx-model-picker-relay-view .nmx-relay-grid-head {
     min-height: 24px;
     padding-block: 0 2px;
-    padding-inline: 8px 0;
+    padding-inline: 6px 0;
     color: var(--nmx-muted);
 }
 /* Titles and values restate their type over the pickers' blanket 13px / 18px (`.nmx-relay-picker-popover *` and
-   `.nmx-model-picker-portal *`, both !important), which cut every one of them off in its column. A title takes at
-   most the head's two 11px lines, so the head stays 24px (relayDrawerChromeHeight): CJK titles fit on one line
-   (平均倍率 is 44px of a 64px column), and a long Latin, Cyrillic or Devanagari word breaks at the soft hyphen
-   relayColumnTitle puts in it. Measured with SF Pro and with Arial + 4% for Segoe UI, every title of the 12 languages
-   fits, so none is cut off or runs into its neighbour. */
+   `.nmx-model-picker-portal *`, both !important), which cut every one of them off in its column. Titles are 10px (CJK
+   11px, on one line) and break only at the soft hyphens relayColumnTitle puts in long words, never mid-word. Every
+   title of the 12 languages fits its column in two 11px lines, so the head stays 24px, except where it needs a third
+   (the average multiplier in es, fr and pt-BR, and the longer Russian words): that head is 35px, and
+   relayDrawerChromeHeight adds the line for those languages. None is cut off or runs into its neighbour. */
 .nmx-model-picker-relay-view .nmx-relay-grid-head > span {
     display: -webkit-box;
     min-width: 0;
-    max-height: 22px;
+    max-height: 33px;
     overflow: hidden;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     font-size: 10px !important;
     font-weight: 500;
     line-height: 11px !important;
@@ -21436,16 +21442,12 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
 /* The head's heart sits where each row's heart button centres its icon. */
 .nmx-model-picker-relay-view .nmx-relay-grid-head:not(.is-own) > span:last-child { display: flex; justify-content: center; }
 .nmx-model-picker-relay-view .nmx-relay-grid-head > span:is(:lang(zh), :lang(ja), :lang(ko)) { font-size: 11px !important; letter-spacing: 0; }
-/* The Council setup lists the relays in half of its dialog, where quality, authenticity and latency get 40px: a long
-   title (Multiplicador medio, Подлинность) may take a third line there. That list scrolls inside the dialog, so no
-   height estimate depends on its head. */
-.nmx-council-source-list.nmx-model-picker-relay-view .nmx-relay-grid-head > span { max-height: 33px; -webkit-line-clamp: 3; }
 .nmx-model-picker-relay-view .nmx-relay-option-select {
     grid-column: 1 / 6;
-    grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(40px, .7fr)) minmax(48px, 1fr);
+    grid-template-columns: minmax(0, 1fr) 35px 40px 39px 46px;
     min-width: 0;
     gap: 0;
-    padding-inline: 8px 0;
+    padding-inline: 6px 0;
 }
 /* A store whose every check of the last day failed but which still has executable models: listed and selectable, its
    name led by an amber mark (its tooltip and label say why). */
@@ -21521,15 +21523,16 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
 /* Outranks the older popover's `.nmx-relay-option-select:hover .nmx-relay-option-metrics > span { color: inherit }`,
    so hovering a row does not recolour its bars. */
 .nmx-model-picker-relay-view .nmx-relay-option-metrics > .nmx-relay-metric-dial[data-relay-metric] { color: var(--nmx-relay-tone); }
-/* 11px tabular figures, a little tighter around the unit's space. The band colours are made for marks; mixed a fifth
-   of the way toward the text colour they read at 4.8:1 or better on a hovered or selected row in both themes. */
+/* 10px tabular figures, a little tighter around the unit's space, so the widest value of each column ("999 ms",
+   "<0,01×") keeps 1.5px spare in the 264px drawer. The band colours are made for marks; mixed a fifth of the way toward
+   the text colour they read at 4.8:1 or better on a hovered or selected row in both themes. */
 .nmx-model-picker-relay-view .nmx-relay-metric-dial .nmx-relay-metric-value {
     position: static;
     display: block;
     max-width: 100%;
     overflow: hidden;
     color: color-mix(in oklab, var(--nmx-relay-tone, currentColor) 80%, var(--nmx-text));
-    font-size: 11px !important;
+    font-size: 10px !important;
     font-weight: 550;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.01em;
@@ -21569,7 +21572,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     position: static;
     grid-column: 6;
     justify-self: center;
-    width: 24px;
+    width: 20px;
     height: 28px;
     transform: none;
 }
