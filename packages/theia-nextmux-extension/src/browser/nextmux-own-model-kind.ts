@@ -44,7 +44,7 @@ const NAME_RULES: readonly [OwnModelKind, RegExp][] = [
     ['image', /(^|[/_-])wanx?-?\d[\d.]*[-_](?:t2i|i2i|imageedit|image)|(^|[/_-])wanx-v\d/],
     ['speech', /(^|[/_-])(tts|speech|voice)([/_-]|$)|^tts|aura-|orpheus|fish-audio|fishaudio|elevenlabs|(^|\/)eleven_|cosyvoice|minimax-speech|audio-tts|sambert|kokoro|chattts|megatts|kling[-_](?:tts|text-to-audio|(?:custom-|presets-)?voices(?:-list)?)/],
     ['video', /veo-|sora|kling(?![-_\s](?:image|kolors|multi-image2image|tts|text-to-audio|(?:custom-|presets-)?voices))|(^|[/_-])wan-\d|(^|[/_-])wanx?\d+(\.\d+)?-(t2v|i2v|kf2v|s2v|r2v|vace|animate|video|videoedit|video-edit)|(^|[/_-])[tir]2v([/_.-]|$)|hailuo|minimax-h-?0?3|seedance|dreamina-seedance|runway[-/]gen[34]|(^|[/_-])gen-(?:3a|4(?:\.5)?)|(^|[/_-])(?:luma[-_]|ray-[23])|pika-[12]|jimeng-video|cogvideox|hunyuan-video|flux-3-video|avatar-iv|pixverse|vidu|video|ltx-|mochi|happyhorse/],
-    ['image', /dall-e|gpt-image|imagen|flux|sdxl|stable-diffusion|seedream|seededit|dola-seedream|recraft|midjourney|ideogram|qwen-image|grok-imagine-image|hunyuan-image|kling-image|nano-?banana|jimeng(?![-_]videos?)|cogview|kolors|hidream|(^|[/_-])wanx?\d+(\.\d+)?-(t2i|i2i|image)|-image(-|$)|image-\d/],
+    ['image', /dall-e|gpt-image|imagen|flux|sdxl|stable-diffusion|seedream|seededit|dola-seedream|recraft|midjourney|ideogram|qwen-image|grok-imagine-image|hunyuan-image|kling-image|nano-?banana|jimeng(?![-_]videos?)|cogview|kolors|hidream|(^|[/_-])wanx?\d+(\.\d+)?-(t2i|i2i|image)|-image(-|$)|image-\d|image[-_]gpt/],
     ['3d', /trellis|hunyuan[-_]?3d|tripo[-_]?3d|triposr|meshy|rodin[-_]?3d|point-e|shap-e|zero123|(^|[/_-])3d([/_-]|$)/],
 ];
 

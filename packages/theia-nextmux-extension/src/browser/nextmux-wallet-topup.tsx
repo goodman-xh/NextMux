@@ -52,6 +52,11 @@ export function walletTopupCharge(creditMinor: number, fee: PlatformWalletTopupO
     return { creditMinor, feeMinor: charge - creditMinor, chargeMinor: charge };
 }
 
+/** Mirrors whop.js whopCnyMinor: the hosted page's price for a USD charge, rounded up. */
+export function walletTopupCheckoutMinor(chargeMinor: number, checkout: NonNullable<PlatformWalletTopupOptions['checkout']>): number {
+    return Math.ceil(chargeMinor * checkout.perUsdMinor / 100);
+}
+
 /** Whole or two-decimal dollars → cents; anything else is invalid. */
 export function walletTopupAmountMinor(text: string): number | undefined {
     const value = text.trim().replace(',', '.');
@@ -75,6 +80,15 @@ function formatUsd(locale: NextMuxDesktopLocale, minor: number, fractionDigits =
         return new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD', minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }).format(minor / 100);
     } catch {
         return `$${(minor / 100).toFixed(fractionDigits)}`;
+    }
+}
+
+/** The hosted page's price, shown under the USD total. */
+function hostedAmountText(locale: NextMuxDesktopLocale, minor: number, currency: string): string {
+    try {
+        return `≈ ${new Intl.NumberFormat(locale, { style: 'currency', currency }).format(minor / 100)}`;
+    } catch {
+        return `≈ ${currency} ${(minor / 100).toFixed(2)}`;
     }
 }
 
@@ -114,10 +128,13 @@ export function WalletTopupSheet(props: WalletTopupSheetProps): React.ReactEleme
     const remainingSeconds = order ? Math.max(0, Math.ceil((order.topup.expiresAt - props.now) / 1000)) : 0;
     const minutes = Math.floor(remainingSeconds / 60);
     const seconds = remainingSeconds % 60;
-    const summary = (credit: string, fee: string, total: string) => <dl className='nmx-topup-summary'>
+    // Kept as a blank line while the amount is invalid, so the sheet does not change height as the person types.
+    const hostedQuote = options?.checkout && (quote ? hostedAmountText(locale, walletTopupCheckoutMinor(quote.chargeMinor, options.checkout), options.checkout.currency) : '\u00a0');
+    const hostedOrder = order?.payment.checkoutAmount && hostedAmountText(locale, order.payment.checkoutAmount.minor, order.payment.checkoutAmount.currency);
+    const summary = (credit: string, fee: string, total: string, hosted?: string) => <dl className='nmx-topup-summary'>
         <div><dt>{text('credit')}</dt><dd>{credit}</dd></div>
         <div><dt>{text('fee')}</dt><dd>{fee}</dd></div>
-        <div className='is-total'><dt>{text('total')}</dt><dd>{total}</dd></div>
+        <div className='is-total'><dt>{text('total')}</dt><dd>{total}</dd>{hosted && <dd className='nmx-topup-hosted'>{hosted}</dd>}</div>
     </dl>;
     return <div className='nmx-sheet-backdrop nmx-dialog-backdrop nmx-topup-backdrop' onMouseDown={() => { if (!busy) props.onClose(); }}>
         <section className='nmx-topup-sheet' role='dialog' aria-modal='true' aria-labelledby='nmx-topup-title' onMouseDown={event => event.stopPropagation()}>
@@ -127,7 +144,7 @@ export function WalletTopupSheet(props: WalletTopupSheetProps): React.ReactEleme
                 <div className='nmx-topup-amount-field'><span>$</span><input id='nmx-topup-amount' className='nmx-topup-amount-input' name='amount' inputMode='decimal' autoComplete='off' dir='ltr' value={props.amount} aria-describedby='nmx-topup-amount-help' aria-invalid={props.amount !== '' && !inRange} onChange={event => props.onAmountChange(event.currentTarget.value.replace(/[^0-9.,]/g, '').slice(0, 9))} /></div>
                 <div className='nmx-topup-presets'>{presets.map(value => <button type='button' key={value} aria-pressed={amountMinor === value} onClick={() => props.onAmountChange(String(value / 100))}>{formatUsd(locale, value, 0)}</button>)}</div>
                 <p id='nmx-topup-amount-help' className='nmx-topup-limits'>{text('limits', { min: formatUsd(locale, options?.minimumMinor ?? 1_000, 0), max: formatUsd(locale, options?.maximumMinor ?? 100_000, 0) })}</p>
-                {summary(quote ? formatUsd(locale, quote.creditMinor) : '—', quote ? (quote.feeMinor === 0 ? text('feeFree') : formatUsd(locale, quote.feeMinor)) : '—', quote ? formatUsd(locale, quote.chargeMinor) : '—')}
+                {summary(quote ? formatUsd(locale, quote.creditMinor) : '—', quote ? (quote.feeMinor === 0 ? text('feeFree') : formatUsd(locale, quote.feeMinor)) : '—', quote ? formatUsd(locale, quote.chargeMinor) : '—', hostedQuote)}
                 <p className='nmx-topup-note'><i className='codicon codicon-lock'></i><span>{text('note')}</span></p>
                 {(props.error || unavailable) && <div className='nmx-topup-error' role='alert'><i className='codicon codicon-warning'></i><span>{props.error || text('unavailable')}</span></div>}
                 <footer><button type='button' disabled={busy} onClick={props.onClose}>{text('cancel')}</button><button type='submit' className='is-primary' disabled={busy || unavailable || !quote}>{busy ? text('creating') : text('submit')}</button></footer>
@@ -137,7 +154,7 @@ export function WalletTopupSheet(props: WalletTopupSheetProps): React.ReactEleme
                 <div className='nmx-topup-payment-copy'>
                     <span>{stage === 'credited' ? text('creditedBody') : text('checkoutBody')}</span>
                     <strong>{stage === 'credited' ? `+${props.formatMicros(order.payment.creditAmount.currency, order.payment.creditAmount.micros)}` : formatUsd(locale, order.payment.payableAmount.minor)}</strong>
-                    {stage !== 'credited' && summary(props.formatMicros(order.payment.creditAmount.currency, order.payment.creditAmount.micros), (order.payment.feeAmount?.minor ?? 0) === 0 ? text('feeFree') : formatUsd(locale, order.payment.feeAmount?.minor ?? 0), formatUsd(locale, order.payment.payableAmount.minor))}
+                    {stage !== 'credited' && summary(props.formatMicros(order.payment.creditAmount.currency, order.payment.creditAmount.micros), (order.payment.feeAmount?.minor ?? 0) === 0 ? text('feeFree') : formatUsd(locale, order.payment.feeAmount?.minor ?? 0), formatUsd(locale, order.payment.payableAmount.minor), hostedOrder)}
                     {stage === 'credited' ? <div className='nmx-topup-success'><i className='codicon codicon-pass-filled'></i><span>{text('credited')}</span></div>
                         : stage === 'waiting' ? <div className='nmx-topup-waiting'><i></i><span>{text('waiting')}</span><time aria-label={text('timeLeft')}>{minutes}:{String(seconds).padStart(2, '0')}</time></div> : undefined}
                 </div>

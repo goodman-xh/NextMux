@@ -17,6 +17,7 @@ import type { NextMuxDesktopLocale } from './nextmux-locale';
 import { councilModeText, councilRoleLabel } from './nextmux-council-mode-locale';
 import { councilValidationMessage } from './nextmux-council-validation';
 import { ModelAuthenticityTag } from './nextmux-model-authenticity';
+import { modelDisplayNameOnly } from './nextmux-model-display-name';
 import { offeringPriceText } from './nextmux-offering-price';
 import { relayText } from './nextmux-relay-locale';
 import { modelPickerEvidenceText, relayPercentText } from './nextmux-relay-picker';
@@ -844,11 +845,15 @@ export const CouncilConfigModal: React.FC<CouncilConfigModalProps> = props => {
                                         return Boolean(optionId && normalizedSlotModelId === optionId);
                                     }))
                                     : undefined;
+                                // A saved slot keeps the label it was given, which may be a raw code or an older “Model 41e8…”.
+                                const savedModelLabel = slot.label || slot.modelLabel || slot.modelId || '';
                                 const selectedModelLabel = selectedCandidate
                                     ? selectedCandidate.label
-                                    : (slot.label || slot.modelLabel || slot.modelId || '');
+                                    : savedModelLabel && modelDisplayNameOnly(savedModelLabel, '', slot.modelId);
                                 const slotProviderLabel = (slot.relayLabel || selectedCandidate?.relayLabel || selectedCandidate?.detail || slot.providerId || (sameRelayAsBrowse && selectedModelLabel ? relayLabel : '') || '').trim();
                                 const slotVariantTag = selectedCandidate?.variantTag || slot.variantTag;
+                                // On the label, not the button: hover tips also open on focus, and the button regains it each time a picker closes.
+                                const slotTip = selectedModelLabel ? [selectedModelLabel, slotProviderLabel].filter(Boolean).join(' · ') : undefined;
                                 return (
                                     <div
                                         key={slot.slotId}
@@ -882,7 +887,7 @@ export const CouncilConfigModal: React.FC<CouncilConfigModalProps> = props => {
                                                     setOpenModelPickerSlotId(nextSlotId);
                                                 }}
                                             >
-                                                <span className={`nmx-council-model-trigger-label ${selectedModelLabel ? '' : 'is-placeholder'}`}>
+                                                <span className={`nmx-council-model-trigger-label ${selectedModelLabel ? '' : 'is-placeholder'}`} title={slotTip} data-nmx-tip={slotTip}>
                                                     {selectedModelLabel || councilModeText(locale, 'selectModelPlaceholder')}
                                                 </span>
                                                 {selectedModelLabel && slotProviderLabel && <small className='nmx-council-selected-relay-badge' data-council-slot-provider={slot.slotId}>{slotProviderLabel}</small>}

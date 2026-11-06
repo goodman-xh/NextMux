@@ -2101,9 +2101,9 @@ body.nmx-window-inactive:not(.nmx-window-fullscreen):not(.nmx-modal-open):has(#n
 .nmx-shell .nmx-council-modal-body { flex: 1 1 0; min-height: 0; height: 100%; overflow: hidden; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr) auto; gap: 0; padding: 0 16px 12px; }
 .nmx-shell .nmx-council-sources { box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; min-height: 0; height: 100%; min-width: 0; overflow: hidden; border-inline-end: 1px solid var(--nmx-border); padding-inline-end: 14px; }
 .nmx-shell .nmx-council-sources > .nmx-council-step-label { min-height: 28px; flex: none; }
-/* The source a model comes from: beside a slot's model name, and beside "Source" for the one being browsed. Translucent
+/* The source a model comes from: under a slot's model name, and beside "Source" for the one being browsed. Translucent
    ink keeps the pill visible on the trigger's resting, hover and open fills in both themes; its hairline is a box-shadow
-   because the light theme pins every border colour. It gives way to an ellipsis before the model name or price do. */
+   because the light theme pins every border colour. It gives way to an ellipsis before the price does. */
 .nmx-shell .nmx-council-modal .nmx-council-selected-relay-badge {
     flex: 0 1 auto; align-self: center; box-sizing: border-box; display: inline-block;
     min-width: 0; max-width: min(38%, 148px); margin: 0; padding: 0 7px;
@@ -2144,11 +2144,13 @@ body.nmx-window-inactive:not(.nmx-window-fullscreen):not(.nmx-modal-open):has(#n
 .nmx-shell .nmx-council-generalist-note > span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .nmx-shell .nmx-council-generalist-note.is-warning > .codicon { color: var(--theia-notificationsWarningIcon-foreground, #d49e53); }
 .nmx-shell .nmx-council-slots-list { flex: 1 1 0; display: flex; flex-direction: column; border-top: 1px solid var(--nmx-border); min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; padding-inline-end: 3px; }
-.nmx-shell .nmx-council-slot-row { display: grid; flex: none; grid-template-columns: 16px minmax(0, 1fr) 22px; align-items: center; gap: 5px 6px; padding: 8px 0; border-bottom: 1px solid var(--nmx-border); min-width: 0; }
+.nmx-shell .nmx-council-slot-row { display: grid; flex: none; grid-template-columns: 16px minmax(0, 1fr) 24px; align-items: center; gap: 5px 6px; padding: 8px 0; border-bottom: 1px solid var(--nmx-border); min-width: 0; }
 .nmx-shell .nmx-council-slot-row .nmx-council-slot-model { grid-column: 2; grid-row: 1; }
 .nmx-shell .nmx-council-slot-row .nmx-council-slot-roles { grid-column: 2; grid-row: 2; }
-.nmx-shell .nmx-council-slot-row .nmx-council-slot-remove { grid-column: 3; grid-row: 1; }
-.nmx-shell .nmx-council-slot-row .nmx-council-roles-trigger { width: fit-content; max-width: 100%; gap: 12px; border-color: transparent; background: transparent; padding: 2px 0; min-height: 24px; }
+.nmx-shell .nmx-council-slot-row .nmx-council-slot-remove { grid-column: 3; grid-row: 1; width: 24px; height: 24px; }
+/* The chips line up with the model card above them and the hover fill overhangs them. No border at all, not a transparent
+   one: the light theme's guard (.nmx-theme-light *) would paint it, boxing the chips in that theme only. */
+.nmx-shell .nmx-council-slot-row .nmx-council-roles-trigger { width: fit-content; max-width: calc(100% + 5px); margin-inline-start: -5px; gap: 6px; border-width: 0; background: transparent; padding: 3px 5px; min-height: 26px; }
 .nmx-shell .nmx-council-slot-row.is-picker-open { background: transparent; }
 .nmx-shell .nmx-council-slot-index { font-size: 11px; color: var(--nmx-muted); text-align: center; font-variant-numeric: tabular-nums; }
 .nmx-shell .nmx-council-slot-index.is-lead { color: var(--nmx-accent); font-weight: 600; }
@@ -2156,17 +2158,35 @@ body.nmx-window-inactive:not(.nmx-window-fullscreen):not(.nmx-modal-open):has(#n
 .nmx-shell .nmx-council-slot-roles { min-width: 0; }
 .nmx-shell .nmx-council-model-trigger,
 .nmx-shell .nmx-council-roles-trigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 34px; padding: 6px 9px; box-sizing: border-box; border: 1px solid var(--nmx-border); border-radius: 6px; background: var(--nmx-panel-2); color: var(--nmx-text); font: inherit; font-size: 12px; line-height: 1.5; text-align: start; cursor: pointer; }
+/* A slot trigger reads in two lines: the model name with the chevron, then source, price and authenticity. The name's
+   basis leaves its line room for the chevron alone, so the tags always wrap below it; with no tags, as for a slot with no
+   model yet, the trigger stays one compact line. */
+.nmx-shell .nmx-council-model-trigger { flex-wrap: wrap; justify-content: flex-start; gap: 4px 6px; }
+.nmx-shell .nmx-council-model-trigger > :is(.nmx-council-selected-relay-badge, .nmx-council-model-price, .nmx-model-authenticity) { order: 3; }
+/* Basis 0: however long a source's name, it never pushes a tag onto a third line. It takes what the tags leave, up to its
+   own text, and only then does the price's auto margin open the gap between them. */
+.nmx-shell .nmx-council-modal .nmx-council-model-trigger > .nmx-council-selected-relay-badge { flex: 1 1 0; max-width: max-content; }
+/* The pickers' tag type in nextmux-shell-polish.css is !important; here the price must stand as tall as the source pill. */
+.nmx-shell .nmx-council-modal .nmx-council-model-trigger > .nmx-council-model-price { line-height: 18px !important; }
+/* The tags keep to the trailing edge, led by the price or, without one, the authenticity. Both are dir='ltr', so in an
+   Arabic dialog their own inline start is the far side of the row. */
+.nmx-shell .nmx-council-model-trigger > .nmx-model-authenticity:not(.nmx-council-model-price + *) { margin-inline-start: auto; }
+.nmx-shell .nmx-council-model-trigger:dir(rtl) > :is(.nmx-council-model-price, .nmx-model-authenticity:not(.nmx-council-model-price + *)) { margin-inline: 0 auto; }
 .nmx-shell .nmx-council-model-trigger:hover:not(:disabled),
 .nmx-shell .nmx-council-roles-trigger:hover:not(:disabled),
 .nmx-shell .nmx-council-relay-trigger:hover:not(:disabled) { background: var(--nmx-hover); border-color: color-mix(in srgb, var(--nmx-text) 28%, var(--nmx-border)); }
 .nmx-shell .nmx-council-model-trigger.is-open,
 .nmx-shell .nmx-council-roles-trigger.is-open,
 .nmx-shell .nmx-council-relay-trigger.is-active { border-color: var(--nmx-border); background: var(--nmx-hover); }
-.nmx-shell .nmx-council-model-trigger-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.nmx-shell .nmx-council-model-price { flex: none; align-self: center; margin-inline-start: auto; padding: 0 5px; border-radius: 4px; background: var(--nmx-hover); white-space: nowrap; font-size: 11px; line-height: 16px; font-weight: 400; font-variant-numeric: tabular-nums; color: var(--nmx-muted); }
+.nmx-shell .nmx-council-model-trigger-label { order: 1; flex: 1 0 calc(100% - 22px); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.nmx-shell .nmx-council-model-trigger-label.is-placeholder { font-weight: 400; }
+/* The same ink as the source pill: var(--nmx-hover) is the fill of a hovered trigger or option, so the tag vanished into it,
+   and muted text on the light theme's tag reached only 3.9:1 (subtle is 5.2:1). */
+.nmx-shell .nmx-council-model-price { flex: none; align-self: center; margin-inline-start: auto; padding: 0 5px; border-radius: 4px; background: color-mix(in srgb, var(--nmx-text) 8%, transparent); white-space: nowrap; font-size: 11px; line-height: 16px; font-weight: 400; font-variant-numeric: tabular-nums; color: var(--nmx-subtle); }
 .nmx-shell .nmx-council-model-trigger-label.is-placeholder,
 .nmx-shell .nmx-council-role-placeholder { color: var(--nmx-muted); }
-.nmx-shell .nmx-council-select-chevron { flex: none; font-size: 12px; color: var(--nmx-muted); }
+.nmx-shell .nmx-council-select-chevron { order: 2; flex: none; margin-inline-start: auto; font-size: 12px; color: var(--nmx-muted); }
+.nmx-shell .nmx-council-roles-trigger > .codicon { flex: none; font-size: 12px; color: var(--nmx-muted); }
 .nmx-shell .nmx-council-role-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-width: 0; flex: 1; }
 .nmx-shell .nmx-council-role-chip { display: inline-flex; align-items: center; padding: 0 5px; min-height: 20px; border-radius: 4px; font-size: 11px; font-weight: 400; line-height: 1.5; background: color-mix(in srgb, var(--nmx-text) 7%, transparent); color: var(--nmx-subtle); }
 .nmx-shell .nmx-council-role-chip.is-role-lead { color: var(--nmx-accent); background: color-mix(in srgb, var(--nmx-accent) 10%, transparent); }
@@ -2223,6 +2243,7 @@ body.nmx-window-inactive:not(.nmx-window-fullscreen):not(.nmx-modal-open):has(#n
     .nmx-shell .nmx-council-slot-model { grid-column: 2; }
     .nmx-shell .nmx-council-slot-roles { grid-column: 2; grid-row: 2; }
     .nmx-shell .nmx-council-slot-remove { grid-column: 3; grid-row: 1; }
+    .nmx-shell .nmx-council-slot-row .nmx-council-slot-remove { width: 28px; height: 28px; }
     .nmx-shell .nmx-council-modal-footer { padding: 12px 16px; }
 }
 @media (prefers-reduced-motion: reduce) {

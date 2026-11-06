@@ -620,7 +620,7 @@ import {
     type ImageLightboxState
 } from './nextmux-image-lightbox';
 import { mediaRuntimeText } from './nextmux-media-runtime-locale';
-import { modelDisplayNameOnly } from './nextmux-model-display-name';
+import { isSyntheticModelId, knownModelName, modelDisplayNameOnly } from './nextmux-model-display-name';
 import {
     isVerifiedModelRoute,
     managedRelayKey,
@@ -15831,7 +15831,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         || route.offering.output.some(kind => kind !== 'text')) continue;
                     const id = route.automatic ? `auto:${route.registryModelId}` : `relay:${route.id}`;
                     if (!choices.has(id)) choices.set(id, {
-                        id, group: 'relay', label: this.modelDisplayName(route.canonicalModel, route.offering.modelFamily),
+                        id, group: 'relay', label: this.modelDisplayName(route.canonicalModel, route.offering.displayName || route.offering.providerModelCode),
                         detail: route.automatic ? this.ct('automatic') : route.offering.providerName, route
                     });
                 }
@@ -16083,7 +16083,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             return this.comicTranscriptionRoutes().map(route => {
                 const source: ComicStepSource = route.kind === 'local' ? { key: 'local', kind: 'local', label: '' }
                     : { key: managedRelayKey(this.offeringMerchantId(route.offering!)), kind: 'managed', label: route.providerName };
-                return { key: `${source.key}::${route.id}`, routeId: route.id, model: route.model, label: route.model, source,
+                return { key: `${source.key}::${route.id}`, routeId: route.id, model: route.model, label: route.offering ? this.modelDisplayName(route.model, route.offering.displayName || route.offering.providerModelCode) : route.model, source,
                     rank: route.kind === 'local' ? 0 : this.comicStepRank(route.model, route.offering),
                     ...(route.offering ? { note: this.comicTranscriptionPrice(route), offering: route.offering } : {}) };
             });
@@ -16107,7 +16107,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const candidates: ComicStepCandidate[] = this.comicMediaRouteGroups(capability).flatMap(group => group.routes.map(route => {
                 const price = route.kind === 'managed' ? this.formatManagedMediaPrice(route, capability) : '';
                 return {
-                    key: `${group.option.key}::${route.id}`, routeId: route.id, model: route.model, label: this.modelDisplayName(route.model),
+                    key: `${group.option.key}::${route.id}`, routeId: route.id, model: route.model, label: this.modelDisplayName(route.model, route.offering?.displayName || route.offering?.providerModelCode),
                     source: this.comicStepSource(group.option), rank: this.comicStepRank(route.model, route.offering), ...(price ? { note: price } : {}),
                     ...(route.kind === 'managed' && route.offering ? { offering: route.offering } : {}),
                     ...(capability === 'video' ? { withSound: this.comicVideoMakesSound(route) } : {})
@@ -18914,7 +18914,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 const source = route.kind === 'official' ? originalConnection?.label || originalConnection?.providerName || route.connection?.providerName || group.option.label
                     : sourceLabels.get(sourceKey) || route.providerName;
                 choices.push({ key, connectionId, kind, routeKind: route.kind === 'managed' ? 'relay' : 'own', modelId: this.canvasModelId(route),
-                    label: this.modelDisplayName(route.model, route.model), source, sourceKey, sourceLabel: source });
+                    label: this.modelDisplayName(route.model, route.offering?.displayName || route.offering?.providerModelCode || route.model), source, sourceKey, sourceLabel: source });
             }
         }
         return { choices, routes };
@@ -20500,7 +20500,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const shots = project.scenes.filter(scene => scene.episodeNumber !== undefined).flatMap(scene => scene.shots);
         const videoRoute = this.comicStepMediaRoute('video');
         const plan = shots.length && videoRoute ? {
-            clips: shots.length, model: this.modelDisplayName(videoRoute.model),
+            clips: shots.length, model: this.modelDisplayName(videoRoute.model, videoRoute.offering?.displayName || videoRoute.offering?.providerModelCode),
             seconds: shots.reduce((total, shot) => total + clipSecondsFor(shot.durationFrames / project.frameRate, clipLengths), 0)
         } : undefined;
         const reachable = new Set<DeskStep>(['canvas', 'edit']);
@@ -37692,7 +37692,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected modelDisplayName(value: string, fallback = ''): string {
-        // A relay's kind prefix is not part of the name: 速创's video_wan_3.0 is “Wan 3.0”.
+        const id = value.trim() || fallback;
+        // A merchant's own listing has an anonymous ID, so its name comes from the listing: never “Model 41e8…”.
+        if (isSyntheticModelId(id)) return modelDisplayNameOnly(fallback && !isSyntheticModelId(fallback) ? fallback : this.listedModelName?.(id) || '');
+        const known = knownModelName(id);
+        if (known) return known;
+        // A relay's kind prefix is not part of the name: video_seedance_2 is “Seedance 2”.
         const raw = (value.replace(/^~/, '').split('/').pop()?.trim() || fallback).replace(/^(?:video|image|img|audio|music|tts|t2v|i2v)[-_](?=[a-z])/i, '');
         if (!raw) return '未命名模型';
         return raw.split(/[-_\s]+/).filter(Boolean).map(part => {
@@ -37705,6 +37710,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected modelOnlyDisplayName(displayName: string, providerName = '', canonicalModel = '', fallback = ''): string {
         return modelDisplayNameOnly(displayName, providerName, canonicalModel, this.modelDisplayName(canonicalModel, fallback));
+    }
+
+    /** The name on a listing whose ID is anonymous, from whichever catalogue has already been read. */
+    protected listedModelName(model: string): string {
+        const id = model.trim().replace(/^~/, '').toLowerCase();
+        const same = (value: string | undefined): boolean => value?.trim().replace(/^~/, '').toLowerCase() === id;
+        const catalogs = [this.platformCatalog, this.selectedMerchantCatalog, ...[...(this.merchantPickerSnapshots?.values() || [])].map(value => value.catalog)];
+        for (const catalog of catalogs) for (const offering of catalog?.offerings || []) {
+            if (!same(offering.canonicalModel) && !same(offering.id)) continue;
+            const name = [offering.displayName, offering.providerModelCode].find(value => value?.trim() && !isSyntheticModelId(value));
+            if (name) return name;
+        }
+        return '';
     }
 
     protected officialModelRoutes(): readonly Extract<DesktopModelRoute, { readonly kind: 'official_connection' }>[] {
@@ -37881,7 +37899,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         for (const offering of offerings) {
             add({
                 id: this.modelKeyForOffering(offering),
-                label: this.modelOnlyDisplayName(offering.displayName, offering.providerName, offering.canonicalModel, offering.modelFamily),
+                label: this.modelOnlyDisplayName(offering.displayName, offering.providerName, offering.canonicalModel, offering.providerModelCode || offering.modelFamily),
                 providerName: offering.providerName,
                 model: offering.canonicalModel,
                 kind: offering.kind,
@@ -38042,7 +38060,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             } as PlatformRegistryModel, 'comic')) continue;
             add({
                 id: this.modelKeyForOffering(offering),
-                label: this.modelOnlyDisplayName(offering.displayName, offering.providerName, offering.canonicalModel, offering.modelFamily),
+                label: this.modelOnlyDisplayName(offering.displayName, offering.providerName, offering.canonicalModel, offering.providerModelCode || offering.modelFamily),
                 providerName: offering.providerName,
                 model: offering.canonicalModel,
                 available: true,
@@ -39365,7 +39383,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             && !targetSnapshot.catalog.nextCursor && Date.now() - targetSnapshot.updatedAt < 30_000);
         if (current && !matched && targetCatalogKnown) {
             this.pendingRelaySwitch = { option, conversationId: this.activeCodingSessionId,
-                modelLabel: this.modelDisplayName(this.modelKeyForRoute(current), current.kind === 'managed_gateway' ? current.offering.modelFamily : current.connection.modelFamily) };
+                modelLabel: this.modelDisplayName(this.modelKeyForRoute(current), current.kind === 'managed_gateway' ? current.offering.displayName || current.offering.providerModelCode : current.connection.modelFamily) };
             // While the person decides, the target's first model page stays ready for 选择模型 (re-read once stale).
             if (option.merchantId) this.preloadMerchantCatalogSnapshot?.(option.merchantId);
             this.modelPickerRelayOpen = false;
@@ -39864,7 +39882,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         const model = route?.kind === 'managed_gateway'
             ? this.modelOnlyDisplayName(route.offering.displayName, route.offering.providerName,
-                route.offering.canonicalModel, route.offering.modelFamily) : '';
+                route.offering.canonicalModel, route.offering.providerModelCode || route.offering.modelFamily) : '';
         return <><RelaySwitchControl locale={this.desktopLocale} model={model}
             enabled={Boolean(model) && this.automaticRouting}
             onChange={enabled => this.setAutomaticRouting(enabled)} />
@@ -40802,7 +40820,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             relayKey,
             automaticRelaySource: goalOwner ? goalOwner.automaticRelaySource : this.automaticRelaySource,
             keyPriceQuoteId: route.kind === 'managed_gateway' ? route.keyPriceQuoteId : undefined,
-            modelLabel: this.modelDisplayName(this.modelKeyForRoute(route), route.kind === 'managed_gateway' ? route.offering.modelFamily : route.connection.modelFamily),
+            modelLabel: this.modelDisplayName(this.modelKeyForRoute(route), route.kind === 'managed_gateway' ? route.offering.displayName || route.offering.providerModelCode : route.connection.modelFamily),
             reasoningSettings: goalOwner?.reasoningSettings || this.reasoningSettingsForRoute(route),
             reasoningEffort: goalOwner ? (goalOwner.reasoningEffort && this.reasoningEffortLevels(route).includes(goalOwner.reasoningEffort)
                 ? goalOwner.reasoningEffort : undefined) : this.reasoningEffortForRoute(route),
@@ -43552,7 +43570,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         workbench, routeId: route.id, relayKey: runRelayKey,
                         automaticRelaySource: submittedRelaySource,
                         keyPriceQuoteId: route.kind === 'managed_gateway' ? route.keyPriceQuoteId : undefined,
-                        modelLabel: this.modelDisplayName(this.modelKeyForRoute(route), route.kind === 'managed_gateway' ? route.offering.modelFamily : route.connection.modelFamily),
+                        modelLabel: this.modelDisplayName(this.modelKeyForRoute(route), route.kind === 'managed_gateway' ? route.offering.displayName || route.offering.providerModelCode : route.connection.modelFamily),
                         reasoningEffort: runReasoningEffort,
                         reasoningSettings: runReasoningSettings, contextWindowTokens: runContextWindowTokens, permissionMode: runPermission,
                         attachments: [], createdAt: Date.parse(message.createdAt) || Date.now()
@@ -47597,7 +47615,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 : undefined;
         const modelPickerSwitchPanel = modelPickerSwitchRoute?.kind === 'managed_gateway' || composerRelay?.kind === 'managed';
         const modelPickerSwitchModel = modelPickerSwitchRoute?.kind === 'managed_gateway'
-            ? this.modelOnlyDisplayName(modelPickerSwitchRoute.offering.displayName, modelPickerSwitchRoute.offering.providerName, modelPickerSwitchRoute.offering.canonicalModel, modelPickerSwitchRoute.offering.modelFamily)
+            ? this.modelOnlyDisplayName(modelPickerSwitchRoute.offering.displayName, modelPickerSwitchRoute.offering.providerName, modelPickerSwitchRoute.offering.canonicalModel, modelPickerSwitchRoute.offering.providerModelCode || modelPickerSwitchRoute.offering.modelFamily)
             : '';
         const modelPickerSwitchHint = relaySwitchCopy(this.desktopLocale, modelPickerSwitchModel).hint;
         const selectedModel = this.selectedModelOption('coding');
@@ -47682,7 +47700,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             ? this.modelDisplayName(route.kind === 'official_connection'
                 ? route.connection.model
                 : route.offering.canonicalModel || route.offering.providerModelCode,
-            route.kind === 'official_connection' ? route.connection.modelFamily : route.offering.modelFamily)
+            route.kind === 'official_connection' ? route.connection.modelFamily : route.offering.displayName || route.offering.providerModelCode)
             : '选择模型');
         const routeDepth = reasoningDepthChoicesForDisplay(this.reasoningDepthChoicesForRoute(route));
         const routeDepthOption = routeDepth.options.find(option => option.id === this.activeReasoningDepthId(route, routeDepth));
@@ -48663,7 +48681,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** The model's own name: a registry family (e.g. “gpt-image”) is shared by several models. */
     protected scheduleRouteModelLabel(route: DesktopModelRoute): string {
         return route.kind === 'managed_gateway'
-            ? this.modelOnlyDisplayName(route.offering.displayName, route.offering.providerName, route.offering.canonicalModel, route.offering.modelFamily)
+            ? this.modelOnlyDisplayName(route.offering.displayName, route.offering.providerName, route.offering.canonicalModel, route.offering.providerModelCode || route.offering.modelFamily)
             : route.connection.model;
     }
 
@@ -52003,7 +52021,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 return { ...segment, ...(asset ? { url: this.comicMediaUrl(asset.uri) } : {}),
                     running: Boolean(job && ['awaiting_confirmation', 'queued', 'running', 'paused'].includes(job.status)),
                     ...(job?.status === 'failed' ? { error: modelFailureText(this.desktopLocale, job.failure) } : {}) };
-            })} videoModel={this.renderComicStepSummary('video')} modelName={route ? this.modelDisplayName(route.model) : this.ct('noStepModel')}
+            })} videoModel={this.renderComicStepSummary('video')} modelName={route ? this.modelDisplayName(route.model, route.offering?.displayName || route.offering?.providerModelCode) : this.ct('noStepModel')}
             estimateForSegments={ids => this.musicMvEstimate(project, ids)} confirmationKey={this.musicMvKey(project, route)}
             canGenerate={Boolean(route && song && mv?.treatment && musicMvCurrent(settings, durationMs))} blockedReason={!route ? this.ct('noStepModel') : !song ? musicMvText(this.desktopLocale, 'noSong') : undefined}
             busy={this.musicMvPreparing || this.musicMvGenerating || this.musicMvHasLiveJobs(project) || this.comicStage !== 'idle' || this.comicExternalChange} aligning={this.musicMvAligning}
@@ -53740,7 +53758,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.activeSection !== 'comic' || !this.comicCastLibraryOpen) return undefined;
         const imageRoute = this.comicStepMediaRoute('image');
         return <ComicCharacterLibrarySheet locale={this.desktopLocale} entries={this.comicCharacterLibrary} busy={this.comicCharacterLibraryBusy}
-            {...(imageRoute ? { imageModel: this.modelDisplayName(imageRoute.model) } : {})}
+            {...(imageRoute ? { imageModel: this.modelDisplayName(imageRoute.model, imageRoute.offering?.displayName || imageRoute.offering?.providerModelCode) } : {})}
             lookOptions={comicSettingOptions(this.desktopLocale, 'look')} creating={this.comicLibraryCreating}
             {...(this.comicLibraryError ? { error: this.comicLibraryError } : {})}
             onDelete={bundleId => void this.deleteComicCharacterFromLibrary(bundleId)}

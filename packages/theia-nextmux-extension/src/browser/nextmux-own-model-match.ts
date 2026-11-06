@@ -4,6 +4,7 @@
  * downloaded (models.dev + OpenRouter); nothing about the user's APIs is sent anywhere. What the API itself reported
  * always wins; the catalog only fills what it left out (kind, context, reference price, capabilities).
  */
+import { wuyinModelSpec } from '@nextmux/model-runtime/media-template';
 import { modelNameForms, modelNameGroupKey, modelReleaseVariant } from '../common/nextmux-model-name';
 import type { PlatformRegistryModel } from '../common/nextmux-platform-protocol';
 
@@ -98,6 +99,11 @@ export function matchCatalogModel<T extends CatalogModel>(id: string, label: str
     if (!lower || !catalog?.length) return undefined;
     const index = indexOf(catalog);
     const tail = lower.slice(lower.lastIndexOf('/') + 1);
+    // A 速创 code is an address, not a spelling of the model. It goes straight to its own entry, so an alias that lists a
+    // variant under its base model (image_gpt_2.6_flare under gpt-image-2.6) cannot merge the two.
+    const scapi = wuyinModelSpec(tail)?.canonicalModel?.toLowerCase();
+    const scapiEntry = scapi ? index.exact.get(scapi)?.find(model => model.canonicalModel.toLowerCase() === scapi) : undefined;
+    if (scapiEntry) return scapiEntry;
     const identity = variantIdentity(lower);
     // Opaque deployment IDs may use a descriptive label; recognizable IDs own
     // their variant/version even when a generic label or a stale alias omits it.
