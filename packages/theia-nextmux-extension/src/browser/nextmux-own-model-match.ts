@@ -5,7 +5,7 @@
  * always wins; the catalog only fills what it left out (kind, context, reference price, capabilities).
  */
 import { wuyinModelSpec } from '@nextmux/model-runtime/media-template';
-import { modelNameForms, modelNameGroupKey, modelReleaseVariant } from '../common/nextmux-model-name';
+import { modelNameForms, modelNameGroupKey, modelReleaseVariant, relayModelNames } from '../common/nextmux-model-name';
 import type { PlatformRegistryModel } from '../common/nextmux-platform-protocol';
 
 export type CatalogModel = Pick<PlatformRegistryModel, 'canonicalModel' | 'id' | 'provider' | 'output' | 'capabilities' | 'contextTokens' | 'maximumOutputTokens'>
@@ -75,7 +75,9 @@ function pick<T extends CatalogModel>(candidates: readonly T[] | undefined, name
     if (candidates.length === 1) return candidates[0];
     const family = FAMILY_PROVIDERS.find(([pattern]) => pattern.test(name))?.[1];
     const preferred = family ? candidates.filter(model => family.test(model.provider.toLowerCase())) : [];
-    return preferred.length === 1 ? preferred[0] : undefined;
+    // An author listed under two slugs (bytedance, bytedance-seed) is one model, not a choice; two snapshots still are.
+    const spellings = new Set(preferred.map(model => model.canonicalModel.toLowerCase().split('/').pop()!.replace(/\./g, '-')));
+    return spellings.size === 1 ? preferred.find(model => model.referencePrice) ?? preferred[0] : undefined;
 }
 
 function variantIdentity(name: string): { variants: string; versions: string } {
@@ -104,6 +106,11 @@ export function matchCatalogModel<T extends CatalogModel>(id: string, label: str
     const scapi = wuyinModelSpec(tail)?.canonicalModel?.toLowerCase();
     const scapiEntry = scapi ? index.exact.get(scapi)?.find(model => model.canonicalModel.toLowerCase() === scapi) : undefined;
     if (scapiEntry) return scapiEntry;
+    // A relay's shorthand has no version or variant of its own to compare ("931" is a build): match what it stands for.
+    for (const name of relayModelNames(tail)) {
+        const entry = matchCatalogModel(name, undefined, catalog);
+        if (entry) return entry;
+    }
     const identity = variantIdentity(lower);
     // Opaque deployment IDs may use a descriptive label; recognizable IDs own
     // their variant/version even when a generic label or a stale alias omits it.

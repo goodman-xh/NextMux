@@ -1,3 +1,5 @@
+import { modelNameGroupKey, modelReleaseVariant } from '../common/nextmux-model-name';
+
 /**
  * The IDs a merchant's own listing and an unlisted model get: anonymous by design (model-policies.js,
  * merchant-unlisted-models.js), so they name nothing. "Model 41e8…" is how older labels printed one, and a saved label may
@@ -32,16 +34,43 @@ const SCAPI_MODEL_NAMES: readonly (readonly string[])[] = [
     ['Grok Imagine Video', 'video_grok_imagine', 'x-ai/grok-imagine-video']
 ];
 
+/** The video models api.4stoken.cn lists under its own names, as SCAPI_MODEL_NAMES. */
+const RELAY_MODEL_NAMES: readonly (readonly string[])[] = [
+    ['Wan 3.0 Video GB', 'wan3.0-video-gb', 'alibaba/wan3.0-video-gb'],
+    ['Wan 3.0 Video Prime', 'wan3.0-video-prime', 'alibaba/wan3.0-video-prime'],
+    ['Kling Video v4', 'kling-video-v4', 'klingai/kling-video-v4'],
+    ['Video Subtitle Pro', 'video-subtitle-pro', 'alibaba/video-subtitle-pro'],
+    ['Veo 3.1 R2V Fast Landscape', 'veo_3_1_r2v_fast_landscape', 'google/veo-3.1-r2v-fast-landscape'],
+    ['Veo 3.1 I2V Fast FL', 'veo_3_1_i2v_s_fast_fl', 'google/veo-3.1-i2v-fast-fl'],
+    ['Veo 3.1 T2V Fast', 'veo_3_1_t2v_fast', 'google/veo-3.1-t2v-fast'],
+    ['Seedance 2.5', '4sdance_2.5'],
+    ['Seedance 2.0 Mini', '4sdance_mini931'],
+    ['Doubao Seedance 2.0 Fast', '4sdance_fast_931'],
+    ['Doubao Seedance 2.0', '4sdance931']
+];
+
 const modelIdKey = (value: string): string => value.trim().replace(/^~/, '').toLowerCase();
 const modelIdTail = (key: string): string => key.slice(key.lastIndexOf('/') + 1);
 
-const KNOWN_MODEL_NAMES = new Map(SCAPI_MODEL_NAMES.flatMap(([name, ...ids]) =>
+const KNOWN_MODEL_NAMES = new Map([...SCAPI_MODEL_NAMES, ...RELAY_MODEL_NAMES].flatMap(([name, ...ids]) =>
     ids.flatMap(id => [modelIdKey(id), modelIdTail(modelIdKey(id))].map(key => [key, name] as const))));
 
-/** The title of a model in the table, by provider code or canonical ID, whatever its case or namespace. */
-export function knownModelName(value: string): string | undefined {
+const tableModelName = (value: string): string | undefined => {
     const key = modelIdKey(value);
     return KNOWN_MODEL_NAMES.get(key) ?? KNOWN_MODEL_NAMES.get(modelIdTail(key));
+};
+
+/** DeepSeek's own style however a relay spells it: DeepSeek-V4.1-Flash 1017. A release is a model of its own, so it stays. */
+function deepseekModelName(value: string): string | undefined {
+    const match = /^deepseek-([vr]\d+(?:\.\d+)?)((?:-(?:flash|pro|lite|mini|exp))*)(?:-(\d{4}))?$/.exec(modelIdTail(modelNameGroupKey(value)));
+    if (!match) return undefined;
+    const [, version, variants, release] = match;
+    return `DeepSeek-${version.toUpperCase()}${variants.replace(/-[a-z]/g, letter => letter.toUpperCase())}${release ? ` ${release}` : ''}`;
+}
+
+/** The title of a known model, by provider code or canonical ID, whatever its case or namespace. */
+export function knownModelName(value: string): string | undefined {
+    return tableModelName(value) ?? deepseekModelName(value);
 }
 
 const compactProviderIdentity = (value: string): string => value
@@ -74,7 +103,8 @@ export function modelDisplayNameOnly(
     const source = name || spare || canonicalFallback;
     if (!source) return '未命名模型';
     // The table outranks a catalogue name: the wrapper rules below would read "Muse AI Video" as provider Muse's "AI Video".
-    const known = knownModelName(canonical) || knownModelName(source);
+    // So does a canonical release: a catalogue name that left it off would merge DeepSeek-V4.1 1017 into DeepSeek-V4.1.
+    const known = tableModelName(canonical) || (modelReleaseVariant(canonical) ? deepseekModelName(canonical) : undefined) || knownModelName(source);
     if (known) return known;
     const providerCandidates = [...new Set([
         providerName,
