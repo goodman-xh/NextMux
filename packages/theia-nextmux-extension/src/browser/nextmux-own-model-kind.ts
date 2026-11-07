@@ -7,6 +7,7 @@
  */
 
 import { knownModelTaskCorrection, modelTaskCategories, type ModelTaskMetadata } from '@nextmux/model-runtime/model-task-capabilities';
+import { MODEL_NAME_PATTERNS } from '@nextmux/model-runtime/model-taxonomy';
 import { modelNameForms } from '../common/nextmux-model-name';
 
 export type OwnModelKind = 'llm' | '3d' | 'image' | 'video' | 'speech' | 'music' | 'transcription' | 'sound_effect' | 'decision' | 'embedding' | 'rerank' | 'moderation' | 'other';
@@ -19,33 +20,31 @@ export interface OwnModelFacts extends ModelTaskMetadata {
     readonly outputModalities?: readonly string[];
 }
 
-/**
- * Music model names (“udio” only as a name of its own: “gpt-audio” is a voice model, not Udio). Stable Audio is music,
- * as in the cloud taxonomy (apps/cloudflare-platform/src/model-taxonomy.js tests MUSIC before SOUND_EFFECT).
- */
-const MUSIC_NAME = /lyria|music|suno|stable-audio|mureka|riffusion|ace-step|diffrhythm|song-?gen|(?:^|[\s/_.-])udio(?:$|[\s/_.-])|(?:^|[\s/_.-])song(?:$|[\s/_.-])/;
+/** Music model names (“udio” only as a name of its own: “gpt-audio” is a voice model, not Udio); Stable Audio is music. */
+const MUSIC_NAME = MODEL_NAME_PATTERNS.music;
 
-// The same name evidence and order as model-runtime's model-taxonomy.ts NAME_RULES (plus moderation, and Wan picture
-// models ahead of the Wan video rule because this list also tests dashed spellings of each id): Alibaba's
-// "wan2.1-t2v-turbo" is a video model and "wanx2.1-t2i-turbo" a picture model; ElevenLabs' "eleven_text_to_sound_v2"
-// is a sound effect, matched before the "eleven_" voice rule that catches "eleven_multilingual_v2". A bare id the API
-// reported nothing for lands where the cloud classifier puts it: Nano Banana, Jimeng and "wanx-v1" draw, Stable
-// Audio is music (before sound effects), MMAudio a sound effect, Sambert and Kling's voice/TTS ids speak (before the
-// Kling video rule).
+// The shared name evidence (model-runtime's model-taxonomy.ts MODEL_NAME_PATTERNS, the server classifier's identity
+// patterns) in the order this classifier tests it, plus moderation, and Wan picture models ahead of the Wan video rule
+// because this list also tests dashed spellings of each id: Alibaba's "wan2.1-t2v-turbo" is a video model and
+// "wanx2.1-t2i-turbo" a picture model; ElevenLabs' "eleven_text_to_sound_v2" is a sound effect, matched before the
+// "eleven_" voice rule that catches "eleven_multilingual_v2". A bare id the API reported nothing for lands where the
+// cloud classifier puts it: Nano Banana, Jimeng and "wanx-v1" draw, Stable Audio is music (before sound effects), MMAudio
+// a sound effect, Sambert and Kling's voice/TTS ids speak (before the Kling video rule), "4sdance_2.5" and
+// "video-subtitle-pro" make video.
 const NAME_RULES: readonly [OwnModelKind, RegExp][] = [
-    ['decision', /(^|\/)(?:jev(?:$|[._-])|tev1-4b-experimental|mercury-decide|solar-decide|gliner-[\d.]+-decide|span-01)/],
-    ['rerank', /rerank/],
+    ['decision', MODEL_NAME_PATTERNS.decision],
+    ['rerank', MODEL_NAME_PATTERNS.rerank],
     ['moderation', /moderation|guard/],
-    ['embedding', /embed|(^|[/_-])(bge|gte|e5)([/_-]|$)/],
-    ['transcription', /whisper|transcri|(^|[/_-])(asr|stt)([/_-]|$)|chirp|paraformer|sensevoice/],
+    ['embedding', MODEL_NAME_PATTERNS.embedding],
+    ['transcription', MODEL_NAME_PATTERNS.transcription],
     ['music', MUSIC_NAME],
-    ['sound_effect', /sound[\s_-]?effect|text[\s_-]?to[\s_-]?sound|(^|[/_-])sfx([/_-]|$)|mmaudio|audiogen|audioldm|foley/],
+    ['sound_effect', MODEL_NAME_PATTERNS.sound_effect],
     // Before the "wan-<n>" video rule: the dashed spelling of "wan2.2-t2i-flash" ("wan-2.2-t2i-flash") is a picture model.
     ['image', /(^|[/_-])wanx?-?\d[\d.]*[-_](?:t2i|i2i|imageedit|image)|(^|[/_-])wanx-v\d/],
-    ['speech', /(^|[/_-])(tts|speech|voice)([/_-]|$)|^tts|aura-|orpheus|fish-audio|fishaudio|elevenlabs|(^|\/)eleven_|cosyvoice|minimax-speech|audio-tts|sambert|kokoro|chattts|megatts|kling[-_](?:tts|text-to-audio|(?:custom-|presets-)?voices(?:-list)?)/],
-    ['video', /veo-|sora|kling(?![-_\s](?:image|kolors|multi-image2image|tts|text-to-audio|(?:custom-|presets-)?voices))|(^|[/_-])wan-\d|(^|[/_-])wanx?\d+(\.\d+)?-(t2v|i2v|kf2v|s2v|r2v|vace|animate|video|videoedit|video-edit)|(^|[/_-])[tir]2v([/_.-]|$)|hailuo|minimax-h-?0?3|seedance|dreamina-seedance|runway[-/]gen[34]|(^|[/_-])gen-(?:3a|4(?:\.5)?)|(^|[/_-])(?:luma[-_]|ray-[23])|pika-[12]|jimeng-video|cogvideox|hunyuan-video|flux-3-video|avatar-iv|pixverse|vidu|video|(^|\/)omni[-_]flash|ltx-|mochi|happyhorse/],
-    ['image', /dall-e|gpt-image|imagen|flux|sdxl|stable-diffusion|seedream|seededit|dola-seedream|recraft|midjourney|ideogram|qwen-image|grok-imagine-image|hunyuan-image|kling-image|nano-?banana|jimeng(?![-_]videos?)|cogview|kolors|hidream|(^|[/_-])wanx?\d+(\.\d+)?-(t2i|i2i|image)|-image(-|$)|image-\d|image[-_]gpt/],
-    ['3d', /trellis|hunyuan[-_]?3d|tripo[-_]?3d|triposr|meshy|rodin[-_]?3d|point-e|shap-e|zero123|(^|[/_-])3d([/_-]|$)/],
+    ['speech', MODEL_NAME_PATTERNS.speech],
+    ['video', MODEL_NAME_PATTERNS.video],
+    ['image', MODEL_NAME_PATTERNS.image],
+    ['3d', MODEL_NAME_PATTERNS['3d']],
 ];
 
 /** `catalog`: the public-directory entry this id names (nextmux-own-model-match); used only when the API reported nothing. */
@@ -69,7 +68,7 @@ export function ownModelKind(model: OwnModelFacts, catalog?: ModelTaskMetadata):
         if (output.includes('image')) return 'image';
         if (output.includes('3d')) return '3d';
         if (output.includes('audio')) return MUSIC_NAME.test(name) ? 'music' : output.includes('text') ? 'llm' : 'speech';
-        if (output.includes('text')) return /rerank/.test(name) ? 'rerank' : /moderation|guard/.test(name) ? 'moderation' : /trellis|hunyuan[-_]?3d|tripo[-_]?3d|triposr|meshy|rodin[-_]?3d|point-e|shap-e|zero123|(^|[/_-])3d([/_-]|$)/.test(name) ? '3d' : 'llm';
+        if (output.includes('text')) return /rerank/.test(name) ? 'rerank' : /moderation|guard/.test(name) ? 'moderation' : MODEL_NAME_PATTERNS['3d'].test(name) ? '3d' : 'llm';
     }
     if (/^deepgram\/nova(?:[-/]|$)/i.test(model.id)) return 'transcription';
     // Every spelling of the id (relays write "video_wan_3.0", "Wan 3.0" …), then the label.

@@ -142,7 +142,7 @@ import { installInactiveWindowButtons } from './nextmux-inactive-window-buttons'
 import { AgentInstructionsSettings, agentInstructionsText } from './nextmux-agent-instructions-panel';
 import { projectMemoryText } from './nextmux-project-memory-locale';
 import { communitySkillInstalledLabel, communitySkillListText } from './nextmux-community-skill-locale';
-import { officialInvokableModelIds, officialDiscoveredModelIds, officialDiscoverySummary, officialDiscoveryCapabilityEvidence, OfficialCatalogDetails, OwnModelList, ownModelListModels, ownModelListText, isCatalogOnlyOfficialProvider } from './nextmux-official-discovery';
+import { officialInvokableModelIds, officialDiscoveredModelIds, officialDiscoverySummary, officialDiscoveryCapabilityEvidence, OfficialCatalogDetails, OwnModelList, ownModelListModels, ownModelListText, isCatalogOnlyOfficialProvider, ownApiSaveText } from './nextmux-official-discovery';
 import { credentialStoreName, MyApisDialog, MyApisErrorToast, myApisText, type MyApiRow } from './nextmux-my-apis';
 import { reasoningControlText } from './nextmux-reasoning-controls-locale';
 import { ComicImagePicker, type ComicImageChoice } from './nextmux-comic-image-picker';
@@ -154,6 +154,7 @@ import { officialProviderLogoAsset } from './nextmux-provider-logos';
 import { closePersistenceText } from './nextmux-close-persistence-locale';
 import { DesktopUpdateAction, desktopUpdateText, isUpdateDownloadErrorCode, updateAppearsInDock } from './nextmux-update-action';
 import type { DesktopCommunitySkillInstallReview } from '../common/nextmux-platform-protocol';
+import type { SaveOfficialModelConnectionResult } from '../common/nextmux-platform-protocol';
 import { normalizeCouncilRouteSource } from './nextmux-conversation-history';
 import { normalizeArchivedChildResults, ArchivedChildResult } from '../common/nextmux-citation-display';
 import { normalizeModelCitations } from '@nextmux/agent-runtime/citations';
@@ -4596,6 +4597,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected modelPickerEffortLevelCount = 0;
     protected modelPickerEffortPlacement: AdjacentFloatingPanelPlacement | undefined;
     protected modelPickerEffortCloseTimer: number | undefined;
+    /** Hover intent of the model pickers (coding, comic chat, comic studio; one is open at a time): see intendModelHover. */
+    protected modelHoverIntent: { readonly key: string; readonly timer: number } | undefined;
+    protected modelListHoverLocked = false;
+    protected modelListScrolledAt = 0;
+    protected modelListPointer: { readonly x: number; readonly y: number } | undefined;
     protected readonly queuedAttachmentPayloads = new Map<string, readonly DesktopAttachmentRecord[]>();
     // Base64 in memory is about 4/3 of the file size.
     protected readonly turnAttachmentPayloads = new AttachmentPayloadCache<DesktopAttachmentRecord>(record => Math.ceil(record.size * 4 / 3));
@@ -7682,6 +7688,24 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected councilDisableSubagents = typeof window === 'undefined' ? true : window.localStorage?.getItem('nextmux.desktop.council.disableSubagents.v1') !== 'false';
 
+    /**
+     * The Council dialog's model list reports pointer and focus entry alike, without the pointer's position
+     * (nextmux-council-mode-view.tsx). Its card opens once a row has held the pointer or focus for a moment (70 ms), so
+     * rows passing under the pointer while the list scrolls, and a sweep across them, open nothing; the row whose card is
+     * open keeps it at once (its close is cancelled), as intendModelHover does for the other pickers.
+     */
+    protected intendCouncilModelHover(candidate: CouncilModelCandidate, anchor: HTMLElement): void {
+        if (this.modelPickerEffortModelId === candidate.routeId) { this.openCouncilModelHoverDrawer(candidate, anchor); return; }
+        if (this.modelHoverIntent?.key === candidate.routeId) return;
+        this.cancelModelHoverIntent();
+        const timer = window.setTimeout(() => {
+            if (this.modelHoverIntent?.timer !== timer) return;
+            this.modelHoverIntent = undefined;
+            if (anchor.isConnected) this.openCouncilModelHoverDrawer(candidate, anchor);
+        }, 70);
+        this.modelHoverIntent = { key: candidate.routeId, timer };
+    }
+
     protected openCouncilModelHoverDrawer(candidate: CouncilModelCandidate, anchor: HTMLElement): void {
         const optionRoute = this.councilRoutesForRelay(this.councilModalRelayKey).find(route => route.id === candidate.routeId);
         const depth = reasoningDepthChoicesForDisplay(this.reasoningDepthChoicesForRoute(optionRoute));
@@ -7929,8 +7953,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     this.closeModelEffortPickerImmediately?.();
                     this.selectCouncilSlotModel(slotId, routeId);
                 }}
-                onModelOptionPointerEnter={(model, element) => this.openCouncilModelHoverDrawer(model, element)}
-                onModelOptionPointerLeave={() => this.scheduleModelEffortPickerClose()}
+                onModelOptionPointerEnter={(model, element) => this.intendCouncilModelHover(model, element)}
+                onModelOptionPointerLeave={() => { this.cancelModelHoverIntent?.(); this.scheduleModelEffortPickerClose(); }}
                 renderModelOptionHoverPortal={model => this.renderCouncilModelHoverPortal(model)}
                 disableSubagents={this.councilDisableSubagents}
                 onToggleDisableSubagents={disabled => {
@@ -13488,6 +13512,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 role='listbox'
                                 aria-label={comicStepName(this.desktopLocale, capability)}
                                 onScroll={() => {
+                                    this.noteModelListScroll?.();
                                     if (this.comicModelHoverKey) {
                                         this.closeComicModelHoverImmediately();
                                         this.update();
@@ -13522,14 +13547,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                             value: item.source.kind === 'local' ? this.comicChatT('free') : this.comicChatT('providerBilled')
                                         });
                                     }
-                                    if (capability === 'video') {
+                                    // A model's video and reference rules are read for its open card only, not for every row on each render.
+                                    if (capability === 'video' && hoverPlacement) {
                                         const aspects = this.comicChatAspectChoices(item);
                                         if (aspects.length > 0) evidenceRows.push({ label: this.comicChatT('aspect'), value: aspects.join(' / ') });
                                         const durations = this.comicChatSecondsChoices(item, modalRefCount);
                                         if (durations.length > 0) evidenceRows.push({ label: canvasText(this.desktopLocale, 'duration'), value: durations.map(n => `${n}s`).join(' / ') });
                                         if (videoModelGuide(item.model).nativeAudio) evidenceRows.push({ label: canvasText(this.desktopLocale, 'audio'), value: this.comicChatT('sound') });
                                     }
-                                    if (capability === 'image' || capability === 'video') {
+                                    if ((capability === 'image' || capability === 'video') && hoverPlacement) {
                                         const refPolicy = this.comicChatReferencePolicy(capability, item);
                                         if (refPolicy.limit > 0) {
                                             evidenceRows.push({
@@ -13539,15 +13565,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         }
                                     }
                                     const optionTitle = [item.label, ...evidenceRows.map(metric => `${metric.label}: ${metric.value}`)].filter(Boolean).join(' · ');
+                                    const hover = (event: React.PointerEvent<HTMLElement>): void => this.intendModelHover?.(item.key, this.comicModelHoverKey, event,
+                                        anchor => this.openComicModelHover(item.key, anchor, detailGeometry));
                                     return (
                                         <div
                                             className={`nmx-model-option ${selected ? 'is-selected' : ''}`}
                                             key={item.key}
                                             data-model-id={item.key}
-                                            onPointerEnter={event => this.openComicModelHover(item.key, event.currentTarget, detailGeometry)}
+                                            onPointerEnter={hover}
+                                            onPointerMove={hover}
                                             onFocus={event => this.openComicModelHover(item.key, event.currentTarget, detailGeometry)}
                                             onBlur={() => this.scheduleComicModelHoverClose()}
-                                            onPointerLeave={() => this.scheduleComicModelHoverClose()}
+                                            onPointerLeave={() => { this.cancelModelHoverIntent?.(item.key); this.scheduleComicModelHoverClose(); }}
                                         >
                                             <button
                                                 type='button'
@@ -34626,6 +34655,52 @@ export class NextMuxDesktopWidget extends ReactWidget {
         });
     }
 
+    /**
+     * A model list opens a row's hover card when the pointer rests on the row, never for rows that scroll under a still
+     * pointer. Scrolling moves rows under the pointer and fires pointerenter on each; opening a card measures the row and
+     * renders the whole window, so one scroll used to open and close a card for every row it passed and the list
+     * stuttered. After a scroll, hovering waits until the pointer itself moves; a row then needs the pointer on it for a
+     * moment (70 ms), so sweeping across the list opens nothing on the way. Rows call this on pointer enter and move.
+     */
+    protected intendModelHover(key: string, openKey: string, event: React.PointerEvent<HTMLElement>, open: (anchor: HTMLElement) => void): void {
+        const anchor = event.currentTarget;
+        const moved = this.modelListPointer?.x !== event.clientX || this.modelListPointer?.y !== event.clientY;
+        this.modelListPointer = { x: event.clientX, y: event.clientY };
+        if (this.modelListHoverLocked) {
+            // Rows passing under a still pointer, or the pointer moving while the list still scrolls.
+            if (!moved || performance.now() - this.modelListScrolledAt < 150) return;
+            this.modelListHoverLocked = false;
+        }
+        if (key === openKey) {
+            // Back on the row whose card is open: the card stays (its close is cancelled); moving within the row is nothing.
+            if (event.type !== 'pointermove') open(anchor);
+            return;
+        }
+        if (this.modelHoverIntent?.key === key) return;
+        this.cancelModelHoverIntent();
+        const timer = window.setTimeout(() => {
+            if (this.modelHoverIntent?.timer !== timer) return;
+            this.modelHoverIntent = undefined;
+            if (anchor.isConnected) open(anchor);
+        }, 70);
+        this.modelHoverIntent = { key, timer };
+    }
+
+    /** The pointer left the row (or the list scrolled) before its card was due. */
+    protected cancelModelHoverIntent(key?: string): void {
+        const intent = this.modelHoverIntent;
+        if (!intent || key !== undefined && intent.key !== key) return;
+        window.clearTimeout(intent.timer);
+        this.modelHoverIntent = undefined;
+    }
+
+    /** Each scroll event of a model list: rows moving under the pointer are not hovered (intendModelHover). */
+    protected noteModelListScroll(): void {
+        this.modelListHoverLocked = true;
+        this.modelListScrolledAt = performance.now();
+        this.cancelModelHoverIntent();
+    }
+
     protected openModelEffortPicker(modelId: string, anchor: HTMLElement, levelCount: number): void {
         this.cancelModelEffortPickerClose();
         if (this.modelPickerEffortModelId === modelId && this.modelPickerEffortLevelCount === levelCount) {
@@ -37772,8 +37847,20 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return '';
     }
 
+    /**
+     * Own APIs' routes, one for each model an API lists. Each is built with its capability evidence and its media facts
+     * from the model directory, which for an API listing hundreds of models took long enough to slow every render: the
+     * composer and the model picker ask for these routes several times per render. They are rebuilt only when an API,
+     * its model list or the directory changes (each part of the key is replaced, never edited, when it changes).
+     */
+    protected officialModelRoutesCache: { readonly key: readonly unknown[]; readonly value: readonly Extract<DesktopModelRoute, { readonly kind: 'official_connection' }>[] } | undefined;
     protected officialModelRoutes(): readonly Extract<DesktopModelRoute, { readonly kind: 'official_connection' }>[] {
-        return this.officialModels.connections.flatMap(connection => {
+        const connections = this.officialModels.connections;
+        const key: readonly unknown[] = [connections, this.globalModels, ...connections.flatMap(connection => [connection, connection.model, connection.protocol,
+            connection.status, connection.toolCapability, connection.capabilityEvidence, connection.discoveredModels, connection.providerSettings])];
+        const cached = this.officialModelRoutesCache;
+        if (cached && cached.key.length === key.length && cached.key.every((value, index) => Object.is(value, key[index]))) return cached.value;
+        const value = connections.flatMap(connection => {
             const models = officialInvokableModelIds(connection);
             return models.flatMap(model => {
                 const virtual = this.connectionForDiscoveredModel(connection, model);
@@ -37797,6 +37884,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         : 2;
                 return score(left) - score(right) || left.connection.label.localeCompare(right.connection.label);
             });
+        this.officialModelRoutesCache = { key, value };
+        return value;
     }
 
     protected connectionForDiscoveredModel(connection: OfficialModelConnection, model: string): OfficialModelConnection {
@@ -38566,68 +38655,39 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
     }
 
+    /**
+     * Context windows found in the model directories, by route. The model picker names each row's window (its accessible
+     * name carries what its hover card shows), and finding one reads every directory entry, thousands of them: a route's
+     * window is looked up once until a directory is replaced. The key holds everything the lookup reads from the route.
+     */
+    protected rawContextWindowCache: { readonly sources: readonly unknown[]; readonly values: Map<string, number | undefined> } | undefined;
     protected rawModelContextWindowTokens(route: DesktopModelRoute | undefined, modelName?: string): number | undefined {
         if (!route) return undefined;
-        const catalog = [
-            ...(this.globalModels || []),
-            ...(this.platformCatalog?.offerings || []).map(offering => ({
-                id: offering.registryModelId || offering.id,
-                provider: offering.providerName || '',
-                canonicalModel: offering.canonicalModel,
-                contextTokens: offering.routeContextTokens ?? offering.contextTokens ?? null,
-                inputTokens: offering.routeInputTokens ?? offering.inputTokens ?? null,
-                maximumOutputTokens: offering.routeMaximumOutputTokens ?? offering.maximumOutputTokens ?? null
-            }))
-        ];
-        if (route.kind === 'managed_gateway') {
-            return modelContextWindowTokens([...(this.registryModels || []), ...catalog], {
-                registryModelId: route.offering?.registryModelId ?? route.registryModelId,
-                model: route.offering?.canonicalModel ?? route.canonicalModel ?? modelName,
-                capacity: {
-                    contextTokens: route.offering?.routeContextTokens ?? route.offering?.contextTokens,
-                    inputTokens: route.offering?.routeInputTokens ?? route.offering?.inputTokens,
-                    maximumOutputTokens: route.offering?.routeMaximumOutputTokens ?? route.offering?.maximumOutputTokens
-                }
-            });
-        }
-        const effectiveModel = modelName || route.connection.model;
-        const discovered = route.connection.discoveredModels?.find(model => model.selectionMode !== 'catalog_only' && (model.id === effectiveModel || model.id === route.connection.model));
-        const direct = modelContextWindowTokens(catalog, {
-            providerId: route.connection.providerId,
-            model: effectiveModel,
-            capacity: discovered
-        });
-        if (direct !== undefined) return direct;
-        if (catalog.length > 0 && typeof matchCatalogModel === 'function') {
-            const matched = matchCatalogModel(effectiveModel, discovered?.label || route.connection.label, this.globalModels || []);
-            if (matched) {
-                return modelContextWindowTokens(catalog, {
-                    registryModelId: matched.id,
-                    providerId: matched.provider || route.connection.providerId,
-                    model: matched.canonicalModel || effectiveModel,
-                    capacity: discovered
-                });
-            }
-        }
-        return undefined;
-    }
-
-    protected modelContextWindowTokens(route: DesktopModelRoute | undefined, modelName?: string): number | undefined {
-        if (!route) return undefined;
-        const catalog = [
-            ...(this.globalModels || []),
-            ...(this.platformCatalog?.offerings || []).map(offering => ({
-                id: offering.registryModelId || offering.id,
-                provider: offering.providerName || '',
-                canonicalModel: offering.canonicalModel,
-                contextTokens: offering.routeContextTokens ?? offering.contextTokens ?? null,
-                inputTokens: offering.routeInputTokens ?? offering.inputTokens ?? null,
-                maximumOutputTokens: offering.routeMaximumOutputTokens ?? offering.maximumOutputTokens ?? null
-            }))
-        ];
-        const raw = this.rawModelContextWindowTokens ? this.rawModelContextWindowTokens(route, modelName) : (
-            route.kind === 'managed_gateway'
-                ? modelContextWindowTokens([...(this.registryModels || []), ...catalog], {
+        const sources: readonly unknown[] = [this.globalModels, this.platformCatalog?.offerings, this.registryModels];
+        const cache = this.rawContextWindowCache?.sources.every((value, index) => value === sources[index])
+            ? this.rawContextWindowCache : this.rawContextWindowCache = { sources, values: new Map<string, number | undefined>() };
+        const effectiveModel = route.kind === 'managed_gateway' ? '' : modelName || route.connection.model;
+        const discovered = route.kind === 'managed_gateway' ? undefined
+            : route.connection.discoveredModels?.find(model => model.selectionMode !== 'catalog_only' && (model.id === effectiveModel || model.id === route.connection.model));
+        const key = JSON.stringify(route.kind === 'managed_gateway'
+            ? ['managed', route.offering?.registryModelId ?? route.registryModelId, route.offering?.canonicalModel ?? route.canonicalModel ?? modelName,
+                route.offering?.routeContextTokens ?? route.offering?.contextTokens, route.offering?.routeInputTokens ?? route.offering?.inputTokens]
+            : ['official', route.connection.providerId, effectiveModel, route.connection.label, discovered?.label, discovered?.contextTokens, discovered?.inputTokens]);
+        if (cache.values.has(key)) return cache.values.get(key);
+        const value = ((): number | undefined => {
+            const catalog = [
+                ...(this.globalModels || []),
+                ...(this.platformCatalog?.offerings || []).map(offering => ({
+                    id: offering.registryModelId || offering.id,
+                    provider: offering.providerName || '',
+                    canonicalModel: offering.canonicalModel,
+                    contextTokens: offering.routeContextTokens ?? offering.contextTokens ?? null,
+                    inputTokens: offering.routeInputTokens ?? offering.inputTokens ?? null,
+                    maximumOutputTokens: offering.routeMaximumOutputTokens ?? offering.maximumOutputTokens ?? null
+                }))
+            ];
+            if (route.kind === 'managed_gateway') {
+                return modelContextWindowTokens([...(this.registryModels || []), ...catalog], {
                     registryModelId: route.offering?.registryModelId ?? route.registryModelId,
                     model: route.offering?.canonicalModel ?? route.canonicalModel ?? modelName,
                     capacity: {
@@ -38635,30 +38695,79 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         inputTokens: route.offering?.routeInputTokens ?? route.offering?.inputTokens,
                         maximumOutputTokens: route.offering?.routeMaximumOutputTokens ?? route.offering?.maximumOutputTokens
                     }
-                })
-                : ((): number | undefined => {
-                    const effectiveModel = modelName || route.connection.model;
-                    const discovered = route.connection.discoveredModels?.find(model => model.selectionMode !== 'catalog_only' && (model.id === effectiveModel || model.id === route.connection.model));
-                    const direct = modelContextWindowTokens(catalog, {
-                        providerId: route.connection.providerId,
-                        model: effectiveModel,
+                });
+            }
+            const direct = modelContextWindowTokens(catalog, {
+                providerId: route.connection.providerId,
+                model: effectiveModel,
+                capacity: discovered
+            });
+            if (direct !== undefined) return direct;
+            if (catalog.length > 0 && typeof matchCatalogModel === 'function') {
+                const matched = matchCatalogModel(effectiveModel, discovered?.label || route.connection.label, this.globalModels || []);
+                if (matched) {
+                    return modelContextWindowTokens(catalog, {
+                        registryModelId: matched.id,
+                        providerId: matched.provider || route.connection.providerId,
+                        model: matched.canonicalModel || effectiveModel,
                         capacity: discovered
                     });
-                    if (direct !== undefined) return direct;
-                    if (catalog.length > 0 && typeof matchCatalogModel === 'function') {
-                        const matched = matchCatalogModel(effectiveModel, discovered?.label || route.connection.label, this.globalModels || []);
-                        if (matched) {
-                            return modelContextWindowTokens(catalog, {
-                                registryModelId: matched.id,
-                                providerId: matched.provider || route.connection.providerId,
-                                model: matched.canonicalModel || effectiveModel,
-                                capacity: discovered
-                            });
-                        }
+                }
+            }
+            return undefined;
+        })();
+        cache.values.set(key, value);
+        return value;
+    }
+
+    protected modelContextWindowTokens(route: DesktopModelRoute | undefined, modelName?: string): number | undefined {
+        if (!route) return undefined;
+        const raw = this.rawModelContextWindowTokens ? this.rawModelContextWindowTokens(route, modelName) : ((): number | undefined => {
+            // Only without rawModelContextWindowTokens (some test harnesses): the joined directory is thousands of entries,
+            // and building it unused on every call cost more than the lookup itself.
+            const catalog = [
+                ...(this.globalModels || []),
+                ...(this.platformCatalog?.offerings || []).map(offering => ({
+                    id: offering.registryModelId || offering.id,
+                    provider: offering.providerName || '',
+                    canonicalModel: offering.canonicalModel,
+                    contextTokens: offering.routeContextTokens ?? offering.contextTokens ?? null,
+                    inputTokens: offering.routeInputTokens ?? offering.inputTokens ?? null,
+                    maximumOutputTokens: offering.routeMaximumOutputTokens ?? offering.maximumOutputTokens ?? null
+                }))
+            ];
+            if (route.kind === 'managed_gateway') {
+                return modelContextWindowTokens([...(this.registryModels || []), ...catalog], {
+                    registryModelId: route.offering?.registryModelId ?? route.registryModelId,
+                    model: route.offering?.canonicalModel ?? route.canonicalModel ?? modelName,
+                    capacity: {
+                        contextTokens: route.offering?.routeContextTokens ?? route.offering?.contextTokens,
+                        inputTokens: route.offering?.routeInputTokens ?? route.offering?.inputTokens,
+                        maximumOutputTokens: route.offering?.routeMaximumOutputTokens ?? route.offering?.maximumOutputTokens
                     }
-                    return undefined;
-                })()
-        );
+                });
+            }
+            const effectiveModel = modelName || route.connection.model;
+            const discovered = route.connection.discoveredModels?.find(model => model.selectionMode !== 'catalog_only' && (model.id === effectiveModel || model.id === route.connection.model));
+            const direct = modelContextWindowTokens(catalog, {
+                providerId: route.connection.providerId,
+                model: effectiveModel,
+                capacity: discovered
+            });
+            if (direct !== undefined) return direct;
+            if (catalog.length > 0 && typeof matchCatalogModel === 'function') {
+                const matched = matchCatalogModel(effectiveModel, discovered?.label || route.connection.label, this.globalModels || []);
+                if (matched) {
+                    return modelContextWindowTokens(catalog, {
+                        registryModelId: matched.id,
+                        providerId: matched.provider || route.connection.providerId,
+                        model: matched.canonicalModel || effectiveModel,
+                        capacity: discovered
+                    });
+                }
+            }
+            return undefined;
+        })();
         const learned = this.learnedRouteContextCap?.(route);
         return raw !== undefined && learned !== undefined ? Math.min(raw, learned) : raw;
     }
@@ -40050,6 +40159,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
             : undefined;
     }
 
+    /**
+     * A model the API cannot list for itself: an Azure deployment, a Bedrock invocation ID or a generation model (the
+     * form's requiresManualModel). A new draft of any other API leaves its model empty, as the field says (留空自动识别):
+     * the preset's model sent as if typed was tested alone, and an API that does not serve it failed to save instead
+     * of picking a model from its own list.
+     */
+    protected officialModelRequired(provider: OfficialProviderPreset): boolean {
+        return provider.id === 'azure_openai' || provider.id === 'bedrock' || provider.id === 'custom_media' || isOfficialMediaProtocol(provider.protocol);
+    }
+
     protected openOfficialProvider(
         provider: OfficialProviderPreset,
         connection?: OfficialModelConnection,
@@ -40075,7 +40194,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             ...(connection.providerSettings ? { providerSettings: connection.providerSettings } : {})
         } : {
             label: '',
-            model: provider.defaultModel,
+            model: this.officialModelRequired?.(provider) ? provider.defaultModel : '',
             baseUrl: provider.defaultBaseUrl,
             apiKey: '',
             ...(provider.id === 'custom_media' ? { providerSettings: { ...this.defaultOfficialProviderSettings(provider), mediaTemplate: mediaTemplateFromPreset('relay') as never } }
@@ -40399,6 +40518,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         const draft = this.officialDraft;
         const requestToken = ++this.officialConnectionRequestToken;
+        const startedAt = Date.now();
         this.officialConnectionStage = validate ? 'testing' : 'saving';
         this.officialConnectionMessage = '';
         this.officialConnectionError = '';
@@ -40425,17 +40545,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const mediaChecked = Boolean(result.validation) || (validate && result.connection.protocol === 'async_media_template' && result.connection.status === 'verified');
             this.officialConnectionMessage = result.connection.ollamaStatus ? officialDiscoverySummary(this.desktopLocale, result.connection)
                 : generationApi && validate ? connectionCheckText(this.desktopLocale, mediaChecked ? 'mediaReachable' : 'notChecked', result.connection.label)
-                : result.validation
-                    ? result.validation.toolCalling
-                        ? `连接与工具调用已通过 · ${result.validation.latencyMs} ms`
-                        : '连接已通过，但模型没有按要求发起工具调用；仍可使用，Agent 排序会降低。'
-                    : localizeDesktopSurface(this.desktopLocale, '已保存模型');
+                : this.ownApiSaveMessage?.(result, validate, startedAt) ?? localizeDesktopSurface(this.desktopLocale, '已保存模型');
             savedToList = result.connection.id;
             this.officialConnectionEditorOpen = false;
             this.officialImportSource = undefined;
             this.officialDraft = {
                 label: '',
-                model: provider.defaultModel,
+                model: this.officialModelRequired?.(provider) ? provider.defaultModel : '',
                 baseUrl: provider.defaultBaseUrl,
                 apiKey: '',
                 ...(this.defaultOfficialProviderSettings(provider)
@@ -40459,11 +40575,35 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.update();
     }
 
+    /** A check made by this request: the backend also returns the last stored result when its own test call failed. */
+    protected ownApiCheckedNow(result: SaveOfficialModelConnectionResult, startedAt: number): boolean {
+        return Boolean(result.validation && Date.parse(result.validation.checkedAt) >= startedAt - 1_000);
+    }
+
+    /**
+     * What saving a chat API established, said in 我的 API once the drawer closes. “测试并保存” whose paid call failed
+     * (no balance, a used-up quota, rate limits) is still saved with the models its list returned, and says so instead
+     * of a bare “已保存模型”; “仅保存” never presents an earlier test as this one.
+     */
+    protected ownApiSaveMessage(result: SaveOfficialModelConnectionResult, validate: boolean, startedAt: number): string {
+        const { connection, validation } = result;
+        const values = { label: connection.label, title: myApisText(this.desktopLocale, 'title'), test: myApisText(this.desktopLocale, 'test') };
+        if (validate && validation && this.ownApiCheckedNow(result, startedAt)) {
+            return ownApiSaveText(this.desktopLocale, validation.toolCalling ? 'passed' : 'toolsFailed', { ...values, ms: String(validation.latencyMs) });
+        }
+        const generationApi = isOfficialMediaProtocol(connection.protocol) || connection.protocol === 'async_media_template';
+        // The count 我的 API shows for the row, and only when the list was really read this time or before.
+        const listed = !generationApi && connection.modelDiscoveryStatus === 'verified' ? ownModelListModels(connection).length : 0;
+        if (validate && !generationApi) return ownApiSaveText(this.desktopLocale, listed ? 'unconfirmed' : 'unconfirmedNoList', { ...values, count: String(listed) });
+        return listed ? ownApiSaveText(this.desktopLocale, 'saved', { ...values, count: String(listed) }) : localizeDesktopSurface(this.desktopLocale, '已保存模型');
+    }
+
     protected async validateExistingOfficialConnection(connection: OfficialModelConnection): Promise<void> {
         if (this.officialConnectionStage !== 'idle') {
             return;
         }
         const requestToken = ++this.officialConnectionRequestToken;
+        const startedAt = Date.now();
         this.officialConnectionStage = 'testing';
         this.officialBusyConnectionId = connection.id;
         this.officialConnectionFeedbackId = connection.id;
@@ -40486,6 +40626,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const generationApi = isOfficialMediaProtocol(connection.protocol) || connection.protocol === 'async_media_template';
             const mediaChecked = Boolean(result.validation) || (result.connection.protocol === 'async_media_template' && result.connection.status === 'verified');
             this.officialConnectionMessage = result.connection.ollamaStatus ? officialDiscoverySummary(this.desktopLocale, result.connection)
+                // The paid call failed and the list still answered: not a tool-call result, and never the last stored one.
+                : !generationApi && this.ownApiCheckedNow?.(result, startedAt) === false ? ownApiSaveText(this.desktopLocale, 'testIncomplete', { label: connection.label })
                 : connectionCheckText(this.desktopLocale, generationApi ? mediaChecked ? 'mediaReachable' : 'notChecked'
                     : result.validation?.toolCalling ? 'toolsPassed' : 'toolsFailed', connection.label);
         } catch (error) {
@@ -40694,7 +40836,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (this.officialDraft.connectionId === connectionId && this.officialProviderSheet) {
                 this.officialDraft = {
                     label: '',
-                    model: this.officialProviderSheet.defaultModel,
+                    model: this.officialModelRequired?.(this.officialProviderSheet) ? this.officialProviderSheet.defaultModel : '',
                     baseUrl: this.officialProviderSheet.defaultBaseUrl,
                     apiKey: ''
                 };
@@ -47727,7 +47869,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     : 0)
                 : 0);
         const modelPickerDesiredHeight = modelPickerChromeHeight + Math.max(48, pickerRows.length * 32);
-        const modelPickerPlacement = this.calculateModelPickerPlacement(modelPickerDesiredHeight);
+        // Measured only while the list is open: the placement reads the trigger and the bars from the layout, and doing that
+        // on every render (each keystroke, each streamed token) made the browser lay the window out again.
+        const modelPickerPlacement = this.codingPopover === 'routes' && !this.modelPickerRelayOpen
+            ? this.calculateModelPickerPlacement(modelPickerDesiredHeight)
+            : { side: 'below' as const, top: 0, left: 0, width: 264, height: 0, maxHeight: 0 };
         const modelPickerMaximumHeight = modelPickerPlacement.maxHeight;
         const modelPickerHeight = modelPickerPlacement.height;
         const questionState = this.currentAgentQuestionState();
@@ -47765,22 +47911,29 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const optionRoute = (model.variantRouteId ? priceVariantRoutes.get(baseModelId)?.find(variant => variant.id === model.variantRouteId) : undefined)
                 || modelRouteById.get(baseModelId);
             const optionRouteLabel = optionRoute?.kind === 'official_connection' ? optionRoute.connection.label : '';
-            const depth = reasoningDepthChoicesForDisplay(this.reasoningDepthChoicesForRoute(optionRoute));
-            const activeDepth = this.activeReasoningDepthId(optionRoute, depth);
-            const rawContextMaximum = this.rawModelContextWindowTokens?.(optionRoute, model.model) ?? this.modelContextWindowTokens(optionRoute, model.model) ?? (model.contextTokens ?? undefined);
-            const learnedContextCap = this.learnedRouteContextCap?.(optionRoute);
+            // The row's window is part of its accessible name; the lookup is kept per route (rawContextWindowCache).
             const contextMaximum = this.modelContextWindowTokens(optionRoute, model.model) ?? (model.contextTokens ?? undefined);
-            const contextChoices = typeof contextWindowChoices === 'function' ? contextWindowChoices(rawContextMaximum, learnedContextCap) : [];
-            const activeContextTokens = this.contextWindowForRoute?.(optionRoute) ?? contextMaximum;
-            // Rows the hover card adds (placement estimate): the depth caption and its rows, the window sizes' caption and
-            // rows (six choices a row in both), and the measured-limit note.
-            const contextCapped = learnedContextCap !== undefined && rawContextMaximum !== undefined && learnedContextCap < rawContextMaximum;
-            const contextShown = contextMaximum !== undefined && contextChoices.length > 1;
-            const settingsRowCount = (depth.options.length ? 1 + Math.ceil(depth.options.length / 6) : 0) + (contextShown ? 1 + Math.ceil(contextChoices.length / 6) : 0)
-                + (!contextShown && contextMaximum !== undefined ? 1 : 0) + (contextCapped ? 2 : 0);
+            // The hover card's settings (thinking depth, the window sizes on offer) read the model catalogs again. They are
+            // worked out for the row whose card is open, or one about to open, never for every row the list scrolls past.
+            const cardSettings = () => {
+                const depth = reasoningDepthChoicesForDisplay(this.reasoningDepthChoicesForRoute(optionRoute));
+                const rawContextMaximum = this.rawModelContextWindowTokens?.(optionRoute, model.model) ?? this.modelContextWindowTokens(optionRoute, model.model) ?? (model.contextTokens ?? undefined);
+                const learnedContextCap = this.learnedRouteContextCap?.(optionRoute);
+                const contextChoices = typeof contextWindowChoices === 'function' ? contextWindowChoices(rawContextMaximum, learnedContextCap) : [];
+                // Rows the hover card adds (placement estimate): the depth caption and its rows, the window sizes' caption and
+                // rows (six choices a row in both), and the measured-limit note.
+                const contextCapped = learnedContextCap !== undefined && rawContextMaximum !== undefined && learnedContextCap < rawContextMaximum;
+                const contextShown = contextMaximum !== undefined && contextChoices.length > 1;
+                const settingsRowCount = (depth.options.length ? 1 + Math.ceil(depth.options.length / 6) : 0) + (contextShown ? 1 + Math.ceil(contextChoices.length / 6) : 0)
+                    + (!contextShown && contextMaximum !== undefined ? 1 : 0) + (contextCapped ? 2 : 0);
+                return { depth, learnedContextCap, contextChoices, contextCapped, contextShown, settingsRowCount };
+            };
             const selected = supported && this.selectedModelIds.coding === baseModelId && (!model.variantRouteId || this.activeModelRouteId === model.variantRouteId);
             const effortOpen = this.modelPickerEffortModelId === model.id;
             const placement = effortOpen ? this.modelPickerEffortPlacement : undefined;
+            const card = effortOpen && placement ? cardSettings() : undefined;
+            const openCard = (anchor: HTMLElement): void => this.openModelEffortPicker(model.id, anchor, cardSettings().settingsRowCount);
+            const hover = (event: React.PointerEvent<HTMLElement>): void => this.intendModelHover?.(model.id, this.modelPickerEffortModelId, event, openCard);
             const unavailableReason = model.availabilityReason || 'generation_unverified';
             const unavailableReasonText = runningTaskText(this.desktopLocale, unavailableReason === 'generation_unsupported'
                 ? 'modelGenerationUnsupported'
@@ -47791,7 +47944,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         : 'modelGenerationUnverified');
             const unavailableLabel = model.listingPending ? modelPickerEvidenceText(this.desktopLocale, 'listingPending') : unavailableReasonText;
             const offering = optionRoute?.kind === 'managed_gateway' ? optionRoute.offering : undefined;
-            const officialOffering = !offering && optionRoute?.kind === 'official_connection' ? this.officialRoutePriceOffering?.(optionRoute, model.label) : undefined;
             const fidelity = measuredModelFidelity(offering?.fidelity || model.fidelity);
             const authenticityPending = Boolean(offering) && fidelity === undefined;
             const authenticityHint = authenticityPending ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint') : undefined;
@@ -47809,25 +47961,31 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // Hovering the tag says what it is: 倍率, or for an own price that the multiplier does not apply (the hover card has the price).
             const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
             const contextRow: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
-            const evidenceRows = [...(offering || officialOffering ? metrics.slice(0, 2) : metrics), ...(!contextShown ? contextRow : [])];
             const optionTitle = [model.label, optionRouteLabel, ...[...metrics, ...contextRow].map(metric => `${metric.label}: ${metric.value}`), !supported && unavailableLabel].filter(Boolean).join(' · ');
             return <div className={`nmx-model-option ${supported ? '' : 'is-unsupported'} ${selected ? 'is-selected' : ''}`} key={model.id} data-model-id={model.id}
                 data-capability-gate={supported ? 'verified_generation_and_tools' : model.listingPending ? 'listing_pending' : unavailableReason}
-                onPointerEnter={event => this.openModelEffortPicker(model.id, event.currentTarget, settingsRowCount)}
-                onFocus={event => this.openModelEffortPicker(model.id, event.currentTarget, settingsRowCount)}
+                onPointerEnter={hover}
+                onPointerMove={hover}
+                onFocus={event => this.openModelEffortPicker(model.id, event.currentTarget, cardSettings().settingsRowCount)}
                 onBlur={() => this.scheduleModelEffortPickerClose()}
-                onPointerLeave={() => this.scheduleModelEffortPickerClose()}>
+                onPointerLeave={() => { this.cancelModelHoverIntent?.(model.id); this.scheduleModelEffortPickerClose(); }}>
                 <button aria-disabled={!supported} onClick={event => {
                     if (!supported) return;
                     this.selectModelOptionOnRelay(baseModelId, 'coding', modelPickerRelayKey,
                         optionRoute?.kind === 'managed_gateway' ? { id: optionRoute.offering.keyPriceQuoteId } : undefined, model.variantRouteId);
-                    if (optionRoute) this.openModelEffortPicker(model.id, event.currentTarget.closest('.nmx-model-option') as HTMLElement, settingsRowCount);
+                    if (optionRoute) openCard(event.currentTarget.closest('.nmx-model-option') as HTMLElement);
                     else this.completeNavigationSurface();
                     this.update();
                 }} aria-label={optionTitle}><span><strong>{model.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
                     onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)} onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
                     {(offering || fidelity !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}</span>{selected && <i className='codicon codicon-check'></i>}</button>
-                {effortOpen && placement && ReactDOM.createPortal(
+                {card && placement && (() => {
+                    const { depth, learnedContextCap, contextChoices, contextCapped, contextShown } = card;
+                    const activeDepth = this.activeReasoningDepthId(optionRoute, depth);
+                    const activeContextTokens = this.contextWindowForRoute?.(optionRoute) ?? contextMaximum;
+                    const officialOffering = !offering && optionRoute?.kind === 'official_connection' ? this.officialRoutePriceOffering?.(optionRoute, model.label) : undefined;
+                    const evidenceRows = [...(offering || officialOffering ? metrics.slice(0, 2) : metrics), ...(!contextShown ? contextRow : [])];
+                    return ReactDOM.createPortal(
                     <div className={`nmx-model-effort-portal nmx-theme-${this.resolvedDesktopTheme()}`} dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'} lang={this.desktopLocale}
                         onPointerEnter={() => this.cancelModelEffortPickerClose()} onPointerLeave={() => this.scheduleModelEffortPickerClose()}>
                         <section className={`nmx-model-effort-menu nmx-model-evidence-menu is-${placement.side}`} data-model-id={model.id}
@@ -47891,7 +48049,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         </section>
                     </div>,
                     document.body
-                )}
+                    );
+                })()}
             </div>;
         };
         const panelMeta: Record<CodingPanel, { readonly icon: string; readonly title: string; readonly body: string; readonly action?: string }> = {
@@ -48350,7 +48509,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             defaultItemHeight={32}
                             endReached={() => this.loadMorePickerModels()}
                             rangeChanged={({ endIndex }) => { if (endIndex >= pickerRows.length - 4) this.loadMorePickerModels(); }}
-                            onScroll={() => { if (this.modelPickerEffortModelId) { this.closeModelEffortPickerImmediately(); this.update(); } else this.hideModelEvidenceTooltip?.(); }}
+                            onScroll={() => { this.noteModelListScroll?.(); if (this.modelPickerEffortModelId) { this.closeModelEffortPickerImmediately(); this.update(); } else this.hideModelEvidenceTooltip?.(); }}
                             increaseViewportBy={{ top: 96, bottom: 128 }}
                             onMouseDown={event => { if (event.target === event.currentTarget) this.closeNavigationSurface(); }}
                             itemContent={(_index, model) => renderModelPickerOption(model, modelRouteById.has(model.variantOf ?? model.id))}
@@ -49586,7 +49745,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 onChange={event => { this.comicModelPickerQuery = event.currentTarget.value; this.closeComicModelHoverImmediately(); this.update(); }} /></div>}
                         {filtered.length > 0 ? (
                             <div className='nmx-model-picker-list' role='listbox' aria-label={this.comicChatT(activeTab)}
-                                onScroll={() => { if (this.comicModelHoverKey) { this.closeComicModelHoverImmediately(); this.update(); } else this.hideModelEvidenceTooltip?.(); }}>
+                                onScroll={() => { this.noteModelListScroll?.(); if (this.comicModelHoverKey) { this.closeComicModelHoverImmediately(); this.update(); } else this.hideModelEvidenceTooltip?.(); }}>
                                 {filtered.map(item => {
                                     const selected = item.key === selectedCandidate?.key;
                                     const offering = item.offering;
@@ -49610,14 +49769,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                             value: item.source.kind === 'local' ? this.comicChatT('free') : this.comicChatT('providerBilled')
                                         });
                                     }
-                                    if (activeTab === 'video') {
+                                    // A model's video and reference rules are read for its open card only, not for every row on each render.
+                                    if (activeTab === 'video' && hoverPlacement) {
                                         const aspects = this.comicChatAspectChoices(item);
                                         if (aspects.length > 0) evidenceRows.push({ label: this.comicChatT('aspect'), value: aspects.join(' / ') });
                                         const durations = this.comicChatSecondsChoices(item, ui.references.length);
                                         if (durations.length > 0) evidenceRows.push({ label: canvasText(this.desktopLocale, 'duration'), value: durations.map(n => `${n}s`).join(' / ') });
                                         if (videoModelGuide(item.model).nativeAudio) evidenceRows.push({ label: canvasText(this.desktopLocale, 'audio'), value: this.comicChatT('sound') });
                                     }
-                                    if (activeTab === 'image' || activeTab === 'video') {
+                                    if ((activeTab === 'image' || activeTab === 'video') && hoverPlacement) {
                                         const refPolicy = this.comicChatReferencePolicy(activeTab, item);
                                         if (refPolicy.limit > 0) {
                                             evidenceRows.push({
@@ -49627,11 +49787,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         }
                                     }
                                     const optionTitle = [item.label, ...evidenceRows.map(metric => `${metric.label}: ${metric.value}`)].filter(Boolean).join(' · ');
+                                    const hover = (event: React.PointerEvent<HTMLElement>): void => this.intendModelHover?.(item.key, this.comicModelHoverKey, event,
+                                        anchor => this.openComicModelHover(item.key, anchor, detailGeometry));
                                     return <div className={`nmx-model-option ${selected ? 'is-selected' : ''}`} key={item.key} data-model-id={item.key}
-                                        onPointerEnter={event => this.openComicModelHover(item.key, event.currentTarget, detailGeometry)}
+                                        onPointerEnter={hover}
+                                        onPointerMove={hover}
                                         onFocus={event => this.openComicModelHover(item.key, event.currentTarget, detailGeometry)}
                                         onBlur={() => this.scheduleComicModelHoverClose()}
-                                        onPointerLeave={() => this.scheduleComicModelHoverClose()}>
+                                        onPointerLeave={() => { this.cancelModelHoverIntent?.(item.key); this.scheduleComicModelHoverClose(); }}>
                                         <button type='button' role='option' aria-selected={selected} aria-label={optionTitle}
                                             onClick={() => {
                                                 this.pickComicChatModel(activeTab, item.key);

@@ -1140,7 +1140,7 @@
     gap: 8px;
     padding: 8px 0 4px;
 }
-.nmx-shell .nmx-my-apis-models .nmx-own-model-list { max-height: 320px; overflow: auto; }
+.nmx-shell .nmx-my-apis-models .nmx-own-model-list { max-height: 320px; overflow: auto; overscroll-behavior: contain; }
 .nmx-shell .nmx-my-apis-models .nmx-my-apis-refresh {
     justify-self: start;
     min-height: 28px;

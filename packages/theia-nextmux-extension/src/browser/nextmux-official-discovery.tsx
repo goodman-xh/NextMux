@@ -140,7 +140,7 @@ const priceText = (value: number): string => `$${value >= 1 ? value.toFixed(2).r
 const tokenText = (value: number): string => contextWindowTokenLabel(value);
 
 /** Context, price and capabilities: what this API reported first, the public directory's entry only for what it left out. */
-function OwnModelFactsLine({ locale, model, catalog }: { readonly locale: NextMuxDesktopLocale; readonly model: OfficialModelConnection['discoveredModels'][number]; readonly catalog?: CatalogModel }): React.ReactElement | null {
+const OwnModelFactsLine = React.memo(function OwnModelFactsLine({ locale, model, catalog }: { readonly locale: NextMuxDesktopLocale; readonly model: OfficialModelConnection['discoveredModels'][number]; readonly catalog?: CatalogModel }): React.ReactElement | null {
     const t = (key: keyof typeof ownListText.en, values: Record<string, string> = {}): string => ownModelListText(locale, key).replace(/\{(\w+)\}/g, (match, name: string) => values[name] ?? match);
     const context = model.contextTokens || catalog?.contextTokens || undefined;
     const apiPrice = model.inputPricePerMillion !== undefined && model.outputPricePerMillion !== undefined;
@@ -159,7 +159,7 @@ function OwnModelFactsLine({ locale, model, catalog }: { readonly locale: NextMu
             {t('price', { input: priceText(input), output: priceText(output) })}<em>{apiPrice ? t('priceApi') : t('priceReference')}</em></span> : null}
         <ModelTaxonomyTags locale={locale} model={facts} />
     </small>;
-}
+});
 
 /** Display inventory: keep every reported kind and include a manual default absent from the directory.
  * This does not grant invocation or tool capability to any model.
@@ -172,18 +172,27 @@ export function ownModelListModels(connection: Pick<OfficialModelConnection, 'mo
     return groupModelsByName([...models.values()].filter(model => !needle || `${model.id} ${model.label}`.toLowerCase().includes(needle)), model => model.id);
 }
 
-export function OwnModelList({ locale, connection, catalog }: { readonly locale: NextMuxDesktopLocale; readonly connection: Pick<OfficialModelConnection, 'id' | 'model' | 'discoveredModels'>; readonly catalog?: readonly CatalogModel[] }): React.ReactElement {
+/**
+ * The model list of one own API. It renders again only when its API, the directory or the language changes, never on
+ * the window's other renders (each keystroke, each streamed token): an API can list hundreds of models, and every row
+ * classifies its model and formats its facts.
+ */
+export const OwnModelList = React.memo(function OwnModelList({ locale, connection, catalog }: { readonly locale: NextMuxDesktopLocale; readonly connection: Pick<OfficialModelConnection, 'id' | 'model' | 'discoveredModels'>; readonly catalog?: readonly CatalogModel[] }): React.ReactElement {
     const [query, setQuery] = React.useState('');
     const needle = query.trim().toLowerCase();
     const models = React.useMemo(() => ownModelListModels(connection), [connection.model, connection.discoveredModels]);
     const visible = React.useMemo(() => needle ? ownModelListModels(connection, needle) : models, [connection.model, connection.discoveredModels, models, needle]);
     const matches = React.useMemo(() => new Map(visible.map(model => [model.id, matchCatalogModel(model.id, model.label, catalog)])), [visible, catalog]);
-    const groups = new Map<OwnModelKind, typeof models[number][]>();
-    for (const model of visible) {
-        for (const kind of ownModelCategories(model, matches.get(model.id))) {
-            groups.set(kind, [...(groups.get(kind) || []), model]);
+    const groups = React.useMemo(() => {
+        const byKind = new Map<OwnModelKind, typeof models[number][]>();
+        for (const model of visible) {
+            for (const kind of ownModelCategories(model, matches.get(model.id))) {
+                const members = byKind.get(kind);
+                if (members) members.push(model); else byKind.set(kind, [model]);
+            }
         }
-    }
+        return byKind;
+    }, [visible, matches]);
     return <section className='nmx-own-model-list' dir={locale === 'ar' ? 'rtl' : undefined} aria-label={ownModelListText(locale, 'button')}>
         <header><input type='search' value={query} placeholder={ownModelListText(locale, 'search')} aria-label={ownModelListText(locale, 'search')} onChange={event => setQuery(event.currentTarget.value)} />
             <small>{ownModelListText(locale, 'note')}</small></header>
@@ -194,9 +203,118 @@ export function OwnModelList({ locale, connection, catalog }: { readonly locale:
                     <OwnModelFactsLine locale={locale} model={model} catalog={matches.get(model.id)} /></li>)}</ul>
             </details>)}
     </section>;
-}
+});
 
 /** Text lookups that never throw: an unknown key or language falls back (see nextmux-copy-fallback.ts). */
 export function ownModelListText(locale: Parameters<typeof uncheckedOwnModelListText>[0], key: Parameters<typeof uncheckedOwnModelListText>[1], ...rest: AfterLocaleAndKey<Parameters<typeof uncheckedOwnModelListText>>): string {
     return totalCopy(locale, key, language => uncheckedOwnModelListText(language, key, ...rest));
+}
+
+/**
+ * What saving or testing a chat API established (audit A03-04: say only what was checked). A test whose paid call
+ * failed (no balance, a used-up quota, rate limits) still saves the API with the models its list returned; the
+ * sentence says so. {title} and {test} are the 我的 API dialog and its test button (myApisText), so they always match.
+ */
+export type OwnApiSaveKey = 'passed' | 'toolsFailed' | 'unconfirmed' | 'unconfirmedNoList' | 'saved' | 'testIncomplete';
+const ownApiSaveCopy: Record<NextMuxDesktopLocale, Record<OwnApiSaveKey, string>> = {
+    'zh-CN': {
+        passed: '“{label}”已保存，连接与工具调用已通过 · {ms} ms',
+        toolsFailed: '“{label}”已保存，可以连接，但模型没有按要求发起工具调用；仍可使用，Agent 排序会降低。',
+        unconfirmed: '“{label}”已保存，读到 {count} 个模型。测试调用没有成功，常见原因是余额不足、额度用尽或请求过于频繁；可以稍后在“{title}”里点“{test}”重新测试。',
+        unconfirmedNoList: '“{label}”已保存。测试调用没有成功，常见原因是余额不足、额度用尽或请求过于频繁；可以稍后在“{title}”里点“{test}”重新测试。',
+        saved: '“{label}”已保存，读到 {count} 个模型。',
+        testIncomplete: '“{label}”的测试调用没有成功，常见原因是余额不足、额度用尽或请求过于频繁；已读到的模型不受影响。'
+    },
+    'zh-TW': {
+        passed: '「{label}」已儲存，連線與工具呼叫已通過 · {ms} ms',
+        toolsFailed: '「{label}」已儲存，可以連線，但模型沒有依要求發起工具呼叫；仍可使用，Agent 排序會降低。',
+        unconfirmed: '「{label}」已儲存，讀到 {count} 個模型。測試呼叫沒有成功，常見原因是餘額不足、額度用盡或請求過於頻繁；可以稍後在「{title}」裡點「{test}」重新測試。',
+        unconfirmedNoList: '「{label}」已儲存。測試呼叫沒有成功，常見原因是餘額不足、額度用盡或請求過於頻繁；可以稍後在「{title}」裡點「{test}」重新測試。',
+        saved: '「{label}」已儲存，讀到 {count} 個模型。',
+        testIncomplete: '「{label}」的測試呼叫沒有成功，常見原因是餘額不足、額度用盡或請求過於頻繁；已讀到的模型不受影響。'
+    },
+    en: {
+        passed: '“{label}” saved. Connection and tool calls passed · {ms} ms',
+        toolsFailed: '“{label}” saved. It connects, but the model did not make the requested tool call; you can still use it, and Agent ranks it lower.',
+        unconfirmed: '“{label}” saved. Models read from its list: {count}. The test call did not succeed, most often because of a low balance, a used-up quota or rate limits. You can test it again later with {test} in {title}.',
+        unconfirmedNoList: '“{label}” saved. The test call did not succeed, most often because of a low balance, a used-up quota or rate limits. You can test it again later with {test} in {title}.',
+        saved: '“{label}” saved. Models read from its list: {count}.',
+        testIncomplete: 'The test call to “{label}” did not succeed, most often because of a low balance, a used-up quota or rate limits. The models already read stay as they are.'
+    },
+    ja: {
+        passed: '「{label}」を保存しました。接続とツール呼び出しの確認に合格しました · {ms} ms',
+        toolsFailed: '「{label}」を保存しました。接続はできますが、モデルが求められたツール呼び出しを行いませんでした。引き続き使えますが、Agent での順位は下がります。',
+        unconfirmed: '「{label}」を保存しました。一覧から読み取ったモデル: {count} 件。テスト呼び出しは成功しませんでした。残高不足、利用枠の使い切り、リクエスト制限がよくある原因です。後で「{title}」の「{test}」からもう一度テストできます。',
+        unconfirmedNoList: '「{label}」を保存しました。テスト呼び出しは成功しませんでした。残高不足、利用枠の使い切り、リクエスト制限がよくある原因です。後で「{title}」の「{test}」からもう一度テストできます。',
+        saved: '「{label}」を保存しました。一覧から読み取ったモデル: {count} 件。',
+        testIncomplete: '「{label}」へのテスト呼び出しは成功しませんでした。残高不足、利用枠の使い切り、リクエスト制限がよくある原因です。読み取り済みのモデルはそのままです。'
+    },
+    ko: {
+        passed: '“{label}”을(를) 저장했습니다. 연결 및 도구 호출 확인 통과 · {ms} ms',
+        toolsFailed: '“{label}”을(를) 저장했습니다. 연결은 되지만 모델이 요청한 도구 호출을 하지 않았습니다. 계속 사용할 수 있지만 Agent 순위가 낮아집니다.',
+        unconfirmed: '“{label}”을(를) 저장했습니다. 목록에서 읽은 모델: {count}개. 테스트 호출이 성공하지 못했습니다. 잔액 부족, 사용 한도 소진, 요청 제한이 흔한 원인입니다. 나중에 ‘{title}’에서 ‘{test}’로 다시 테스트할 수 있습니다.',
+        unconfirmedNoList: '“{label}”을(를) 저장했습니다. 테스트 호출이 성공하지 못했습니다. 잔액 부족, 사용 한도 소진, 요청 제한이 흔한 원인입니다. 나중에 ‘{title}’에서 ‘{test}’로 다시 테스트할 수 있습니다.',
+        saved: '“{label}”을(를) 저장했습니다. 목록에서 읽은 모델: {count}개.',
+        testIncomplete: '“{label}” 테스트 호출이 성공하지 못했습니다. 잔액 부족, 사용 한도 소진, 요청 제한이 흔한 원인입니다. 이미 읽은 모델은 그대로 유지됩니다.'
+    },
+    es: {
+        passed: '«{label}» guardado. La conexión y las llamadas a herramientas pasaron la prueba · {ms} ms',
+        toolsFailed: '«{label}» guardado. Se conecta, pero el modelo no hizo la llamada a herramientas solicitada; puedes seguir usándolo y Agent lo clasifica más abajo.',
+        unconfirmed: '«{label}» guardado. Modelos leídos de su lista: {count}. La llamada de prueba no tuvo éxito; suele deberse a saldo insuficiente, cuota agotada o límites de solicitudes. Puedes volver a probarlo más tarde con «{test}» en «{title}».',
+        unconfirmedNoList: '«{label}» guardado. La llamada de prueba no tuvo éxito; suele deberse a saldo insuficiente, cuota agotada o límites de solicitudes. Puedes volver a probarlo más tarde con «{test}» en «{title}».',
+        saved: '«{label}» guardado. Modelos leídos de su lista: {count}.',
+        testIncomplete: 'La llamada de prueba a «{label}» no tuvo éxito; suele deberse a saldo insuficiente, cuota agotada o límites de solicitudes. Los modelos ya leídos se mantienen.'
+    },
+    fr: {
+        passed: '« {label} » enregistré. La connexion et les appels d’outils ont réussi · {ms} ms',
+        toolsFailed: '« {label} » enregistré. Il se connecte, mais le modèle n’a pas fait l’appel d’outil demandé ; il reste utilisable et Agent le classe plus bas.',
+        unconfirmed: '« {label} » enregistré. Modèles lus dans sa liste : {count}. L’appel de test n’a pas abouti, le plus souvent à cause d’un solde insuffisant, d’un quota épuisé ou de limites de requêtes. Vous pourrez le tester à nouveau plus tard avec « {test} » dans « {title} ».',
+        unconfirmedNoList: '« {label} » enregistré. L’appel de test n’a pas abouti, le plus souvent à cause d’un solde insuffisant, d’un quota épuisé ou de limites de requêtes. Vous pourrez le tester à nouveau plus tard avec « {test} » dans « {title} ».',
+        saved: '« {label} » enregistré. Modèles lus dans sa liste : {count}.',
+        testIncomplete: 'L’appel de test à « {label} » n’a pas abouti, le plus souvent à cause d’un solde insuffisant, d’un quota épuisé ou de limites de requêtes. Les modèles déjà lus restent inchangés.'
+    },
+    de: {
+        passed: '„{label}“ gespeichert. Verbindung und Tool-Aufrufe bestanden · {ms} ms',
+        toolsFailed: '„{label}“ gespeichert. Die Verbindung steht, aber das Modell hat den angeforderten Tool-Aufruf nicht ausgeführt; es bleibt nutzbar, Agent stuft es niedriger ein.',
+        unconfirmed: '„{label}“ gespeichert. Aus der Liste gelesene Modelle: {count}. Der Testaufruf war nicht erfolgreich; meist liegt es an zu wenig Guthaben, einem aufgebrauchten Kontingent oder Anfragelimits. Sie können ihn später mit „{test}“ in „{title}“ erneut testen.',
+        unconfirmedNoList: '„{label}“ gespeichert. Der Testaufruf war nicht erfolgreich; meist liegt es an zu wenig Guthaben, einem aufgebrauchten Kontingent oder Anfragelimits. Sie können ihn später mit „{test}“ in „{title}“ erneut testen.',
+        saved: '„{label}“ gespeichert. Aus der Liste gelesene Modelle: {count}.',
+        testIncomplete: 'Der Testaufruf an „{label}“ war nicht erfolgreich; meist liegt es an zu wenig Guthaben, einem aufgebrauchten Kontingent oder Anfragelimits. Die bereits gelesenen Modelle bleiben erhalten.'
+    },
+    'pt-BR': {
+        passed: '“{label}” salvo. Conexão e chamadas de ferramentas aprovadas · {ms} ms',
+        toolsFailed: '“{label}” salvo. Ele conecta, mas o modelo não fez a chamada de ferramenta solicitada; continua utilizável, e o Agent o classifica mais abaixo.',
+        unconfirmed: '“{label}” salvo. Modelos lidos da lista: {count}. A chamada de teste não teve sucesso; as causas mais comuns são saldo insuficiente, cota esgotada ou limites de requisições. Você pode testar de novo mais tarde com “{test}” em “{title}”.',
+        unconfirmedNoList: '“{label}” salvo. A chamada de teste não teve sucesso; as causas mais comuns são saldo insuficiente, cota esgotada ou limites de requisições. Você pode testar de novo mais tarde com “{test}” em “{title}”.',
+        saved: '“{label}” salvo. Modelos lidos da lista: {count}.',
+        testIncomplete: 'A chamada de teste para “{label}” não teve sucesso; as causas mais comuns são saldo insuficiente, cota esgotada ou limites de requisições. Os modelos já lidos continuam como estão.'
+    },
+    ru: {
+        passed: '«{label}» сохранено. Подключение и вызовы инструментов прошли проверку · {ms} мс',
+        toolsFailed: '«{label}» сохранено. Подключение работает, но модель не выполнила запрошенный вызов инструмента; ею можно пользоваться, но в Agent она будет ниже.',
+        unconfirmed: '«{label}» сохранено. Моделей прочитано из списка: {count}. Тестовый вызов не удался — чаще всего из-за недостатка средств, исчерпанной квоты или ограничения запросов. Позже можно проверить ещё раз кнопкой «{test}» в разделе «{title}».',
+        unconfirmedNoList: '«{label}» сохранено. Тестовый вызов не удался — чаще всего из-за недостатка средств, исчерпанной квоты или ограничения запросов. Позже можно проверить ещё раз кнопкой «{test}» в разделе «{title}».',
+        saved: '«{label}» сохранено. Моделей прочитано из списка: {count}.',
+        testIncomplete: 'Тестовый вызов к «{label}» не удался — чаще всего из-за недостатка средств, исчерпанной квоты или ограничения запросов. Уже прочитанные модели остаются.'
+    },
+    ar: {
+        passed: 'حُفظ «{label}». اجتاز الاتصال واستدعاء الأدوات · {ms} ms',
+        toolsFailed: 'حُفظ «{label}». يتصل، لكن النموذج لم يُجرِ استدعاء الأداة المطلوب؛ يمكنك الاستمرار في استخدامه، ويضعه Agent في مرتبة أدنى.',
+        unconfirmed: 'حُفظ «{label}». النماذج المقروءة من قائمته: {count}. لم ينجح استدعاء الاختبار، وغالبًا يكون السبب رصيدًا غير كافٍ أو حصة مستنفدة أو حدودًا على الطلبات. يمكنك اختباره مجددًا لاحقًا عبر «{test}» في «{title}».',
+        unconfirmedNoList: 'حُفظ «{label}». لم ينجح استدعاء الاختبار، وغالبًا يكون السبب رصيدًا غير كافٍ أو حصة مستنفدة أو حدودًا على الطلبات. يمكنك اختباره مجددًا لاحقًا عبر «{test}» في «{title}».',
+        saved: 'حُفظ «{label}». النماذج المقروءة من قائمته: {count}.',
+        testIncomplete: 'لم ينجح استدعاء الاختبار إلى «{label}»، وغالبًا يكون السبب رصيدًا غير كافٍ أو حصة مستنفدة أو حدودًا على الطلبات. تبقى النماذج المقروءة كما هي.'
+    },
+    hi: {
+        passed: '“{label}” सहेजा गया। कनेक्शन और टूल-कॉल जाँच पास हुई · {ms} ms',
+        toolsFailed: '“{label}” सहेजा गया। यह जुड़ता है, पर मॉडल ने माँगा गया टूल-कॉल नहीं किया; आप इसे इस्तेमाल कर सकते हैं, पर Agent में इसकी रैंक कम रहेगी।',
+        unconfirmed: '“{label}” सहेजा गया। सूची से पढ़े गए मॉडल: {count}। परीक्षण कॉल सफल नहीं हुई; आम कारण कम बैलेंस, खत्म हुआ कोटा या अनुरोध सीमा हैं। बाद में “{title}” में “{test}” से फिर जाँच सकते हैं।',
+        unconfirmedNoList: '“{label}” सहेजा गया। परीक्षण कॉल सफल नहीं हुई; आम कारण कम बैलेंस, खत्म हुआ कोटा या अनुरोध सीमा हैं। बाद में “{title}” में “{test}” से फिर जाँच सकते हैं।',
+        saved: '“{label}” सहेजा गया। सूची से पढ़े गए मॉडल: {count}।',
+        testIncomplete: '“{label}” की परीक्षण कॉल सफल नहीं हुई; आम कारण कम बैलेंस, खत्म हुआ कोटा या अनुरोध सीमा हैं। पहले पढ़े गए मॉडल वैसे ही रहेंगे।'
+    }
+};
+
+export function ownApiSaveText(locale: NextMuxDesktopLocale, key: OwnApiSaveKey, values: Readonly<Record<string, string>>): string {
+    return totalCopy(locale, key, language => ownApiSaveCopy[language][key]).replace(/\{(\w+)\}/g, (match, name: string) => values[name] ?? match);
 }

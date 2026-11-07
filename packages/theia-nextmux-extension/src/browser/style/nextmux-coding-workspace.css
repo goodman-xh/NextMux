@@ -1285,6 +1285,9 @@
 @container (max-width: 560px) { .nmx-shell .nmx-data-location { grid-template-columns: 22px minmax(0, 1fr); } .nmx-shell .nmx-data-location-actions { grid-column: 2; justify-content: flex-start; } }
 /* A model row: its name, then what is known about it (context, price with its source, capabilities). */
 .nmx-shell .nmx-own-model-list li { flex-direction: column; align-items: stretch; gap: 3px; }
+/* An API can list hundreds of models: only the rows in view are laid out and painted. A row has no focusable control
+   (no focus ring to clip), and `auto` keeps a row's real height once shown, so the scroll range does not jump. */
+.nmx-shell .nmx-own-model-list li { content-visibility: auto; contain-intrinsic-size: auto 42px; }
 .nmx-shell .nmx-own-model-list li > .nmx-own-model-name { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
 .nmx-shell .nmx-own-model-list .nmx-own-model-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--nmx-muted); font-size: 11.5px; line-height: 1.45; }
 .nmx-shell .nmx-own-model-list .nmx-own-model-facts em { margin-inline-start: 6px; padding: 0 5px; border-radius: 4px; color: var(--nmx-subtle); background: var(--nmx-control-background); font-style: normal; font-size: 10.5px; }

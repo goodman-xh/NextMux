@@ -8044,9 +8044,10 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     .nmx-scheduled-page > header { align-items: center; gap: 8px; }
 }
 
+/* No blur under the drawers: a backdrop filter behind a drawer is drawn again for every frame its lists scroll
+   (我的 API, an API's models, the connection form). A slightly deeper scrim keeps the drawer apart instead. */
 .nmx-sheet-backdrop {
-    background: rgba(0, 0, 0, .52);
-    backdrop-filter: blur(3px);
+    background: rgba(0, 0, 0, .58);
 }
 
 .nmx-dialog-backdrop {
@@ -18293,6 +18294,7 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     width: 100%;
     padding: 3px 0;
     overflow: auto;
+    overscroll-behavior: contain;
     box-sizing: border-box;
 }
 
