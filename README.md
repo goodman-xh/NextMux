@@ -2,142 +2,145 @@
 
 # NextMux
 
-**Open-Source AI Coding, Multi-Agent Council, Desktop App Automation & Comic/Video Studio**
+**开源 AI 编程、多智能体“臭皮匠模式”、桌面应用/游戏自动化与漫剧多轨视频工作台**
 
 [![License: Apache-2.0 with Commons Clause](https://img.shields.io/badge/License-Apache%202.0%20%2B%20Commons%20Clause-blue.svg)](./LICENSE)
 [![Release](https://img.shields.io/badge/Release-v0.1.20-1263db)](https://github.com/goodman-xh/NextMux/releases/tag/v0.1.20)
 [![Website](https://img.shields.io/badge/Website-nextmux.app-111111)](https://nextmux.app)
 
-**English** | [简体中文](./README.zh-CN.md)
+[English](./README.en.md) | **简体中文**
 
 </div>
 
+> [!IMPORTANT]
+> 🌟 **看到这个的就是元老级别的云股东，不管是用户还是商家我们都将铭记你的每一份支持，现在，先点个star再走啊～喂！（不花钱买star，纯天然）**
+
 ---
 
-**NextMux** is an open-source, cross-platform desktop AI workbench (`macOS` & `Windows`, native `arm64` & `x64`) that unifies **agentic software engineering**, **multi-model Council deliberation**, **embedded desktop app/game automation**, and **end-to-end comic & multitrack video production**—powered by a transparent global AI relay marketplace alongside full **BYOK (Bring Your Own Key)** and local **Ollama** support.
+**NextMux** 是一款开源跨平台桌面端 AI 创作与工程工作台（原生支持 `macOS` 与 `Windows` 的 `arm64` / `x64` 四种架构），将 **AI 编程与终端自动化**、**多模型协同思辨（臭皮匠模式）**、**内嵌桌面软件与游戏插件控制** 以及 **漫剧无限画布与多轨视频剪辑台** 融为一体，内置透明验真的全球 AI 中转市场，并完整支持 **BYOK（自带 API Key）** 与本地 **Ollama** 模型。
 
 ---
 
-## Why NextMux? — Stop Paying $200/Month for a Single Model
+## 为什么选择 NextMux？— 告别 $200/月 的单厂商高昂包月订阅
 
-Most developers and creators today are forced to choose between paying **$200/month** for a single-vendor subscription (such as Claude Max) or juggling half a dozen separate API accounts for coding, image generation, video synthesis, and voice acting.
+许多重度开发者与创作者每月花费 **$200 美元** 订阅单一厂商的固定套餐（如 Claude Max），不仅月底未用完的额度直接清零，而且只能使用单一厂商的文本模型；当需要调用其他顶尖模型、无审查模型，或进行漫剧生图、视频生成与配音时，又不得不额外购买多个平台的订阅。
 
-With NextMux's built-in **Relay Marketplace**, independent providers compete on price, latency, availability, and verified model authenticity:
+NextMux 内置公开透明的 **AI 中转市场（Relay Marketplace）**，让全球优质中转商在价格倍率、首字延迟、可用率与模型真伪验真上同台竞争：
 
-| Dimension | Single-Vendor $200/mo Subscription (e.g. Claude Max) | $200 Top-Up on NextMux Relay Marketplace |
+| 对比维度 | 单一厂商 $200/月 包月订阅（如 Claude Max） | 在 NextMux 充值 $200 美元（按量计费 · 永不过期） |
 | :--- | :--- | :--- |
-| **Claude Opus 5.5 Cost** | Fixed **$200/month** (unused quota expires monthly) | **0.1x – 0.2x** official API rate (**$200 = $1,000–$2,000** of official token usage, lasts for months, **never expires**) |
-| **Coding & Reasoning Models** | Locked to a single vendor | Switch freely between **Claude Opus 5.5**, **GPT-5.6**, **Gemini 3.1 Pro**, **DeepSeek V4.1**, **Grok 4.20**, and **Qwen 3.6** in the same thread |
-| **Uncensored Models** | Strictly filtered / unavailable | Direct access to **Uncensored** text, roleplay, image, and video models for unrestricted creative writing and storyboarding |
-| **Image, Video & Audio Models** | Not included | One balance unlocks **Seedream 5.0**, **Flux**, **Kling 2.1**, **Veo 3**, **Wan 2.6**, **Suno**, and **CosyVoice** |
-| **Quality & Authenticity Proof** | Opaque rate limits | Live **Availability %**, **First-Token Latency (ms)**, and cryptographic **Model Authenticity** badges per relay |
-| **BYOK & Local Models** | Not supported | Connect your own OpenAI / Anthropic / Gemini / Custom API keys or local **Ollama** models with **0% platform fee** |
+| **Claude Opus 5.5 成本** | 固定 **$200/月**（按月强制清零，不退不攒） | 中转市场低至 **0.1x – 0.2x 倍率**（**$200 相当于官方 $1,000–$2,000 额度**，可用数月，**余额永不过期**） |
+| **全系顶尖编程与推理模型** | 仅限单一厂商模型 | 同一余额自由切换 **Claude Opus 5.5**、**GPT-5.6**、**Gemini 3.1 Pro**、**DeepSeek V4.1**、**Grok 4.20**、**Qwen 3.6** |
+| **无审查（Uncensored）模型** | 严格内容过滤 / 不提供 | 直接调用多款 **无审查（Uncensored）** 文本、角色扮演、生图与视频模型，满足小说、剧本与自由创作需求 |
+| **漫剧生图、视频与配音模型** | 不包含 | 同一账户直接调用 **Seedream 5.0**、**Flux**、**可灵 Kling 2.1**、**Veo 3**、**Wan 2.6**、**Suno 音乐**、**CosyVoice 配音** |
+| **可用率与模型真伪验真** | 黑盒限流 | 实时展示每个中转节点的 **可用率 %**、**首字延迟 (ms)** 与 **模型真伪验真（Authenticity）** 徽章 |
+| **自带 Key (BYOK) 与本地模型** | 不支持 | 零平台抽成接入个人 OpenAI / Anthropic / Gemini / 兼容 API Key 或本地 **Ollama** 模型 |
 
 ---
 
-## Live Demo & Product Tour
+## 实机演示视频与产品截图
 
-### Embedded Desktop App & Game Automation (`League of Legends` + `JEV` Client)
+### 内嵌桌面软件与游戏自动化演示（《英雄联盟》+ JEV 客户端）
 
-Watch NextMux attach to live desktop applications and games directly inside a workspace tab—observing frames in real time and driving the app through JEV's isolated virtual keyboard/mouse channel (completely independent from your physical system cursor and keyboard, so it never interrupts your normal work) while keeping background audio muted by default:
+NextMux 可直接将本机运行的桌面软件或游戏窗口内嵌至会话标签页中，实时感知画面并由 JEV 独立键鼠通道执行后台自动化操控——JEV 的键鼠控制权与系统物理鼠标键盘完全独立、互不干扰（绝不抢占你正在使用的鼠标与键盘），且默认自动静音后台窗口：
 
 <table>
 <tr>
 <td width="50%" align="center" valign="middle">
-<img src="./assets/showcase/nextmux-lol-jev-demo-preview.gif" alt="NextMux Embedded Game & Desktop Automation GIF Preview" width="100%" />
+<img src="./assets/showcase/nextmux-lol-jev-demo-preview.gif" alt="NextMux 桌面软件与英雄联盟游戏自动化演示 GIF" width="100%" />
 <br />
-<sub><b>Animated GIF Preview (Auto-Play)</b></sub>
+<sub><b>动态 GIF 预览（自动循环播放）</b></sub>
 </td>
 <td width="50%" align="center" valign="middle">
 
 https://github.com/user-attachments/assets/9e24568a-bde0-46b6-8eb5-0bf5da6804f0
 
-<sub><b>▶ Click Play in the Video Player Above (1440×900 60fps · Unmute for Audio)</b></sub>
+<sub><b>▶ 点击上方播放器直接播放有声高清演示视频（1440×900 60fps · 可开声音）</b></sub>
 </td>
 </tr>
 </table>
 
 ---
 
-### 1. Agentic Coding Workbench & Git Diff Review
+### 1. AI 编程主工作台与 Git Diff 审查抽屉
 
-Multi-project sidebar, live tool-execution trace, integrated terminal, and side-by-side Git diff inspection with one-click hunk staging.
+多项目会话管理、工具调用实时追踪、内置原生终端，以及右侧分栏 Git Diff 逐块审查与暂存。
 
-![NextMux Main Coding Workbench](./assets/showcase/01-macos-main-workbench.png)
+![NextMux AI 编程主工作台](./assets/showcase/01-macos-main-workbench.png)
 
-### 2. Global Relay Marketplace & Real-Time Route Selector
+### 2. 全球中转市场与实时路由切换抽屉
 
-Compare relay providers side by side with live availability, authenticity verification, latency metrics, thinking-effort controls (`low` / `medium` / `high` / `max`), Auto-Best (`自动最优`) smart routing, and price multipliers (`0.1x`–`1.0x`).
+直观对比各中转商的实时可用率、模型真伪验真、首字延迟、思考深度（`low` / `medium` / `high` / `max`）、“自动最优”智能路由及价格倍率（`0.1x`–`1.0x`）。
 
 https://github.com/user-attachments/assets/ad7551a4-f026-49a7-af77-fe1ec3ede348
 
-![NextMux Relay Selector Drawer](./assets/showcase/02-macos-relay-selector-drawer.png)
+![NextMux 中转市场与模型选择器](./assets/showcase/02-macos-relay-selector-drawer.png)
 
-### 3. Council Mode (`臭皮匠模式`) — Multi-Agent Deliberation
+### 3. 臭皮匠模式（Council Mode）— 多智能体协同思辨
 
-Assign distinct specialist roles (e.g., Systems Architect, Security Auditor, Performance Engineer) powered by different frontier models to debate, cross-examine, and synthesize a verified engineering plan before writing code.
+在同一任务下指派不同角色的子智能体（如系统架构师、安全审计员、性能工程师），分别挂载不同前沿模型并行交叉质询、辩论并收敛出最优方案。
 
 https://github.com/user-attachments/assets/21730d54-9c7c-4496-8c52-e651b4ea20f8
 
-![NextMux Council Mode](./assets/showcase/03-macos-council-mode.png)
+![NextMux 臭皮匠模式](./assets/showcase/03-macos-council-mode.png)
 
-### 4. Desktop Application & Game Plugin Viewport
+### 4. 桌面应用与游戏内嵌插件视口
 
-Mount any native macOS or Windows window inside a NextMux conversation tab (`Only in Tab` or `Also on Desktop`), run background automation via an isolated keyboard/mouse channel that never interferes with your physical system mouse/keyboard, and install automation plugins from the built-in Plugin Marketplace.
+将任意 macOS 或 Windows 原生应用/游戏挂载到会话标签页内（支持“只在标签 / 也在桌面”切换、独立键鼠通道开关、后台默认静音及插件市场扩展，自动化操控与系统物理键鼠完全独立、互不影响）。
 
-![NextMux Desktop Plugin & Game Viewport](./assets/showcase/04-macos-plugin-lol-game.png)
+![NextMux 游戏与桌面插件内嵌视口](./assets/showcase/04-macos-plugin-lol-game.png)
 
-### 5. Comic & Drama Studio — Node-Based Infinite Canvas
+### 5. 漫剧工作台 — 节点式无限画布（Infinite Canvas）
 
-Turn scripts or story prompts into structured character sheets, storyboard shots, and node-based generation pipelines (`Text` → `Character` → `ImageGen` → `VideoGen`) with automatic last-frame (`尾帧`) shot continuity.
+从空画布新建视频节点、配置运镜与提示词、选择模型生成分镜，并通过节点连线自动提取承接上一镜头的尾帧（Last Frame），保持人物与光影连贯。
 
 https://github.com/user-attachments/assets/a71b55cf-17e3-4dc3-8cbf-5459afc54d77
 
-![NextMux Comic Studio Infinite Canvas](./assets/showcase/05-macos-comic-infinite-canvas.png)
+![NextMux 漫剧无限画布](./assets/showcase/05-macos-comic-infinite-canvas.png)
 
-### 6. Multitrack Video Timeline Editor
+### 6. 漫剧多轨视频时间线剪辑台
 
-Send generated canvas shots straight to the built-in multitrack timeline editor (`Subtitles`, `Video`, `Voiceover`, `SFX`, `Music`) with real-time 16:9 preview, clip inspector, and hardware-accelerated FFmpeg export.
+画布生成的镜头一键送入内置多轨时间线剪辑台（`字幕`、`画面`、`配音`、`音效`、`音乐` 五轨联动），支持 16:9 实时字幕预览、右侧属性检查器与 FFmpeg 硬件加速导出成片。
 
-![NextMux Comic Timeline Editor](./assets/showcase/06-macos-comic-timeline-editor.png)
+![NextMux 漫剧多轨时间线剪辑台](./assets/showcase/06-macos-comic-timeline-editor.png)
 
 ---
 
-## Download Installers (`v0.1.20`)
+## 客户端下载（`v0.1.20` 四架构独立构建）
 
-Every release is built and verified independently for all 4 OS/CPU targets (no foreign-architecture binaries mixed into native bundles). You can download directly from **[nextmux.app/download](https://nextmux.app/download)** or **GitHub Releases**:
+每个发布版本均针对不同操作系统与 CPU 架构独立编译、打包并校验原生二进制边界。您可直接从 **[官网下载页 (nextmux.app/download)](https://nextmux.app/download)** 或 **GitHub Releases** 获取安装包：
 
-| Operating System | CPU Architecture | GitHub Release Installer | Official Website Mirror (`nextmux.app`) |
+| 操作系统 | CPU 架构 | GitHub Release 安装包下载 | 官网高速直链 (`nextmux.app`) |
 | :--- | :--- | :--- | :--- |
-| **macOS** (`12.0+`) | Apple Silicon (`darwin-arm64`) | [`NextMux-0.1.20-arm64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.20/NextMux-0.1.20-arm64.dmg) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.20/macos/arm64/NextMux-0.1.20-arm64.dmg) |
-| **macOS** (`12.0+`) | Intel (`darwin-x64`) | [`NextMux-0.1.20-x64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.20/NextMux-0.1.20-x64.dmg) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.20/macos/x64/NextMux-0.1.20-x64.dmg) |
-| **Windows** (`10 / 11`) | x64 (`win32-x64`) | [`NextMux-0.1.20-x64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.20/NextMux-0.1.20-x64-setup.exe) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.20/windows/x64/NextMux-0.1.20-x64-setup.exe) |
-| **Windows** (`11`) | ARM64 (`win32-arm64`) | [`NextMux-0.1.20-arm64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.20/NextMux-0.1.20-arm64-setup.exe) | [Download via nextmux.app](https://nextmux.app/updates/releases/v0.1.20/windows/arm64/NextMux-0.1.20-arm64-setup.exe) |
+| **macOS** (`12.0+`) | Apple 芯片 (`darwin-arm64`) | [`NextMux-0.1.20-arm64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.20/NextMux-0.1.20-arm64.dmg) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.20/macos/arm64/NextMux-0.1.20-arm64.dmg) |
+| **macOS** (`12.0+`) | Intel 芯片 (`darwin-x64`) | [`NextMux-0.1.20-x64.dmg`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.20/NextMux-0.1.20-x64.dmg) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.20/macos/x64/NextMux-0.1.20-x64.dmg) |
+| **Windows** (`10 / 11`) | x64 (`win32-x64`) | [`NextMux-0.1.20-x64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.20/NextMux-0.1.20-x64-setup.exe) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.20/windows/x64/NextMux-0.1.20-x64-setup.exe) |
+| **Windows** (`11`) | ARM64 (`win32-arm64`) | [`NextMux-0.1.20-arm64-setup.exe`](https://github.com/goodman-xh/NextMux/releases/download/v0.1.20/NextMux-0.1.20-arm64-setup.exe) | [官网直链下载](https://nextmux.app/updates/releases/v0.1.20/windows/arm64/NextMux-0.1.20-arm64-setup.exe) |
 
->Installed clients check `https://nextmux.app/updates` in the background and display a one-click **Update (`更新`)** button in the bottom-left account dock when a newer build is ready.
+> 已安装的桌面端会在后台自动检测 `https://nextmux.app/updates`，当发现新版本时会在左下角账户栏旁显示圆角蓝色 **“更新”** 按钮，支持后台静默下载与一键升级。
 
 ---
 
-## Open-Source UI Repository Structure
+## 开源 UI 界面代码结构
 
-This repository open-sources NextMux's **desktop frontend UI views, interaction surfaces, 12-locale interface copy, CSS theme system, and launch visuals**, while official prebuilt 4-architecture desktop installers are published via [GitHub Releases](https://github.com/goodman-xh/NextMux/releases) and [nextmux.app/download](https://nextmux.app/download):
+本仓库对外开源 NextMux 桌面端的**前端 UI 界面组件、工作台交互视图、12 语言界面文案、深浅色样式体系与启动动画视觉资源**；四架构桌面端完整安装包通过 [GitHub Releases](https://github.com/goodman-xh/NextMux/releases) 与 [官网下载页 (nextmux.app/download)](https://nextmux.app/download) 官方构建分发：
 
 ```text
 NextMux/
 ├── apps/
 │   └── desktop/
-│       └── splash/                   # WebGL / Canvas launch visual animation & textures
-├── assets/                           # Brand artwork, product screenshots & showcase videos
+│       └── splash/                   # 启动画面 WebGL / Canvas 视觉动画与纹理贴图
+├── assets/                           # 品牌标识、实机界面截图与功能演示视频
 └── packages/
     └── theia-nextmux-extension/
         └── src/
-            ├── browser/              # Workbench UI, Relay & Model drawers, Council, Comic Studio & 12-locale copy
-            │   └── style/            # Dark/light monochrome theme tokens, layout stylesheets & provider icons
-            └── styles.d.ts           # Frontend bridge & asset TypeScript declarations
+            ├── browser/              # 编程主工作台、中转商与模型抽屉、臭皮匠模式、漫剧创作台与 12 语言界面文案
+            │   └── style/            # 深浅色主题设计令牌、组件布局样式表与厂商图标
+            └── styles.d.ts           # 前端视图桥接与静态资源 TypeScript 类型声明
 ```
 
 ---
 
-## License
+## 开源与商业授权许可
 
-Licensed under the [Apache License 2.0 with Commons Clause Restriction Condition v1.0](./LICENSE) (free for personal, research, and internal use; offering NextMux or derivative works as a commercial or hosted service to third-party users requires explicit written authorization from NextMux). Third-party runtime disclosures are documented in [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md).
+本项目采用 [Apache License 2.0 with Commons Clause v1.0（非商业服务限制许可）](./LICENSE) 发布：免费支持个人使用、学术研究、插件开发与内部自用；**严禁在未获得 NextMux 官方书面授权的情况下将本项目（或其衍生版本）作为商业服务、SaaS 托管平台或商业分发版本提供给其他用户**（商业合作与授权请联系 [nextmux.app](https://www.nextmux.app)）。第三方组件声明详见 [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md)。

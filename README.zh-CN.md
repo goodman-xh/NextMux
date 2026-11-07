@@ -8,9 +8,12 @@
 [![Release](https://img.shields.io/badge/Release-v0.1.20-1263db)](https://github.com/goodman-xh/NextMux/releases/tag/v0.1.20)
 [![Website](https://img.shields.io/badge/Website-nextmux.app-111111)](https://nextmux.app)
 
-[English](./README.md) | **简体中文**
+[English](./README.en.md) | **简体中文**
 
 </div>
+
+> [!IMPORTANT]
+> 🌟 **看到这个的就是元老级别的云股东，不管是用户还是商家我们都将铭记你的每一份支持，现在，先点个star再走啊～喂！（不花钱买star，纯天然）**
 
 ---
 
