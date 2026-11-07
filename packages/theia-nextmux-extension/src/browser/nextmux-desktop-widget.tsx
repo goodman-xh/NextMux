@@ -4361,6 +4361,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected localDataModalKind: '' | 'cache' | 'conversations' = '';
     protected updateState: NextMuxDesktopUpdateState = EMPTY_UPDATE_STATE;
     protected updateBusy = false;
+    protected dropdownRenderWait?: Element;
     protected updateMessage = '';
     protected updateError = '';
     protected gitState: DesktopGitState = EMPTY_GIT_STATE;
@@ -6460,13 +6461,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
         try {
             this.node.lang = this.desktopLocale;
             this.node.dir = this.desktopLocale === 'ar' ? 'rtl' : 'ltr';
+            // Rewriting a focused <select> closes its native popup: its options wait until it loses focus.
+            const focusedSelect = this.focusedNativeSelect?.();
+            let heldForSelect = false;
             // Editor, terminal and literal subtrees hold user content and are never entered.
             forEachSurfaceTextNode(this.node, textNode => {
                 const value = textNode.data;
                 const previous = this.localizedTextNodes.get(textNode);
                 const source = previous && value === previous.rendered ? previous.source : value;
                 const rendered = localizeDesktopSurface(this.desktopLocale, source);
-                if (value !== rendered) textNode.data = rendered;
+                if (value !== rendered) {
+                    if (focusedSelect?.contains(textNode)) { heldForSelect = true; return; }
+                    textNode.data = rendered;
+                }
                 this.localizedTextNodes.set(textNode, { source, rendered });
             });
             for (const element of Array.from(this.node.querySelectorAll<HTMLElement>('[placeholder],[title],[aria-label]'))) {
@@ -6482,10 +6489,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     const previous = attributes.get(name);
                     const source = previous && value === previous.rendered ? previous.source : value;
                     const rendered = localizeDesktopSurface(this.desktopLocale, source);
-                    if (value !== rendered) element.setAttribute(name, rendered);
+                    if (value !== rendered) {
+                        if (focusedSelect?.contains(element)) { heldForSelect = true; continue; }
+                        element.setAttribute(name, rendered);
+                    }
                     attributes.set(name, { source, rendered });
                 }
             }
+            if (heldForSelect && focusedSelect) this.renderWhenDropdownCloses(focusedSelect);
         } finally {
             queueMicrotask(() => {
                 if (this.localizationMutationSuppressionGeneration === suppressionGeneration) {
@@ -6493,6 +6504,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }
             });
         }
+    }
+
+    protected focusedNativeSelect(): HTMLSelectElement | undefined {
+        const active = document.activeElement;
+        return active instanceof HTMLSelectElement ? active : undefined;
+    }
+
+    /** One render once this dropdown takes a choice or loses focus, however much waited for it. */
+    protected renderWhenDropdownCloses(dropdown: Element): void {
+        if (this.dropdownRenderWait === dropdown) return;
+        this.dropdownRenderWait = dropdown;
+        const release = () => {
+            dropdown.removeEventListener('change', release);
+            dropdown.removeEventListener('focusout', release);
+            if (this.dropdownRenderWait === dropdown) this.dropdownRenderWait = undefined;
+            if (!this.isDisposed) this.update();
+        };
+        dropdown.addEventListener('change', release);
+        dropdown.addEventListener('focusout', release);
     }
 
     protected scheduleSurfaceLocalization(): void {
@@ -9108,6 +9138,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected applyDesktopUpdateState(state: NextMuxDesktopUpdateState): void {
         if (!state || !['idle', 'checking', 'available', 'downloading', 'current', 'ready', 'error', 'unsupported'].includes(state.phase)) return;
         if ((state.revision || 0) < (this.updateState.revision || 0)) return;
+        const previous = this.updateState;
         this.updateState = {
             ...state,
             progress: Math.max(0, Math.min(100, Number(state.progress) || 0)),
@@ -9129,7 +9160,23 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         // A finished download never closes or restarts NextMux: the update installs when the person quits (or closes
         // the last window with nothing running), or right away only from an explicit "Restart to update" click.
+        if (this.downloadTickNeedsNoRender?.(previous, this.updateState)) return;
         this.update();
+    }
+
+    /**
+     * A download tick changes numbers only. Outside the Updates page nothing shows them (the dock says "Downloading…"),
+     * and a render would rewrite the page under an open <select>, whose native popup then closes. On the Updates page the
+     * progress bar does move, once a focused dropdown has closed.
+     */
+    protected downloadTickNeedsNoRender(previous: NextMuxDesktopUpdateState, next: NextMuxDesktopUpdateState): boolean {
+        if (previous.phase !== 'downloading' || next.phase !== 'downloading' || Boolean(previous.preparing) !== Boolean(next.preparing)
+            || previous.version !== next.version || previous.errorCode !== next.errorCode) return false;
+        if (this.activeSection !== 'settings' || this.settingsPanel !== 'updates') return true;
+        const dropdown = document.activeElement?.closest("select, [role='combobox'], [role='listbox']");
+        if (!dropdown) return false;
+        this.renderWhenDropdownCloses(dropdown);
+        return true;
     }
 
     protected async installDesktopUpdate(): Promise<void> {
@@ -45005,7 +45052,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const balance = wallet ? formatBalanceMicros(this.desktopLocale, wallet.currency, walletNetBalanceMicros(wallet)) : undefined;
         // The avatar opens the account sheet (balance, feedback, settings, sign out); the gear still opens settings directly.
         // The balance lives in that sheet only, not under the name.
-        return <footer className={`nmx-context-account-dock${showUpdate ? ' has-update' : ''}`} aria-label={localizeDesktopSurface(this.desktopLocale, '账户与设置')}>
+        return <footer className={`nmx-context-account-dock${showUpdate ? ' has-update' : ''}${this.updateState.phase === 'ready' ? ' has-update-ready' : ''}`} aria-label={localizeDesktopSurface(this.desktopLocale, '账户与设置')}>
             {this.accountMenuOpen && <AccountMenu locale={this.desktopLocale} linked={this.platformSession.linked} identity={identity}
                 email={this.platformSession.user?.email || undefined} balance={balance}
                 signOutArmed={this.accountSignOutArmed} signingOut={this.accountSigningOut}
@@ -55745,7 +55792,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 {state.phase === 'downloading' && <div className='nmx-update-progress' role='progressbar' aria-label='更新下载进度' aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.progress)}><i style={{ width: `${state.progress}%` }}></i></div>}
                 {state.checkedAt > 0 && <div className='nmx-update-meta'><span>{text('checkedAt')}</span><strong>{new Date(state.checkedAt).toLocaleString(this.desktopLocale)}</strong></div>}
                 {(this.updateError || this.updateMessage) && <div className={`nmx-network-message ${this.updateError ? 'is-error' : ''}`}>{this.updateError || this.updateMessage}</div>}
-                <div className='nmx-settings-actions'><button disabled={this.updateBusy || state.phase === 'downloading' || state.phase === 'ready' || state.reason === 'development' || state.restartRequired} onClick={() => void this.checkForDesktopUpdates()}>{state.phase === 'checking' ? text('checking') : text('check')}</button><button onClick={() => void this.openDesktopDownloadPage()}>{text('downloadPage')}</button>{state.phase === 'available' && <button className='is-primary' disabled={this.updateBusy} onClick={() => void this.downloadDesktopUpdate()}>{text('download')}</button>}{state.phase === 'ready' && <button className='is-primary' data-nmx-literal disabled={this.updateBusy} onClick={() => void this.installDesktopUpdate()}>{text('restartNow')}</button>}</div>
+                <div className='nmx-settings-actions'><button disabled={this.updateBusy || state.phase === 'downloading' || state.reason === 'development' || state.restartRequired} onClick={() => void this.checkForDesktopUpdates()}>{state.phase === 'checking' ? text('checking') : text('check')}</button><button onClick={() => void this.openDesktopDownloadPage()}>{text('downloadPage')}</button>{state.phase === 'available' && <button className='is-primary' disabled={this.updateBusy} onClick={() => void this.downloadDesktopUpdate()}>{text('download')}</button>}{state.phase === 'ready' && <button className='is-primary' data-nmx-literal disabled={this.updateBusy} onClick={() => void this.installDesktopUpdate()}>{text('restartNow')}</button>}</div>
             </section>;
         }
         return <>

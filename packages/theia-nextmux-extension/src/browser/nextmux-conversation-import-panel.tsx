@@ -83,6 +83,7 @@ function uncheckedImportText(locale: NextMuxDesktopLocale, key: Key, values: Rea
 const SOURCE_NAMES: Readonly<Record<ConversationImportSource, string>> = { 'claude-code': 'Claude Code', 'claude-cowork': 'Claude Cowork', codex: 'Codex', cursor: 'Cursor' };
 const SOURCE_MARKS: Readonly<Record<ConversationImportSource, string>> = { 'claude-code': 'CC', 'claude-cowork': 'CW', codex: 'CX', cursor: 'CU' };
 const LIST_LIMIT = 200;
+const STATUS_ORDER: readonly ConversationImportCandidate['status'][] = ['new', 'updated', 'deleted', 'imported'];
 
 export interface ConversationImportPanelProps {
     readonly locale: NextMuxDesktopLocale;
@@ -116,9 +117,11 @@ function SourceCard(props: ConversationImportPanelProps & { readonly summary: Co
     const blockedHint = conversationText(locale, 'stopBeforeDelete');
     const [message, setMessage] = React.useState('');
     const [error, setError] = React.useState<unknown>();
-    const importable = summary.candidates.filter(item => item.status !== 'imported');
     const needle = query.trim().toLocaleLowerCase();
     const visible = (needle ? summary.candidates.filter(item => item.title.toLocaleLowerCase().includes(needle) || item.workspacePath.toLocaleLowerCase().includes(needle)) : summary.candidates);
+    // “Select all” means what the list shows: with a search active, only the matches.
+    const selectable = visible.filter(item => item.status !== 'imported');
+    const statusCounts = STATUS_ORDER.map(status => [status, summary.candidates.filter(item => item.status === status).length] as const).filter(([, count]) => count > 0);
     const blocked = summary.roots.some(root => root.found && !root.readable);
     const found = summary.roots.some(root => root.found);
     const run = async (ids?: readonly string[]): Promise<void> => {
@@ -146,36 +149,47 @@ function SourceCard(props: ConversationImportPanelProps & { readonly summary: Co
         finally { setBusy(false); }
     };
     const toggle = (id: string): void => setSelected(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+    const selectAll = (checked: boolean): void => setSelected(current => {
+        const next = new Set(current);
+        for (const item of selectable) { if (checked) next.add(item.externalId); else next.delete(item.externalId); }
+        return next;
+    });
     const failure = error === undefined ? undefined : conversationErrorPresentation(locale, error, 'import_failed');
     const scanFailure = summary.error || summary.domainError ? conversationErrorPresentation(locale, summary.domainError ? { domainError: summary.domainError } : summary.error, 'import_scan_failed') : undefined;
     const statusLabel = (item: ConversationImportCandidate): string => t(`status.${item.status}` as Key);
     return <article className={`nmx-import-source ${summary.importable ? 'has-items' : ''}`}>
         <header>
             <span className={`nmx-import-mark is-${summary.source}`} aria-hidden='true'>{SOURCE_MARKS[summary.source]}</span>
-            <div>
-                <strong>{SOURCE_NAMES[summary.source]}</strong>
-                <small>{scanFailure ? scanFailure.summary : summary.total ? t('counts', { importable: summary.importable, imported: summary.imported }) : blocked ? t('noAccess') : found ? t('nothing') : t('notFound')}</small>
+            <div className='nmx-import-source-copy'>
+                <strong>{SOURCE_NAMES[summary.source]}{summary.total > 0 && <span className='nmx-import-total'>{summary.total}</span>}</strong>
+                {summary.total > 0 && !scanFailure
+                    ? <ul className='nmx-import-pills' aria-label={t('counts', { importable: summary.importable, imported: summary.imported })}>
+                        {statusCounts.map(([status, count]) => <li key={status} className={`is-${status}`}>{t(`status.${status}` as Key)}<b>{count}</b></li>)}
+                    </ul>
+                    : <small>{scanFailure ? scanFailure.summary : blocked ? t('noAccess') : found ? t('nothing') : t('notFound')}</small>}
             </div>
             <div className='nmx-import-actions'>
-                {summary.importable > 0 && <button type='button' className='nmx-primary-button' disabled={busy || props.scanning || !props.historyEnabled} onClick={() => void run()}>
+                {summary.importable > 0 && <button type='button' className='nmx-primary-button is-primary' disabled={busy || props.scanning || !props.historyEnabled} onClick={() => void run()}>
                     {busy ? t('importing') : t('importAll', { count: summary.importable })}</button>}
                 {summary.total > 0 && <button type='button' className='nmx-secondary-button' aria-expanded={open} disabled={busy} onClick={() => setOpen(!open)}>{open ? t('hideList') : t('choose')}</button>}
             </div>
         </header>
-        <ul className='nmx-import-roots'>
-            {summary.roots.map(root => <li key={root.path} className={root.found ? root.readable ? 'is-found' : 'is-blocked' : 'is-missing'}>
-                <i className={`codicon codicon-${root.found ? root.readable ? 'folder' : 'lock' : 'circle-slash'}`} aria-hidden='true'></i>
-                <span data-nmx-literal title={root.path}>{root.path}</span>
-                {root.custom && <em className='nmx-import-custom-tag'>{t('customTag')}</em>}
-                {root.custom && <button type='button' className='nmx-link-button' title={t('removeFolderHint')} onClick={() => props.onRemoveFolder(summary.source, root.path)}>{t('removeFolder')}</button>}
-            </li>)}
-            <li><button type='button' className='nmx-link-button' onClick={() => props.onAddFolder(summary.source)}><i className='codicon codicon-add' aria-hidden='true'></i>{t('addFolder')}</button></li>
-        </ul>
+        <footer className='nmx-import-source-foot'>
+            <ul className='nmx-import-folders'>
+                {summary.roots.map(root => <li key={root.path} className={root.found ? root.readable ? 'is-found' : 'is-blocked' : 'is-missing'}>
+                    <i className={`codicon codicon-${root.found ? root.readable ? 'folder' : 'lock' : 'circle-slash'}`} aria-hidden='true'></i>
+                    <span data-nmx-literal title={root.path}>{root.path}</span>
+                    {root.custom && <em className='nmx-import-custom-tag'>{t('customTag')}</em>}
+                    {root.custom && <button type='button' className='nmx-link-button is-destructive' title={t('removeFolderHint')} onClick={() => props.onRemoveFolder(summary.source, root.path)}>{t('removeFolder')}</button>}
+                </li>)}
+                <li className='nmx-import-folder-add'><button type='button' className='nmx-link-button' onClick={() => props.onAddFolder(summary.source)}><i className='codicon codicon-add' aria-hidden='true'></i>{t('addFolder')}</button></li>
+            </ul>
+            {importedIds.length > 0 && !result && <div className='nmx-import-manage'>
+                <button type='button' className={`nmx-link-button is-destructive${removeArmed ? ' is-danger' : ''}${removeBlocked ? ' is-blocked' : ''}`} aria-disabled={removeBlocked || undefined} title={removeBlocked ? blockedHint : undefined} data-nmx-tip={removeBlocked ? blockedHint : undefined} disabled={busy} onBlur={() => setRemoveArmed(false)}
+                    onClick={() => void removeImported()}>{removeArmed ? t('removeImportedConfirm', { count: importedIds.length }) : t('removeImported', { count: importedIds.length })}</button>
+            </div>}
+        </footer>
         {blocked && <p className='nmx-import-hint'>{t('noAccessHint')}</p>}
-        {importedIds.length > 0 && !result && <div className='nmx-import-manage'>
-            <button type='button' className={`nmx-link-button ${removeArmed ? 'is-danger' : ''}${removeBlocked ? ' is-blocked' : ''}`} aria-disabled={removeBlocked || undefined} title={removeBlocked ? blockedHint : undefined} data-nmx-tip={removeBlocked ? blockedHint : undefined} disabled={busy} onBlur={() => setRemoveArmed(false)}
-                onClick={() => void removeImported()}>{removeArmed ? t('removeImportedConfirm', { count: importedIds.length }) : t('removeImported', { count: importedIds.length })}</button>
-        </div>}
         {!props.historyEnabled && summary.importable > 0 && <p className='nmx-import-hint'>{t('historyOff')}</p>}
         {failure && <div className='nmx-agent-inline-error' role='alert'>{failure.summary}{failure.details && <details><summary>{conversationDetailsLabel(locale)}</summary><pre data-nmx-literal>{failure.details}</pre></details>}</div>}
         {scanFailure?.details && <details><summary>{conversationDetailsLabel(locale)}</summary><pre data-nmx-literal>{scanFailure.details}</pre></details>}
@@ -187,20 +201,23 @@ function SourceCard(props: ConversationImportPanelProps & { readonly summary: Co
                 <ul>{result.failed.slice(0, 100).map(item => <li key={item.externalId}><span data-nmx-literal>{item.title}</span> — <small>{conversationErrorPresentation(locale, item.domainError ? { domainError: item.domainError } : item.reason, 'import_failed').summary}</small><details><summary>{conversationDetailsLabel(locale)}</summary><pre data-nmx-literal>{conversationErrorPresentation(locale, item.domainError ? { domainError: item.domainError } : item.reason, 'import_failed').details}</pre></details></li>)}</ul></details>}
         </div>}
         {open && <div className='nmx-import-list'>
-            <div className='nmx-import-list-tools'>
-                <input type='search' value={query} placeholder={t('searchPlaceholder')} onChange={event => setQuery(event.currentTarget.value)} />
-                <label><input type='checkbox' checked={importable.length > 0 && importable.every(item => selected.has(item.externalId))}
-                    onChange={event => setSelected(event.currentTarget.checked ? new Set(importable.map(item => item.externalId)) : new Set())} />{t('selectAll')}</label>
-                <button type='button' className='nmx-primary-button' disabled={busy || !selected.size || !props.historyEnabled} onClick={() => void run([...selected])}>{t('importSelected', { count: selected.size })}</button>
+            <div className='nmx-import-toolbar'>
+                <div className='nmx-import-search'>
+                    <i className='codicon codicon-search' aria-hidden='true'></i>
+                    <input type='search' value={query} placeholder={t('searchPlaceholder')} aria-label={t('searchPlaceholder')} onChange={event => setQuery(event.currentTarget.value)} />
+                </div>
+                <label className='nmx-import-select-all'><input type='checkbox' disabled={!selectable.length} checked={selectable.length > 0 && selectable.every(item => selected.has(item.externalId))}
+                    onChange={event => selectAll(event.currentTarget.checked)} /><span>{t('selectAll')}</span></label>
+                <button type='button' className='nmx-primary-button is-primary' disabled={busy || !selected.size || !props.historyEnabled} onClick={() => void run([...selected])}>{t('importSelected', { count: selected.size })}</button>
             </div>
-            <ul>{visible.slice(0, LIST_LIMIT).map(item => <li key={item.externalId} className={`is-${item.status}`}>
+            {visible.length > 0 ? <ul className='nmx-import-items'>{visible.slice(0, LIST_LIMIT).map(item => <li key={item.externalId} className={`nmx-import-item is-${item.status}${selected.has(item.externalId) ? ' is-selected' : ''}`}>
                 <label>
                     <input type='checkbox' disabled={item.status === 'imported'} checked={selected.has(item.externalId)} onChange={() => toggle(item.externalId)} />
-                    <span><strong data-nmx-literal title={item.title}>{item.title}</strong>
-                        <small><span data-nmx-literal title={item.workspacePath}>{item.workspacePath ? item.workspacePath.split(/[\\/]/).filter(Boolean).at(-1) : t('noProject')}</span> · {new Date(item.updatedAt).toLocaleDateString(locale)}</small></span>
+                    <span className='nmx-import-item-copy'><strong data-nmx-literal title={item.title}>{item.title}</strong>
+                        <small><span className='nmx-import-chip' data-nmx-literal title={item.workspacePath}>{item.workspacePath ? item.workspacePath.split(/[\\/]/).filter(Boolean).at(-1) : t('noProject')}</span><span>{new Date(item.updatedAt).toLocaleDateString(locale)}</span></small></span>
                     <em>{statusLabel(item)}</em>
                 </label>
-            </li>)}</ul>
+            </li>)}</ul> : <p className='nmx-import-hint'>{t('nothing')}</p>}
             {visible.length > LIST_LIMIT && <p className='nmx-import-hint'>{t('more', { count: visible.length - LIST_LIMIT })}</p>}
         </div>}
     </article>;
@@ -210,10 +227,12 @@ export function ConversationImportPanel(props: ConversationImportPanelProps): Re
     const t = (key: Key, values?: Readonly<Record<string, string | number>>): string => importText(props.locale, key, values);
     return <section className='nmx-settings-panel nmx-import-panel'>
         <header className='nmx-import-header'>
-            <div><h3>{t('title')}</h3><p>{t('lead')}</p></div>
-            <div><button type='button' className='nmx-secondary-button' disabled={props.scanning} onClick={props.onRescan}>
-                <i className={`codicon codicon-${props.scanning ? 'loading codicon-modifier-spin' : 'refresh'}`} aria-hidden='true'></i>{props.scanning ? t('scanning') : t('rescan')}</button>
-                {props.scan && <small>{t('scannedAt', { time: new Date(props.scan.scannedAt).toLocaleString(props.locale) })}</small>}</div>
+            <p>{t('lead')}</p>
+            <div className='nmx-import-rescan'>
+                {props.scan && <small>{t('scannedAt', { time: new Date(props.scan.scannedAt).toLocaleString(props.locale) })}</small>}
+                <button type='button' className='nmx-secondary-button' disabled={props.scanning} onClick={props.onRescan}>
+                    <i className={`codicon codicon-${props.scanning ? 'loading codicon-modifier-spin' : 'refresh'}`} aria-hidden='true'></i>{props.scanning ? t('scanning') : t('rescan')}</button>
+            </div>
         </header>
         {!props.scan ? <p className='nmx-import-hint'>{t('scanning')}</p>
             : props.scan.sources.map(summary => <SourceCard key={summary.source} {...props} summary={summary} />)}

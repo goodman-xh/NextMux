@@ -497,54 +497,121 @@
 .nmx-feedback-sent h2 { margin: 6px 0 0; font-size: 17px; }
 .nmx-feedback-sent p { margin: 0 0 10px; color: var(--nmx-muted); font-size: 13px; }
 
-/* Settings → Import */
-.nmx-import-panel { display: grid; gap: 14px; }
-.nmx-import-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.nmx-import-header h3 { margin: 0 0 4px; font-size: 15px; }
-.nmx-import-header p { margin: 0; max-width: 560px; color: var(--nmx-muted); font-size: 12.5px; line-height: 1.6; }
-.nmx-import-header > div:last-child { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
-.nmx-import-header > div:last-child small { color: var(--nmx-muted); font-size: 11.5px; }
-.nmx-import-header .nmx-secondary-button { display: inline-flex; align-items: center; gap: 6px; }
-.nmx-import-source { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--nmx-border); border-radius: 12px; background: var(--nmx-panel); }
-.nmx-import-source > header { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
-.nmx-import-source > header > div:nth-child(2) { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.nmx-import-source > header strong { font-size: 14px; }
-.nmx-import-source > header small { color: var(--nmx-muted); font-size: 12px; }
-.nmx-import-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; color: #fff; font-size: 11.5px; font-weight: 700; letter-spacing: .02em; }
-.nmx-import-mark.is-claude-code { background: #c96442; }
-.nmx-import-mark.is-claude-cowork { background: #a2563c; }
-.nmx-import-mark.is-codex { background: #202123; border: 1px solid var(--nmx-border-strong); }
-.nmx-import-mark.is-cursor { background: #3b3b3b; }
-.nmx-import-actions { display: flex; gap: 8px; }
-.nmx-import-roots { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--nmx-muted); }
-.nmx-import-roots li { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.nmx-import-roots li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--nmx-code-font, ui-monospace, monospace); font-size: 11.5px; }
-.nmx-import-roots li.is-found > i { color: var(--nmx-success); }
-.nmx-import-roots li.is-blocked > i { color: var(--nmx-warning); }
-.nmx-import-roots li.is-missing { opacity: .7; }
-.nmx-import-roots .nmx-link-button { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
-.nmx-import-hint { margin: 0; color: var(--nmx-muted); font-size: 12px; line-height: 1.5; }
-.nmx-import-result { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0; padding: 8px 10px; border-radius: 8px; background: var(--nmx-panel-2); font-size: 12.5px; }
-.nmx-import-result details { flex-basis: 100%; }
-.nmx-import-result details ul { margin: 6px 0 0; padding-inline-start: 18px; color: var(--nmx-muted); }
-.nmx-import-list { display: grid; gap: 8px; }
-.nmx-import-list-tools { display: flex; align-items: center; gap: 10px; }
-.nmx-import-list-tools input[type='search'] { flex: 1; min-width: 0; height: 30px; padding: 0 10px; border: 1px solid var(--nmx-border-strong); border-radius: 8px; color: var(--nmx-text); background: var(--nmx-control-background, var(--nmx-panel-2)); }
-.nmx-import-list-tools label { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; white-space: nowrap; }
-.nmx-import-list > ul { max-height: 340px; overflow: auto; margin: 0; padding: 0; list-style: none; border: 1px solid var(--nmx-border); border-radius: 9px; }
-.nmx-import-list > ul > li + li { border-top: 1px solid var(--nmx-border); }
-.nmx-import-list > ul label { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; }
-.nmx-import-list > ul label > span { display: flex; flex-direction: column; min-width: 0; }
-.nmx-import-list > ul strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
-.nmx-import-list > ul small { color: var(--nmx-muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nmx-import-list > ul em { font-style: normal; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--nmx-panel-2); color: var(--nmx-muted); white-space: nowrap; }
-.nmx-import-list > ul .is-new em { color: var(--nmx-accent); background: color-mix(in srgb, var(--nmx-accent) 12%, transparent); }
-.nmx-import-list > ul .is-updated em { color: var(--nmx-warning); }
-.nmx-import-list > ul .is-imported { opacity: .6; }
-.nmx-import-custom-tag { flex: none; padding: 1px 7px; border-radius: 999px; background: var(--nmx-panel-2); color: var(--nmx-muted); font-size: 11px; font-style: normal; }
-.nmx-import-manage { display: flex; justify-content: flex-end; }
-.nmx-import-manage .nmx-link-button { font-size: 12px; color: var(--nmx-muted); }
-.nmx-import-manage .nmx-link-button.is-danger { color: var(--nmx-danger); }
+/* Settings → Import. Settings rules reach every button, label, small and input inside .nmx-settings-panel, and the
+   light theme forces every border colour, so each rule here is scoped to the panel and a deliberate border colour
+   is !important. Unscoped, .nmx-import-source would also restyle the relay-link banner of the same name. */
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel {
+    --nmx-import-chip: color-mix(in srgb, var(--nmx-text) 7%, transparent);
+    --nmx-import-row-hover: color-mix(in srgb, var(--nmx-text) 5%, transparent);
+    --nmx-import-row-selected: color-mix(in srgb, var(--nmx-text) 8%, transparent);
+    /* Status text is mixed toward the text colour: the raw tokens fall under 4.5:1 on their own tint in one theme or the other. */
+    --nmx-import-new: color-mix(in srgb, var(--nmx-accent) 70%, var(--nmx-text));
+    --nmx-import-updated: color-mix(in srgb, var(--nmx-warning) 80%, var(--nmx-text));
+    --nmx-import-imported: color-mix(in srgb, var(--nmx-success) 38%, var(--nmx-text));
+    display: grid;
+    gap: 12px;
+}
+/* The source cards are the cards: the panel itself draws nothing in either theme. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-settings-page > .nmx-settings-panel.nmx-import-panel { overflow: visible; padding: 0 !important; border: 0 !important; border-radius: 0; background: transparent !important; box-shadow: none !important; }
+
+.nmx-shell .nmx-settings-page .nmx-import-panel small { color: var(--nmx-muted); font-size: 12.5px; font-weight: 400; line-height: 1.5; }
+
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-header > p { flex: 1 1 320px; max-width: 64ch; margin: 0; color: var(--nmx-muted); font-size: 13px; line-height: 1.6; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-rescan { display: flex; flex: none; align-items: center; gap: 10px; }
+
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; min-height: 30px; padding: 0 12px; border-radius: 8px; font-size: 13px; font-weight: 500; line-height: 1; white-space: nowrap; }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel button .codicon { font-size: 14px; }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel button.is-primary { border: 1px solid var(--nmx-text) !important; color: var(--nmx-bg) !important; background: var(--nmx-text) !important; font-weight: 600; }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel button.is-primary:hover:not(:disabled) { border-color: var(--nmx-text) !important; color: var(--nmx-bg) !important; background: var(--nmx-text) !important; box-shadow: 0 1px 6px rgba(0, 0, 0, .2) !important; }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel .nmx-secondary-button { border: 1px solid var(--nmx-border-strong); color: var(--nmx-text); background: var(--nmx-control-background, var(--nmx-panel)); }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel .nmx-secondary-button:hover:not(:disabled) { border-color: var(--nmx-focus-ring, var(--nmx-border-strong)); color: var(--nmx-text); background: var(--nmx-control-hover, var(--nmx-hover)); }
+/* Width 0, not a transparent border: the light theme would colour a transparent one in. */
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel .nmx-link-button { height: 26px; min-height: 26px; padding: 0 8px; border: 0; border-radius: 7px; color: var(--nmx-muted) !important; background: transparent !important; font-size: 12.5px; }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel .nmx-link-button:hover:not(:disabled):not(.is-blocked) { color: var(--nmx-text) !important; background: var(--nmx-import-row-hover) !important; }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel .nmx-link-button.is-destructive:hover:not(:disabled):not(.is-blocked) { color: var(--nmx-danger) !important; background: color-mix(in srgb, var(--nmx-danger) 12%, transparent) !important; }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel .nmx-link-button.is-danger { color: var(--nmx-danger) !important; background: color-mix(in srgb, var(--nmx-danger) 12%, transparent) !important; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nmx-danger) 45%, transparent); }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel .nmx-link-button.is-blocked { cursor: not-allowed; opacity: .55; }
+
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-source { display: grid; gap: 12px; padding: 14px 16px; border: 1px solid var(--nmx-border) !important; border-radius: 12px; background: var(--nmx-panel); }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-source > header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-source-copy { display: grid; flex: 1 1 220px; gap: 5px; min-width: 0; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-source-copy > strong { display: flex; align-items: center; gap: 7px; color: var(--nmx-text); font-size: 14px; font-weight: 600; line-height: 1.3; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-total { min-width: 20px; padding: 0 6px; border-radius: 999px; color: var(--nmx-muted); background: var(--nmx-import-chip); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 500; line-height: 18px; text-align: center; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-mark { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: #fff; font-size: 11.5px; font-weight: 700; letter-spacing: .02em; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-mark.is-claude-code { background: #b9552f; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-mark.is-claude-cowork { background: #96503a; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-mark.is-codex { border: 1px solid var(--nmx-border-strong) !important; background: #202123; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-mark.is-cursor { background: #3b3b3b; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-pills { display: flex; flex-wrap: wrap; gap: 4px 6px; margin: 0; padding: 0; list-style: none; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-pills > li { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; border-radius: 999px; color: var(--nmx-muted); background: var(--nmx-import-chip); font-size: 12.5px; line-height: 1; white-space: nowrap; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-pills > li > b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-pills > li.is-new,
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item.is-new > label > em { color: var(--nmx-import-new); background: color-mix(in srgb, var(--nmx-accent) 12%, transparent); }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-pills > li.is-updated,
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item.is-updated > label > em { color: var(--nmx-import-updated); background: color-mix(in srgb, var(--nmx-warning) 14%, transparent); }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-pills > li.is-imported,
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item.is-imported > label > em { color: var(--nmx-import-imported); background: color-mix(in srgb, var(--nmx-success) 13%, transparent); }
+
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-source-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding-top: 10px; border-top: 1px solid var(--nmx-border) !important; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-folders { display: flex; flex: 1 1 280px; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-folders > li { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; min-height: 26px; padding: 0 8px; border-radius: 7px; color: var(--nmx-muted); background: var(--nmx-import-chip); font-size: 12.5px; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-folders > li > .codicon { flex: none; font-size: 13px; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-folders > li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-folders > li.is-found > .codicon { color: var(--nmx-import-imported); }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-folders > li.is-blocked > .codicon { color: var(--nmx-warning); }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-folders > li.is-missing { background: transparent; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-folders > li.nmx-import-folder-add { padding: 0; background: transparent; }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel .nmx-import-folders > li:not(.nmx-import-folder-add) .nmx-link-button { height: 22px; min-height: 22px; margin-inline-end: -4px; padding: 0 6px; font-size: 12px; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-custom-tag { flex: none; padding: 0 6px; border-radius: 999px; color: var(--nmx-muted); background: var(--nmx-import-chip); font-size: 12px; font-style: normal; line-height: 18px; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-manage { flex: none; margin-inline-start: auto; }
+
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-hint { margin: 0; color: var(--nmx-muted); font-size: 12.5px; line-height: 1.5; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-result { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0; padding: 7px 12px; border-radius: 8px; color: var(--nmx-text); background: var(--nmx-import-chip); font-size: 13px; line-height: 1.5; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-result details { flex-basis: 100%; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-result details ul { margin: 6px 0 0; padding-inline-start: 18px; color: var(--nmx-muted); }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-source details > summary { color: var(--nmx-muted); font-size: 12.5px; cursor: pointer; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-source details > pre { max-height: 160px; margin: 6px 0 0; padding: 8px 10px; overflow: auto; border-radius: 7px; color: var(--nmx-muted); background: var(--nmx-import-chip); font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-list { display: grid; gap: 8px; animation: nmx-import-list-in 140ms ease-out; }
+@keyframes nmx-import-list-in { from { opacity: 0; transform: translateY(-3px); } }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-search { position: relative; flex: 1 1 200px; min-width: 0; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-search > .codicon { position: absolute; top: 50%; inset-inline-start: 9px; color: var(--nmx-muted); font-size: 13px; pointer-events: none; transform: translateY(-50%); }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel .nmx-import-search > input { box-sizing: border-box; width: 100%; height: 30px; min-height: 30px; padding-block: 0; padding-inline: 28px 10px; border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: var(--nmx-control-background, var(--nmx-panel)); font-size: 13px; }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel .nmx-import-search > input::placeholder { color: var(--nmx-muted); }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel label.nmx-import-select-all { display: inline-flex; align-items: center; gap: 7px; width: auto; min-height: 30px; margin: 0; padding: 0; color: var(--nmx-muted); font-size: 13px; cursor: pointer; white-space: nowrap; }
+
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel input[type='checkbox'] { position: relative; flex: none; box-sizing: border-box; width: 16px; min-width: 16px; height: 16px; min-height: 16px; margin: 0; padding: 0; border: 1px solid var(--nmx-border-strong) !important; border-radius: 5px; background: var(--nmx-control-background, var(--nmx-panel)); cursor: pointer; appearance: none; transition: border-color 120ms ease, background-color 120ms ease; }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel input[type='checkbox']:hover:not(:disabled) { border-color: var(--nmx-focus-ring) !important; }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel input[type='checkbox']:checked { border-color: var(--nmx-text) !important; background: var(--nmx-text); }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel input[type='checkbox']:checked::after { position: absolute; top: 1px; inset-inline-start: 4px; box-sizing: border-box; width: 6px; height: 10px; border: solid var(--nmx-bg) !important; border-width: 0 2px 2px 0 !important; content: ''; transform: rotate(45deg); }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel input[type='checkbox']:disabled { cursor: default; opacity: .4; }
+#nextmux\.desktop\.widget .nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel input[type='checkbox']:focus-visible { outline: 2px solid var(--nmx-focus-ring) !important; outline-offset: 2px; }
+
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-items { max-height: 340px; margin: 0; padding: 4px; overflow: auto; border: 1px solid var(--nmx-border) !important; border-radius: 10px; list-style: none; scrollbar-color: var(--nmx-border-strong) transparent; scrollbar-width: thin; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item { border-radius: 7px; transition: background-color 120ms ease; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item + .nmx-import-item { margin-top: 1px; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item:hover:not(.is-imported) { background: var(--nmx-import-row-hover); }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item.is-selected,
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item.is-selected:hover { background: var(--nmx-import-row-selected); }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel .nmx-import-item > label { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: auto; min-height: 46px; margin: 0; padding: 6px 10px; color: inherit; font-size: inherit; cursor: pointer; }
+.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel .nmx-import-item.is-imported > label { cursor: default; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item-copy { display: grid; gap: 2px; min-width: 0; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item-copy > strong { overflow: hidden; color: var(--nmx-text); font-size: 13.5px; font-weight: 600; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item.is-imported .nmx-import-item-copy > strong { color: var(--nmx-muted); font-weight: 500; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item-copy > small { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-chip { overflow: hidden; max-width: 62%; padding: 0 6px; border-radius: 5px; background: var(--nmx-import-chip); text-overflow: ellipsis; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item.is-selected .nmx-import-chip { color: var(--nmx-text); }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item > label > em { padding: 2px 8px; border-radius: 999px; color: var(--nmx-muted); background: var(--nmx-import-chip); font-size: 12.5px; font-style: normal; line-height: 1.3; white-space: nowrap; }
+.nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item.is-selected > label > em { background: transparent; }
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-list { animation: none; }
+    .nmx-shell .nmx-settings-page .nmx-import-panel .nmx-import-item,
+    .nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel input[type='checkbox'] { transition: none; }
+}
 /* The generic sheet rules (.nmx-permission-sheet > div, > div > button) right-align rows and restyle buttons. */
 .nmx-permission-sheet.nmx-feedback-sheet > .nmx-feedback-kinds { justify-content: flex-start; }
 .nmx-permission-sheet.nmx-feedback-sheet > .nmx-feedback-kinds > button { height: 28px; min-height: 28px; padding: 0 12px; border: 1px solid var(--nmx-border); border-radius: 999px; color: var(--nmx-text); background: transparent; font-size: 12.5px; }
@@ -742,11 +809,6 @@
 
 /* Settings cards use a neutral surface; the dark theme's rose-tinted panel read as a warning there. */
 .nmx-shell:not(.nmx-theme-light) .nmx-settings-page { --nmx-panel: #232122; }
-/* Import: the source cards are the cards; no second frame around them. */
-.nmx-shell .nmx-settings-page .nmx-settings-panel.nmx-import-panel { padding: 0; border: 0; background: transparent; box-shadow: none; }
-.nmx-shell .nmx-import-header { align-items: flex-end; flex-wrap: wrap; row-gap: 10px; }
-.nmx-shell .nmx-import-header > div:last-child { flex-direction: row-reverse; align-items: center; gap: 10px; }
-.nmx-shell .nmx-import-source > header .nmx-import-actions { flex-wrap: wrap; justify-content: flex-end; }
 
 /* Settings → Models: “Enable anonymous models”, right-aligned under the list. */
 .nmx-shell label.nmx-anonymous-models-toggle { display: flex; flex-direction: row; justify-content: flex-start; align-items: center; gap: 7px; width: fit-content; margin: 14px 0 0 auto; padding: 4px 2px; border: 0; background: none; color: var(--nmx-text); font-size: 13px; cursor: pointer; }

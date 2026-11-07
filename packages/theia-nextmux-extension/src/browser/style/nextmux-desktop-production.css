@@ -1866,8 +1866,11 @@ body:is(.windows, :has(#window-controls)) .nmx-shell .nmx-titlebar-context {
 .nmx-billing-receipts [role='alert'] { color: var(--theia-errorForeground); }
 
 /* Update preparation never replaces the account/settings entry or grows the dock. */
-.nmx-context-account-dock.has-update { grid-template-columns: minmax(0, 1fr) minmax(54px, max-content); }
-.nmx-context-account-dock.has-update .nmx-account-trigger { grid-template-columns: 28px minmax(0, 1fr); min-width: 0; }
+.nmx-context-account-dock.has-update { display: flex; }
+.nmx-context-account-dock.has-update .nmx-account-trigger {
+    flex: 1 1 auto; width: auto; min-width: 0; grid-template-columns: 28px minmax(0, 1fr);
+    transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease, flex-grow 220ms ease, gap 220ms ease;
+}
 .nmx-context-account-dock .nmx-account-update {
     appearance: none; min-width: 54px; max-width: 100px; height: 32px; padding: 0 9px;
     display: grid; place-items: center; border: 1px solid transparent; border-radius: 7px;
@@ -1879,6 +1882,36 @@ body:is(.windows, :has(#window-controls)) .nmx-shell .nmx-titlebar-context {
 .nmx-context-account-dock .nmx-account-update.is-warning:hover:not(:disabled) { background: #a84f00 !important; color: #fff !important; }
 .nmx-context-account-dock .nmx-account-update:disabled { cursor: default; opacity: 1; }
 .nmx-context-account-dock .nmx-account-update:focus-visible { outline: 2px solid var(--theia-focusBorder); outline-offset: 2px; }
+.nmx-context-account-dock.has-update .nmx-account-update { flex: 0 0 auto; transition: flex-grow 220ms ease; }
+/* The fixed "Downloading…" label is the longest thing the dock shows before an update is ready. */
+.nmx-context-account-dock .nmx-account-update.is-downloading { max-width: 132px; }
+
+/* A ready update takes the dock: the name fades out beside the avatar and the button spreads, so no language's label is
+   cut off. 300px is wider than the name gets in the widest panel, so it truncates nothing and still gives the fade a width to
+   animate from. The free space passes from the trigger to the button by flex-grow, one continuous move; the button never
+   shrinks. .has-update-ready and the :has() form say the same thing. */
+.nmx-context-account-dock.has-update .nmx-account-trigger-copy { max-width: 300px; transition: opacity 200ms ease, max-width 220ms ease; }
+.nmx-context-account-dock.has-update-ready .nmx-account-trigger { flex-grow: 0; grid-template-columns: 28px minmax(0, max-content); gap: 0; }
+.nmx-context-account-dock.has-update-ready .nmx-account-trigger-copy,
+.nmx-context-account-dock:has(> .nmx-account-update.is-ready) .nmx-account-trigger-copy {
+    opacity: 0; max-width: 0; overflow: hidden; pointer-events: none;
+    -webkit-mask-image: linear-gradient(90deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 70%);
+    mask-image: linear-gradient(90deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 70%);
+    transition: opacity 200ms ease, max-width 220ms ease;
+}
+[dir='rtl'] .nmx-context-account-dock.has-update-ready .nmx-account-trigger-copy,
+[dir='rtl'] .nmx-context-account-dock:has(> .nmx-account-update.is-ready) .nmx-account-trigger-copy {
+    -webkit-mask-image: linear-gradient(270deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 70%);
+    mask-image: linear-gradient(270deg, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0) 70%);
+}
+.nmx-context-account-dock.has-update-ready .nmx-account-update.is-ready { flex-grow: 1; max-width: calc(100% - 44px); }
+@media (prefers-reduced-motion: reduce) {
+    .nmx-context-account-dock.has-update .nmx-account-trigger,
+    .nmx-context-account-dock.has-update .nmx-account-update,
+    .nmx-context-account-dock.has-update .nmx-account-trigger-copy,
+    .nmx-context-account-dock.has-update-ready .nmx-account-trigger-copy,
+    .nmx-context-account-dock:has(> .nmx-account-update.is-ready) .nmx-account-trigger-copy { transition: none; }
+}
 
 /* The action buttons already occupy the fixed titlebar. The empty coding
    toolbar only needs half its former 48px spacer; a visible find control keeps
