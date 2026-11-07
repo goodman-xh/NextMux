@@ -45048,7 +45048,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         );
 
         const showUpdate = updateAppearsInDock(this.updateState);
-        const wallet = this.platformSession.wallets[0];
+        // The USD wallet, like the plugin market and the billing page; another currency only when there is none.
+        const wallet = this.platformSession.wallets.find(item => item.currency === 'USD') ?? this.platformSession.wallets[0];
         const balance = wallet ? formatBalanceMicros(this.desktopLocale, wallet.currency, walletNetBalanceMicros(wallet)) : undefined;
         // The avatar opens the account sheet (balance, feedback, settings, sign out); the gear still opens settings directly.
         // The balance lives in that sheet only, not under the name.
@@ -45848,7 +45849,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected renderModelCenter(): React.ReactNode {
         const query = this.modelSearchQuery.trim().toLocaleLowerCase();
-        const wallet = this.platformSession.wallets[0];
+        // The USD wallet, like the plugin market and the billing page; another currency only when there is none.
+        const wallet = this.platformSession.wallets.find(item => item.currency === 'USD') ?? this.platformSession.wallets[0];
         const showOfficial = this.modelCenterView === 'official';
         const showMarketplace = this.modelCenterView === 'all' || this.modelCenterView === 'capability';
         const showUsage = this.modelCenterView === 'usage';
