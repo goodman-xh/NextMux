@@ -3135,7 +3135,8 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
 
 #nextmux\.desktop\.widget .nmx-shell .nmx-library-grid {
     display: grid !important;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+    /* The 素材库 window sets its own thumbnail size on .nmx-unified-asset-library; nothing else uses this grid. */
+    grid-template-columns: repeat(auto-fill, minmax(var(--nmx-library-card-min, 156px), 1fr)) !important;
     gap: 12px !important;
 }
 
@@ -3157,6 +3158,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
 #nextmux\.desktop\.widget .nmx-shell .nmx-library-preview {
     display: block;
     width: 100%;
+    height: var(--nmx-library-preview-h, 108px);
     aspect-ratio: 1 / 1;
     object-fit: cover;
     background: var(--nmxv-surface-3);

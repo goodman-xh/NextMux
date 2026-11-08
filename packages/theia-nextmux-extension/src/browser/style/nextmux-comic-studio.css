@@ -306,7 +306,7 @@
 .nmx-comic-studio .nmx-comic-stepper [role='tab'].is-active .nmx-comic-step-index { border-color: var(--nmx-accent); color: var(--nmx-bg); background: var(--nmx-accent); }
 
 /* Home: new comic + recent library. */
-.nmx-comic-studio .nmx-comic-home { width: min(860px, calc(100% - 48px)); }
+.nmx-comic-studio .nmx-comic-home { width: min(1040px, calc(100% - 48px)); }
 .nmx-comic-studio .nmx-comic-home .nmx-comic-empty-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
 .nmx-comic-studio .nmx-comic-home .nmx-comic-empty-action { flex-direction: row; flex-wrap: wrap; align-items: center; }
 .nmx-comic-studio .nmx-comic-home .nmx-comic-empty-action > small { flex-basis: 100%; }

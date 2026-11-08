@@ -34,6 +34,13 @@
     mask-image: linear-gradient(270deg, #000 0%, #000 calc(100% - 18px), transparent 100%);
     text-overflow: clip;
 }
+/* A left-to-right title (English, Chinese) overflows at its right end, where a fade would also dim the end of a short
+   title aligned against it: it is cut there with an ellipsis instead, as in the comic sidebar. */
+[dir='rtl'] .nmx-coding-context .nmx-session-open > span[dir='auto']:dir(ltr) {
+    -webkit-mask-image: none;
+    mask-image: none;
+    text-overflow: ellipsis;
+}
 
 /* RTL: project conversations indent from the right and the row's "…" menu
    sits at the inline end (left), mirroring the LTR layout. */
@@ -53,28 +60,51 @@
     padding-left: 32px !important;
 }
 
-/* The row menu is anchored to its row and escapes the scrolling sidebar
-   (Floating UI "flip" behaviour via CSS anchor positioning): a row near the
-   bottom opens its menu upwards instead of being clipped by the account dock. */
-.nmx-desktop-widget .nmx-coding-context .nmx-session-menu {
+/* The conversation and project menus are anchored to their row and escape the
+   scrolling sidebar (Floating UI "flip" via CSS anchor positioning). They open
+   below the row, aligned with its inline end; a row near the bottom opens its
+   menu upwards, and a menu wider than the room up to the window's edge (a
+   narrow sidebar, longer labels) turns to open along the sidebar instead of
+   spilling out of the window. The insets keep 8px clear of the window edges on
+   the side the menu grows toward; the margin is the 3px gap to the row. With
+   insets on both sides, normal alignment would put the menu at the far end of
+   its area (away from the row): the self-alignment holds it against the row,
+   and each flip mirrors it. */
+.nmx-desktop-widget .nmx-coding-context :is(.nmx-session-menu, .nmx-project-menu) {
     position: fixed;
-    position-anchor: --nmx-session-hover-anchor;
-    top: calc(anchor(bottom) + 3px);
-    right: anchor(right);
-    bottom: auto;
-    left: auto;
+    inset: auto auto 8px 8px;
+    z-index: 2600;
     width: max-content;
-    min-width: 202px;
-    max-width: min(300px, calc(100vw - 20px));
+    max-width: min(300px, calc(100vw - 16px));
     max-height: calc(100dvh - 16px);
+    margin: 3px 0;
     overflow-y: auto;
-    position-try-fallbacks: flip-block;
+    position-area: bottom span-left;
+    justify-self: end;
+    align-self: start;
+    position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
 }
-[dir='rtl'] .nmx-desktop-widget .nmx-coding-context .nmx-session-menu,
-.nmx-desktop-widget[dir='rtl'] .nmx-coding-context .nmx-session-menu,
-.nmx-desktop-widget [dir='rtl'] .nmx-coding-context .nmx-session-menu {
-    right: auto;
-    left: anchor(left);
+.nmx-desktop-widget .nmx-coding-context .nmx-session-menu {
+    position-anchor: --nmx-session-hover-anchor;
+    min-width: 202px;
+}
+.nmx-desktop-widget .nmx-coding-context .nmx-project-menu {
+    position-anchor: --nmx-project-menu-anchor;
+}
+.nmx-desktop-widget .nmx-coding-context .nmx-project-header {
+    anchor-name: --nmx-project-menu-anchor;
+    anchor-scope: --nmx-project-menu-anchor;
+}
+[dir='rtl'] .nmx-desktop-widget .nmx-coding-context :is(.nmx-session-menu, .nmx-project-menu),
+.nmx-desktop-widget[dir='rtl'] .nmx-coding-context :is(.nmx-session-menu, .nmx-project-menu),
+.nmx-desktop-widget [dir='rtl'] .nmx-coding-context :is(.nmx-session-menu, .nmx-project-menu) {
+    inset: auto 8px 8px auto;
+    position-area: bottom span-right;
+    justify-self: start;
+}
+/* Another row's time card must never cover an open menu. */
+.nmx-coding-context:has(:is(.nmx-session-menu, .nmx-project-menu)) .nmx-session-time-tooltip {
+    display: none !important;
 }
 
 /* Light theme: the conversation search field was a dark bar with a white

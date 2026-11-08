@@ -15,6 +15,55 @@ import '../../src/browser/style/nextmux-comic-asset-library.css';
  */
 const LIBRARY_VIDEO_CONTROL_STRIP=72;
 
+/** Thumbnail size of the 素材库 window and the conversation's 素材 drawer, one choice on this device for both. */
+export type ComicLibrarySize='small'|'medium'|'large';
+export const COMIC_LIBRARY_SIZES:readonly ComicLibrarySize[]=['small','medium','large'];
+const COMIC_LIBRARY_SIZE_KEY='nextmux.desktop.comicLibrarySize.v1';
+/** Card column minimum and preview height of the 素材库 window, set on the window itself so no other grid moves. */
+const LIBRARY_CARD_SIZES:Readonly<Record<ComicLibrarySize,{readonly card:string;readonly preview:string}>>={
+    small:{card:'128px',preview:'88px'},medium:{card:'156px',preview:'108px'},large:{card:'204px',preview:'142px'}
+};
+const comicLibrarySizeListeners=new Set<(size:ComicLibrarySize)=>void>();
+function storedComicLibrarySize():ComicLibrarySize {
+    try{const value=window.localStorage.getItem(COMIC_LIBRARY_SIZE_KEY);return COMIC_LIBRARY_SIZES.includes(value as ComicLibrarySize)?value as ComicLibrarySize:'medium';}
+    catch{return 'medium';}
+}
+/** Remembers a size on this device and shows it in every open library view. */
+export function chooseComicLibrarySize(size:ComicLibrarySize):void {
+    try{window.localStorage.setItem(COMIC_LIBRARY_SIZE_KEY,size);}catch{/* this window still shows the choice */}
+    for(const listener of comicLibrarySizeListeners)listener(size);
+}
+/** The remembered size, kept in step with the other open library views. */
+export function useComicLibrarySize():readonly [ComicLibrarySize,(size:ComicLibrarySize)=>void] {
+    const [size,setSize]=React.useState<ComicLibrarySize>(storedComicLibrarySize);
+    React.useEffect(()=>{comicLibrarySizeListeners.add(setSize);return()=>{comicLibrarySizeListeners.delete(setSize);};},[]);
+    return [size,chooseComicLibrarySize];
+}
+const LIBRARY_SIZE_TEXT:Readonly<Record<string,readonly [group:string,small:string,medium:string,large:string]>>={
+    'zh-CN':['缩略图大小','小','中','大'],'zh-TW':['縮圖大小','小','中','大'],en:['Thumbnail size','Small','Medium','Large'],
+    ja:['サムネイルのサイズ','小','中','大'],ko:['썸네일 크기','작게','보통','크게'],es:['Tamaño de las miniaturas','Pequeño','Mediano','Grande'],
+    fr:['Taille des vignettes','Petit','Moyen','Grand'],de:['Vorschaugröße','Klein','Mittel','Groß'],'pt-BR':['Tamanho das miniaturas','Pequeno','Médio','Grande'],
+    ru:['Размер миниатюр','Мелкие','Средние','Крупные'],ar:['حجم الصور المصغرة','صغير','متوسط','كبير'],hi:['थंबनेल का आकार','छोटा','मध्यम','बड़ा']
+};
+/** 小 / 中 / 大 (S / M / L outside Chinese): a segmented control, arrow keys move the choice. */
+export function ComicLibrarySizeControl(props:{readonly locale:string;readonly size:ComicLibrarySize;readonly onSize:(size:ComicLibrarySize)=>void}):React.ReactElement {
+    const [group,...names]=LIBRARY_SIZE_TEXT[props.locale]??LIBRARY_SIZE_TEXT[props.locale.startsWith('zh')?'zh-CN':'en'];
+    const short=props.locale.startsWith('zh')?['小','中','大']:['S','M','L'];
+    const index=COMIC_LIBRARY_SIZES.indexOf(props.size);
+    return <div className='nmx-library-size' role='radiogroup' aria-label={group} title={group} dir='ltr'
+        onKeyDown={event=>{
+            const step=event.key==='ArrowRight'||event.key==='ArrowDown'?1:event.key==='ArrowLeft'||event.key==='ArrowUp'?-1:0;
+            if(!step)return;
+            event.preventDefault();
+            const next=Math.max(0,Math.min(COMIC_LIBRARY_SIZES.length-1,index+step));
+            props.onSize(COMIC_LIBRARY_SIZES[next]);
+            (event.currentTarget.children[next] as HTMLElement|undefined)?.focus();
+        }}>
+        {COMIC_LIBRARY_SIZES.map((size,at)=><button key={size} type='button' role='radio' aria-checked={props.size===size} tabIndex={props.size===size?0:-1}
+            aria-label={names[at]} title={names[at]} className={props.size===size?'is-active':''} onClick={()=>props.onSize(size)}>{short[at]}</button>)}
+    </div>;
+}
+
 export interface CanvasAssetLibraryDialogProps {
     readonly locale:string;readonly load:()=>Promise<readonly ComicAssetLibraryEntry[]>;
     readonly onUse?:(assetId:string,requestId:string,entry:ComicAssetLibraryEntry)=>Promise<void>;readonly onClose:()=>void;
@@ -35,6 +84,7 @@ export interface CanvasAssetLibraryDialogProps {
 }
 export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):React.ReactElement {
     const t=(key:Parameters<typeof comicAssetLibraryText>[1])=>comicAssetLibraryText(props.locale,key);
+    const [librarySize,setLibrarySize]=useComicLibrarySize();
     const [loadedEntries,setEntries]=React.useState<readonly ComicAssetLibraryEntry[]>(props.entries??[]),[category,setCategory]=React.useState<ComicAssetLibraryFilter>(props.initialFilter??'all');
     const syncedPropEntries=React.useRef(props.entries);
     let entries=loadedEntries;
@@ -325,6 +375,7 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
         if(event.target===event.currentTarget&&!operations.busy)props.onClose();
     }}>
         <section className='nmx-board-tool-dialog nmx-board-asset-library nmx-unified-asset-library' role='dialog' aria-modal='true' aria-label={t('library')}
+            data-library-size={librarySize} style={{'--nmx-library-card-min':LIBRARY_CARD_SIZES[librarySize].card,'--nmx-library-preview-h':LIBRARY_CARD_SIZES[librarySize].preview} as React.CSSProperties}
             onKeyDown={event=>{event.stopPropagation();if(event.key==='Escape'){event.preventDefault();if(zoomedEntry)closeZoom();else if(pendingDelete)closeDeletePopover(true);else if(contextMenu)setContextMenu(undefined);else if(renaming)setRenaming(undefined);else props.onClose();}}}>
             <header>
                 <div className='nmx-library-header-title'>
@@ -357,6 +408,7 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
                         <option value='newest'>{t('newest')}</option>
                         <option value='oldest'>{t('oldest')}</option>
                     </select>
+                    <ComicLibrarySizeControl locale={props.locale} size={librarySize} onSize={setLibrarySize}/>
                 </div>
             </div>
             {operations.busy&&<p className='nmx-library-progress' role='status'>{t('workingClose')}</p>}

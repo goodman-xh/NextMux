@@ -2436,17 +2436,51 @@ body.nmx-window-inactive:not(.nmx-window-fullscreen):not(.nmx-modal-open):has(#n
     color: var(--nmx-subtle, var(--nmx-muted));
 }
 
-/* Inline pasted-text chips in composer overlay & sent message bubbles */
+/* The pasted-text marker as drawn in the composer's overlay. The overlay sits
+   under the textarea's transparent text, so it must keep the textarea's glyph
+   widths: no weight change, no padding, or the caret drifts from the text after
+   the marker. A marker that wraps gets its own rounded tint on each line. */
 .nmx-shell .nmx-composer-inline-paste-chip {
     border-radius: 6px;
     background: color-mix(in srgb, var(--nmx-accent, #d14a79) 16%, transparent);
     color: var(--nmx-accent, #d14a79);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nmx-accent, #d14a79) 34%, transparent);
-    font-weight: 600;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
 }
 
+/* A pasted text is folded into its chip. Clicking the chip unfolds it back into
+   the message, where its marker stands; the unfold icon fades in on hover and
+   focus, in room the chip always keeps, so nothing moves. */
 .nmx-shell .nmx-pasted-text-chip {
     max-width: 268px;
+}
+.nmx-shell .nmx-pasted-text-chip > .nmx-attachment-preview {
+    padding-inline-end: 22px;
+    cursor: pointer;
+}
+.nmx-shell .nmx-pasted-text-chip > .nmx-pasted-text-expand {
+    position: absolute;
+    z-index: 2;
+    top: 50%;
+    inset-inline-end: 9px;
+    width: 16px;
+    height: 16px;
+    margin-top: -8px;
+    display: grid;
+    place-items: center;
+    color: var(--nmx-att-meta);
+    font-size: 14px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms ease, color 140ms ease;
+}
+.nmx-shell .nmx-pasted-text-chip:is(:hover, :focus-within) > .nmx-pasted-text-expand {
+    color: var(--nmx-att-text);
+    opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell .nmx-pasted-text-chip > .nmx-pasted-text-expand { transition: none; }
 }
 
 .nmx-shell .nmx-user-message-pasted-flow {

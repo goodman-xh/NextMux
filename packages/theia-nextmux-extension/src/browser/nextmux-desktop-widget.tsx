@@ -57,7 +57,7 @@ import { AttachmentChip, ComposerDropOverlay, CONVERTIBLE_IMAGE_MIME, FOLDER_SNA
 import { contextBudgetText } from './nextmux-context-budget-locale';
 import { applyConversationWindowDelta, buildDetachedConversationSearch, conversationWindowDelta, ConversationWindowPublisher, type ConversationWindowEvent, type ConversationSyncDiagnosticEvent } from '../common/nextmux-conversation-window';
 import { conversationWindowText } from './nextmux-conversation-window-locale';
-import { ApplicationShell, CommonCommands, Message, open, OpenerService } from '@theia/core/lib/browser';
+import { ApplicationShell, CommonCommands, Message, MessageLoop, open, OpenerService, Widget } from '@theia/core/lib/browser';
 import { ClipboardService } from '@theia/core/lib/browser/clipboard-service';
 import { MessageService } from '@theia/core/lib/common/message-service';
 import { composerMarkdownSegments, decorateConversationLinks, normalizeConversationMarkdown, removeAdjacentComposerLink } from './nextmux-markdown';
@@ -461,7 +461,7 @@ import { naturalPanelHeight, placeAdjacentFloatingPanel, placeAnchoredFloatingPa
 import type { AdjacentFloatingPanelPlacement } from './nextmux-floating-panel';
 import type { AnchoredFloatingPanelPlacement } from './nextmux-floating-panel';
 import type { PublicMerchantDirectoryPage, PublicMerchantDirectoryQuery, PublicMerchantIdentity } from '../common/nextmux-public-merchants';
-import { reorderPublicMerchantDirectory } from '../common/nextmux-public-merchants';
+import { publicMerchantDepositText, reorderPublicMerchantDirectory } from '../common/nextmux-public-merchants';
 import { bindPriceQuote, optionalKeyPriceQuoteId, priceAuthorizationErrorCode } from '../common/nextmux-price-quote';
 import { canRateRelayReply, normalizeRelayFeedbackRequestIds } from '../common/nextmux-relay-feedback';
 import { codingProjectPathKey, codingSidebarProjects } from './nextmux-sidebar-projects';
@@ -691,6 +691,7 @@ import {
     composerContentToken,
     createPastedTextReference,
     deserializePastedTextReferences,
+    expandPastedTextReferenceToInlineText,
     findPastedTextMarkerRanges,
     formatFollowUpQueueStatusBadge,
     formatPastedTextChipSummary,
@@ -699,6 +700,7 @@ import {
     materializePastedTextPrompt,
     mergeComposerAttachmentsByOrdinal,
     parseUserPromptPastedSegments,
+    pastedTextExpansionCopy,
     pastedTextReferencesInDocument,
     removeAdjacentPastedTextMarker,
     removePastedTextReferenceById,
@@ -744,6 +746,102 @@ const RELAY_FAVORITES_STORAGE_KEY = 'nextmux.desktop.favoriteMerchants.v1';
 const MODEL_SWITCH_DEFAULT_STORAGE_KEY = 'nextmux.desktop.modelSwitchDefault.v1';
 const ROUTE_LABELS_STORAGE_KEY = 'nextmux.desktop.routeLabels.v1';
 const LEGACY_ROUTE_SCORE_LABELS: ReadonlySet<string> = new Set(['极高', '良好', '可用']);
+
+/**
+ * Crash journal of the composer each window is writing in (journalComposerDraft): one localStorage entry per window,
+ * written on every edit, so text typed a moment before a kill -9 or a power cut survives. The next start folds the newer
+ * ones into the startup snapshot (applyComposerDraftJournal) and then removes them.
+ */
+const COMPOSER_DRAFT_JOURNAL_PREFIX = 'nextmux.desktop.codingDraft.v1:';
+/** Entries up to this size are written on every keystroke; a longer draft at most every DRAFT_JOURNAL_THROTTLE_MS. */
+const DRAFT_JOURNAL_SYNC_LIMIT = 32_768;
+const DRAFT_JOURNAL_THROTTLE_MS = 120;
+const DRAFT_JOURNAL_MAX_AGE_MS = 30 * 86_400_000;
+/** Every 漫剧对话's unsent composer, by conversation (`chat:<id>`) or, before its first message, its folder (`new:<path>`). */
+const COMIC_CHAT_DRAFTS_KEY = 'nextmux.desktop.comicChatDrafts.v1';
+/** The 漫剧对话 on screen (its folder, and its ID once sent), reopened at the next start. */
+const COMIC_CHAT_ACTIVE_KEY = 'nextmux.desktop.comicChatActive.v1';
+const COMIC_CHAT_DRAFT_LIMIT = 50;
+
+interface ComposerDraftJournalEntry {
+    readonly sessionId: string;
+    readonly at: number;
+    readonly prompt: string;
+    readonly pastedTextReferences?: string;
+    readonly attachments?: readonly QueuedAttachmentReference[];
+    /** The conversation's saved draft (draftHash) when this was written: a snapshot still holding it is older than this. */
+    readonly base: string;
+}
+
+/** A conversation's composer draft as one comparable string (attachments by their references' IDs). */
+function composerDraftFingerprint(draft: { readonly draftPrompt?: unknown; readonly draftPastedTextReferences?: unknown; readonly draftAttachments?: unknown }): string {
+    const attachments = Array.isArray(draft.draftAttachments) ? draft.draftAttachments : [];
+    return JSON.stringify([typeof draft.draftPrompt === 'string' ? draft.draftPrompt : '',
+        typeof draft.draftPastedTextReferences === 'string' && draft.draftPastedTextReferences ? draft.draftPastedTextReferences : '[]',
+        attachments.map(item => item && typeof item === 'object' ? String((item as { readonly id?: unknown }).id) : '')]);
+}
+
+/** cyrb53 of a draft fingerprint: a short stand-in for the whole text in each journal entry. */
+function draftHash(value: string): string {
+    let first = 0xdeadbeef, second = 0x41c6ce57;
+    for (let index = 0; index < value.length; index++) {
+        const code = value.charCodeAt(index);
+        first = Math.imul(first ^ code, 2654435761);
+        second = Math.imul(second ^ code, 1597334677);
+    }
+    first = Math.imul(first ^ (first >>> 16), 2246822507) ^ Math.imul(second ^ (second >>> 13), 3266489909);
+    second = Math.imul(second ^ (second >>> 16), 2246822507) ^ Math.imul(first ^ (first >>> 13), 3266489909);
+    return (4294967296 * (2097151 & second) + (first >>> 0)).toString(36);
+}
+
+/** Every readable journal entry left by any window, newest first; an unreadable or expired one is skipped. */
+function readComposerDraftJournal(storage: Storage, now = Date.now()): { readonly key: string; readonly entry: ComposerDraftJournalEntry }[] {
+    const found: { key: string; entry: ComposerDraftJournalEntry }[] = [];
+    for (let index = 0; index < storage.length; index++) {
+        const key = storage.key(index);
+        if (!key?.startsWith(COMPOSER_DRAFT_JOURNAL_PREFIX)) continue;
+        try {
+            const value = JSON.parse(storage.getItem(key) || 'null') as Partial<Record<keyof ComposerDraftJournalEntry, unknown>> | null;
+            if (!value || typeof value.sessionId !== 'string' || !value.sessionId || value.sessionId.length > 200
+                || typeof value.at !== 'number' || !Number.isFinite(value.at) || value.at <= 0 || now - value.at > DRAFT_JOURNAL_MAX_AGE_MS
+                || typeof value.prompt !== 'string' || value.prompt.length > 200_000 || typeof value.base !== 'string') continue;
+            const attachments = Array.isArray(value.attachments) ? value.attachments.filter((item): item is QueuedAttachmentReference =>
+                Boolean(item) && typeof item === 'object' && typeof (item as { readonly id?: unknown }).id === 'string').slice(0, 64) : [];
+            found.push({ key, entry: { sessionId: value.sessionId, at: value.at, prompt: value.prompt, base: value.base,
+                ...(typeof value.pastedTextReferences === 'string' && value.pastedTextReferences !== '[]' ? { pastedTextReferences: value.pastedTextReferences } : {}),
+                ...(attachments.length ? { attachments } : {}) } });
+        } catch { /* another window's half-written or foreign entry */ }
+    }
+    return found.sort((left, right) => right.entry.at - left.entry.at);
+}
+
+/** One 漫剧对话's unsent composer: the text, the pictures picked, the skill card and the mode it was written in. */
+interface ComicChatDraftRecord {
+    readonly prompt: string;
+    readonly references: readonly ComicChatDraftReference[];
+    readonly skill?: string;
+    readonly mode?: ComicChatMode;
+    readonly at: number;
+}
+
+function normalizeComicChatDraft(value: unknown): ComicChatDraftRecord | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    const draft = value as Partial<Record<keyof ComicChatDraftRecord, unknown>>;
+    const text = (input: unknown, limit: number): string | undefined => typeof input === 'string' && input.length <= limit ? input : undefined;
+    const prompt = text(draft.prompt, COMIC_CHAT_LIMITS.prompt) ?? '';
+    const references = (Array.isArray(draft.references) ? draft.references : []).flatMap((item): ComicChatDraftReference[] => {
+        const reference = item && typeof item === 'object' ? item as Partial<Record<keyof ComicChatDraftReference, unknown>> : {};
+        const key = text(reference.key, 4_200), name = text(reference.name, 1_000);
+        if (!key || name === undefined) return [];
+        const assetId = text(reference.assetId, 200), path = text(reference.path, 4_096), url = text(reference.url, 8_192);
+        return [{ key, name, ...(assetId ? { assetId } : {}), ...(path ? { path } : {}), ...(url ? { url } : {}) }];
+    }).slice(0, 8);
+    const skill = text(draft.skill, 64);
+    const mode = COMIC_CHAT_MODES.includes(draft.mode as ComicChatMode) ? draft.mode as ComicChatMode : undefined;
+    const at = typeof draft.at === 'number' && Number.isFinite(draft.at) ? draft.at : 0;
+    if (!prompt && !references.length && !skill) return undefined;
+    return { prompt, references, ...(skill ? { skill } : {}), ...(mode ? { mode } : {}), at };
+}
 
 const DESKTOP_AGENT_CHILD_STATUSES = new Set([
     'running', 'completed', 'limit_reached', 'cancelled', 'paused', 'interrupted', 'model_timeout',
@@ -1610,6 +1708,11 @@ interface RelayOption {
     readonly latencyObservedAt?: number;
     /** The authenticity is that of the store's other listed models: none of those on sale is scored yet. */
     readonly authenticityListed?: boolean;
+    /**
+     * The store holds the platform's security deposit: its name is gold in the relay drawers (no seal there) and its hint
+     * says so. The directory's word decides while it lists the store, else the store's offerings.
+     */
+    readonly depositVerified?: boolean;
 }
 
 interface PendingRelaySwitch {
@@ -3788,7 +3891,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         selector: '.nmx-project-tree[data-project-tree], .nmx-session-row[data-session-id]',
         keyOf: element => element.dataset.projectTree ? `project:${element.dataset.projectTree}`
             : element.dataset.sessionId ? `session:${element.dataset.sessionId}` : undefined,
-        ignoreWithin: '.nmx-session-virtual-list'
+        ignoreWithin: '.nmx-session-virtual-list',
+        // A transform on a row or project would become the containing block of its open fixed menu and clip it.
+        paused: () => Boolean(this.codingSessionMenuId || this.projectMenuPath)
     });
     protected lastRenderedSection: DesktopSection | undefined;
     protected conversationWindowShown = false;
@@ -3830,6 +3935,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected threadScrollPersistTimer: number | undefined;
     protected threadAwayFromBottom = false;
     protected threadReadingAnchor: { sessionId: string; turnId: string; turnRatio: number; offsetPx: number; stageWidth: number } | undefined;
+    /** Set while a right-drawer change reflows the conversation (lockThreadReadingAnchorForDrawerTransition). */
+    protected threadReadingAnchorHeld = false;
+    protected threadReadingAnchorLockUntil = 0;
+    protected threadReadingAnchorLockFrame = 0;
+    /** The conversation and how much of its width the right drawer takes, as last rendered (onUpdateRequest). */
+    protected workContextLayoutKey = '';
+    protected threadMarkerRevealTimer: number | undefined;
+    /** The rendered window of a long conversation, kept while it is the same window (a stable list for Virtuoso). */
+    protected renderedTurnSlice: { readonly source: readonly CodingTurnRecord[]; readonly offset: number; readonly turns: readonly CodingTurnRecord[] } | undefined;
     protected threadUnseenUpdates = 0;
     protected threadBottomFollowToken = 0;
     protected threadBottomFollowActive = false;
@@ -4001,6 +4115,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
         readonly sessionId: string; readonly reference: PastedTextReference;
     }>();
     protected composerDraftPersistTimer: number | undefined;
+    /** This window's crash-journal entry (journalComposerDraft); entries of earlier runs are folded in at start, then removed. */
+    protected readonly composerDraftJournalKey = `${COMPOSER_DRAFT_JOURNAL_PREFIX}${crypto.randomUUID()}`;
+    protected readonly composerDraftJournalStartedAt = Date.now();
+    protected composerDraftJournalTimer: number | undefined;
+    protected composerDraftJournalAt = 0;
+    protected composerDraftJournalSize = 0;
+    protected composerDraftJournalBase: { readonly session: CodingSessionRecord; readonly hash: string } | undefined;
     /** Do not reconcile the whole React surface for every keystroke.  A
      * controlled textarea must remain native-stable while a user types (and
      * especially while macOS is composing a Pinyin candidate). */
@@ -4910,6 +5031,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
     /** Relays the capability-filtered directory lists for advanced mode (models load on demand). */
     protected comicStepDirectory = new Map<ComicStepCapability, { readonly loading: boolean; readonly relays: readonly ComicStepRelay[]; readonly revision?: number }>();
+    /** 保证金: the security-deposit mark of each relay the capability-filtered directory pages listed, by source key. */
+    protected comicStepDirectoryDeposits = new Map<string, boolean>();
+    /** Every 漫剧对话's unsent composer (comicChatDrafts), and the pacing of its localStorage writes. */
+    protected comicChatDraftsById: Map<string, ComicChatDraftRecord> | undefined;
+    protected comicChatDraftWriteTimer: number | undefined;
+    protected comicChatDraftWrittenAt = 0;
+    protected comicChatDraftWrittenSize = 0;
+    /** The conversation to reopen at start (reopenRestoredComicChat), until its folder is open. */
+    protected comicChatRestoredChat: { readonly target: string; readonly chatId: string } | undefined;
     protected comicStepDirectoryByScope = new Map<string, { readonly loading: boolean; readonly relays: readonly ComicStepRelay[]; readonly revision?: number }>();
     protected comicStepRelayLoading = '';
     protected comicStepRelayLoadingByScope = new Map<string, string>();
@@ -5135,10 +5265,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
             document.documentElement.classList.toggle('nmx-document-hidden', document.visibilityState === 'hidden');
         };
         trackDocumentVisibility();
+        // A window hidden, closed or reloaded writes every unsent composer before anything else can end the process.
+        const flushDrafts = (): void => this.flushComposerDraftsForExit?.();
+        const flushDraftsWhenHidden = (): void => { if (document.visibilityState === 'hidden') flushDrafts(); };
+        window.addEventListener('pagehide', flushDrafts);
+        window.addEventListener('beforeunload', flushDrafts);
+        document.addEventListener('visibilitychange', flushDraftsWhenHidden);
         window.addEventListener('focus', acknowledgeVisibleConversation);
         document.addEventListener('visibilitychange', acknowledgeVisibleConversation);
         document.addEventListener('visibilitychange', trackDocumentVisibility);
         this.toDispose.push({ dispose: () => {
+            window.removeEventListener('pagehide', flushDrafts);
+            window.removeEventListener('beforeunload', flushDrafts);
+            document.removeEventListener('visibilitychange', flushDraftsWhenHidden);
             window.removeEventListener('focus', acknowledgeVisibleConversation);
             document.removeEventListener('visibilitychange', acknowledgeVisibleConversation);
             document.removeEventListener('visibilitychange', trackDocumentVisibility);
@@ -5150,6 +5289,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const offHoverTips = installHoverTips(this.node);
         this.toDispose.push({ dispose: offHoverTips });
         const scrollIdleTimers = new WeakMap<HTMLElement, number>();
+        const lastScrollActivity = new WeakMap<HTMLElement, number>();
         const activeScrollingTargets = new Set<HTMLElement>();
         const handleScrollActivity = (event: Event): void => {
             const target = event.target;
@@ -5161,16 +5301,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             if (event.type !== 'scroll' || !(target instanceof HTMLElement)) return;
             if (!target.classList.contains('nmx-context-nav') && !target.classList.contains('nmx-task-view')) return;
-            target.classList.add('is-scrolling');
-            activeScrollingTargets.add(target);
-            const existingTimer = scrollIdleTimers.get(target);
-            if (existingTimer !== undefined) window.clearTimeout(existingTimer);
-            const timer = window.setTimeout(() => {
+            // Scroll events arrive every frame: write the class once, and keep one idle timer that re-arms itself rather
+            // than clearing and creating a timer per event.
+            lastScrollActivity.set(target, performance.now());
+            if (!activeScrollingTargets.has(target)) {
+                target.classList.add('is-scrolling');
+                activeScrollingTargets.add(target);
+            }
+            if (scrollIdleTimers.has(target)) return;
+            const settle = (): void => {
+                const idle = performance.now() - (lastScrollActivity.get(target) ?? 0);
+                if (idle < 700) {
+                    scrollIdleTimers.set(target, window.setTimeout(settle, 700 - idle));
+                    return;
+                }
                 scrollIdleTimers.delete(target);
                 activeScrollingTargets.delete(target);
                 target.classList.remove('is-scrolling');
-            }, 700);
-            scrollIdleTimers.set(target, timer);
+            };
+            scrollIdleTimers.set(target, window.setTimeout(settle, 700));
         };
         this.node.addEventListener('scroll', handleScrollActivity, { capture: true, passive: true });
         window.addEventListener('wheel', handleScrollActivity, { capture: true, passive: true });
@@ -5634,6 +5783,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (this.codingSearchTimer !== undefined) window.clearTimeout(this.codingSearchTimer);
             this.codingSearchTimer = undefined;
             this.codingSearchRequestToken += 1;
+            // The last place read is saved with the close-time write just below.
+            if (this.threadScrollPersistTimer !== undefined) {
+                window.clearTimeout(this.threadScrollPersistTimer);
+                this.threadScrollPersistTimer = undefined;
+                this.persistActiveCodingScrollViewState?.();
+            }
+            if (this.threadMarkerRevealTimer !== undefined) window.clearTimeout(this.threadMarkerRevealTimer);
+            this.threadMarkerRevealTimer = undefined;
+            if (this.threadReadingAnchorLockFrame) cancelAnimationFrame(this.threadReadingAnchorLockFrame);
+            this.threadReadingAnchorLockFrame = 0;
+            this.threadReadingAnchorHeld = false;
             if (this.conversationHistoryPersistTimer !== undefined) window.clearTimeout(this.conversationHistoryPersistTimer);
             this.conversationHistoryPersistTimer = undefined;
             if (this.conversationHistoryPersistDirty && this.conversationHistoryPersistenceReady) {
@@ -5641,8 +5801,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             for (const timer of this.composerNotificationTimers.values()) window.clearTimeout(timer);
             this.composerNotificationTimers.clear();
-            if (this.threadScrollPersistTimer !== undefined) window.clearTimeout(this.threadScrollPersistTimer);
-            this.threadScrollPersistTimer = undefined;
             if (this.contextFileListScrollPersistTimer !== undefined) window.clearTimeout(this.contextFileListScrollPersistTimer);
             this.contextFileListScrollPersistTimer = undefined;
             if (this.contextFileScrollPersistTimer !== undefined) {
@@ -6465,8 +6623,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const suppressionGeneration = ++this.localizationMutationSuppressionGeneration;
         this.localizationMutationSuppressed = true;
         try {
-            this.node.lang = this.desktopLocale;
-            this.node.dir = this.desktopLocale === 'ar' ? 'rtl' : 'ltr';
+            // Written only when they change: every write is a mutation record and a style recalculation of this root.
+            const direction = this.desktopLocale === 'ar' ? 'rtl' : 'ltr';
+            if (this.node.lang !== this.desktopLocale) this.node.lang = this.desktopLocale;
+            if (this.node.dir !== direction) this.node.dir = direction;
             // Rewriting a focused <select> closes its native popup: its options wait until it loses focus.
             const focusedSelect = this.focusedNativeSelect?.();
             let heldForSelect = false;
@@ -9662,6 +9822,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.projectDeleteBusy) return;
         this.clearNavigationSurfaces();
         window.getSelection()?.removeAllRanges();
+        this.sidebarFlip?.cancelRunning?.();
         this.projectMenuPath = path;
         this.update();
         requestAnimationFrame(() => this.node.querySelector<HTMLButtonElement>('.nmx-project-menu button')?.focus());
@@ -11525,6 +11686,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         });
         this.recordConversationSyncDiagnostic?.('draft_persisted', { changed });
         if (changed) this.persistCodingSessions();
+        // The journal now matches the saved draft (cleared drafts too, after a send), so it never resurrects sent text.
+        this.journalComposerDraft?.(true);
     }
 
     protected scheduleComposerDraftPersist(): void {
@@ -11532,6 +11695,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.ensureCodingSession(this.prompt || this.attachments[0]?.attachment.name || '');
         }
         if (!this.activeCodingSessionId) return;
+        // Every edit reaches localStorage at once (crash journal); the snapshot and the durable save follow the timer.
+        this.journalComposerDraft?.();
         if (this.composerDraftPersistTimer !== undefined) window.clearTimeout(this.composerDraftPersistTimer);
         const sessionId = this.activeCodingSessionId;
         this.composerDraftPersistTimer = window.setTimeout(() => {
@@ -11576,6 +11741,116 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.composerDraftPersistTimer !== undefined) window.clearTimeout(this.composerDraftPersistTimer);
         this.composerDraftPersistTimer = undefined;
         if (this.activeCodingSessionId) this.persistComposerDraft();
+    }
+
+    /**
+     * Writes the composer of the conversation on screen to this window's crash-journal entry, ahead of the 250 ms draft
+     * timer, the startup snapshot and the debounced durable save: an entry of up to 32 KB on every edit, a longer one at
+     * most every 120 ms (the last state always written). Each entry carries the hash of the conversation's saved draft it
+     * was typed over, so the next start can tell a newer composer from a stale one (applyComposerDraftJournal).
+     */
+    protected journalComposerDraft(force = false): void {
+        const sessionId = this.activeCodingSessionId;
+        if (!sessionId || !this.privacySettings?.saveConversationHistory) return;
+        const session = this.codingSessions.find(candidate => candidate.id === sessionId);
+        if (!session) return;
+        if (session.incognito) {
+            // A private conversation's text never lands on disk; an older entry of this window goes too.
+            try { window.localStorage.removeItem(this.composerDraftJournalKey); } catch { /* nothing to remove */ }
+            return;
+        }
+        const now = Date.now();
+        if (!force && this.composerDraftJournalTimer !== undefined) return;
+        if (!force && this.composerDraftJournalSize > DRAFT_JOURNAL_SYNC_LIMIT && now - this.composerDraftJournalAt < DRAFT_JOURNAL_THROTTLE_MS) {
+            this.composerDraftJournalTimer = window.setTimeout(() => {
+                this.composerDraftJournalTimer = undefined;
+                this.journalComposerDraft(true);
+            }, DRAFT_JOURNAL_THROTTLE_MS - (now - this.composerDraftJournalAt));
+            return;
+        }
+        if (this.composerDraftJournalTimer !== undefined) window.clearTimeout(this.composerDraftJournalTimer);
+        this.composerDraftJournalTimer = undefined;
+        const base = this.composerDraftJournalBase?.session === session ? this.composerDraftJournalBase.hash
+            : draftHash(composerDraftFingerprint(session));
+        this.composerDraftJournalBase = { session, hash: base };
+        const pasted = serializePastedTextReferences(this.activePastedTextReferences());
+        const attachments = this.composerDraftAttachmentReferences();
+        const entry = JSON.stringify({ sessionId, at: now, prompt: this.prompt, base,
+            ...(pasted !== '[]' ? { pastedTextReferences: pasted } : {}), ...(attachments.length ? { attachments } : {}) });
+        this.composerDraftJournalAt = now;
+        this.composerDraftJournalSize = entry.length;
+        try { window.localStorage.setItem(this.composerDraftJournalKey, entry); } catch { /* the snapshot still follows the timer */ }
+    }
+
+    /**
+     * The startup snapshot with the crash journal folded in: a conversation takes the newest entry written over the draft
+     * it still holds (or written after its last change), as if the draft timer had run before the process ended. Runs on
+     * the raw snapshot, so normalizeCodingSessions checks the result like any stored draft.
+     */
+    protected applyComposerDraftJournal(sessions: readonly unknown[]): readonly unknown[] {
+        if (!this.privacySettings?.saveConversationHistory) return sessions;
+        const newest = new Map<string, ComposerDraftJournalEntry>();
+        for (const { entry } of readComposerDraftJournal(window.localStorage)) if (!newest.has(entry.sessionId)) newest.set(entry.sessionId, entry);
+        if (!newest.size) return sessions;
+        return sessions.map(value => {
+            const session = value && typeof value === 'object' ? value as Partial<CodingSessionRecord> : undefined;
+            const entry = typeof session?.id === 'string' ? newest.get(session.id) : undefined;
+            if (!session || !entry || session.incognito) return value;
+            const saved = composerDraftFingerprint(session);
+            const updatedAt = typeof session.updatedAt === 'number' && Number.isFinite(session.updatedAt) ? session.updatedAt : 0;
+            if (saved === composerDraftFingerprint({ draftPrompt: entry.prompt, draftPastedTextReferences: entry.pastedTextReferences, draftAttachments: entry.attachments })
+                || !(entry.at > updatedAt || draftHash(saved) === entry.base)) return value;
+            const followsDraft = Array.isArray(session.turns) && session.turns.length === 0 && (session.titleOrigin === 'default' || session.titleOrigin === 'draft');
+            return { ...session,
+                ...(followsDraft ? { title: this.codingSessionTitle(entry.prompt), titleOrigin: entry.prompt.trim() ? 'draft' : 'default' } : {}),
+                draftPrompt: entry.prompt || undefined,
+                draftPastedTextReferences: entry.pastedTextReferences,
+                draftAttachments: entry.attachments,
+                // Newer than any save of the snapshot it was typed over, so the durable merge keeps it.
+                updatedAt: Math.max(updatedAt + 1, entry.at) };
+        });
+    }
+
+    /**
+     * Entries of earlier runs, once folded and saved, leave localStorage, as do expired and unreadable ones; another
+     * window's entry written during this run stays. With `all` (history not saved) every entry goes, this window's too.
+     */
+    protected discardComposerDraftJournal(all = false): void {
+        try {
+            const readable = new Map(readComposerDraftJournal(window.localStorage).map(({ key, entry }) => [key, entry]));
+            const keys: string[] = [];
+            for (let index = 0; index < window.localStorage.length; index++) {
+                const key = window.localStorage.key(index);
+                if (key?.startsWith(COMPOSER_DRAFT_JOURNAL_PREFIX)) keys.push(key);
+            }
+            for (const key of keys) {
+                const entry = readable.get(key);
+                if (all || key !== this.composerDraftJournalKey && (!entry || entry.at < this.composerDraftJournalStartedAt)) window.localStorage.removeItem(key);
+            }
+        } catch { /* left for the next start */ }
+    }
+
+    /**
+     * After the durable merge: when the draft of the conversation on screen changed (a newer copy on disk, or from another
+     * window) and nothing was typed since the composer was filled from the snapshot, the composer shows the merged one.
+     */
+    protected restoreMergedComposerDraft(before: CodingSessionRecord | undefined): void {
+        const after = this.activeCodingSession();
+        if (!before || !after || before.id !== after.id || this.composerDraftPersistTimer !== undefined
+            || composerDraftFingerprint(after) === composerDraftFingerprint(before)) return;
+        const shown = composerDraftFingerprint({ draftPrompt: this.prompt,
+            draftPastedTextReferences: serializePastedTextReferences(this.activePastedTextReferences()), draftAttachments: this.composerDraftAttachmentReferences() });
+        if (shown === composerDraftFingerprint(before)) this.restoreComposerDraft(after);
+    }
+
+    /**
+     * The window is hidden, closed or reloaded: every unsent composer is written now (crash journal, startup snapshot and
+     * the comic drafts), so whatever happens to the process next, nothing typed is lost.
+     */
+    protected flushComposerDraftsForExit(): void {
+        try { this.journalComposerDraft(true); } catch { /* best effort while the page goes away */ }
+        try { if (this.composerDraftPersistTimer !== undefined) this.flushComposerDraft(); } catch { /* best effort */ }
+        try { if ((this as unknown as { comicChatState?: unknown }).comicChatState) this.rememberComicChatDraft?.(true); } catch { /* best effort */ }
     }
 
     protected restoreComposerDraft(session: CodingSessionRecord): void {
@@ -11833,6 +12108,59 @@ export class NextMuxDesktopWidget extends ReactWidget {
         })();
         this.pastedTextPersistence.set(reference.id, persist);
         void persist.finally(() => this.pastedTextPersistence.delete(reference.id));
+    }
+
+    /**
+     * A pasted-text chip turns back into ordinary, editable text at the place its marker holds in the message: the
+     * words before and after it stay where they were and the caret ends after the text. Its saved copy stays on disk
+     * for earlier messages that may name it.
+     */
+    protected async expandPastedTextReference(id: string): Promise<void> {
+        const reference = this.pastedTextReferences.find(candidate => candidate.id === id);
+        if (!reference) return;
+        const sessionId = this.activeCodingSessionId;
+        let content = reference.content;
+        if (content === undefined && reference.attachment?.uri) {
+            try {
+                const bytes = await this.readCachedAttachmentBytes({
+                    uri: reference.attachment.uri, name: reference.name, size: reference.attachment.size,
+                    ...(reference.attachment.workspaceRelativePath ? { workspaceRelativePath: reference.attachment.workspaceRelativePath } : {})
+                }, this.activeCodingSession());
+                content = new TextDecoder().decode(bytes);
+            } catch (error) {
+                if (this.activeCodingSessionId === sessionId) {
+                    this.attachmentError = desktopDomainErrorText(this.desktopLocale, error);
+                    this.update();
+                }
+                return;
+            }
+        }
+        // The draft may have changed while the file was read.
+        if (content === undefined || this.activeCodingSessionId !== sessionId || !this.pastedTextReferences.some(candidate => candidate.id === id)) return;
+        const textarea = this.composerTextareaRef?.current || this.node.querySelector<HTMLTextAreaElement>('.nmx-composer textarea');
+        const caret = textarea && this.ownsComposerInput(textarea) ? textarea.selectionStart ?? this.prompt.length : this.prompt.length;
+        const expanded = expandPastedTextReferenceToInlineText(this.prompt, id, this.pastedTextReferences, content, caret);
+        if (!expanded) return;
+        // The composer's own limit (its textarea maxLength): past it, the text stays a file.
+        if (expanded.value.length > 200_000) {
+            this.attachmentError = pastedTextExpansionCopy(this.desktopLocale).tooLong;
+            this.update();
+            return;
+        }
+        this.setComposerPrompt(expanded.value);
+        this.pastedTextReferences = this.pastedTextReferences.filter(candidate => candidate.id !== id);
+        this.unpersistedPastedTextReferences.delete(id);
+        this.attachments = this.attachments.filter(candidate => candidate.id !== id);
+        this.editedTurnAttachmentOrder = this.editedTurnAttachmentOrder.filter(attachmentId => attachmentId !== id);
+        this.attachmentError = '';
+        this.persistComposerDraft();
+        this.update();
+        requestAnimationFrame(() => {
+            const current = this.composerTextareaRef?.current || this.node.querySelector<HTMLTextAreaElement>('.nmx-composer textarea');
+            if (!current || !this.ownsComposerInput(current)) return;
+            current.focus();
+            current.setSelectionRange(expanded.selectionStart, expanded.selectionEnd);
+        });
     }
 
     protected removePastedTextReference(id: string): void {
@@ -16744,6 +17072,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 relays: page.merchants.filter(merchant => !this.catalogRemovedMerchants.has(merchant.id)).map(merchant => ({ key: managedRelayKey(merchant.id), label: merchant.name })),
                 revision
             };
+            for (const merchant of page.merchants) this.comicStepDirectoryDeposits?.set(managedRelayKey(merchant.id), merchant.depositVerified === true);
             this.comicStepDirectoryByScope?.set(scopeKey, readyEntry);
             this.comicStepDirectory.set(capability, readyEntry);
             return true;
@@ -23009,11 +23338,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!this.privacySettings.saveConversationHistory) {
             this.conversationHistoryInitialSnapshot = undefined;
             this.codingSessions = [];
+            this.discardComposerDraftJournal?.(true);
             return;
         }
         const mirror = readConversationHistoryMirror(window.localStorage.getItem('nextmux.desktop.codingSessions.v1'));
         this.conversationHistoryMirrorLegacy = mirror.legacy;
-        this.codingSessions = this.normalizeCodingSessions(mirror.sessions);
+        // Text typed after the snapshot's last write (the crash journal) belongs to the snapshot this start begins from.
+        this.codingSessions = this.normalizeCodingSessions(this.applyComposerDraftJournal?.(mirror.sessions) ?? mirror.sessions);
         try {
             const stored = JSON.parse(window.localStorage.getItem('nextmux.desktop.codingSessionOrder.v1') || '[]');
             this.codingSessionOrder = Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string') : [];
@@ -23549,12 +23880,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
             for (const id of permanentlyRemoved) this.removedCodingSessionIds.add(id);
             this.codingSessions = this.codingSessions.filter(session => !permanentlyRemoved.has(session.id));
             for (const id of permanentlyRemoved) this.conversationCompletionTimes?.delete(id);
+            const composerBefore = this.activeCodingSessionId ? this.codingSessions.find(session => session.id === this.activeCodingSessionId) : undefined;
             const merged = mergeConversationHistorySessions(this.codingSessions, durable, {
                 mutatedDuringLoad: this.conversationHistoryRevision !== initialRevision,
                 initialSessionIds,
                 ...(initialSnapshot ? { initialSnapshot } : {})
             });
             this.codingSessions = merged.sessions;
+            this.restoreMergedComposerDraft?.(composerBefore);
             this.codingSessionPagesLoaded?.add?.('__global__');
             if (initialGlobalCursor) this.codingSessionPageCursors?.set?.('__global__', initialGlobalCursor);
             else this.codingSessionPageCursors?.delete?.('__global__');
@@ -23567,6 +23900,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 : createConversationPersistenceBaseline(durable);
             this.conversationHistoryPersistenceReady = true;
             this.writeConversationHistoryMirror();
+            // The journal of earlier runs is in the snapshot now (and saved durably below when it changed a draft).
+            this.discardComposerDraftJournal?.();
             this.resumeAfterComputerPermission?.();
             if (result.status === 'partial') {
                 this.addNotification('warning', '部分对话已恢复', '损坏记录已隔离，健康会话仍可正常使用。', notificationSessionId);
@@ -24118,6 +24453,32 @@ export class NextMuxDesktopWidget extends ReactWidget {
         });
         if (changed) this.persistCodingSessions();
         this.persistDesktopRestoreState();
+    }
+
+    /**
+     * Where the conversation is being read. Saving it must not re-serialize every loaded conversation into the startup
+     * mirror the way persistCodingSessions does: that blocked the main thread as the next wheel flick arrived. The view
+     * state changes in memory and reaches the durable store with the next quiet write, or the one at close.
+     */
+    protected persistActiveCodingScrollViewState(): void {
+        const sessionId = this.activeCodingSessionId;
+        if (!sessionId) return;
+        // Secondary windows publish to the primary and never write the mirror: they keep the full path.
+        if (this.detachedConversationId || this.conversationWindowPrimary === false) {
+            this.persistActiveCodingSessionState();
+            return;
+        }
+        const viewState = this.currentCodingSessionViewState();
+        let changed = false;
+        this.codingSessions = this.codingSessions.map(session => {
+            if (session.id !== sessionId) return session;
+            changed = true;
+            return { ...session, viewState, viewStateUpdatedAt: Date.now() };
+        });
+        if (!changed || !this.privacySettings.saveConversationHistory) return;
+        this.conversationHistoryRevision += 1;
+        this.refreshConversationHistoryPersistDirty();
+        if (this.conversationHistoryPersistTimer === undefined) this.scheduleConversationHistoryPersist(5_000);
     }
 
     protected async restoreCodingSessionState(session: CodingSessionRecord): Promise<void> {
@@ -25238,6 +25599,20 @@ export class NextMuxDesktopWidget extends ReactWidget {
         void this.runNavigationCommand(event.button === 3 ? 'back' : 'forward');
     };
 
+    /**
+     * A native control whose value lives on this widget (a dropdown, a checkbox, a radio button): React puts it back to
+     * the value it last rendered as soon as its event ends, and the widget renders a task later, so for a frame the closed
+     * dropdown showed the old choice again (the box its old state) before the new one. Rendering here, still inside the
+     * event, lets React commit the choice first: updates made during a React event are flushed before that restore.
+     */
+    protected commitNativeChoice = (event: React.FormEvent<HTMLElement>): void => {
+        const target = event.target;
+        const choice = target instanceof HTMLSelectElement
+            || target instanceof HTMLInputElement && (target.type === 'checkbox' || target.type === 'radio');
+        if (!choice || this.isDisposed) return;
+        MessageLoop.sendMessage(this, Widget.Msg.UpdateRequest);
+    };
+
     protected handleModelPickerOutsidePointerDown = (event: PointerEvent): void => {
         const target = event.target instanceof Element ? event.target : undefined;
         let changed = false;
@@ -25668,6 +26043,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const index = listed.findIndex(turn => turn.id === turnId);
         if (index < 0) return;
         this.ensureConversationTurnRendered?.(this.activeCodingSessionId, turnId);
+        this.releaseThreadReadingAnchorLock?.();
         this.threadClickedTurn = { sessionId: this.activeCodingSessionId, turnId };
         const token = ++this.threadJumpToken;
         const searchToken = this.threadFindRevealToken;
@@ -25763,6 +26139,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected scheduleThreadBottomFollow(sessionId: string, behavior: 'auto' | 'smooth' = 'auto', targetTurnId?: string): void {
         if (!sessionId || sessionId !== this.activeCodingSessionId || this.activeSection !== 'coding' || this.codingPanel !== 'thread') return;
         this.cancelThreadScrollRestore();
+        this.releaseThreadReadingAnchorLock?.();
         const expectedTurnId = targetTurnId || this.activeCodingSession()?.turns.at(-1)?.id || '';
         const token = ++this.threadBottomFollowToken;
         this.threadBottomFollowActive = true;
@@ -25831,6 +26208,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected noteThreadUserScrollIntent(pointer = false): void {
+        this.releaseThreadReadingAnchorLock?.();
         this.threadClickedTurn = undefined;
         this.threadJumpToken += 1;
         this.threadUserScrollIntentAt = performance.now();
@@ -25875,6 +26253,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected onThreadAtBottomStateChange = (atBottom: boolean): void => {
         if (this.threadClickedTurn?.sessionId === this.activeCodingSessionId) return;
+        // The held drawer reflow moves the bottom; releaseThreadReadingAnchorLock settles the bottom state afterwards.
+        if (this.threadReadingAnchorHeld) return;
         if (this.threadScrollRestoreActive || (!atBottom && this.threadBottomFollowActive)) return;
         const stage = this.node.querySelector<HTMLElement>('.nmx-task-view');
         if (stage && this.threadReadingAnchor && this.threadReadingAnchor.sessionId === this.activeCodingSessionId
@@ -25968,7 +26348,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // Retain Virtuoso's bottom-follow semantics; ratio anchoring is only
         // for a reader who has intentionally scrolled into earlier history.
         // https://virtuoso.dev/react-virtuoso/api-reference/virtuoso/#autoscrolltobottom
-        if (!this.threadAwayFromBottom) {
+        // While a drawer change is held, a reader at the bottom of a finished conversation keeps the text they read too.
+        if (!this.threadAwayFromBottom && !this.threadReadingAnchorHeld) {
             this.threadVirtuosoRef.current?.autoscrollToBottom();
             this.threadReadingAnchor = undefined;
             return;
@@ -25994,6 +26375,67 @@ export class NextMuxDesktopWidget extends ReactWidget {
         anchor.stageWidth = Math.round(stage.clientWidth);
     }
 
+    /**
+     * Opening, closing, maximizing or resizing the right drawer changes the conversation's width over the workspace's
+     * 180 ms margin transition, and its text reflows on every frame of it. The reading position (the first visible turn
+     * and how much of it lies above the stage's top) is taken once, before the change, and restored on every frame
+     * until the layout has settled; the scroll events of that reflow never replace it. Any scrolling of the person's
+     * own ends the hold at once (noteThreadUserScrollIntent), as does a jump the app makes. A reader following a live
+     * answer at the bottom keeps following it instead.
+     */
+    protected lockThreadReadingAnchorForDrawerTransition(durationMs = 260): void {
+        if (this.isDisposed || this.activeSection !== 'coding' || this.codingPanel !== 'thread' || !this.activeCodingSessionId) return;
+        const stage = this.node.querySelector<HTMLElement>('.nmx-task-view');
+        if (!stage || stage.clientWidth <= 0 || this.threadBottomFollowActive || this.threadScrollRestoreActive) return;
+        const followingLiveAnswer = !this.threadAwayFromBottom && [...this.conversationAgentRuns.values()]
+            .some(run => conversationAgentRunActive(run) && run.activeAgentSessionId === this.activeCodingSessionId);
+        if (followingLiveAnswer) return;
+        // A second change during the hold (open, then close at once) keeps the position from before the first one.
+        if (!this.threadReadingAnchorHeld || this.threadReadingAnchor?.sessionId !== this.activeCodingSessionId) {
+            this.captureThreadReadingAnchor(stage);
+        }
+        if (this.threadReadingAnchor?.sessionId !== this.activeCodingSessionId) return;
+        this.threadReadingAnchorHeld = true;
+        this.threadReadingAnchorLockUntil = Math.max(this.threadReadingAnchorLockUntil, performance.now() + durationMs);
+        if (this.threadReadingAnchorLockFrame) return;
+        const hold = (): void => {
+            this.threadReadingAnchorLockFrame = 0;
+            if (this.isDisposed || !this.threadReadingAnchorHeld) return;
+            this.restoreThreadReadingAnchor();
+            if (performance.now() < this.threadReadingAnchorLockUntil) {
+                this.threadReadingAnchorLockFrame = requestAnimationFrame(hold);
+                return;
+            }
+            this.releaseThreadReadingAnchorLock();
+        };
+        this.threadReadingAnchorLockFrame = requestAnimationFrame(hold);
+    }
+
+    /** Ends the drawer hold. The held text may have grown past the bottom, so the bottom state follows the real geometry. */
+    protected releaseThreadReadingAnchorLock(): void {
+        if (!this.threadReadingAnchorHeld) return;
+        if (this.threadReadingAnchorLockFrame) cancelAnimationFrame(this.threadReadingAnchorLockFrame);
+        this.threadReadingAnchorLockFrame = 0;
+        this.threadReadingAnchorLockUntil = 0;
+        this.threadReadingAnchorHeld = false;
+        const stage = this.node.querySelector<HTMLElement>('.nmx-task-view');
+        if (!stage || this.isDisposed) return;
+        const away = stage.scrollHeight - stage.scrollTop - stage.clientHeight > 96;
+        if (away === this.threadAwayFromBottom) return;
+        this.threadAwayFromBottom = away;
+        if (!away) this.threadUnseenUpdates = 0;
+        this.update();
+    }
+
+    /** The rail follows the reader once the wheel pauses: moving it at every turn boundary added layout work to scroll frames. */
+    protected scheduleActiveThreadMarkerReveal(): void {
+        if (this.threadMarkerRevealTimer !== undefined) window.clearTimeout(this.threadMarkerRevealTimer);
+        this.threadMarkerRevealTimer = window.setTimeout(() => {
+            this.threadMarkerRevealTimer = undefined;
+            if (!this.isDisposed) requestAnimationFrame(() => this.revealActiveThreadMarker());
+        }, 180);
+    }
+
     protected onCodingStageScroll = (): void => {
         if (this.conversationTabMenuAt) {
             this.conversationTabMenuAt = undefined;
@@ -26007,6 +26449,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const stage = this.node.querySelector<HTMLElement>('.nmx-task-view');
             if (!stage) return;
             if (this.threadBottomFollowActive || this.threadScrollRestoreActive || this.threadClickedTurn?.sessionId === this.activeCodingSessionId) return;
+            // A held drawer change is reflowing the text: these scrolls are not the person's reading.
+            if (this.threadReadingAnchorHeld && this.threadReadingAnchor?.sessionId === this.activeCodingSessionId) {
+                this.restoreThreadReadingAnchor(stage);
+                return;
+            }
             if (this.threadReadingAnchor && this.threadReadingAnchor.sessionId === this.activeCodingSessionId
                 && Math.abs(Math.round(stage.clientWidth) - this.threadReadingAnchor.stageWidth) >= 2) {
                 this.restoreThreadReadingAnchor(stage);
@@ -26028,7 +26475,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const unseenChanged = !awayFromBottom && this.threadUnseenUpdates > 0;
             if (turnChanged && turnId) {
                 this.setActiveThreadMarker(turnId);
-                requestAnimationFrame(() => requestAnimationFrame(() => this.revealActiveThreadMarker()));
+                if (this.scheduleActiveThreadMarkerReveal) this.scheduleActiveThreadMarkerReveal();
+                else requestAnimationFrame(() => requestAnimationFrame(() => this.revealActiveThreadMarker()));
             }
             if (bottomChanged || unseenChanged) {
                 this.threadAwayFromBottom = awayFromBottom;
@@ -26038,8 +26486,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (this.threadScrollPersistTimer !== undefined) window.clearTimeout(this.threadScrollPersistTimer);
             this.threadScrollPersistTimer = window.setTimeout(() => {
                 this.threadScrollPersistTimer = undefined;
-                this.persistActiveCodingSessionState();
-            }, 240);
+                if (this.persistActiveCodingScrollViewState) this.persistActiveCodingScrollViewState();
+                else this.persistActiveCodingSessionState();
+            }, 600);
             if (awayFromBottom) this.captureThreadReadingAnchor(stage);
         });
     };
@@ -29487,6 +29936,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         this.rememberNavigation();
         this.clearNavigationSurfaces();
+        this.sidebarFlip?.cancelRunning?.();
         this.codingSessionMenuId = sessionId;
         this.update();
     }
@@ -33942,9 +34392,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.comicHomeKind = comic.homeKind;
             this.activeComicEpisodeId = comic.episodeId;
             const ui = this.comicChatUi();
+            const switching = ui.chatId !== comic.chatId || ui.target !== comic.target;
+            if (switching) this.rememberComicChatDraft?.(true);
             ui.surface = comic.surface;
             ui.chatId = comic.chatId;
             ui.target = comic.target;
+            if (switching) { this.restoreComicChatDraft?.(); this.rememberComicChatActive?.(); }
             ui.editor = comic.editor;
             ui.menu = undefined;
             ui.materials = undefined;
@@ -35769,7 +36222,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return <div ref={element => {
             this.composerMarkdownOverlayRef.current = element;
             if (element) this.syncComposerMarkdownOverlay?.();
-        }} className='nmx-composer-markdown-overlay' aria-hidden='true' />;
+        }} className='nmx-composer-markdown-overlay' aria-hidden='true' data-nmx-literal />;
     }
 
     /** Keep the visual link overlay in sync while the uncontrolled textarea keeps focus. */
@@ -37249,12 +37702,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.accountOverviewLoading = false;
             this.accountOverviewError = '';
             this.accountOverview = EMPTY_ACCOUNT_OVERVIEW;
-            this.publicMerchantPageRequest++;
-            this.publicMerchantPage = undefined;
-            this.publicMerchantBrowsePage = undefined;
+            // The plain directory (the merchant and own-API tabs) is public, read without the account
+            // (getPublicMerchantDirectory). Signing in, the launch's first session included, keeps the page already shown
+            // or on its way instead of dropping it and reading it again; a failed read is read again as before. Leaving or
+            // changing an account still clears it, and favorites are always this account's.
+            const keepPublicDirectory = !previousUserId && this.relaySourceTab !== 'favorite' && Boolean(this.publicMerchantPage || this.publicMerchantPageLoading);
+            if (!keepPublicDirectory) {
+                this.publicMerchantPageRequest++;
+                this.publicMerchantPage = undefined;
+                this.publicMerchantBrowsePage = undefined;
+                this.publicMerchantPageLoading = false;
+                this.publicMerchantPageError = false;
+            }
             this.favoriteMerchantPage = undefined;
-            this.publicMerchantPageLoading = false;
-            this.publicMerchantPageError = false;
             this.selectedPublicMerchant = undefined;
             this.catalogSnapshotRevision++;
             this.catalogSnapshotRefresh.reset();
@@ -37273,7 +37733,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.merchantPickerSnapshots.clear();
             this.merchantDiscoveredModels.clear();
             this.merchantCatalogStatus = 'idle';
-            if ((this.relayDirectoryOnScreen?.() ?? this.modelPickerRelayOpen) && this.relaySourceTab !== 'my-api') void this.loadPublicMerchantPage();
+            if (keepPublicDirectory) { /* kept: the page shown, or the read on its way, is the list */ }
+            else if ((this.relayDirectoryOnScreen?.() ?? this.modelPickerRelayOpen) && this.relaySourceTab !== 'my-api') void this.loadPublicMerchantPage();
             else this.prewarmPublicMerchantPage?.();
         }
         if (previousUserId !== session.user?.id) {
@@ -38316,6 +38777,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 qualityInitial, ...(qualityInitial ? { quality: INITIAL_RELAY_QUALITY } : {}),
                 ...(latencyStale ? { latencyStale, ...(latencyObservedAt !== undefined ? { latencyObservedAt } : {}) } : {}),
                 ...(authenticityListed ? { authenticityListed } : {}),
+                // Paying or refunding the deposit reaches the drawer with the next directory page, or with the catalog
+                // for a store the loaded directory does not list.
+                ...((directory !== undefined ? directory.depositVerified === true : values.some(item => item.depositVerified === true))
+                    ? { depositVerified: true } : {}),
                 ...(executableModels && checksFailed ? { checksFailing: true } : {}),
                 ...(this.relaySourceTab === 'favorite' && (confirmedMissingFavorite || !values.length && directoryMerchants === undefined) ? {
                     directoryStatus: confirmedMissingFavorite ? 'unavailable' as const : 'unknown' as const,
@@ -39071,10 +39536,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
             else if (!append) this.publicMerchantPage = undefined;
             this.update();
         }
+        // The plain list is public (read without the account): a read started signed out stays valid after a sign-in.
+        // A read started under an account never lands in another one (applyPlatformSession also replaces the request).
+        // Favorites belong to the account that asked.
         const current = (): boolean => token === this.publicMerchantPageRequest && query === this.relaySourceQuery
             && sortMode === this.relaySortMode && tab === this.relaySourceTab
             && (tab !== 'favorite' || favoriteScope === JSON.stringify([...this.favoriteMerchantLabels.keys()].sort().slice(0, 256)))
-            && owner === this.platformSession.user?.id && linked === this.platformSession.linked;
+            && (tab !== 'favorite' && !owner && !linked || owner === this.platformSession.user?.id && linked === this.platformSession.linked);
         try {
             if (tab === 'favorite') {
                 const chunks = Array.from({ length: Math.ceil(favoriteIds.length / 100) }, (_, index) => favoriteIds.slice(index * 100, index * 100 + 100));
@@ -39477,7 +39945,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.selectedPublicMerchant = option.kind === 'managed'
             ? (this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage)?.merchants.find(merchant => merchant.id === option.merchantId)
                 || (option.merchantId ? { id: option.merchantId, name: option.label, ...(option.publicCode ? { publicCode: option.publicCode } : {}),
-                    ...(option.storeTagline ? { storeTagline: option.storeTagline } : {}), ...(option.storeDescription ? { storeDescription: option.storeDescription } : {}) } : undefined) : undefined;
+                    ...(option.storeTagline ? { storeTagline: option.storeTagline } : {}), ...(option.storeDescription ? { storeDescription: option.storeDescription } : {}),
+                    ...(option.depositVerified ? { depositVerified: true } : {}) } : undefined) : undefined;
         this.activeRelayKey = option.key;
         this.activeModelRouteId = '';
         this.activeKeyPriceQuoteId = undefined;
@@ -41253,7 +41722,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void this.saveGoalDrawer(); }
                     else this.trapDialogFocus(event); }}>
                 <header className='nmx-goal-drawer-header'><span className='nmx-goal-drawer-icon'><i className='codicon codicon-target'/></span><div className='nmx-goal-drawer-titles'><h2 id='nmx-goal-drawer-title'>{t('edit')}</h2><p>{goalScheduleText(this.desktopLocale, goal.status === 'completed' ? 'completedGoal' : goal.status === 'paused' ? 'pausedGoal' : 'activeGoal')} · <GoalElapsed goal={goal} turns={session?.turns || []}/></p></div><button className='nmx-goal-drawer-close' aria-label={t('close')} onClick={() => this.closeGoalDrawer()}><i className='codicon codicon-close'/></button></header>
-                <div className='nmx-goal-drawer-body'><textarea className='nmx-goal-drawer-input' aria-label={t('edit')} autoFocus maxLength={200_000} value={drawer.draft} disabled={drawer.saving} onChange={event => { drawer.draft = event.target.value; drawer.error = ''; this.update(); }}/><div className='nmx-goal-drawer-meta'><span data-nmx-literal>{drawer.draft.length.toLocaleString(this.desktopLocale)}/{(200_000).toLocaleString(this.desktopLocale)}</span><span>{t('savedHint')}</span></div>{drawer.error && <div className='nmx-goal-drawer-error' role='alert'>{drawer.error}</div>}</div>
+                <div className='nmx-goal-drawer-body'><textarea className='nmx-goal-drawer-input' aria-label={t('edit')} autoFocus maxLength={200_000} spellCheck={false} autoCorrect='off' autoCapitalize='off' value={drawer.draft} disabled={drawer.saving} onChange={event => { drawer.draft = event.target.value; drawer.error = ''; this.update(); }}/><div className='nmx-goal-drawer-meta'><span data-nmx-literal>{drawer.draft.length.toLocaleString(this.desktopLocale)}/{(200_000).toLocaleString(this.desktopLocale)}</span><span>{t('savedHint')}</span></div>{drawer.error && <div className='nmx-goal-drawer-error' role='alert'>{drawer.error}</div>}</div>
                 <footer className='nmx-goal-drawer-footer'><button className='nmx-goal-drawer-cancel' onClick={() => this.closeGoalDrawer()}>{t('cancel')}</button><button className='nmx-goal-drawer-save' disabled={!dirty || !drawer.draft.trim() || drawer.saving} onClick={() => void this.saveGoalDrawer()}>{t('save')}</button></footer>
             </aside></>;
     }
@@ -43425,6 +43894,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.pastedTextReferences = [];
                 this.editedTurnAttachmentOrder = [];
                 this.attachmentError = '';
+                this.journalComposerDraft?.(true);
                 if (pickedApp) {
                     if (this.composerApps.get(pickedAppOwner)?.id === pickedApp.id) this.composerApps.delete(pickedAppOwner);
                     if (this.composerApps.get(this.activeCodingSessionId || '')?.id === pickedApp.id) this.composerApps.delete(this.activeCodingSessionId || '');
@@ -44754,7 +45224,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.threadFocusActive = Boolean(target?.closest('.nmx-coding-topbar, .nmx-coding-stage'))
                 && !Boolean(target?.closest('.nmx-work-context, .nmx-terminal-drawer, .nmx-sidebar-search'));
             this.dismissFloatingSurfaces(event.target);
-        }} onFocusCapture={event => this.captureEditingCommandTarget(event.target)} onContextMenu={event => { this.handleChatContextMenu(event); this.handleLibraryChatContextMenu(event); }}>
+        }} onFocusCapture={event => this.captureEditingCommandTarget(event.target)} onChange={this.commitNativeChoice} onContextMenu={event => { this.handleChatContextMenu(event); this.handleLibraryChatContextMenu(event); }}>
             {/* The last line of defence: whatever part breaks without a boundary of its own, the window shows a card, never goes blank. */}
             {this.guard('window', () => this.renderWindowParts(), undefined, 'section')}
         </div>;
@@ -45048,9 +45518,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     onFocus={event => { if (option.kind !== 'automatic') showMetric(option.key, metricsFor(option).map(metric => metric.label).join('\n'), event.currentTarget); }}
                     onBlur={hideMetric} onPointerLeave={hideMetric} onClick={() => { if (option.directoryOnly || this.relayOptionIsFull(option)) return; hideMetric(); if (overrideSelection) overrideSelection.onSelect(option.key); else if (comicScope) this.selectComicChatRelay(option.key); else this.selectRelay(option.key); }}>
                 {/* The public merchant number tells same-named stores apart; the store intro follows it. */}
-                <strong className={`nmx-relay-option-name${option.checksFailing ? ' is-failing' : ''}`} aria-label={(option.kind === 'managed'
+                <strong className={`nmx-relay-option-name${option.checksFailing ? ' is-failing' : ''}${option.depositVerified ? ' is-deposit-verified' : ''}`} aria-label={(option.kind === 'managed'
                     ? [option.label, option.publicCode, (option.storeTagline || option.storeDescription || '').trim() || modelCenterText(this.desktopLocale, 'noStoreIntro'),
-                        option.checksFailing ? relayText(this.desktopLocale, 'checksFailing') : '']
+                        option.checksFailing ? relayText(this.desktopLocale, 'checksFailing') : '',
+                        option.depositVerified ? publicMerchantDepositText(this.desktopLocale) : '']
                     : [option.label, option.kind === 'official' ? option.detail : '']).filter(Boolean).join('\n')}
                     onPointerEnter={event => showMetric(option.key, event.currentTarget.getAttribute('aria-label') || option.label, event.currentTarget)}
                     onPointerLeave={hideMetric}>{option.checksFailing && <i className='codicon codicon-warning' data-relay-checks='failing' aria-hidden='true'></i>}{option.label}</strong>
@@ -47843,7 +48314,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
             usageLabel: ''
         }] : [];
         const startOffset = this.renderedTurnStartOffset?.(codingSession?.id, allVisibleTurns.length) ?? 0;
-        const visibleTurns: readonly CodingTurnRecord[] = startOffset > 0 ? allVisibleTurns.slice(startOffset) : allVisibleTurns;
+        // The same array while the conversation and its rendered window are unchanged, so Virtuoso keeps its item state.
+        const slice = startOffset > 0 ? this.renderedTurnSlice : undefined;
+        const visibleTurns: readonly CodingTurnRecord[] = startOffset <= 0 ? allVisibleTurns
+            : slice?.source === allVisibleTurns && slice.offset === startOffset ? slice.turns
+                : (this.renderedTurnSlice = { source: allVisibleTurns, offset: startOffset, turns: allVisibleTurns.slice(startOffset) }).turns;
         // The notice is dismissible per failed turn; a later failure shows it again.
         // The user pressed Esc during this turn: the AI no longer controls windows until the next prompt or 恢复控制.
         const desktopControlStopped = Boolean(codingSession && this.desktopControlEscapedConversations.has(codingSession.id));
@@ -48144,7 +48619,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     className='nmx-task-view'
                     style={visualTab ? { visibility: 'hidden', pointerEvents: 'none' } : undefined}
                     aria-hidden={visualTab ? true : undefined}
-                    data={[...visibleTurns]}
+                    data={visibleTurns}
                     firstItemIndex={startOffset}
                     startReached={() => { if (startOffset > 0) this.loadOlderConversationTurns?.(codingSession?.id); }}
                     rangeChanged={({ startIndex }) => { if (startOffset > 0 && startIndex - startOffset <= 4) this.loadOlderConversationTurns?.(codingSession?.id); }}
@@ -48270,7 +48745,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             <div className={`nmx-user-message ${editing ? 'is-editing' : ''}`} data-message-id={conversationMessageId(turn, 'user')} onClickCapture={event => this.handleAssistantContentClick(event)}>{editing
                                 ? <div className='nmx-user-message-editor' data-turn-id={turn.id}>
                                     {this.editingTurnApp && <span className='nmx-turn-app-row'><TurnAppChip name={this.editingTurnApp.name} icon={this.appIconFor(this.editingTurnApp.id)} locale={this.desktopLocale} /></span>}
-                                    <textarea key={`${codingSession?.id || this.activeCodingSessionId}:${turn.id}`} autoFocus value={this.editingTurnValue} aria-label={conversationText(this.desktopLocale, 'editMessage')}
+                                    <textarea key={`${codingSession?.id || this.activeCodingSessionId}:${turn.id}`} autoFocus spellCheck={false} autoCorrect='off' autoCapitalize='off' value={this.editingTurnValue} aria-label={conversationText(this.desktopLocale, 'editMessage')}
                                         onChange={event => {
                                             if (this.activeCodingSessionId !== codingSession?.id || this.editingTurnId !== turn.id) return;
                                             this.editingTurnValue = event.currentTarget.value; this.update();
@@ -48644,10 +49119,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 ? formatPastedTextChipSummary(reference, this.desktopLocale)
                                 : { title: reference.name, subtitle: reference.attachment ? this.formatMediaSize(reference.attachment.size) : localizeDesktopSurface(this.desktopLocale, '保存中…'), filePath: reference.name };
                             const filePath = summary.filePath;
+                            const expansion = typeof pastedTextExpansionCopy === 'function' ? pastedTextExpansionCopy(this.desktopLocale) : undefined;
                             return <AttachmentChip key={reference.id} className='nmx-pasted-text-chip' locale={this.desktopLocale} name={summary.title} kind='text'
                                 meta={reference.attachment ? summary.subtitle : localizeDesktopSurface(this.desktopLocale, '保存中…')}
-                                hint={filePath ? `${summary.title}\n${filePath}` : summary.title}
-                                removeLabel={localizeDesktopSurface(this.desktopLocale, `移除 ${summary.title}`)} onRemove={() => this.removePastedTextReference(reference.id)} />;
+                                hint={[filePath, expansion?.hint].filter(Boolean).join('\n')}
+                                previewLabel={expansion?.action(summary.title)}
+                                onPreview={expansion ? () => void this.expandPastedTextReference?.(reference.id) : undefined}
+                                removeLabel={localizeDesktopSurface(this.desktopLocale, `移除 ${summary.title}`)} onRemove={() => this.removePastedTextReference(reference.id)}>
+                                {expansion && <i className='codicon codicon-unfold nmx-pasted-text-expand' aria-hidden='true'></i>}
+                            </AttachmentChip>;
                         })}</div>}
                     </div>}
                     {/* Attachments above, then the goal right on top of the input. */}
@@ -48671,10 +49151,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         {this.composerDropMode === 'composer' && <ComposerDropOverlay locale={this.desktopLocale} />}
                         {this.composerApp() && <ComposerAppChip app={this.composerApp()!} locale={this.desktopLocale} onRemove={() => this.removeComposerApp()} disabled={this.runningMessageSubmitting}
                             onFullAccess={this.permissionMode === 'full_access' ? undefined : () => this.setPermissionMode('full_access')} />}
-                        <div className={`nmx-composer-input ${/\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)/i.test(this.prompt) ? 'has-markdown-links' : ''}`}>
+                        <div className={`nmx-composer-input ${/\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)/i.test(this.prompt)
+                            || typeof findPastedTextMarkerRanges === 'function' && findPastedTextMarkerRanges(this.prompt, this.pastedTextReferences).length > 0 ? 'has-markdown-links' : ''}`}>
                         {this.renderComposerMarkdownOverlay()}
                         {this.composerDropMode === 'text' && this.composerDropCaret && <TextDropIndicator caret={this.composerDropCaret} locale={this.desktopLocale} />}
                         <textarea key={this.composerInputKey()} data-composer-input-scope={this.composerInputKey()} ref={this.composerTextareaRef} defaultValue={this.prompt} maxLength={200_000}
+                            spellCheck={false} autoCorrect='off' autoCapitalize='off'
                             readOnly={Boolean(this.incognitoModeOperation && this.incognitoModeSessionId === codingSession?.id || this.draftWorkspaceBindingOperation && this.draftWorkspaceBindingSessionId === codingSession?.id)}
                             onCompositionStart={event => { if (!this.ownsComposerInput(event.currentTarget)) return; this.composerComposing = true; this.syncComposerDomControls(); }}
                             onCompositionEnd={event => {
@@ -49104,6 +49586,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 ? Object.fromEntries(Object.entries(models as Record<string, unknown>).filter(([key, value]) => COMIC_CHAT_MODES.includes(key as ComicChatMode) && typeof value === 'string')) : {},
             sending: false, editor: false, error: '', notice: '', saving: Promise.resolve()
         };
+        // The conversation on screen when the app last closed: its folder now, the conversation itself once that folder
+        // is open (reopenRestoredComicChat), and its unsent composer at once.
+        const active = read(COMIC_CHAT_ACTIVE_KEY) as { readonly target?: unknown; readonly chatId?: unknown } | null;
+        if (active && typeof active.target === 'string' && active.target.length <= 4_096) {
+            self.comicChatState.target = active.target;
+            if (typeof active.chatId === 'string' && /^[\w.:-]{1,200}$/.test(active.chatId)) this.comicChatRestoredChat = { target: active.target, chatId: active.chatId };
+        }
+        this.restoreComicChatDraft?.();
         return self.comicChatState;
     }
 
@@ -49123,6 +49613,109 @@ export class NextMuxDesktopWidget extends ReactWidget {
             window.localStorage.setItem('nextmux.desktop.comicChatRecommended.v1', JSON.stringify(ui.recommended));
             window.localStorage.setItem('nextmux.desktop.comicChatRelay.v1', JSON.stringify(ui.relay));
         } catch { /* remembered for this session */ }
+    }
+
+    /** Where the conversation on screen keeps its unsent composer: its ID, or before its first message the folder it goes to. */
+    protected comicChatDraftKey(ui: ComicChatUiState = this.comicChatUi()): string {
+        return ui.chatId ? `chat:${ui.chatId}` : `new:${ui.target}`;
+    }
+
+    /** Every 漫剧对话's unsent composer, read once from localStorage. */
+    protected comicChatDrafts(): Map<string, ComicChatDraftRecord> {
+        if (this.comicChatDraftsById) return this.comicChatDraftsById;
+        const drafts = new Map<string, ComicChatDraftRecord>();
+        try {
+            const stored = JSON.parse(window.localStorage.getItem(COMIC_CHAT_DRAFTS_KEY) || 'null') as { readonly drafts?: unknown } | null;
+            const entries = stored?.drafts && typeof stored.drafts === 'object' && !Array.isArray(stored.drafts) ? Object.entries(stored.drafts as Record<string, unknown>) : [];
+            for (const [key, value] of entries) {
+                const draft = /^(?:chat|new):/.test(key) && key.length <= 4_300 ? normalizeComicChatDraft(value) : undefined;
+                if (draft) drafts.set(key, draft);
+            }
+        } catch { /* an unreadable store starts empty */ }
+        this.comicChatDraftsById = drafts;
+        return drafts;
+    }
+
+    /**
+     * Keeps the composer on screen under its conversation's key (an empty one leaves) and writes every draft: up to 32 KB
+     * on every keystroke, a larger store at most every 120 ms with the last state always written, like the coding journal.
+     */
+    protected rememberComicChatDraft(force = false): void {
+        const ui = this.comicChatUi();
+        const drafts = this.comicChatDrafts();
+        const key = this.comicChatDraftKey(ui);
+        const draft = normalizeComicChatDraft({ prompt: ui.prompt, references: ui.references, skill: ui.skill, mode: ui.mode, at: Date.now() });
+        if (draft) drafts.set(key, draft);
+        else drafts.delete(key);
+        this.writeComicChatDrafts(force);
+    }
+
+    protected writeComicChatDrafts(force = false): void {
+        if (!force && this.comicChatDraftWriteTimer !== undefined) return;
+        const now = Date.now();
+        if (!force && this.comicChatDraftWrittenSize > DRAFT_JOURNAL_SYNC_LIMIT && now - this.comicChatDraftWrittenAt < DRAFT_JOURNAL_THROTTLE_MS) {
+            this.comicChatDraftWriteTimer = window.setTimeout(() => {
+                this.comicChatDraftWriteTimer = undefined;
+                this.writeComicChatDrafts(true);
+            }, DRAFT_JOURNAL_THROTTLE_MS - (now - this.comicChatDraftWrittenAt));
+            return;
+        }
+        if (this.comicChatDraftWriteTimer !== undefined) window.clearTimeout(this.comicChatDraftWriteTimer);
+        this.comicChatDraftWriteTimer = undefined;
+        const kept = [...this.comicChatDrafts()].sort(([, left], [, right]) => right.at - left.at).slice(0, COMIC_CHAT_DRAFT_LIMIT);
+        const raw = JSON.stringify({ version: 1, drafts: Object.fromEntries(kept) });
+        this.comicChatDraftWrittenAt = now;
+        this.comicChatDraftWrittenSize = raw.length;
+        try { window.localStorage.setItem(COMIC_CHAT_DRAFTS_KEY, raw); } catch { /* kept for this session */ }
+    }
+
+    /** Shows the composer kept for the conversation now on screen (empty when it has none), in the mode it was written in. */
+    protected restoreComicChatDraft(): void {
+        const ui = this.comicChatUi();
+        const draft = this.comicChatDrafts().get(this.comicChatDraftKey(ui));
+        ui.prompt = draft?.prompt || '';
+        ui.references = draft ? [...draft.references] : [];
+        ui.skill = draft?.skill;
+        if (draft?.mode && draft.mode !== ui.mode) ui.mode = draft.mode;
+        this.dropSetAsideComicChatReferences?.();
+    }
+
+    protected forgetComicChatDraft(key: string): void {
+        if (this.comicChatDrafts().delete(key)) this.writeComicChatDrafts(true);
+    }
+
+    /** The conversation on screen, for the next start. */
+    protected rememberComicChatActive(): void {
+        const ui = this.comicChatUi();
+        try {
+            window.localStorage.setItem(COMIC_CHAT_ACTIVE_KEY, JSON.stringify({ version: 1, target: ui.target, ...(ui.chatId ? { chatId: ui.chatId } : {}) }));
+        } catch { /* reopens a new conversation instead */ }
+    }
+
+    /**
+     * The conversation on screen when the app last closed opens again once its folder is the open conversation folder,
+     * without a navigation step; one that no longer exists leaves that folder's new conversation (and its own draft).
+     */
+    protected reopenRestoredComicChat(): void {
+        const pending = this.comicChatRestoredChat;
+        const ui = this.comicChatUi();
+        if (!pending || ui.surface !== 'chat') return;
+        this.comicChatRestoredChat = undefined;
+        if (ui.chatId || ui.target !== pending.target || this.activeComicWorkspaceRoot !== pending.target) return;
+        this.rememberComicChatDraft(true);
+        ui.chatId = pending.chatId;
+        this.restoreComicChatDraft();
+        if (ui.chats.get(pending.chatId)?.root === pending.target) return;
+        void this.platformService.readComicChat(pending.target, pending.chatId).then(chat => {
+            if (!ui.chats.has(pending.chatId)) ui.chats.set(pending.chatId, { root: pending.target, chat });
+            this.update();
+        }, () => {
+            if (ui.chatId !== pending.chatId) return;
+            ui.chatId = undefined;
+            this.restoreComicChatDraft();
+            this.rememberComicChatActive();
+            this.update();
+        });
     }
 
     /** The conversation on screen, once its project is the loaded one. */
@@ -49218,11 +49811,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** Takes a folder off the list only; nothing in it is deleted. */
     protected removeComicChatFolder(path: string): void {
         const ui = this.comicChatUi();
+        const leaving = ui.target === path;
+        if (leaving) this.rememberComicChatDraft?.(true);
         ui.folders = ui.folders.filter(item => item !== path);
         ui.expanded.delete(path);
         ui.lists.delete(path);
         if (ui.target === path) ui.target = '';
         if (this.activeComicWorkspaceRoot === path && ui.surface === 'chat') { ui.chatId = undefined; this.closeComicProject(); }
+        if (leaving) { this.restoreComicChatDraft?.(); this.rememberComicChatActive?.(); }
         this.persistComicChatUi();
         this.update();
     }
@@ -49267,6 +49863,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const ui = this.comicChatUi();
         if (path && path !== this.activeComicWorkspaceRoot && this.comicStage !== 'idle') return;
         if (this.activeSection !== 'comic' || ui.surface !== 'chat' || ui.chatId || ui.target !== (path ?? '') || ui.editor) this.rememberNavigation();
+        // The conversation being left keeps its unsent text and pictures; the new one shows its folder's own draft.
+        this.rememberComicChatDraft?.(true);
         this.activeSection = 'comic';
         if (path) this.activateComicChatFolder(path);
         ui.surface = 'chat';
@@ -49276,6 +49874,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         ui.references = [];
         this.dropSetAsideComicChatReferences?.();
         ui.skill = undefined;
+        this.restoreComicChatDraft?.();
+        this.rememberComicChatActive?.();
         ui.error = '';
         ui.notice = '';
         ui.editor = false;
@@ -49302,6 +49902,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const ui = this.comicChatUi();
         if (path !== this.activeComicWorkspaceRoot && this.comicStage !== 'idle') return;
         if (this.activeSection !== 'comic' || ui.surface !== 'chat' || ui.chatId !== chatId || ui.target !== path || ui.editor) this.rememberNavigation();
+        const switching = ui.chatId !== chatId || ui.target !== path;
+        if (switching) this.rememberComicChatDraft?.(true);
         this.activeSection = 'comic';
         if (path !== this.activeComicWorkspaceRoot) {
             this.activateComicChatFolder(path);
@@ -49309,6 +49911,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         ui.surface = 'chat';
         ui.chatId = chatId;
         ui.target = path;
+        if (switching) { this.restoreComicChatDraft?.(); this.rememberComicChatActive?.(); }
         ui.error = '';
         ui.notice = '';
         ui.editor = false;
@@ -49323,7 +49926,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const chat = await this.platformService.readComicChat(path, chatId);
             if (!ui.chats.has(chatId)) ui.chats.set(chatId, { root: path, chat });
         } catch (error) {
-            if (ui.chatId === chatId) { ui.chatId = undefined; ui.error = modelFailureText(this.desktopLocale, error); }
+            if (ui.chatId === chatId) {
+                ui.chatId = undefined;
+                ui.error = modelFailureText(this.desktopLocale, error);
+                // Text typed while it was being read stays, as the folder's new conversation; otherwise that one's own draft shows.
+                if (ui.prompt || ui.references.length) this.rememberComicChatDraft?.();
+                else this.restoreComicChatDraft?.();
+                this.rememberComicChatActive?.();
+            }
             void this.loadComicChatList(path);
         }
         this.update();
@@ -49348,7 +49958,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (!await window.nextmuxDesktop?.trashFolder?.(file)) throw new Error(file);
             ui.chats.delete(target.chatId);
             ui.lists.set(target.path, (ui.lists.get(target.path) || []).filter(item => item.id !== target.chatId));
-            if (ui.chatId === target.chatId) { ui.chatId = undefined; ui.target = target.path; }
+            this.forgetComicChatDraft?.(`chat:${target.chatId}`);
+            if (ui.chatId === target.chatId) {
+                ui.chatId = undefined;
+                ui.target = target.path;
+                this.restoreComicChatDraft?.();
+                this.rememberComicChatActive?.();
+            }
             ui.deleting = undefined;
         } catch (error) {
             target.busy = false;
@@ -49906,6 +50522,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
         }
         ui.params = nextParams;
+        this.rememberComicChatDraft?.();
     }
 
     protected dropSetAsideComicChatReferences(): void {
@@ -50015,6 +50632,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const ui = this.comicChatUi();
         const had = Boolean(ui.prompt.trim());
         ui.prompt = value.slice(0, ui.mode === 'speech' ? 8_000 : COMIC_CHAT_LIMITS.prompt);
+        this.rememberComicChatDraft?.();
         // Typing stays in the field (IME-safe); only 发送's state and a voice-over's price follow each keystroke.
         if (had !== Boolean(ui.prompt.trim()) || ui.mode === 'speech') this.update();
     }
@@ -50024,6 +50642,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (ui.mode === mode) return;
         ui.mode = mode;
         if (ui.skill && COMIC_CHAT_SKILLS.find(skill => skill.id === ui.skill)?.mode !== mode) ui.skill = undefined;
+        this.rememberComicChatDraft?.();
         this.persistComicChatUi();
         this.update();
     }
@@ -50044,6 +50663,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 void this.ensureComicChatFolder().then(() => this.update(), error => { ui.error = modelFailureText(this.desktopLocale, error); this.update(); });
             }
         }
+        this.rememberComicChatDraft?.();
         this.persistComicChatUi();
         this.update();
         this.focusComicChatComposer();
@@ -50087,6 +50707,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const merged = [...ui.references.filter(item => !added.some(next => next.key === item.key)), ...added];
         ui.references = merged.slice(-keep);
         ui.error = merged.length > keep && keep > 1 ? this.comicChatT('referencesLimit', { n: keep }) : '';
+        this.rememberComicChatDraft?.();
         this.update();
     }
 
@@ -50151,6 +50772,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected async sendComicChat(): Promise<void> {
         const ui = this.comicChatUi();
+        const draftKey = this.comicChatDraftKey?.(ui);
         const prompt = ui.prompt.trim();
         const mode = ui.mode;
         const candidate = this.comicChatCandidate(mode);
@@ -50187,6 +50809,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
             ui.references = [];
             this.dropSetAsideComicChatReferences?.();
             ui.skill = undefined;
+            // Sent: neither the draft it was written in nor the conversation it went to keeps the text.
+            if (draftKey) this.forgetComicChatDraft?.(draftKey);
+            this.forgetComicChatDraft?.(`chat:${next.id}`);
+            this.rememberComicChatActive?.();
             if (!ui.expanded.has(root)) { ui.expanded.add(root); this.persistComicChatUi(); }
             this.update();
             await this.saveComicChatSoon(root, next);
@@ -50607,6 +51233,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             } else {
                 const snippet = target.prompt?.trim() || target.title;
                 if (snippet) ui.prompt = ui.prompt.trim() ? `${ui.prompt.trim()}\n${snippet}` : snippet;
+                this.rememberComicChatDraft?.();
             }
             this.focusComicChatComposer();
         }
@@ -51097,7 +51724,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             && this.comicChatUi() === ui && ui.surface === 'chat' && ui.chatId === chatId && ui.target === target && input.isConnected
             ? ui.prompt : undefined;
         const adapter = new NativeDictationAdapter(window.nextmuxDesktop, {
-            input, read, isComposing: () => isImeFieldComposing(input), write: value => { if (read() !== undefined) { ui.prompt = value.slice(0, ui.mode === 'speech' ? 8_000 : COMIC_CHAT_LIMITS.prompt); this.update(); } }
+            input, read, isComposing: () => isImeFieldComposing(input), write: value => { if (read() !== undefined) { ui.prompt = value.slice(0, ui.mode === 'speech' ? 8_000 : COMIC_CHAT_LIMITS.prompt); this.rememberComicChatDraft?.(); this.update(); } }
         }, this.desktopLocale, window.crypto.randomUUID(), phase => this.onNativeDictationPhase(adapter, phase),
             level => { if (this.nativeDictation === adapter) this.nativeDictationActivity.set(level); });
         this.nativeDictation = adapter;
@@ -51469,6 +52096,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected renderComicChatSurface(): React.ReactNode {
         const ui = this.comicChatUi();
+        this.reopenRestoredComicChat?.();
         this.ensureComicChatDirectories();
         // 人物库 (从人物库选择) and 全部素材 read the library once.
         this.ensureComicLibrary();
@@ -51614,7 +52242,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onPickMaterials={() => { ui.materials = { pick: true }; if (!project) void this.ensureComicChatFolder().then(() => this.update(), error => { ui.error = modelFailureText(this.desktopLocale, error); this.update(); }); this.update(); }}
                 onPickCast={id => this.pickComicChatCast(id)}
                 onOpenCast={() => this.openComicCastLibrary()}
-                onRemoveReference={key => { ui.references = ui.references.filter(item => item.key !== key); this.update(); }}
+                onRemoveReference={key => { ui.references = ui.references.filter(item => item.key !== key); this.rememberComicChatDraft?.(); this.update(); }}
+                onOpenReference={reference => { if (reference.url) this.openComicViewerMedia(reference.url, reference.name, reference.kind === 'video' ? 'video' : 'image'); }}
                 onVoice={() => void this.openComicChatVoiceInput()}
                 onChooseFolder={() => void this.chooseComicChatDraftFolder()}
                 onClearFolder={() => { ui.target = ''; this.update(); }}
@@ -51644,9 +52273,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!resource) return;
         const ui = this.comicChatUi();
         const prompt = ui.prompt, references = ui.references, skill = ui.skill;
+        const from = this.comicChatDraftKey?.(ui);
         if (await this.addComicChatFolder(resource.path.fsPath(), true)) {
             // The draft moves with the conversation into the folder.
             ui.prompt = prompt; ui.references = references; ui.skill = skill;
+            if (from && from !== this.comicChatDraftKey?.(ui)) this.forgetComicChatDraft?.(from);
+            this.rememberComicChatDraft?.();
             this.update();
         }
     }
@@ -52802,6 +53434,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
         </div>;
     }
 
+    /**
+     * 保证金: the relay directory's word on each relay's security deposit, by source key, for the AI 模型 panel. Every
+     * directory page held counts (the drawer's page last, the most recent); a relay none lists falls back to its offerings.
+     */
+    protected comicSetupDepositDirectory(): ReadonlyMap<string, boolean> {
+        const known = new Map(this.comicStepDirectoryDeposits || []);
+        for (const merchant of [...(this.favoriteMerchantPage?.merchants || []), ...(this.publicMerchantPage?.merchants || [])]) {
+            known.set(managedRelayKey(merchant.id), merchant.depositVerified === true);
+        }
+        return known;
+    }
+
     /** “AI 模型”: the relay for every step and each step's model, in one small panel (see nextmux-comic-model-setup.tsx). */
     protected renderComicModelsSheet(): React.ReactNode {
         if (!this.comicModelsSheetOpen) return undefined;
@@ -52817,6 +53461,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // Still reading: the catalogues, or the relay directory the source list is built from.
             busy={this.catalogLoading || this.registryModelsLoading || this.officialModelsLoading
                 || COMIC_STEP_CAPABILITIES.some(capability => Boolean((this.comicStepDirectoryByScope?.get(`${this.comicModelKind()}:${capability}`) ?? this.comicStepDirectory.get(capability))?.loading))}
+            {...(this.comicSetupDepositDirectory ? { depositVerified: this.comicSetupDepositDirectory() } : {})}
             pendingRelays={Object.fromEntries(COMIC_STEP_CAPABILITIES.map(capability => [
                 capability,
                 (this.comicStepDirectoryByScope?.get(`${this.comicModelKind()}:${capability}`) ?? this.comicStepDirectory.get(capability))?.relays || []
@@ -54696,7 +55341,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             <span className={`nmx-comic-image-card-state is-${state.tone}`}>{clip?.videoUrl ? this.ct('videoReady') : state.label}</span>
                         </div>
                         <label className='nmx-comic-image-card-prompt'><span>{this.ct('motionPrompt')}</span>
-                            <textarea key={`${shot.id}:${shot.visualPrompt}`} rows={3} maxLength={20_000} defaultValue={shot.visualPrompt} disabled={busy}
+                            <textarea key={`${shot.id}:${shot.visualPrompt}`} rows={3} maxLength={20_000} spellCheck={false} autoCorrect='off' autoCapitalize='off' defaultValue={shot.visualPrompt} disabled={busy}
                                 placeholder={comicSheetText(this.desktopLocale, 'motionPlaceholder')}
                                 onBlur={event => { const value = event.currentTarget.value.trim(); if (value !== shot.visualPrompt.trim()) void this.runComicCutEdits([{ type: 'command', command: { type: 'shot.update', sceneId: scene.id, shotId: shot.id, patch: { visualPrompt: value } } }], shot.id); }} /></label>
                         <footer><small data-nmx-literal>{(shot.durationFrames / project.frameRate).toFixed(1)}s</small>
@@ -56373,6 +57018,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 if (!this.isDisposed) this.update();
             }, 180);
         }
+        // Every way the right drawer opens, closes, maximizes or changes width ends up here, before React commits it:
+        // hold the reading position of the conversation it is about to narrow or widen. Not across a change of
+        // section, panel or conversation, which restores its own position.
+        const workContextInset = this.workContextOpen && (this.isWorkContextSectionActive?.() ?? this.activeSection === 'coding')
+            ? this.workContextIsOverlay?.() || this.contextFileMaximized ? 'over' : String(this.effectiveWorkContextWidth?.() ?? 0) : '0';
+        const workContextOwner = `${this.activeSection}|${this.codingPanel}|${this.activeCodingSessionId}`;
+        const workContextLayout = `${workContextOwner}|${workContextInset}`;
+        if (workContextLayout !== this.workContextLayoutKey) {
+            const sameView = this.workContextLayoutKey.startsWith(`${workContextOwner}|`);
+            this.workContextLayoutKey = workContextLayout;
+            if (sameView) this.lockThreadReadingAnchorForDrawerTransition?.();
+        }
         super.onUpdateRequest(message);
         // ReactWidget renders through a React 18 root, which commits in a later task, so measuring here would read
         // the previous layout. Re-measure the floats' column on the next frame, after new turns or file rows are on
@@ -56416,9 +57073,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected override onActivateRequest(message: Message): void {
         super.onActivateRequest(message);
+        // Activation (a navigation command, Theia handing the main area back) never takes focus from a control the
+        // person is using inside the widget: moving it would close an open dropdown or end typing.
+        const active = document.activeElement;
+        if (active instanceof HTMLElement && active !== this.node && this.node.contains(active)) return;
         this.node.focus({ preventScroll: true });
-        requestAnimationFrame(() => {
-            this.node.querySelector<HTMLElement>('.nmx-rail-button.is-active')?.focus({ preventScroll: true });
-        });
     }
 }

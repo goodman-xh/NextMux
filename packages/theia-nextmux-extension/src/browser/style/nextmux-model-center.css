@@ -6,6 +6,10 @@
     --mc-line: #514b56;
     --mc-accent: #ee7ea5;
     --mc-warning: #e4a653;
+    /* Security-deposit gold, tuned to stay quiet on the monochrome surfaces: 8.3:1 on #252427, 9.6:1 when strong. */
+    --mc-gold: #e5b84b;
+    --mc-gold-strong: #f0c75e;
+    --mc-gold-ink: #1d1b1e;
     color: var(--mc-text);
     min-width: 0;
     container-type: inline-size;
@@ -18,6 +22,10 @@
     --mc-line: #d7cedb;
     --mc-accent: #a73862;
     --mc-warning: #a7671f;
+    /* Antique amber gold: 5.2:1 on white (#a86f14 reads only 4.2:1), 5.7:1 when strong; the check is white on it. */
+    --mc-gold: #976100;
+    --mc-gold-strong: #8f5c0d;
+    --mc-gold-ink: #fff;
 }
 .nmx-shell .nmx-mc-directory button,
 .nmx-mc-directory button {
@@ -78,6 +86,22 @@
 .nmx-mc-identity code { min-width: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }
 .nmx-shell .nmx-mc-identity button { padding: 0; width: 20px; height: 18px; }
 .nmx-mc-identity .codicon { color: var(--mc-muted); font-size: 12px; }
+/* A store holding the platform's security deposit: its name in gold, the gold seal right after it. Beside the seal the
+   name is only as wide as its text, so an ellipsis marks a cut (the fade would cut every name short). */
+.nmx-mc-identity > .nmx-mc-name-line { display: flex; align-items: center; gap: 5px; width: 100%; max-width: 100%; min-width: 0; }
+.nmx-mc-name-line > .nmx-mc-hint:first-child { flex: 0 1 auto; min-width: 0; }
+.nmx-mc-name-line > .nmx-mc-hint:first-child > strong { text-overflow: ellipsis; -webkit-mask-image: none; mask-image: none; }
+.nmx-mc-name-line > .nmx-mc-hint:last-child { flex: none; border-radius: 50%; }
+.nmx-mc-identity strong.is-deposit-verified,
+.nmx-mc-drawer h3.is-deposit-verified { color: var(--mc-gold); transition: color 120ms ease; }
+.nmx-mc-deposit-seal { display: block; flex: none; color: var(--mc-gold); transition: color 120ms ease; }
+.nmx-mc-merchant[data-deposit-verified]:hover :is(strong.is-deposit-verified, .nmx-mc-deposit-seal),
+.nmx-mc-hint:is(:hover, :focus-visible) > :is(strong.is-deposit-verified, h3.is-deposit-verified, .nmx-mc-deposit-seal),
+.nmx-mc-drawer-title:hover :is(h3.is-deposit-verified, .nmx-mc-deposit-seal) { color: var(--mc-gold-strong); }
+.nmx-mc-drawer-title { display: flex; align-items: flex-start; gap: 7px; min-width: 0; }
+.nmx-mc-drawer-title > .nmx-mc-hint:first-child { flex: 0 1 auto; min-width: 0; }
+/* Level with the first line of the 17px title, which can wrap to two. */
+.nmx-mc-drawer-title > .nmx-mc-hint:last-child { flex: none; margin-top: 3px; border-radius: 50%; }
 .nmx-mc-metrics { display: grid; grid-template-columns: 64px 64px 80px 60px; align-items: center; gap: 12px; font-variant-numeric: tabular-nums; }
 .nmx-mc-metrics > .nmx-mc-hint { gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .nmx-mc-metrics strong { font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; }

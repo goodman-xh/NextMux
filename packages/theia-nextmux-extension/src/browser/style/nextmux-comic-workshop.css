@@ -400,8 +400,8 @@
     background: radial-gradient(circle at 35% 70%, var(--kind-b) 0 6px, transparent 6.5px), linear-gradient(var(--kind-b), var(--kind-b)) 60% 0 / 2.5px 70% no-repeat; }
 .nmx-shell :is(.nmx-comic-kind, .nmx-comic-cats-first).is-music:hover:not(:disabled) .nmx-comic-kind-art > i.is-disc { transform: rotate(40deg); }
 .nmx-shell .nmx-comic-kind-sheet.nmx-music-create h2 .codicon { background: linear-gradient(135deg, #14b8a6, #6366f1); }
-@container comic-studio (max-width: 1180px) { .nmx-shell .nmx-comic-kinds { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@container comic-studio (max-width: 640px) { .nmx-shell .nmx-comic-kinds { grid-template-columns: minmax(0, 1fr); } .nmx-shell .nmx-comic-kind { min-height: 0; } }
+@container comic-studio (max-width: 640px) { .nmx-shell .nmx-comic-kinds { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container comic-studio (max-width: 420px) { .nmx-shell .nmx-comic-kinds { grid-template-columns: minmax(0, 1fr); } .nmx-shell .nmx-comic-kind { min-height: 0; } }
 
 /* Sidebar groups: one per kind, each with its own “+”. */
 .nmx-shell .nmx-comic-context .nmx-comic-kind-group { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 10px; }
@@ -1329,7 +1329,7 @@
 .nmx-shell .nmx-comic-cats { display: flex; flex-direction: column; gap: 14px; }
 .nmx-shell .nmx-comic-cats-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .nmx-shell .nmx-comic-cats-tab { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px 14px; border: 1px solid var(--nmx-border); border-radius: 14px; color: var(--nmx-text);
-    background: var(--nmx-panel); font: inherit; text-align: start; cursor: pointer; transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease; }
+    background: var(--nmx-panel); font: inherit; text-align: start; white-space: nowrap; cursor: pointer; transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease, padding 140ms ease; }
 .nmx-shell .nmx-comic-cats-tab:hover { border-color: color-mix(in srgb, var(--kind-a) 45%, var(--nmx-border)); }
 .nmx-shell .nmx-comic-cats-tab.is-active { border-color: var(--kind-a); background: color-mix(in srgb, var(--kind-a) 9%, var(--nmx-panel)); box-shadow: 0 8px 22px color-mix(in srgb, var(--kind-a) 18%, transparent); }
 .nmx-shell .nmx-comic-cats-tab:focus-visible { outline: 2px solid var(--kind-a); outline-offset: 2px; }
@@ -1372,8 +1372,23 @@
 .nmx-shell .nmx-comic-cats-badges > em .codicon { font-size: 11px; }
 .nmx-shell .nmx-comic-cats-badges > em.is-exported { background: rgba(16, 150, 100, .9); }
 .nmx-shell .nmx-comic-cats-badges > em.is-failed { background: rgba(229, 72, 77, .92); }
-@container comic-studio (max-width: 900px) { .nmx-shell .nmx-comic-cats-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@container comic-studio (max-width: 520px) { .nmx-shell .nmx-comic-cats-tabs { grid-template-columns: minmax(0, 1fr); } .nmx-shell .nmx-comic-cats-panel > header { flex-direction: column; } }
+/* The four kinds stay on one row down to a 560px studio: below 900px the tabs tighten (gap, padding, a smaller icon)
+   instead of wrapping; two per row only under 560px, one under 340px. A name too long for its tab ends in an ellipsis. */
+@container comic-studio (max-width: 900px) {
+    .nmx-shell .nmx-comic-cats-tabs { gap: 8px; }
+    .nmx-shell .nmx-comic-cats-tab { gap: 8px; padding: 10px 11px; }
+    .nmx-shell .nmx-comic-cats-icon { flex-basis: 30px; width: 30px; height: 30px; border-radius: 9px; font-size: 14px; }
+}
+@container comic-studio (max-width: 720px) {
+    .nmx-shell .nmx-comic-cats-tabs { gap: 6px; }
+    .nmx-shell .nmx-comic-cats-tab { gap: 7px; padding: 9px; border-radius: 12px; }
+    .nmx-shell .nmx-comic-cats-icon { flex-basis: 26px; width: 26px; height: 26px; border-radius: 8px; font-size: 13px; }
+    .nmx-shell .nmx-comic-cats-name > strong { font-size: 12.5px; }
+}
+@container comic-studio (max-width: 560px) { .nmx-shell .nmx-comic-cats-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container comic-studio (max-width: 520px) { .nmx-shell .nmx-comic-cats-panel > header { flex-direction: column; } }
+@container comic-studio (max-width: 340px) { .nmx-shell .nmx-comic-cats-tabs { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .nmx-shell .nmx-comic-cats-tab { transition: none; } }
 
 .nmx-shell .nmx-comic-setup-scope { display: inline-flex; align-items: center; margin-inline-start: 8px; padding: 1px 9px; border-radius: 999px; color: var(--nmx-text); background: var(--nmx-panel-2);
     font-size: 11.5px; font-weight: 700; vertical-align: 2px; }

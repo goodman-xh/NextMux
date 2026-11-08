@@ -11,6 +11,7 @@ import {
     comicStepSourceLabel, comicStepText
 } from './nextmux-comic-step-models';
 import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
+import { publicMerchantDepositText } from '../common/nextmux-public-merchants';
 
 /**
  * “AI 模型”: one small panel where the whole comic workflow gets its models — a relay for every
@@ -223,6 +224,8 @@ export interface ComicSetupSource {
     readonly listed: readonly ComicStepCapability[];
     /** Its best model's rank (lower is better). */
     readonly rank: number;
+    /** A relay holding the platform's security deposit: its name is gold in the list (no seal here, as in the relay drawer). */
+    readonly depositVerified?: boolean;
 }
 
 /**
@@ -231,24 +234,30 @@ export interface ComicSetupSource {
  * loaded yet are listed too (with the functions they are listed for), so choosing one can load it.
  */
 export function comicSetupSources(steps: readonly ComicModelSetupStep[], tab: 'relay' | 'own',
-    pending: Partial<Record<ComicStepCapability, readonly ComicStepRelay[]>> = {}): readonly ComicSetupSource[] {
+    pending: Partial<Record<ComicStepCapability, readonly ComicStepRelay[]>> = {},
+    deposits?: ReadonlyMap<string, boolean>): readonly ComicSetupSource[] {
     const order = steps.map(step => step.capability);
-    const bySource = new Map<string, { key: string; kind: ComicStepSource['kind']; label: string; steps: Set<ComicStepCapability>; listed: Set<ComicStepCapability>; rank: number }>();
+    const bySource = new Map<string, { key: string; kind: ComicStepSource['kind']; label: string; steps: Set<ComicStepCapability>; listed: Set<ComicStepCapability>; rank: number; offeringDeposit: boolean }>();
     for (const step of steps) for (const candidate of step.candidates) {
         if (comicSetupTab(candidate) !== tab) continue;
-        const entry = bySource.get(candidate.source.key) || { key: candidate.source.key, kind: candidate.source.kind, label: candidate.source.label, steps: new Set(), listed: new Set(), rank: Number.MAX_SAFE_INTEGER };
+        const entry = bySource.get(candidate.source.key) || { key: candidate.source.key, kind: candidate.source.kind, label: candidate.source.label, steps: new Set(), listed: new Set(), rank: Number.MAX_SAFE_INTEGER, offeringDeposit: false };
         entry.steps.add(step.capability);
         entry.rank = Math.min(entry.rank, candidate.rank);
+        entry.offeringDeposit ||= candidate.offering?.depositVerified === true;
         bySource.set(entry.key, entry);
     }
     if (tab === 'relay') for (const step of steps) for (const relay of pending[step.capability] || []) {
-        const entry = bySource.get(relay.key) || { key: relay.key, kind: 'managed' as const, label: relay.label, steps: new Set<ComicStepCapability>(), listed: new Set<ComicStepCapability>(), rank: Number.MAX_SAFE_INTEGER };
+        const entry = bySource.get(relay.key) || { key: relay.key, kind: 'managed' as const, label: relay.label, steps: new Set<ComicStepCapability>(), listed: new Set<ComicStepCapability>(), rank: Number.MAX_SAFE_INTEGER, offeringDeposit: false };
         if (!entry.steps.has(step.capability)) entry.listed.add(step.capability);
         bySource.set(entry.key, entry);
     }
     const kindOrder: Readonly<Record<ComicStepSource['kind'], number>> = { automatic: 0, official: 0, managed: 1, local: 2 };
     const sorted = (set: Set<ComicStepCapability>): ComicStepCapability[] => order.filter(capability => set.has(capability));
-    return [...bySource.values()].map(entry => ({ key: entry.key, kind: entry.kind, label: entry.label, steps: sorted(entry.steps), listed: sorted(entry.listed), rank: entry.rank }))
+    // The directory's word decides while it lists the relay (a refunded deposit there clears it at once), else its offerings.
+    const depositVerified = (entry: { key: string; kind: ComicStepSource['kind']; offeringDeposit: boolean }): boolean => entry.kind === 'managed'
+        && (deposits?.has(entry.key) ? deposits.get(entry.key) === true : entry.offeringDeposit);
+    return [...bySource.values()].map(entry => ({ key: entry.key, kind: entry.kind, label: entry.label, steps: sorted(entry.steps), listed: sorted(entry.listed), rank: entry.rank,
+        ...(depositVerified(entry) ? { depositVerified: true } : {}) }))
         .sort((left, right) => kindOrder[left.kind] - kindOrder[right.kind] || right.steps.length - left.steps.length
             || right.listed.length - left.listed.length || left.rank - right.rank || left.label.localeCompare(right.label));
 }
@@ -281,6 +290,8 @@ export interface ComicModelSetupProps {
     readonly focus?: ComicStepCapability;
     /** Relays known to have such models whose model lists are not loaded yet. */
     readonly pendingRelays?: Partial<Record<ComicStepCapability, readonly ComicStepRelay[]>>;
+    /** The relay directory's word on each listed relay's security deposit, by source key (`managed:<merchant>`). */
+    readonly depositVerified?: ReadonlyMap<string, boolean>;
     /** The relay whose models are being read. */
     readonly loadingRelayKey?: string;
     readonly busy?: boolean;
@@ -414,7 +425,7 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
     const missing = props.steps.filter(step => COMIC_CORE_STEPS.includes(step.capability) && !step.resolution.candidate && !coveredBy(step));
     const step = props.steps.find(item => item.capability === active) || props.steps[0];
     const pending = props.pendingRelays || {};
-    const relaySources = React.useMemo(() => comicSetupSources(props.steps, 'relay', pending), [props.steps, pending]);
+    const relaySources = React.useMemo(() => comicSetupSources(props.steps, 'relay', pending, props.depositVerified), [props.steps, pending, props.depositVerified]);
     const ownSources = React.useMemo(() => comicSetupSources(props.steps, 'own'), [props.steps]);
     const sources = tab === 'relay' ? relaySources : ownSources;
     const needle = query.trim().toLocaleLowerCase();
@@ -435,7 +446,8 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
     };
     const sourceIcon = (source: ComicSetupSource): React.ReactNode => <span className='nmx-comic-setup-source-icon' aria-hidden='true'><i className={`codicon codicon-${SOURCE_ICONS[source.kind]}`}></i></span>;
     const sourceCopy = (source: ComicSetupSource): React.ReactNode => <span className='nmx-comic-setup-source-copy'>
-        <strong data-nmx-literal={source.kind === 'managed' || source.kind === 'official' || undefined}>{sourceName(source)}</strong>
+        <strong data-nmx-literal={source.kind === 'managed' || source.kind === 'official' || undefined}
+            className={source.depositVerified ? 'is-deposit-verified' : undefined} title={source.depositVerified ? publicMerchantDepositText(props.locale) : undefined}>{sourceName(source)}</strong>
         <span className='nmx-comic-setup-caps'>
             {source.steps.map(capability => <em key={capability}>{label(capability)}</em>)}
             {source.listed.map(capability => <em key={capability} className='is-listed'>{label(capability)}</em>)}

@@ -42,12 +42,18 @@ function useImeSafeValue<T extends HTMLInputElement | HTMLTextAreaElement>(
     };
 }
 
+/**
+ * What people type here is prompts, names, paths, keys and code, not prose to proofread: no spelling underline, no
+ * autocorrect and no automatic capitals unless a field asks for them.
+ */
+const PLAIN_TEXT_ENTRY = { spellCheck: false, autoCorrect: 'off', autoCapitalize: 'off' } as const;
+
 export const ImeInput = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(function ImeInput(props, ref) {
     const { value, onChange, onCompositionStart, onCompositionEnd, ...rest } = props;
-    return <input ref={ref} {...rest} {...useImeSafeValue(value, onChange, onCompositionStart, onCompositionEnd)} />;
+    return <input ref={ref} {...PLAIN_TEXT_ENTRY} {...rest} {...useImeSafeValue(value, onChange, onCompositionStart, onCompositionEnd)} />;
 });
 
 export const ImeTextarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(function ImeTextarea(props, ref) {
     const { value, onChange, onCompositionStart, onCompositionEnd, ...rest } = props;
-    return <textarea ref={ref} {...rest} {...useImeSafeValue(value, onChange, onCompositionStart, onCompositionEnd)} />;
+    return <textarea ref={ref} {...PLAIN_TEXT_ENTRY} {...rest} {...useImeSafeValue(value, onChange, onCompositionStart, onCompositionEnd)} />;
 });

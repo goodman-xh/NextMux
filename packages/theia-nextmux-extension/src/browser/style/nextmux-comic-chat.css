@@ -55,7 +55,12 @@
 .nmx-shell .nmx-comic-chat-body { position: relative; display: flex; flex: 1 1 auto; min-height: 0; }
 .nmx-shell .nmx-comic-chat-loading { display: grid; flex: 1; place-items: center; color: var(--nmx-muted); font-size: 18px; }
 .nmx-shell .nmx-comic-chat-header .nmx-studio-header-actions > button > small { padding: 0 6px; border-radius: 999px; color: var(--nmx-muted); background: var(--nmx-panel-2); font-size: 10.5px; }
-.nmx-shell .nmx-comic-chat-thread { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding: 18px 0 8px; scrollbar-width: thin; }
+.nmx-shell .nmx-comic-chat-thread { flex: 1 1 auto; min-width: 0; overflow-y: auto; padding: 18px 0 22px; scrollbar-width: thin; }
+/* Back to the end of the conversation: the coding thread's round button, centred just above the composer, with the same
+   dot when something new arrived below. It stays under the 素材 drawer and the menus. */
+.nmx-shell .nmx-comic-chat-body > .nmx-comic-chat-scroll-bottom { top: auto; bottom: 12px; z-index: 6; animation: nmx-comic-chat-scroll-bottom-in 160ms ease-out both; }
+@keyframes nmx-comic-chat-scroll-bottom-in { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .nmx-shell .nmx-comic-chat-body > .nmx-comic-chat-scroll-bottom { animation: none; } }
 .nmx-shell .nmx-comic-chat-column { display: flex; flex-direction: column; gap: 22px; width: min(760px, calc(100% - 48px)); margin: 0 auto; }
 
 .nmx-shell .nmx-comic-chat-welcome { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 5vh 0 4px; text-align: center; }
@@ -263,16 +268,23 @@
 .nmx-shell .nmx-comic-chat-popover > button:is(:hover, :focus-visible) { background: var(--nmx-panel-2); }
 .nmx-shell .nmx-comic-chat-popover > button.is-active { font-weight: 600; }
 .nmx-shell .nmx-comic-chat-popover > button > .codicon-check { color: var(--nmx-accent); }
-.nmx-shell .nmx-comic-chat-refs { display: flex; flex-wrap: wrap; gap: 10px; padding: 4px 4px 8px; }
-.nmx-shell .nmx-comic-chat-ref { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 64px; }
-.nmx-shell .nmx-comic-chat-ref > img { width: 64px; height: 64px; border: 1px solid var(--nmx-border); border-radius: 10px; object-fit: cover; }
-.nmx-shell .nmx-comic-chat-ref > .codicon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 10px; color: var(--nmx-muted); background: var(--nmx-panel-2); }
-.nmx-shell .nmx-comic-chat-ref > small { color: var(--nmx-muted); font-size: 10.5px; }
-.nmx-shell .nmx-comic-chat-ref > button {
-    position: absolute; top: -6px; inset-inline-end: -6px; display: grid; place-items: center; width: 20px; height: 20px; margin: 0; padding: 0;
-    border: 1px solid var(--nmx-border); border-radius: 50%; color: var(--nmx-text); background: var(--nmx-panel); cursor: pointer;
+/* Pictures and folded pastes waiting to be sent: the coding composer's chips (46px: a 36px thumbnail, the name cut to one
+   line, a round × on hover). Two rows at most; more scroll inside, so dropping in many pictures never pushes the
+   conversation up. The top and inline-end padding leave room for the × badge, which overflow would otherwise cut. */
+.nmx-shell .nmx-comic-chat-refs {
+    display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; box-sizing: border-box; max-height: 108px; margin: 0 0 6px; padding: 7px 7px 1px 1px;
+    overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
 }
-.nmx-shell .nmx-comic-chat-ref > button > .codicon { font-size: 11px; }
+.nmx-shell .nmx-comic-chat-refs > .nmx-comic-chat-ref { flex: 0 1 auto; }
+.nmx-shell .nmx-comic-chat-ref .nmx-attachment-thumb { flex-basis: 36px; width: 36px; height: 36px; }
+/* Inside the composer card every button gets the card's 28–30px minimum height (.nmx-composer button), which stretched the
+   round × into an oval: the chip's own buttons opt out. */
+.nmx-shell .nmx-comic-chat-refs .nmx-attachment-chip > :is(.nmx-attachment-preview, .nmx-attachment-remove) { min-width: 0; min-height: 0; }
+.nmx-shell .nmx-comic-chat-refs .nmx-attachment-chip > .nmx-attachment-remove {
+    display: inline-flex; flex: none; align-items: center; justify-content: center; box-sizing: border-box; width: 20px; height: 20px; aspect-ratio: 1;
+    padding: 0; border-radius: 50%; line-height: 1;
+}
+.nmx-shell .nmx-comic-chat-refs .nmx-attachment-chip > .nmx-attachment-remove:active { transform: scale(.92); }
 .nmx-shell .nmx-comic-chat-drop {
     position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 8px; border: 2px dashed color-mix(in srgb, var(--nmx-accent) 70%, transparent);
     border-radius: inherit; color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-accent) 10%, var(--nmx-panel)); font-size: 13px; pointer-events: none;
@@ -322,8 +334,17 @@
 .nmx-shell .nmx-comic-materials-filters > div > button { display: inline-flex; align-items: center; gap: 5px; height: 26px; margin: 0; padding: 0 10px; border: 1px solid var(--nmx-border); border-radius: 999px; color: var(--nmx-muted); background: transparent; font-size: 12px; cursor: pointer; }
 .nmx-shell .nmx-comic-materials-filters > div > button.is-active { color: var(--nmx-text); background: var(--nmx-panel-2); font-weight: 600; }
 .nmx-shell .nmx-comic-materials-filters > div > button > b { color: var(--nmx-muted); font-size: 10.5px; font-weight: 500; }
+/* The thumbnail size (小 / 中 / 大), shared with the 素材库 window, at the end of the filter row. */
+.nmx-shell .nmx-comic-materials-filters > .nmx-library-size { display: inline-flex; flex-wrap: nowrap; gap: 2px; height: 26px; margin-inline-start: auto; border-radius: 8px; }
+.nmx-shell .nmx-comic-materials-filters > .nmx-library-size > button {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 100%; margin: 0; padding: 0 7px; border: 0; border-radius: 6px;
+    color: var(--nmx-muted); background: transparent; font-size: 11.5px; font-weight: 600; line-height: 1; cursor: pointer; transition: background-color 120ms ease, color 120ms ease;
+}
+.nmx-shell .nmx-comic-materials-filters > .nmx-library-size > button:hover { color: var(--nmx-text); }
+.nmx-shell .nmx-comic-materials-filters > .nmx-library-size > button.is-active { color: var(--nmx-text); background: var(--nmx-panel); box-shadow: 0 1px 3px rgba(0, 0, 0, .22); }
+@media (prefers-reduced-motion: reduce) { .nmx-shell .nmx-comic-materials-filters > .nmx-library-size > button { transition: none; } }
 .nmx-shell .nmx-comic-materials-empty { margin: 24px 14px; color: var(--nmx-muted); font-size: 12.5px; text-align: center; }
-.nmx-shell .nmx-comic-materials-grid { display: grid; flex: 1 1 auto; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); align-content: start; gap: 12px 10px; min-height: 0; overflow-y: auto; padding: 4px 14px 16px; }
+.nmx-shell .nmx-comic-materials-grid { display: grid; flex: 1 1 auto; grid-template-columns: repeat(auto-fill, minmax(var(--nmx-library-card-min, 104px), 1fr)); align-content: start; gap: 12px 10px; min-height: 0; overflow-y: auto; padding: 4px 14px 16px; }
 .nmx-shell .nmx-comic-material { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; padding: 0; border: 0; color: var(--nmx-text); background: transparent; text-align: start; cursor: pointer; }
 .nmx-shell .nmx-comic-material-thumb { position: relative; display: grid; place-items: center; width: 100%; aspect-ratio: 1 !important; overflow: hidden; border: 1px solid var(--nmx-border); border-radius: 10px; color: var(--nmx-muted); background: var(--nmx-panel-2); }
 .nmx-shell .nmx-comic-material-thumb > :is(img, video) { width: 100%; height: 100%; object-fit: cover; }
@@ -340,6 +361,8 @@
 .nmx-shell .nmx-comic-chat-viewer .nmx-attachment-lightbox-stage > :is(img, video, audio),
 .nmx-comic-chat-viewer .nmx-attachment-lightbox-stage > :is(img, video, audio) { pointer-events: auto; }
 .nmx-shell .nmx-comic-chat-viewer .nmx-attachment-lightbox-stage > img { max-width: 100%; max-height: 78vh; object-fit: contain; }
+/* A composer reference's own viewer, also when it opens outside the shell. */
+.nmx-comic-chat-viewer.is-reference .nmx-attachment-lightbox-stage > :is(img, video) { max-width: 100%; max-height: 78vh; object-fit: contain; }
 .nmx-shell .nmx-comic-chat-delete .nmx-primary-button.is-danger { border-color: transparent; color: #fff; background: var(--nmx-danger, #e5484d); }
 /* The sidebar's generic “label pushed to the end” rule is for counters; 新对话 reads left to right. */
 .nmx-shell .nmx-comic-context .nmx-context-nav > button.nmx-comic-new-chat { justify-content: flex-start; }

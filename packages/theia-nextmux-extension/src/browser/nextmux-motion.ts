@@ -37,6 +37,8 @@ export interface FlipListOptions {
     readonly duration?: number;
     /** Above this many insertions in one commit (initial page load) skip enter fades. */
     readonly maxEnterAnimations?: number;
+    /** While true, changes are measured but not animated (an open menu must not sit inside a transformed item). */
+    readonly paused?: () => boolean;
 }
 
 interface Position { readonly top: number; readonly left: number; readonly width: number; readonly height: number }
@@ -74,6 +76,12 @@ export class FlipList {
     };
 
     dispose(): void { this.detach(); }
+
+    /** Ends every running FLIP at its final place, so no item keeps a transform. */
+    cancelRunning(): void {
+        for (const animation of [...this.running.values()]) animation.cancel();
+        this.running.clear();
+    }
 
     protected detach(): void {
         this.mutationObserver?.disconnect();
@@ -158,7 +166,7 @@ export class FlipList {
         this.running.clear();
         const next = this.measure();
         this.positions = next;
-        if (prefersReducedMotion()) return;
+        if (prefersReducedMotion() || this.options.paused?.()) return;
         const origin = container.getBoundingClientRect();
         const deltas = new Map<HTMLElement, { x: number; y: number }>();
         const items = this.items();

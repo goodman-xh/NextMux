@@ -14,6 +14,10 @@ interface PasteQueueLocaleEntry {
     readonly loadingFile: string;
     readonly queueDispatching: string;
     readonly queueWaiting: string;
+    /** The pasted-text chip's action: its text goes back into the message where the chip stands. */
+    readonly expandAction: (title: string) => string;
+    readonly expandHint: string;
+    readonly expandTooLong: string;
 }
 
 const PASTE_QUEUE_LOCALE_CATALOG: Readonly<Record<NextMuxDesktopLocale, PasteQueueLocaleEntry>> = {
@@ -27,7 +31,10 @@ const PASTE_QUEUE_LOCALE_CATALOG: Readonly<Record<NextMuxDesktopLocale, PasteQue
         openFile: '打开文件',
         loadingFile: '正在读取粘贴文件…',
         queueDispatching: '正在自动发送下一条排队提示词…',
-        queueWaiting: '排队中 · 等待当前回复完成后自动发送'
+        queueWaiting: '排队中 · 等待当前回复完成后自动发送',
+        expandAction: title => `转为正文：${title}`,
+        expandHint: '点击转为输入框正文',
+        expandTooLong: '这段文本太长，转为正文会超过输入框上限，已保留为文件。'
     },
     'zh-TW': {
         chipTitle: (ordinal, lineCount) => `貼上文字 #${ordinal} · ${lineCount} 行`,
@@ -39,7 +46,10 @@ const PASTE_QUEUE_LOCALE_CATALOG: Readonly<Record<NextMuxDesktopLocale, PasteQue
         openFile: '開啟檔案',
         loadingFile: '正在讀取貼上檔案…',
         queueDispatching: '正在自動發送下一條排隊提示詞…',
-        queueWaiting: '排隊中 · 等待目前回覆完成後自動發送'
+        queueWaiting: '排隊中 · 等待目前回覆完成後自動發送',
+        expandAction: title => `轉為內文：${title}`,
+        expandHint: '點擊轉為輸入框內文',
+        expandTooLong: '這段文字太長，轉為內文會超過輸入框上限，已保留為檔案。'
     },
     en: {
         chipTitle: (ordinal, lineCount) => {
@@ -57,7 +67,10 @@ const PASTE_QUEUE_LOCALE_CATALOG: Readonly<Record<NextMuxDesktopLocale, PasteQue
         openFile: 'Open file',
         loadingFile: 'Loading pasted file…',
         queueDispatching: 'Sending next queued prompt…',
-        queueWaiting: 'Queued · Will send automatically after current response finishes'
+        queueWaiting: 'Queued · Will send automatically after current response finishes',
+        expandAction: title => `Expand into the message: ${title}`,
+        expandHint: 'Click to expand as inline text',
+        expandTooLong: 'This text is too long to fit in the message box, so it stays attached as a file.'
     },
     ja: {
         chipTitle: (ordinal, lineCount) => `貼り付けテキスト #${ordinal} · ${lineCount} 行`,
@@ -69,7 +82,10 @@ const PASTE_QUEUE_LOCALE_CATALOG: Readonly<Record<NextMuxDesktopLocale, PasteQue
         openFile: 'ファイルを開く',
         loadingFile: '貼り付けファイルを読み込み中…',
         queueDispatching: '待機中の次のプロンプトを自動送信中…',
-        queueWaiting: '待機中 · 現在の応答が完了したら自動送信されます'
+        queueWaiting: '待機中 · 現在の応答が完了したら自動送信されます',
+        expandAction: title => `本文に展開：${title}`,
+        expandHint: 'クリックして入力欄の本文に展開',
+        expandTooLong: 'このテキストは長すぎて入力欄に収まらないため、ファイルのまま添付しています。'
     },
     ko: {
         chipTitle: (ordinal, lineCount) => `붙여넣은 텍스트 #${ordinal} · ${lineCount}줄`,
@@ -81,7 +97,10 @@ const PASTE_QUEUE_LOCALE_CATALOG: Readonly<Record<NextMuxDesktopLocale, PasteQue
         openFile: '파일 열기',
         loadingFile: '붙여넣은 파일 불러오는 중…',
         queueDispatching: '대기 중인 다음 프롬프트를 자동 전송 중…',
-        queueWaiting: '대기 중 · 현재 응답이 끝나면 자동으로 전송됩니다'
+        queueWaiting: '대기 중 · 현재 응답이 끝나면 자동으로 전송됩니다',
+        expandAction: title => `본문으로 펼치기: ${title}`,
+        expandHint: '클릭하면 입력창 본문으로 펼칩니다',
+        expandTooLong: '이 텍스트는 너무 길어 입력창에 넣을 수 없어 파일로 유지합니다.'
     },
     es: {
         chipTitle: (ordinal, lineCount) => {
@@ -99,7 +118,10 @@ const PASTE_QUEUE_LOCALE_CATALOG: Readonly<Record<NextMuxDesktopLocale, PasteQue
         openFile: 'Abrir archivo',
         loadingFile: 'Cargando archivo pegado…',
         queueDispatching: 'Enviando el siguiente prompt en cola…',
-        queueWaiting: 'En cola · Se enviará automáticamente al terminar la respuesta actual'
+        queueWaiting: 'En cola · Se enviará automáticamente al terminar la respuesta actual',
+        expandAction: title => `Insertar como texto: ${title}`,
+        expandHint: 'Haz clic para insertarlo como texto',
+        expandTooLong: 'Este texto es demasiado largo para el cuadro de mensaje; se mantiene adjunto como archivo.'
     },
     fr: {
         chipTitle: (ordinal, lineCount) => {
@@ -117,7 +139,10 @@ const PASTE_QUEUE_LOCALE_CATALOG: Readonly<Record<NextMuxDesktopLocale, PasteQue
         openFile: 'Ouvrir le fichier',
         loadingFile: 'Chargement du fichier collé…',
         queueDispatching: 'Envoi automatique du prochain prompt en file d’attente…',
-        queueWaiting: 'En file d’attente · Envoi automatique à la fin de la réponse actuelle'
+        queueWaiting: 'En file d’attente · Envoi automatique à la fin de la réponse actuelle',
+        expandAction: title => `Insérer comme texte : ${title}`,
+        expandHint: 'Cliquez pour l’insérer comme texte',
+        expandTooLong: 'Ce texte est trop long pour la zone de message ; il reste joint en tant que fichier.'
     },
     de: {
         chipTitle: (ordinal, lineCount) => {
@@ -135,7 +160,10 @@ const PASTE_QUEUE_LOCALE_CATALOG: Readonly<Record<NextMuxDesktopLocale, PasteQue
         openFile: 'Datei öffnen',
         loadingFile: 'Eingefügte Datei wird geladen…',
         queueDispatching: 'Nächster eingereihter Prompt wird gesendet…',
-        queueWaiting: 'In Warteschlange · Wird nach der aktuellen Antwort automatisch gesendet'
+        queueWaiting: 'In Warteschlange · Wird nach der aktuellen Antwort automatisch gesendet',
+        expandAction: title => `Als Text einfügen: ${title}`,
+        expandHint: 'Klicken, um als Text einzufügen',
+        expandTooLong: 'Dieser Text ist für das Eingabefeld zu lang und bleibt als Datei angehängt.'
     },
     'pt-BR': {
         chipTitle: (ordinal, lineCount) => {
@@ -153,7 +181,10 @@ const PASTE_QUEUE_LOCALE_CATALOG: Readonly<Record<NextMuxDesktopLocale, PasteQue
         openFile: 'Abrir arquivo',
         loadingFile: 'Carregando arquivo colado…',
         queueDispatching: 'Enviando o próximo prompt da fila…',
-        queueWaiting: 'Na fila · Será enviado automaticamente após a resposta atual'
+        queueWaiting: 'Na fila · Será enviado automaticamente após a resposta atual',
+        expandAction: title => `Inserir como texto: ${title}`,
+        expandHint: 'Clique para inserir como texto',
+        expandTooLong: 'Este texto é longo demais para a caixa de mensagem; ele continua anexado como arquivo.'
     },
     ru: {
         chipTitle: (ordinal, lineCount) => `Вставленный текст #${ordinal} · ${lineCount} стр.`,
@@ -165,7 +196,10 @@ const PASTE_QUEUE_LOCALE_CATALOG: Readonly<Record<NextMuxDesktopLocale, PasteQue
         openFile: 'Открыть файл',
         loadingFile: 'Загрузка вставленного файла…',
         queueDispatching: 'Отправка следующего запроса из очереди…',
-        queueWaiting: 'В очереди · Отправится автоматически после завершения текущего ответа'
+        queueWaiting: 'В очереди · Отправится автоматически после завершения текущего ответа',
+        expandAction: title => `Вставить как текст: ${title}`,
+        expandHint: 'Нажмите, чтобы вставить как текст',
+        expandTooLong: 'Этот текст слишком длинный для поля ввода, поэтому он остаётся прикреплённым файлом.'
     },
     ar: {
         chipTitle: (ordinal, lineCount) => `نص ملصق #${ordinal} · ${lineCount} سطر`,
@@ -177,7 +211,10 @@ const PASTE_QUEUE_LOCALE_CATALOG: Readonly<Record<NextMuxDesktopLocale, PasteQue
         openFile: 'فتح الملف',
         loadingFile: 'جارٍ تحميل الملف الملصق…',
         queueDispatching: 'جارٍ إرسال المطالبة التالية في قائمة الانتظار…',
-        queueWaiting: 'في قائمة الانتظار · سيُرسل تلقائيًا بعد انتهاء الرد الحالي'
+        queueWaiting: 'في قائمة الانتظار · سيُرسل تلقائيًا بعد انتهاء الرد الحالي',
+        expandAction: title => `إدراج كنص: ${title}`,
+        expandHint: 'انقر لإدراجه كنص في الرسالة',
+        expandTooLong: 'هذا النص أطول من أن يتسع له مربع الرسالة، لذا يبقى مرفقًا كملف.'
     },
     hi: {
         chipTitle: (ordinal, lineCount) => `पेस्ट किया गया टेक्स्ट #${ordinal} · ${lineCount} पंक्तियाँ`,
@@ -189,7 +226,10 @@ const PASTE_QUEUE_LOCALE_CATALOG: Readonly<Record<NextMuxDesktopLocale, PasteQue
         openFile: 'फ़ाइल खोलें',
         loadingFile: 'पेस्ट की गई फ़ाइल लोड हो रही है…',
         queueDispatching: 'कतार का अगला प्रॉम्प्ट भेजा जा रहा है…',
-        queueWaiting: 'कतार में · वर्तमान उत्तर पूरा होने के बाद अपने आप भेजा जाएगा'
+        queueWaiting: 'कतार में · वर्तमान उत्तर पूरा होने के बाद अपने आप भेजा जाएगा',
+        expandAction: title => `टेक्स्ट के रूप में डालें: ${title}`,
+        expandHint: 'संदेश में टेक्स्ट के रूप में डालने के लिए क्लिक करें',
+        expandTooLong: 'यह टेक्स्ट संदेश बॉक्स के लिए बहुत लंबा है, इसलिए यह फ़ाइल के रूप में जुड़ा रहेगा।'
     }
 };
 
@@ -491,6 +531,64 @@ export function removeAdjacentPastedTextMarker(
         selectionEnd: deleteStart,
         removedIds,
         remainingReferences
+    };
+}
+
+export interface PastedTextExpansionCopy {
+    readonly action: (title: string) => string;
+    readonly hint: string;
+    readonly tooLong: string;
+}
+
+export function pastedTextExpansionCopy(locale?: NextMuxDesktopLocale): PastedTextExpansionCopy {
+    const copy = pasteQueueCopy(locale);
+    return { action: copy.expandAction, hint: copy.expandHint, tooLong: copy.expandTooLong };
+}
+
+export interface PastedTextExpansionResult {
+    readonly value: string;
+    readonly selectionStart: number;
+    readonly selectionEnd: number;
+    readonly expanded: PastedTextReference;
+    readonly remainingReferences: readonly PastedTextReference[];
+}
+
+/**
+ * Turns a pasted-text reference back into ordinary text where its marker stands, so the words around it keep their
+ * order and the text stays with the paragraph it was pasted into (the model reads it there too). Every copy of the
+ * marker becomes the text and the caret goes after the first one. A marker that is no longer in the message puts the
+ * text at `fallbackCaret` (the end when it is missing).
+ */
+export function expandPastedTextReferenceToInlineText(
+    value: string,
+    referenceId: string,
+    references: readonly PastedTextReference[],
+    content?: string,
+    fallbackCaret?: number
+): PastedTextExpansionResult | undefined {
+    const expanded = references.find(reference => reference.id === referenceId);
+    const text = content ?? expanded?.content;
+    if (!expanded || text === undefined) {
+        return undefined;
+    }
+    const first = expanded.marker ? value.indexOf(expanded.marker) : -1;
+    let nextValue: string;
+    let caret: number;
+    if (first >= 0) {
+        nextValue = value.split(expanded.marker).join(text);
+        caret = first + text.length;
+    } else {
+        const requested = fallbackCaret === undefined ? value.length : Math.trunc(fallbackCaret);
+        const at = Number.isFinite(requested) ? Math.max(0, Math.min(value.length, requested)) : value.length;
+        nextValue = `${value.slice(0, at)}${text}${value.slice(at)}`;
+        caret = at + text.length;
+    }
+    return {
+        value: nextValue,
+        selectionStart: caret,
+        selectionEnd: caret,
+        expanded,
+        remainingReferences: pastedTextReferencesInDocument(nextValue, references.filter(reference => reference.id !== referenceId))
     };
 }
 

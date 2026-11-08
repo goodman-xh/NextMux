@@ -1,4 +1,5 @@
 import * as React from '@theia/core/shared/react';
+import { createPortal } from '@theia/core/shared/react-dom';
 import type { NextMuxDesktopLocale } from './nextmux-locale';
 import { localizeDesktopSurface } from './nextmux-surface-locale';
 import { relayText } from './nextmux-relay-locale';
@@ -8,6 +9,12 @@ import { StreamText } from './nextmux-conversation-stream';
 import { DictationButton, type DictationActivity } from './nextmux-dictation-button';
 import type { NativeDictationPhase } from './nextmux-native-dictation-adapter';
 import { comicChatText, type ComicChatTextKey } from './nextmux-comic-chat-text';
+import { AttachmentChip } from './nextmux-composer-attachments';
+import {
+    composerAttachmentText, createPastedTextReference, findPastedTextMarkerRanges, formatPastedTextChipSummary, pastedTextExpansionCopy,
+    pastedTextReferencesInDocument, removeAdjacentPastedTextMarker, type PastedTextReference
+} from './nextmux-composer-long-paste';
+import { ComicLibrarySizeControl, useComicLibrarySize, type ComicLibrarySize } from './nextmux-comic-asset-library';
 import {
     COMIC_CHAT_LIMITS, extractComicChatThinking,
     type ComicChatAspect, type ComicChatMediaKind, type ComicChatMode, type ComicChatParams, type ComicChatProposal, type ComicChatTurn
@@ -165,6 +172,92 @@ export function ComicChatMediaTile(props: {
     </div>;
 }
 
+/**
+ * Where the reader is: the deepest element under the reading line and how far into it (`beyond` when the line falls in a
+ * gap below or above it), with the turn's share as a fallback; or an edge, for a reader at the start or following the end.
+ */
+interface ComicChatReadingAnchor {
+    readonly edge?: 'top' | 'bottom';
+    readonly turnId?: string;
+    readonly turnRatio?: number;
+    readonly target?: Element;
+    readonly ratio?: number;
+    readonly beyond?: number;
+}
+
+/** The reading line sits just below the thread's top edge, as in the coding thread. */
+const COMIC_CHAT_READING_LINE = 24;
+
+function comicChatTurnElements(thread: HTMLElement): HTMLElement[] {
+    return [...(thread.firstElementChild?.children || [])].filter((child): child is HTMLElement => child instanceof HTMLElement && Boolean(child.dataset.turnId));
+}
+
+function comicChatReadingAnchor(thread: HTMLElement): ComicChatReadingAnchor | undefined {
+    const turns = comicChatTurnElements(thread);
+    if (!turns.length) return undefined;
+    if (thread.scrollTop < 1) return { edge: 'top' };
+    if (thread.scrollHeight - thread.scrollTop - thread.clientHeight <= 4) return { edge: 'bottom' };
+    const line = thread.getBoundingClientRect().top + COMIC_CHAT_READING_LINE;
+    // The last turn starting above the line (else the first), without measuring every turn of a long thread.
+    let index = 0;
+    for (let low = 0, high = turns.length - 1; low <= high;) {
+        const middle = (low + high) >> 1;
+        if (turns[middle].getBoundingClientRect().top <= line) { index = middle; low = middle + 1; } else high = middle - 1;
+    }
+    const turn = turns[index];
+    // Down to the block holding the line; in a gap between blocks, the block just above it, at its exact distance.
+    let target: Element = turn;
+    for (let depth = 0; depth < 8; depth++) {
+        let above: Element | undefined;
+        let holding: Element | undefined;
+        for (const child of target.children) {
+            const box = child.getBoundingClientRect();
+            if (box.height <= 0 || box.top > line) continue;
+            if (box.bottom > line) {
+                holding = child;
+                break;
+            }
+            above = child;
+        }
+        target = holding || above || target;
+        if (!holding) break;
+    }
+    const box = target.getBoundingClientRect(), turnBox = turn.getBoundingClientRect();
+    const into = Math.max(0, Math.min(box.height, line - box.top));
+    return {
+        turnId: turn.dataset.turnId, turnRatio: Math.max(0, Math.min(1, (line - turnBox.top) / Math.max(1, turnBox.height))),
+        target, ratio: into / Math.max(1, box.height), beyond: line - box.top - into
+    };
+}
+
+/** Scrolls the anchored place back under the reading line; false once its turn is gone (another chat). */
+function restoreComicChatReadingAnchor(thread: HTMLElement, anchor: ComicChatReadingAnchor): boolean {
+    if (anchor.edge) {
+        thread.scrollTop = anchor.edge === 'top' ? 0 : thread.scrollHeight;
+        return true;
+    }
+    const kept = anchor.target && thread.contains(anchor.target) && anchor.target.getClientRects().length ? anchor.target : undefined;
+    const target = kept || comicChatTurnElements(thread).find(turn => turn.dataset.turnId === anchor.turnId);
+    if (!target) return false;
+    const box = target.getBoundingClientRect();
+    const offset = kept ? (anchor.ratio || 0) * box.height + (anchor.beyond || 0) : (anchor.turnRatio || 0) * box.height;
+    const delta = box.top + offset - (thread.getBoundingClientRect().top + COMIC_CHAT_READING_LINE);
+    if (Math.abs(delta) >= 1) thread.scrollTop += delta;
+    return true;
+}
+
+/**
+ * The composer under the thread grew or shrank by `lastHeight - height` (pictures dropped in, a longer message), so the
+ * thread lost or gained that much at its bottom edge. A reader at the end stays at the end; anyone else keeps the lines at
+ * the bottom edge in view, except a reader at the very top, who stays there.
+ */
+export function followComicChatHeight(element: { scrollTop: number; readonly scrollHeight: number }, lastHeight: number, height: number): void {
+    const delta = lastHeight - height;
+    if (!lastHeight || Math.abs(delta) <= 1) return;
+    if (element.scrollHeight - element.scrollTop - lastHeight <= 4) element.scrollTop = element.scrollHeight;
+    else if (element.scrollTop >= 1) element.scrollTop += delta;
+}
+
 export function ComicChatThread(props: {
     readonly locale: NextMuxDesktopLocale;
     readonly turns: readonly ComicChatTurnView[];
@@ -194,18 +287,94 @@ export function ComicChatThread(props: {
     const t = (key: ComicChatTextKey, values?: Readonly<Record<string, string | number>>): string => comicChatText(props.locale, key, values);
     const scroller = React.useRef<HTMLDivElement>(null);
     const last = props.turns[props.turns.length - 1];
+    const reading = React.useRef<{ anchor?: ComicChatReadingAnchor; width: number; height: number; heldUntil: number; frame: number }>({ width: 0, height: 0, heldUntil: 0, frame: 0 });
+    // Away from the end: the coding thread's round button brings the reader back, with a dot while something new arrived.
+    const [away, setAway] = React.useState(false);
+    const [unseen, setUnseen] = React.useState(false);
+    const awayRef = React.useRef(false);
+    const noteAway = React.useCallback((element: HTMLElement): void => {
+        const next = element.scrollHeight - element.scrollTop - element.clientHeight > 96;
+        if (!next) setUnseen(false);
+        if (next === awayRef.current) return;
+        awayRef.current = next;
+        setAway(next);
+    }, []);
     // A turn just sent always comes into view; the answer growing under it follows only a reader near the bottom.
     const shownTurns = React.useRef(props.turns.length);
+    const shownTail = React.useRef<string | undefined>(undefined);
     React.useEffect(() => {
         const element = scroller.current;
         const added = props.turns.length > shownTurns.current;
+        const sameTail = shownTail.current !== undefined && shownTail.current === last?.turn.id;
         shownTurns.current = props.turns.length;
+        shownTail.current = last?.turn.id;
         if (!element) return;
-        if (added || element.scrollHeight - element.scrollTop - element.clientHeight < 360) element.scrollTop = element.scrollHeight;
+        if (added || element.scrollHeight - element.scrollTop - element.clientHeight < 360) {
+            element.scrollTop = element.scrollHeight;
+            reading.current.anchor = { edge: 'bottom' };
+        } else setUnseen(sameTail);
+        noteAway(element);
     }, [props.turns.length, last?.turn.reply, last?.media.length, last?.proposals.length, last?.running]);
+    // A drawer opening, closing or resizing beside the thread changes its width and reflows every turn. The place read
+    // last stays under the reading line: the one from before the drawer moved, or the one the reader scrolled to while it was open.
+    React.useEffect(() => {
+        const element = scroller.current;
+        if (!element || typeof ResizeObserver === 'undefined') return;
+        const state = reading.current;
+        const capture = (): void => {
+            // A width the observer has not handled yet means the text has already reflowed: keep the place from before.
+            if (performance.now() < state.heldUntil || !state.width || Math.abs(Math.round(element.clientWidth) - state.width) >= 2) return;
+            state.anchor = comicChatReadingAnchor(element);
+        };
+        const onScroll = (): void => {
+            if (!state.frame) state.frame = requestAnimationFrame(() => { state.frame = 0; capture(); noteAway(element); });
+        };
+        // The reader's own scrolling (wheel, touch, keys, the scroll bar) becomes the place to keep, even mid-move.
+        const onInput = (): void => { state.heldUntil = 0; };
+        const observer = new ResizeObserver(() => {
+            const width = Math.round(element.clientWidth), height = element.clientHeight;
+            const lastHeight = state.height;
+            state.height = height;
+            if (!width) return;
+            if (Math.abs(width - state.width) >= 2) {
+                const first = !state.width;
+                state.width = width;
+                if (first) {
+                    capture();
+                    return;
+                }
+                // Held through every frame of the move, so the reflow on the way never stands in for the reader's place.
+                state.heldUntil = performance.now() + 240;
+                if (state.anchor && !restoreComicChatReadingAnchor(element, state.anchor)) state.anchor = undefined;
+                return;
+            }
+            followComicChatHeight(element, lastHeight, height);
+            noteAway(element);
+        });
+        const inputs = ['wheel', 'touchmove', 'pointerdown', 'keydown'] as const;
+        observer.observe(element);
+        element.addEventListener('scroll', onScroll, { passive: true });
+        for (const type of inputs) element.addEventListener(type, onInput, { passive: true });
+        return () => {
+            observer.disconnect();
+            element.removeEventListener('scroll', onScroll);
+            for (const type of inputs) element.removeEventListener(type, onInput);
+            cancelAnimationFrame(state.frame);
+            state.frame = 0;
+        };
+    }, []);
     const tile = (media: ComicChatMediaView) => <ComicChatMediaTile key={media.key} locale={props.locale} media={media} onMenu={props.onMenu} onOpen={props.onOpen}
         onRetry={props.onRetry} onCancel={props.onCancel} onSignIn={props.onSignIn} />;
-    return <div className='nmx-comic-chat-thread' ref={scroller} onClick={props.onContentClick}>
+    const toBottom = (): void => {
+        const element = scroller.current;
+        if (!element) return;
+        reading.current.anchor = { edge: 'bottom' };
+        setUnseen(false);
+        const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+        element.scrollTo({ top: element.scrollHeight, behavior: still ? 'auto' : 'smooth' });
+    };
+    const bottomLabel = localizeDesktopSurface(props.locale, unseen ? '有新消息，回到底部' : '回到底部');
+    return <><div className='nmx-comic-chat-thread' ref={scroller} onClick={props.onContentClick}>
         <div className='nmx-comic-chat-column'>
             {props.children}
             {props.turns.map(view => {
@@ -299,7 +468,11 @@ export function ComicChatThread(props: {
                 </section>;
             })}
         </div>
-    </div>;
+    </div>
+    {away && props.turns.length > 0 && <button type='button' className={`nmx-thread-to-bottom nmx-comic-chat-scroll-bottom${unseen ? ' has-unseen' : ''}`}
+        aria-label={bottomLabel} title={bottomLabel} onClick={toBottom}>
+        <i className='codicon codicon-chevron-down' aria-hidden='true'></i>{unseen ? <span aria-hidden='true'></span> : undefined}</button>}
+    </>;
 }
 
 export interface ComicChatMenuItem {
@@ -447,6 +620,8 @@ export interface ComicChatComposerProps {
     readonly onPickCast: (id: string) => void;
     readonly onOpenCast: () => void;
     readonly onRemoveReference: (key: string) => void;
+    /** Shows a reference large in the widget's viewer; without it the composer opens its own. */
+    readonly onOpenReference?: (reference: ComicChatReferenceView) => void;
     readonly onVoice: () => void;
     readonly onChooseFolder: () => void;
     readonly onClearFolder: () => void;
@@ -456,6 +631,121 @@ export interface ComicChatComposerProps {
 
 const MEDIA_FILE = /^(image\/(png|jpe?g|webp)|video\/(mp4|quicktime|webm))$/i;
 
+/**
+ * A long paste folds into a marker, as in the coding composer: the message box keeps one line (⟦粘贴文本 1 · …⟧) where
+ * the text went, a chip above unfolds it back into the box, and 发送 sends the whole text in its place. Comic prompts
+ * are prose, so a paste folds from 2,500 characters or 60 lines (the coding composer folds from 1,000). The texts stay
+ * on this device, so a draft that outlives a restart still has them.
+ */
+export function comicChatPasteFolds(text: string): boolean {
+    if (text.length >= 2_500) return true;
+    let lines = 1;
+    for (let index = 0; index < text.length && lines < 60; index++) if (text.charCodeAt(index) === 10) lines++;
+    return lines >= 60;
+}
+
+const COMIC_PASTE_KEY = 'nextmux.desktop.comicChatPastes.v1';
+const COMIC_PASTE_KEEP = { entries: 40, characters: 1_500_000 };
+interface StoredComicPaste { readonly reference: PastedTextReference; readonly savedAt: number }
+let comicPastes: Map<string, StoredComicPaste> | undefined;
+
+function comicPasteStore(): Map<string, StoredComicPaste> {
+    if (comicPastes) return comicPastes;
+    comicPastes = new Map();
+    try {
+        const saved: unknown = JSON.parse(window.localStorage.getItem(COMIC_PASTE_KEY) || '[]');
+        for (const item of Array.isArray(saved) ? saved : []) {
+            const reference = item?.reference;
+            if (typeof reference?.id === 'string' && typeof reference.marker === 'string' && typeof reference.content === 'string') {
+                comicPastes.set(reference.id, { reference, savedAt: Number(item.savedAt) || 0 });
+            }
+        }
+    } catch { /* an unreadable copy starts empty */ }
+    return comicPastes;
+}
+
+const comicPasteReferences = (): PastedTextReference[] => [...comicPasteStore().values()].map(item => item.reference);
+
+/** Newest first within the limits; a text still in a message box (`keep`) is never dropped. */
+function saveComicPastes(keep: ReadonlySet<string>): void {
+    const store = comicPasteStore();
+    let entries = 0, characters = 0;
+    for (const item of [...store.values()].sort((left, right) => right.savedAt - left.savedAt)) {
+        entries++;
+        characters += item.reference.content?.length ?? 0;
+        if (!keep.has(item.reference.id) && (entries > COMIC_PASTE_KEEP.entries || characters > COMIC_PASTE_KEEP.characters)) store.delete(item.reference.id);
+    }
+    for (let attempt = 0; attempt < 8; attempt++) {
+        try {
+            window.localStorage.setItem(COMIC_PASTE_KEY, JSON.stringify([...store.values()]));
+            return;
+        } catch {
+            // Storage full: drop the oldest text no message box needs and try again; whatever is left stays for this run.
+            const oldest = [...store.values()].filter(item => !keep.has(item.reference.id)).sort((left, right) => left.savedAt - right.savedAt)[0];
+            if (!oldest) return;
+            store.delete(oldest.reference.id);
+        }
+    }
+}
+
+/** Puts text into the message box as typing would: one step the box's own undo takes back, and React hears it. */
+function typeIntoComposer(textarea: HTMLTextAreaElement, text: string, start: number, end: number): void {
+    textarea.focus();
+    textarea.setSelectionRange(start, end);
+    if (document.execCommand('insertText', false, text)) return;
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(textarea, `${textarea.value.slice(0, start)}${text}${textarea.value.slice(end)}`);
+    textarea.setSelectionRange(start + text.length, start + text.length);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/** The message as sent: every folded paste whole, in its marker's place. */
+export function unfoldComicChatPastes(value: string, references: readonly PastedTextReference[]): string {
+    let whole = value;
+    for (const reference of pastedTextReferencesInDocument(value, references)) whole = whole.split(reference.marker).join(reference.content ?? reference.marker);
+    return whole;
+}
+
+const markerStarts = (value: string, marker: string): number[] => {
+    const starts: number[] = [];
+    for (let at = value.indexOf(marker); at >= 0; at = value.indexOf(marker, at + marker.length)) starts.push(at);
+    return starts;
+};
+
+/** A dragged-in reference seen large, in the conversation's own viewer: Escape, × or the backdrop closes it. */
+function ComicChatReferencePreview(props: { readonly locale: NextMuxDesktopLocale; readonly reference: ComicChatReferenceView; readonly onClose: () => void }): React.ReactElement {
+    const t = (key: ComicChatTextKey): string => comicChatText(props.locale, key);
+    const close = React.useRef(props.onClose);
+    close.current = props.onClose;
+    // Taken while rendering, before the close button takes focus: it gets it back when the viewer closes.
+    const opener = React.useRef(document.activeElement);
+    React.useEffect(() => {
+        const onKey = (event: KeyboardEvent): void => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            close.current();
+        };
+        window.addEventListener('keydown', onKey, true);
+        return () => {
+            window.removeEventListener('keydown', onKey, true);
+            const back = opener.current;
+            if (back instanceof HTMLElement && back.isConnected) back.focus({ preventScroll: true });
+        };
+    }, []);
+    const video = props.reference.kind === 'video';
+    return <div className={`nmx-attachment-lightbox nmx-comic-chat-viewer is-${video ? 'video' : 'image'} is-reference`} role='dialog' aria-modal='true' aria-label={props.reference.name}
+        onClick={event => { if (!(event.target instanceof Element) || !event.target.closest('img, video, button')) props.onClose(); }}>
+        <section>
+            <header><span className='nmx-lightbox-title'><strong data-nmx-literal>{props.reference.name}</strong></span>
+                <button type='button' className='nmx-lightbox-close' autoFocus aria-label={t('close')} title={t('close')} onClick={props.onClose}>
+                    <i className='codicon codicon-close' aria-hidden='true'></i></button></header>
+            <div className='nmx-attachment-lightbox-stage'>{video
+                ? <video src={props.reference.url} controls autoPlay playsInline />
+                : <img src={props.reference.url} alt='' draggable={false} />}</div>
+        </section>
+    </div>;
+}
+
 export function ComicChatComposer(props: ComicChatComposerProps): React.ReactElement {
     const t = (key: ComicChatTextKey, values?: Readonly<Record<string, string | number>>): string => comicChatText(props.locale, key, values);
     const [popover, setPopover] = React.useState<'add' | 'cast' | 'models'>();
@@ -464,6 +754,48 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
     const composing = React.useRef(false);
     const box = React.useRef<HTMLDivElement>(null);
     const fileInput = React.useRef<HTMLInputElement>(null);
+    const textarea = React.useRef<HTMLTextAreaElement | null>(null);
+    const overlay = React.useRef<HTMLDivElement>(null);
+    const [pasteIds, setPasteIds] = React.useState<readonly string[]>([]);
+    const [pasteNotice, setPasteNotice] = React.useState('');
+    const [preview, setPreview] = React.useState<ComicChatReferenceView>();
+    const outerTextareaRef = props.textareaRef;
+    const bindTextarea = React.useCallback((node: HTMLTextAreaElement | null): void => {
+        textarea.current = node;
+        if (typeof outerTextareaRef === 'function') outerTextareaRef(node);
+        else if (outerTextareaRef) (outerTextareaRef as React.MutableRefObject<HTMLTextAreaElement | null>).current = node;
+    }, [outerTextareaRef]);
+    // The folded pastes in the box: their chips above it, and the layer under its (then transparent) text that draws their
+    // markers as inline chips — the coding composer's overlay, kept in step on every edit without re-rendering the dock.
+    const paintPastes = React.useCallback((value: string): void => {
+        const references = pastedTextReferencesInDocument(value, comicPasteReferences());
+        const ids = references.map(reference => reference.id);
+        setPasteIds(current => current.length === ids.length && current.every((id, index) => id === ids[index]) ? current : ids);
+        const layer = overlay.current;
+        if (!layer) return;
+        layer.parentElement?.classList.toggle('has-markdown-links', references.length > 0);
+        if (!references.length) {
+            layer.replaceChildren();
+            return;
+        }
+        const parts: Node[] = [];
+        let cursor = 0;
+        for (const range of findPastedTextMarkerRanges(value, references)) {
+            if (!range.reference) continue;
+            if (range.start > cursor) parts.push(document.createTextNode(value.slice(cursor, range.start)));
+            const chip = document.createElement('span');
+            chip.className = 'nmx-composer-inline-paste-chip';
+            chip.textContent = value.slice(range.start, range.end);
+            parts.push(chip);
+            cursor = range.end;
+        }
+        if (cursor < value.length) parts.push(document.createTextNode(value.slice(cursor)));
+        layer.replaceChildren(...parts);
+        layer.scrollTop = textarea.current?.scrollTop ?? 0;
+    }, []);
+    React.useEffect(() => { paintPastes(textarea.current?.value ?? props.prompt); }, [props.prompt, paintPastes]);
+    // A reference removed while it is open closes its viewer.
+    React.useEffect(() => { if (preview && !props.references.some(reference => reference.key === preview.key)) setPreview(undefined); }, [preview, props.references]);
     React.useEffect(() => {
         if (!popover) return;
         // A press anywhere but the open drawer and the button that opened it closes it: the message box too.
@@ -481,6 +813,53 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
     // The model panel opens on the mode being written in.
     React.useEffect(() => { if (popover !== 'models') setTab(props.mode); }, [props.mode, popover]);
     const canSend = Boolean(props.prompt.trim()) && !props.blocked && !props.sending && Boolean(props.model);
+    const pastes = pasteIds.map(id => comicPasteStore().get(id)?.reference).filter((reference): reference is PastedTextReference => Boolean(reference));
+    const foldPaste = (element: HTMLTextAreaElement, text: string): void => {
+        const present = pastedTextReferencesInDocument(element.value, comicPasteReferences());
+        const reference = createPastedTextReference({
+            id: crypto.randomUUID(), ordinal: present.reduce((highest, item) => Math.max(highest, item.ordinal), 0) + 1,
+            createdAt: new Date(), content: text, label: composerAttachmentText(props.locale, 'pastedText')
+        });
+        comicPasteStore().set(reference.id, { reference, savedAt: Date.now() });
+        saveComicPastes(new Set([...present.map(item => item.id), reference.id]));
+        typeIntoComposer(element, reference.marker, element.selectionStart, element.selectionEnd);
+    };
+    // Unfolding puts the text back where its marker is (every copy of it), the caret after it; one undo takes it back.
+    const expandPaste = (reference: PastedTextReference): void => {
+        const element = textarea.current;
+        if (!element || reference.content === undefined) return;
+        const starts = markerStarts(element.value, reference.marker);
+        if (!starts.length) return;
+        if (element.maxLength > 0 && element.value.length + starts.length * (reference.content.length - reference.marker.length) > element.maxLength) {
+            setPasteNotice(pastedTextExpansionCopy(props.locale).tooLong);
+            return;
+        }
+        for (const start of [...starts].reverse()) typeIntoComposer(element, reference.content, start, start + reference.marker.length);
+        const caret = starts[0] + reference.content.length;
+        element.setSelectionRange(caret, caret);
+    };
+    const removePaste = (reference: PastedTextReference): void => {
+        const element = textarea.current;
+        if (!element) return;
+        for (const start of markerStarts(element.value, reference.marker).reverse()) typeIntoComposer(element, '', start, start + reference.marker.length);
+    };
+    // 发送 sends each folded text whole, in its marker's place.
+    const send = (): void => {
+        const element = textarea.current;
+        const value = element?.value ?? props.prompt;
+        const whole = unfoldComicChatPastes(value, comicPasteReferences());
+        if (whole !== value) {
+            if (element && element.maxLength > 0 && whole.length > element.maxLength) {
+                setPasteNotice(pastedTextExpansionCopy(props.locale).tooLong);
+                return;
+            }
+            props.onPrompt(whole);
+        }
+        props.onSend();
+    };
+    const openReference = (reference: ComicChatReferenceView): void => {
+        if (props.onOpenReference) props.onOpenReference(reference); else setPreview(reference);
+    };
     const media = (list: FileList | null | undefined): File[] => [...(list || [])].filter(file => MEDIA_FILE.test(file.type));
     const rows = Math.max(2, Math.min(8, props.prompt.split('\n').length));
     const picker = props.picker;
@@ -539,29 +918,63 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                     props.onFiles(files);
                 }}>
                 {dragging && <div className='nmx-comic-chat-drop' aria-hidden='true'><i className='codicon codicon-file-media'></i><span>{t('dropHint')}</span></div>}
-                {props.references.length > 0 && <div className='nmx-composer-assets nmx-comic-chat-refs'>
-                    {props.references.map((reference, index) => <span key={reference.key} className='nmx-comic-chat-ref' title={reference.name}>
-                        {reference.url ? <img src={reference.url} alt='' draggable={false} /> : <i className='codicon codicon-file-media' aria-hidden='true'></i>}
-                        <small>{props.firstFrame && index === 0 ? t('firstFrame') : t('reference')}</small>
-                        <button type='button' aria-label={`${t('remove')} · ${reference.name}`} title={t('remove')} onClick={() => props.onRemoveReference(reference.key)}>
-                            <i className='codicon codicon-close' aria-hidden='true'></i></button>
-                    </span>)}
+                {/* Pictures and folded pastes waiting to be sent: the coding composer's chips; click one to see it large or unfold it. */}
+                {(props.references.length > 0 || pastes.length > 0) && <div className='nmx-comic-chat-refs'>
+                    {props.references.map((reference, index) => <AttachmentChip key={reference.key} className='nmx-comic-chat-ref' locale={props.locale}
+                        name={reference.name} kind={reference.kind === 'video' ? 'file' : 'image'} mimeType={reference.kind === 'video' ? 'video/mp4' : undefined}
+                        thumbnail={reference.kind === 'video' ? undefined : reference.url} meta={props.firstFrame && index === 0 ? t('firstFrame') : t('reference')}
+                        previewLabel={`${t('openLarge')} · ${reference.name}`} onPreview={reference.url ? () => openReference(reference) : undefined}
+                        removeLabel={`${t('remove')} · ${reference.name}`} onRemove={() => props.onRemoveReference(reference.key)} />)}
+                    {pastes.map(reference => {
+                        const summary = formatPastedTextChipSummary(reference, props.locale);
+                        const unfold = pastedTextExpansionCopy(props.locale);
+                        return <AttachmentChip key={reference.id} className='nmx-comic-chat-ref nmx-pasted-text-chip' locale={props.locale} name={summary.title} kind='text'
+                            meta={summary.subtitle} hint={unfold.hint} previewLabel={unfold.action(summary.title)} onPreview={() => expandPaste(reference)}
+                            removeLabel={`${t('remove')} · ${summary.title}`} onRemove={() => removePaste(reference)}>
+                            <i className='codicon codicon-unfold nmx-pasted-text-expand' aria-hidden='true'></i>
+                        </AttachmentChip>;
+                    })}
                 </div>}
-                <div className='nmx-composer-input'>
-                    <ImeTextarea ref={props.textareaRef} value={props.prompt} rows={rows} maxLength={props.mode === 'speech' ? 8_000 : COMIC_CHAT_LIMITS.prompt}
+                <div className={`nmx-composer-input${pasteIds.length ? ' has-markdown-links' : ''}`}>
+                    <div ref={overlay} className='nmx-composer-markdown-overlay' aria-hidden='true' data-nmx-literal></div>
+                    <ImeTextarea ref={bindTextarea} value={props.prompt} rows={rows} maxLength={props.mode === 'speech' ? 8_000 : COMIC_CHAT_LIMITS.prompt}
                         placeholder={localizeDesktopSurface(props.locale, '发送消息或描述任务')}
-                        onChange={event => props.onPrompt(event.currentTarget.value)}
+                        onChange={event => {
+                            const value = event.currentTarget.value;
+                            props.onPrompt(value);
+                            paintPastes(value);
+                            if (pasteNotice) setPasteNotice('');
+                        }}
+                        onScroll={event => { if (overlay.current) overlay.current.scrollTop = event.currentTarget.scrollTop; }}
                         onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }}
                         onPaste={event => {
                             const files = media(event.clipboardData?.files);
-                            if (!files.length) return;
+                            if (files.length) {
+                                event.preventDefault();
+                                props.onFiles(files);
+                                return;
+                            }
+                            // A voice-over's text is what is read aloud: it always stays in view.
+                            const text = event.clipboardData?.getData('text/plain') ?? '';
+                            if (props.mode === 'speech' || !comicChatPasteFolds(text)) return;
                             event.preventDefault();
-                            props.onFiles(files);
+                            foldPaste(event.currentTarget, text);
                         }}
                         onKeyDown={event => {
+                            // Backspace or Delete next to a marker removes it whole, as in the coding composer.
+                            if ((event.key === 'Backspace' || event.key === 'Delete') && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !composing.current) {
+                                const element = event.currentTarget;
+                                const removal = removeAdjacentPastedTextMarker(element.value, element.selectionStart, element.selectionEnd,
+                                    event.key === 'Backspace' ? 'backward' : 'forward', comicPasteReferences());
+                                if (removal) {
+                                    event.preventDefault();
+                                    typeIntoComposer(element, '', removal.selectionStart, removal.selectionStart + element.value.length - removal.value.length);
+                                    return;
+                                }
+                            }
                             if (event.key !== 'Enter' || event.shiftKey || composing.current || event.nativeEvent.isComposing || event.keyCode === 229 || props.keyboardSubmitDisabled) return;
                             event.preventDefault();
-                            if (canSend && !props.running) props.onSend();
+                            if (canSend && !props.running) send();
                         }} />
                 </div>
                 <div className='nmx-comic-chat-toolbar'>
@@ -627,7 +1040,7 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                     {props.running
                         ? <button type='button' className='nmx-send-button is-stop' aria-label={t('stop')} title={t('stop')} onClick={props.onStop}><i className='codicon codicon-debug-stop' aria-hidden='true'></i></button>
                         : <button type='button' className='nmx-send-button' disabled={!canSend} aria-label={localizeDesktopSurface(props.locale, '发送')}
-                            title={props.blocked || localizeDesktopSurface(props.locale, '发送')} onClick={props.onSend}>
+                            title={props.blocked || localizeDesktopSurface(props.locale, '发送')} onClick={send}>
                             {props.sending ? <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i> : <i className='codicon codicon-arrow-up' aria-hidden='true'></i>}</button>}
                 </div>
             </div>
@@ -636,19 +1049,22 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                 {props.model && !props.blocked && props.estimate ? <span className='nmx-comic-chat-note' data-nmx-literal title={props.estimate}>{props.estimate}</span> : null}
                 {(() => {
                     // One notice at a time, in the corner: a failure, then the latest notice, then what keeps Send disabled.
-                    const text = props.error || props.notice || (!props.model ? t('noModel') : props.blocked || '');
+                    const notice = pasteNotice || props.notice;
+                    const text = props.error || notice || (!props.model ? t('noModel') : props.blocked || '');
                     if (!text) return null;
-                    const tone = props.error ? 'is-error' : props.notice ? 'is-info' : 'is-warning';
+                    const tone = props.error ? 'is-error' : pasteNotice ? 'is-warning' : props.notice ? 'is-info' : 'is-warning';
                     const needsSignIn = text === t('signInNeeded') || text === t('signIn') || text === relayText(props.locale, 'signInRequired');
                     return <div className={`nmx-route-price-notice nmx-council-below-notice ${tone}`} role='status' title={text}>
-                        <i className={`codicon codicon-${props.error ? 'error' : props.notice ? 'info' : 'warning'}`} aria-hidden='true' /><span data-nmx-literal>{text}</span>
+                        <i className={`codicon codicon-${props.error ? 'error' : pasteNotice ? 'warning' : props.notice ? 'info' : 'warning'}`} aria-hidden='true' /><span data-nmx-literal>{text}</span>
                         {needsSignIn && props.onSignIn
                             ? <button type='button' className='nmx-council-below-action' onClick={props.onSignIn}>{t('signIn')}</button>
-                            : !props.error && !props.notice && !props.model && <button type='button' className='nmx-council-below-action' onClick={props.onSetUpModels}>{t('setUpModels')}</button>}
+                            : !props.error && !notice && !props.model && <button type='button' className='nmx-council-below-action' onClick={props.onSetUpModels}>{t('setUpModels')}</button>}
                     </div>;
                 })()}
             </div>
         </div>
+        {preview && createPortal(<ComicChatReferencePreview locale={props.locale} reference={preview} onClose={() => setPreview(undefined)} />,
+            box.current?.closest<HTMLElement>('.nmx-shell') ?? document.body)}
     </div>;
 }
 
@@ -669,6 +1085,9 @@ export interface ComicMaterialView {
 }
 
 export type ComicMaterialScope = 'chat' | 'project' | 'all';
+
+/** The drawer's thumbnail column for each 素材库 size; the drawer is narrower than the 素材库 window. */
+const COMIC_MATERIAL_SIZES: Readonly<Record<ComicLibrarySize, string>> = { small: '84px', medium: '104px', large: '136px' };
 
 /**
  * 素材库: the pictures, clips and sounds the user kept (right-click → 加入素材库), most recently kept first — of this
@@ -693,6 +1112,7 @@ export function ComicMaterialsPanel(props: {
 }): React.ReactElement {
     const t = (key: ComicChatTextKey, values?: Readonly<Record<string, string | number>>): string => comicChatText(props.locale, key, values);
     const [kind, setKind] = React.useState<'all' | 'image' | 'character' | 'video' | 'audio'>('all');
+    const [librarySize, setLibrarySize] = useComicLibrarySize();
     const panel = React.useRef<HTMLElement>(null);
     React.useEffect(() => {
         if (props.pick && (kind === 'video' || kind === 'audio')) setKind('all');
@@ -737,6 +1157,7 @@ export function ComicMaterialsPanel(props: {
         : [['all', 'all'], ['image', 'images'], ['character', 'character'], ['video', 'videos'], ['audio', 'audio']];
     const scopeLabel: Readonly<Record<ComicMaterialScope, ComicChatTextKey>> = { chat: 'scopeChat', project: 'scopeProject', all: 'scopeAll' };
     return <aside ref={panel} tabIndex={-1} className={`nmx-comic-materials ${props.pick ? 'is-picking' : ''}`} aria-label={t('materials')}
+        style={{ '--nmx-library-card-min': COMIC_MATERIAL_SIZES[librarySize] } as React.CSSProperties}
         onKeyDown={event => { if (event.key === 'Escape') { if (document.querySelector('.nmx-comic-chat-viewer, .nmx-attachment-lightbox, .nmx-comic-chat-menu')) return; event.preventDefault(); props.onClose(); } }}>
         <header>
             <div><strong>{props.pick ? t('fromMaterials') : t('materials')}</strong><small>{t('materialsLead')}</small></div>
@@ -749,6 +1170,7 @@ export function ComicMaterialsPanel(props: {
         <div className='nmx-comic-materials-filters'>
             <div role='tablist' aria-label={t('materials')}>{kinds.map(([id, label]) => <button key={id} type='button' role='tab' aria-selected={kind === id}
                 className={kind === id ? 'is-active' : ''} onClick={() => setKind(id)}>{t(label)}<b data-nmx-literal>{props.items.filter(item => matchesKind(item, id)).length}</b></button>)}</div>
+            <ComicLibrarySizeControl locale={props.locale} size={librarySize} onSize={setLibrarySize} />
         </div>
         {props.loading ? <p className='nmx-comic-materials-empty'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i> {t('loadingChats')}</p>
             : shown.length === 0 ? <p className='nmx-comic-materials-empty'>{props.items.length === 0 && props.emptyText || t('noMaterials')}</p>

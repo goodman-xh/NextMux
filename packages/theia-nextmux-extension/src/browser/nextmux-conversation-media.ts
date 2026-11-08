@@ -68,20 +68,29 @@ export interface ResolvedConversationTarget {
 }
 
 // Inline paths may include a recognized bare filename. Runtime names (`node.js`) and versions stay plain code. Inline code
-// has its own edges, so an absolute path under a user folder or a drive may hold spaces (`/Users/me/My Project/a.ts`,
-// `C:\\Users\\John Smith\\a.ts`, `C:\\a.ts`); a command with flags (`/usr/bin/env node a.js`, `x -y`) stays code.
+// and quotes have their own edges, so an absolute path under a user folder or a drive may hold spaces (`/Users/me/My Project/a.ts`,
+// `C:\\Program Files\\My App`, `C:\\a.ts`); a command (`/usr/bin/env node a.js`, `/Users/me/project --flag`) stays code.
 const EXTENSION = String.raw`\.(?=[a-z0-9]*[a-z])[a-z0-9]{1,8}`;
 const USER_ROOT = String.raw`(?:\/(?:Users|home|Volumes|tmp|private|var|opt|etc|mnt|srv|data)\/|[a-z]:[\\/])`;
+// Words of a name under such a root are joined by spaces. A word after a space is never a command option: `--anything`, a short
+// `-x`/`-xy`/`-1` that ends the path or takes `=`, or a `-word` that more words follow (`java -jar app.jar`). Name suffixes stay
+// (`最终修补 -zhengshi`, `最终修补 -获取加密`, `report - Copy.txt`, `Final Patch -v2`). Spaces and separators delimit the words,
+// so a deep path never backtracks across them.
+const OPTION = String.raw`-(?:-|[a-z0-9][^\s\\/]*(?= )|(?:[a-z]{1,2}|\d)(?:=|$))`;
+const SPACED_NAME = String.raw`[^\\/\s"<>\`|*?:]+(?: +(?!${OPTION})[^\\/\s"<>\`|*?:]+)*`;
 // Extensionless directories need at least two segments and a known absolute root; relative prose stays untouched.
-const USER_DIRECTORY_PATH = String.raw`(?=${USER_ROOT})(?:[a-z]:)?(?:[\\/][^\\/\s"'<>\`|*?:]+){2,}[\\/]?`;
+const USER_DIRECTORY_PATH = String.raw`(?=${USER_ROOT})(?:[a-z]:)?(?:[\\/]${SPACED_NAME}){2,}[\\/]?`;
 const TEXT_DIRECTORY_PATH = String.raw`(?=${USER_ROOT})(?:[a-z]:)?(?:[\\/][^\\/\s"'<>\`|*?:，。；、）)\]]+?){2,}?[\\/]?`;
 const CODE_PATH = new RegExp(String.raw`^(?:${USER_DIRECTORY_PATH}|(?:(?:\.{1,2}\/|\/|[a-z]:[\\/])?(?:[^\s\`'"<>|*?:\\/]+[\\/])+[^\s\`'"<>|*?:\\/]+`
-    + String.raw`|(?![^]*\s-)${USER_ROOT}(?:[^\`'"<>|*?:\\/]+[\\/])*[^\`'"<>|*?:\\/]+)${EXTENSION}(?::\d{1,6}(?::\d{1,6})?)?)$`, 'i');
+    + String.raw`|${USER_ROOT}(?:${SPACED_NAME}[\\/])*${SPACED_NAME})${EXTENSION}(?::\d{1,6}(?::\d{1,6})?)?)$`, 'i');
 // An absolute path written in plain text ("已保存到 /Users/me/Movies/demo.mp4", "C:/work/a.txt"). The colon of a drive letter
 // is not a start, so `C:/Users/…` links whole instead of from `/Users/`.
 const TEXT_PATH = new RegExp(String.raw`(^|[\s(（“"'：]|(?<![a-z]):)(${USER_ROOT}[^\s<>"'\`，。；、）)\]]+?${EXTENSION}|${TEXT_DIRECTORY_PATH})(?=$|[\s,;!?，。；：！？、）)\]"']|\.(?:\s|$))`, 'gi');
-// A quoted absolute path may hold spaces ("/Users/me/My Project/a.ts", 「C:\\Users\\John Smith\\a.ts」).
-const QUOTED_PATH = new RegExp(String.raw`(["“'「『])(${USER_ROOT}[^"”'」』\`<>\n]*?${EXTENSION}|${USER_DIRECTORY_PATH})(?=["”'」』])`, 'gi');
+// A quote that opens on an absolute root closes at a quote of its own kind on the same line, and everything between is the
+// candidate ("F:\\修补\\最终修补 -zhengshi", 「C:\\Program Files\\My App」, "/Users/me/it's here/a.txt"), as Explorer's “Copy as
+// path” writes it. Each body stops at the next quote of its kind, so the scan stays linear.
+const QUOTED_PATH = new RegExp(String.raw`(?<=["“])${USER_ROOT}[^"“”\n]*(?=["”])|(?<=['‘])${USER_ROOT}[^'‘’\n]*(?=['’])`
+    + String.raw`|(?<=「)${USER_ROOT}[^「」\n]*(?=」)|(?<=『)${USER_ROOT}[^『』\n]*(?=』)`, 'gi');
 
 /** `src/app.ts:42` → `src/app.ts#L42`, the form file links already use. */
 function pathTarget(value: string): string {
@@ -104,13 +113,27 @@ const RUNTIME_NAMES = new Set(['node.js', 'next.js', 'vue.js', 'react.js', 'thre
 const DOMAIN_EXTENSIONS = new Set(['com', 'org', 'net', 'io', 'dev', 'ai', 'app', 'cn', 'co', 'edu', 'gov', 'uk', 'de', 'jp', 'fr']);
 const BOUNDED_PATH = new RegExp(String.raw`(^|[\s(（\[{"'\`“「『|=：])([^\s\`"'“”「」『』<>|*?=，。；、）)\]{}]*?${EXTENSION}(?::\d{1,6}(?::\d{1,6})?)?(?:#L\d+(?:-L?\d+)?)?)(?=$|[\s,;!?，。；：！？、）)\]{}"'\`”」』|]|\.(?:\s|$))`, 'gi');
 
+// A last name with spaces is a command line or a sentence, not a name, when it sits right inside a bin folder
+// (`.venv/bin/python manage.py migrate`) or a word before its last is a file name (`a.txt is missing`).
+function spacedNameIsCommandOrProse(path: string): boolean {
+    const segments = path.replace(/[\\/]+$/, '').split(/[\\/]/);
+    const words = segments[segments.length - 1].split(/ +/);
+    if (words.length < 2) return false;
+    if (/^(?:\.?bin|scripts)$/i.test(segments[segments.length - 2] || '')) return true;
+    return words.slice(0, -1).some(word => {
+        const lower = word.toLowerCase();
+        const extension = /\.([a-z0-9]{1,8})$/.exec(lower)?.[1] || '';
+        return (BARE_FILE_EXTENSIONS.has(extension) || extension === 'exe') && !RUNTIME_NAMES.has(lower);
+    });
+}
+
 /** Recognize local paths and known bare filenames without treating domains/commands as files. */
 export function isValidLocalFileLinkCandidate(raw: string): boolean {
     const trimmed = raw.trim();
     if (!trimmed || trimmed.length > 4096) return false;
     const value = trimmed.replace(/(?:#L\d+(?:-L?\d+)?|:\d{1,6}(?::\d{1,6})?)$/i, '');
     if (value.startsWith('//') || !isLocalConversationTarget(value)) return false;
-    if (/[\\/]/.test(value)) return CODE_PATH.test(value);
+    if (/[\\/]/.test(value)) return CODE_PATH.test(value) && !spacedNameIsCommandOrProse(value);
     if (/[\s\`'"<>|*?:#@=]/.test(value) || /^v?\d+(?:\.\d+)+(?:[-+][\w.-]+)?$/i.test(value)) return false;
     const lower = value.toLowerCase();
     const extension = lower.includes('.') ? lower.slice(lower.lastIndexOf('.') + 1) : '';
@@ -131,13 +154,27 @@ export interface LocalFileLinkCandidate {
 /** The same bounded scanner serves rendered text and persisted tool command/output evidence. */
 export function findLocalFileLinkCandidatesInText(text: string): LocalFileLinkCandidate[] {
     const found: LocalFileLinkCandidate[] = [];
-    for (const pattern of [QUOTED_PATH, TEXT_PATH, BOUNDED_PATH]) {
+    // A quoted path links whole. When the whole is no path, neither is its part before a space:
+    // `"F:\\修补\\最终修补 -x --y"` must not link `F:\\修补\\最终修补`.
+    const quotedStarts = new Set<number>();
+    QUOTED_PATH.lastIndex = 0;
+    for (let match = QUOTED_PATH.exec(text); match; match = QUOTED_PATH.exec(text)) {
+        // Spaces and sentence punctuation typed before the closing quote end the sentence, not the path.
+        let length = match[0].length;
+        while (length && /[\s.,;!?。，；！？、]/.test(match[0][length - 1])) length--;
+        const path = match[0].slice(0, length);
+        const target = normalizeLocalFileLinkTarget(path);
+        if (target) found.push({ start: match.index, end: match.index + path.length, target });
+        else quotedStarts.add(match.index);
+    }
+    for (const pattern of [TEXT_PATH, BOUNDED_PATH]) {
         pattern.lastIndex = 0;
         for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
             const target = normalizeLocalFileLinkTarget(match[2]);
             if (!target) continue;
             const start = match.index + match[1].length;
             const end = start + match[2].length;
+            if (quotedStarts.has(start) && /\s/.test(text.charAt(end))) continue;
             if (found.some(candidate => start < candidate.end && end > candidate.start)) continue;
             found.push({ start, end, target });
         }

@@ -4,7 +4,7 @@ import { selectMainPriceDimensions, validSummaryRate, priceDisplayUnitSize } fro
 import * as React from '@theia/core/shared/react';
 import { createPortal } from '@theia/core/shared/react-dom';
 import type { NextMuxPlatformService, PlatformMerchantSupportCatalogPage, PlatformOffering } from '../common/nextmux-platform-protocol';
-import { publicMerchantApiDisplay, type PublicMerchantDirectoryPage, type PublicMerchantDirectoryQuery, type PublicMerchantIdentity } from '../common/nextmux-public-merchants';
+import { publicMerchantApiDisplay, publicMerchantDepositText, type PublicMerchantDirectoryPage, type PublicMerchantDirectoryQuery, type PublicMerchantIdentity } from '../common/nextmux-public-merchants';
 import { desktopText, type NextMuxDesktopLocale } from './nextmux-locale';
 import { modelCenterText, modelCenterPriceMetric, modelCenterPriceUnit, modelCenterChecksFailing, modelCenterApiState } from './nextmux-model-center-locale';
 import { modelUsageText } from './nextmux-model-usage-locale';
@@ -179,6 +179,21 @@ export function ModelCenterHint({ text, locale, children, focusable = false, kee
         {children}{position && createPortal(<span ref={tooltip} id={id} className='nmx-mc-tooltip' role='tooltip' dir={locale === 'ar' ? 'rtl' : 'ltr'} lang={locale}
             style={position}>{text}</span>, document.body)}
     </span>;
+}
+
+/**
+ * The gold seal of a store holding the platform's security deposit: a scalloped rosette in the theme's gold with a check
+ * in the surface's ink. It is not the outlined `verified` mark of the authenticity metric beside it on the card.
+ */
+export function DepositVerifiedSeal({ size = 14 }: { size?: number }): React.ReactElement {
+    return <svg className='nmx-mc-deposit-seal' width={size} height={size} viewBox='0 0 16 16' aria-hidden='true' focusable='false'>
+        <g fill='currentColor'>
+            <circle cx='8' cy='8' r='5.6' />
+            {[0, 45, 90, 135, 180, 225, 270, 315].map(angle => <circle key={angle} r='2.3'
+                cx={(8 + 5 * Math.cos(angle * Math.PI / 180)).toFixed(2)} cy={(8 + 5 * Math.sin(angle * Math.PI / 180)).toFixed(2)} />)}
+        </g>
+        <path d='M5.4 8.2l1.75 1.75 3.6-3.65' fill='none' stroke='var(--mc-gold-ink, #1d1b1e)' strokeWidth='1.55' strokeLinecap='round' strokeLinejoin='round' />
+    </svg>;
 }
 
 /**
@@ -441,8 +456,12 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
                 const outputs = merchantOutputCategories(merchant.outputCategories);
                 const storeIntro = (merchant.storeTagline || merchant.storeDescription || '').trim();
                 const storeIntroDisplay = storeIntro || text('noStoreIntro');
-                return <article className='nmx-mc-merchant' key={merchant.id} data-model-center-merchant={merchant.id}>
-                    <div className='nmx-mc-identity'>{hint(<strong>{merchant.name}</strong>, `${merchant.name}\n${storeIntroDisplay}`)}
+                // A store holding the security deposit: its name in gold and the gold seal after it, both saying so on hover.
+                const deposit = merchant.depositVerified === true ? publicMerchantDepositText(locale) : '';
+                const nameHint = hint(<strong className={deposit ? 'is-deposit-verified' : undefined}>{merchant.name}</strong>,
+                    [merchant.name, deposit, storeIntroDisplay].filter(Boolean).join('\n'));
+                return <article className='nmx-mc-merchant' key={merchant.id} data-model-center-merchant={merchant.id} data-deposit-verified={deposit ? 'true' : undefined}>
+                    <div className='nmx-mc-identity'>{deposit ? <span className='nmx-mc-name-line'>{nameHint}{hint(<DepositVerifiedSeal />, deposit)}</span> : nameHint}
                         {hint(
                             <p className={`nmx-mc-tagline nmx-mc-merchant-bio${storeIntro ? '' : ' is-empty'}`} data-testid={`mc-store-tagline-${merchant.id}`} data-nmx-literal dir='auto'>
                                 {storeIntroDisplay}
@@ -650,7 +669,13 @@ function MerchantModelDrawerBody({ service, merchant, locale, onClose, closing =
                     if (next) { event.preventDefault(); next.focus(); }
                 }
             }}>
-            <header><div><ModelCenterHint locale={locale} text={merchant.name} focusable><h3>{merchant.name}</h3></ModelCenterHint><code dir='ltr'>{merchant.publicCode || '—'}</code></div><button type='button' aria-label={text('close')} onClick={onClose}><i className='codicon codicon-close' aria-hidden='true' /></button></header>
+            <header><div>{merchant.depositVerified === true
+                ? <div className='nmx-mc-drawer-title'>
+                    <ModelCenterHint locale={locale} text={`${merchant.name}\n${publicMerchantDepositText(locale)}`} focusable><h3 className='is-deposit-verified'>{merchant.name}</h3></ModelCenterHint>
+                    <ModelCenterHint locale={locale} text={publicMerchantDepositText(locale)} focusable><DepositVerifiedSeal size={16} /></ModelCenterHint>
+                </div>
+                : <ModelCenterHint locale={locale} text={merchant.name} focusable><h3>{merchant.name}</h3></ModelCenterHint>}
+                <code dir='ltr'>{merchant.publicCode || '—'}</code></div><button type='button' aria-label={text('close')} onClick={onClose}><i className='codicon codicon-close' aria-hidden='true' /></button></header>
             <MerchantStoreProfile merchant={merchant} locale={locale} />
             <label className='nmx-mc-model-search'><i className='codicon codicon-search' aria-hidden='true' /><ImeInput type='search' data-model-center-model-search
                 value={search} aria-label={text('modelSearch')} placeholder={text('modelSearch')} maxLength={120}

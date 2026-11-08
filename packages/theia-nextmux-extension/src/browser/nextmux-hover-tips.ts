@@ -7,6 +7,11 @@
  */
 const TARGETS = '.nmx-workspace-controls button, .nmx-titlebar-actions button, .nmx-titlebar-context button, [data-nmx-tip]';
 const DELAY_MS = 320;
+/**
+ * Content that changes all the time (the conversation while it scrolls or streams, the sidebar, the drawer, the
+ * composer, terminals, editors) holds none of the title bar labels measured below.
+ */
+const UNRELATED_CONTENT = '.nmx-task-view, .nmx-thread-timeline, .nmx-context-nav, .nmx-work-context, .nmx-composer, .nmx-comic-chat-thread, .xterm, .monaco-editor';
 
 export function installHoverTips(root: HTMLElement): () => void {
     const doc = root.ownerDocument;
@@ -85,18 +90,43 @@ export function installHoverTips(root: HTMLElement): () => void {
         for (const label of labels) if (!current.has(label)) { resize?.unobserve(label); labels.delete(label); }
         for (const label of current) { if (!labels.has(label)) { labels.add(label); resize?.observe(label); } updateOverflow(label); }
     };
-    const changes = new MutationObserver(refreshLabels);
+    // Measuring reads layout. Done straight from the observer it forced a synchronous reflow inside the frames of a
+    // wheel scroll (the virtual list mounts and unmounts turns as it goes); now at most once per frame, and only for
+    // changes outside content that never holds these labels.
+    let refreshFrame = 0;
+    const scheduleRefresh = (): void => {
+        if (refreshFrame) return;
+        refreshFrame = view.requestAnimationFrame(() => {
+            refreshFrame = 0;
+            refreshLabels();
+        });
+    };
+    const changes = new MutationObserver(records => {
+        for (const record of records) {
+            const element = record.target instanceof Element ? record.target : record.target.parentElement;
+            if (!element?.closest(UNRELATED_CONTENT)) {
+                scheduleRefresh();
+                return;
+            }
+        }
+    });
     changes.observe(root, { childList: true, subtree: true, characterData: true });
     refreshLabels();
+    // Scrolling anywhere hides a label; with none showing or pending, a scroll does no work at all.
+    const onScroll = (): void => {
+        if (tip || timer || target) hide();
+    };
     root.addEventListener('focusin', focus);
     root.addEventListener('focusout', hide);
     root.addEventListener('mouseover', over);
     root.addEventListener('mouseout', out);
     root.addEventListener('mousedown', hide, true);
     view.addEventListener('blur', hide);
-    view.addEventListener('scroll', hide, true);
+    view.addEventListener('scroll', onScroll, { capture: true, passive: true });
     return () => {
         hide();
+        if (refreshFrame) view.cancelAnimationFrame(refreshFrame);
+        refreshFrame = 0;
         resize?.disconnect(); changes.disconnect();
         for (const label of labels) label.removeAttribute('data-nmx-nav-overflow');
         root.removeEventListener('focusin', focus);
@@ -105,6 +135,6 @@ export function installHoverTips(root: HTMLElement): () => void {
         root.removeEventListener('mouseout', out);
         root.removeEventListener('mousedown', hide, true);
         view.removeEventListener('blur', hide);
-        view.removeEventListener('scroll', hide, true);
+        view.removeEventListener('scroll', onScroll, { capture: true });
     };
 }

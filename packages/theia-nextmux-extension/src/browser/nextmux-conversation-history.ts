@@ -58,6 +58,17 @@ export interface ConversationHistorySessionLike<TTurn extends ConversationHistor
     readonly viewState?: unknown;
     readonly agentChildDrafts?: readonly AgentChildDraft[];
     readonly agentChildDraftsUpdatedAt?: number;
+    /**
+     * The conversation's unsent composer input. The renderer writes it to the synchronous
+     * mirror before the debounced durable save and bumps `updatedAt` with it, so the newer
+     * of the two records owns it (see `rendererComposerDraftClock`).
+     */
+    readonly draftPrompt?: string;
+    readonly draftPastedTextReferences?: string;
+    readonly draftAttachments?: readonly unknown[];
+    /** An empty conversation's title follows its draft while `titleOrigin` is 'default' or 'draft'. */
+    readonly title?: string;
+    readonly titleOrigin?: string;
     readonly turns: readonly TTurn[];
 }
 
@@ -1125,10 +1136,42 @@ function sessionFingerprint(session: ConversationHistorySessionLike): string {
     return `${session.id}:${session.updatedAt}:${historyRevision(session.historyRevision)}:${session.viewStateUpdatedAt || 0}:${agentChildDraftClock(session.agentChildDraftsUpdatedAt)}:${session.turns.length}:${last?.id || ''}`;
 }
 
+function sameComposerDraft(left: ConversationHistorySessionLike, right: ConversationHistorySessionLike): boolean {
+    return (left.draftPrompt || '') === (right.draftPrompt || '')
+        && (left.draftPastedTextReferences || '[]') === (right.draftPastedTextReferences || '[]')
+        && sameStartupValue(left.draftAttachments?.length ? left.draftAttachments : [], right.draftAttachments?.length ? right.draftAttachments : []);
+}
+
+function hasComposerDraft(session: ConversationHistorySessionLike): boolean {
+    return Boolean(session.draftPrompt || session.draftAttachments?.length);
+}
+
+/**
+ * When the renderer's composer draft is newer than the durable one, the time it was written;
+ * otherwise undefined. The draft timer writes the synchronous mirror at once and the durable
+ * store only after the save debounce, so when the process is killed or the power fails in
+ * between, the mirror holds the only copy of what was typed. A draft the renderer has not
+ * changed since `initial` (the snapshot it started from) is only as new as that snapshot.
+ */
+function rendererComposerDraftClock(
+    base: ConversationHistorySessionLike, current: ConversationHistorySessionLike,
+    durable: ConversationHistorySessionLike, initial?: ConversationHistorySessionLike
+): number | undefined {
+    if (sameComposerDraft(current, durable)) return undefined;
+    const clock = initial && sameComposerDraft(current, initial)
+        ? Math.min(current.updatedAt, initial.updatedAt) : current.updatedAt;
+    if (!(clock > durable.updatedAt)) return undefined;
+    // Sending or queueing empties the draft in the same write that adds the turn or queue
+    // entry. A merge that keeps the durable record drops those, so the emptied draft must
+    // not erase the saved text as well.
+    if (base === durable && !hasComposerDraft(current) && hasComposerDraft(durable)) return undefined;
+    return clock;
+}
+
 function mergeRendererViewState<
     TTurn extends ConversationHistoryTurnLike,
     TSession extends ConversationHistorySessionLike<TTurn>
->(base: TSession, current: TSession, durable: TSession): TSession {
+>(base: TSession, current: TSession, durable: TSession, initial?: ConversationHistorySessionLike): TSession {
     const currentUpdatedAt = Number.isFinite(current.viewStateUpdatedAt) ? Math.max(0, Number(current.viewStateUpdatedAt)) : 0;
     const durableUpdatedAt = Number.isFinite(durable.viewStateUpdatedAt) ? Math.max(0, Number(durable.viewStateUpdatedAt)) : 0;
     const renderer = currentUpdatedAt > durableUpdatedAt ? current
@@ -1137,11 +1180,17 @@ function mergeRendererViewState<
     const viewStateUpdatedAt = Math.max(currentUpdatedAt, durableUpdatedAt);
     const currentDraftClock = agentChildDraftClock(current.agentChildDraftsUpdatedAt);
     const durableDraftClock = agentChildDraftClock(durable.agentChildDraftsUpdatedAt);
+    const composerClock = rendererComposerDraftClock(base, current, durable, initial);
     // Preserve the acknowledged object when recovery contributes no newer
     // state. Otherwise an unrelated new draft would rewrite every mirror row.
-    if (base === durable && currentUpdatedAt <= durableUpdatedAt && currentDraftClock <= durableDraftClock) return durable;
+    if (base === durable && currentUpdatedAt <= durableUpdatedAt && currentDraftClock <= durableDraftClock
+        && composerClock === undefined) return durable;
     const draftOwner = currentDraftClock > durableDraftClock ? current : durableDraftClock > currentDraftClock ? durable : base;
     const draftClock = Math.max(currentDraftClock, durableDraftClock);
+    // The composer's text, pasted-text chips and attachments come from one record, never half of each.
+    const composerOwner = composerClock === undefined ? durable : current;
+    const titleFollowsDraft = composerClock !== undefined && base.turns.length === 0 && typeof current.title === 'string'
+        && (current.titleOrigin === 'default' || current.titleOrigin === 'draft');
     return {
         ...base,
         viewState: renderer.viewState,
@@ -1149,7 +1198,15 @@ function mergeRendererViewState<
             agentChildDrafts: normalizeAgentChildDrafts(draftOwner.agentChildDrafts, base.turns),
             agentChildDraftsUpdatedAt: draftClock
         } : {}),
-        ...(viewStateUpdatedAt > 0 ? { viewStateUpdatedAt } : {})
+        ...(viewStateUpdatedAt > 0 ? { viewStateUpdatedAt } : {}),
+        ...(sameComposerDraft(base, composerOwner) ? {} : {
+            draftPrompt: composerOwner.draftPrompt,
+            draftPastedTextReferences: composerOwner.draftPastedTextReferences,
+            draftAttachments: composerOwner.draftAttachments
+        }),
+        ...(titleFollowsDraft ? { title: current.title, titleOrigin: current.titleOrigin } : {}),
+        // Typing a draft moves its conversation up the list, so the recovered draft keeps that place.
+        ...(composerClock !== undefined && composerClock > base.updatedAt ? { updatedAt: composerClock } : {})
     };
 }
 
@@ -1175,14 +1232,14 @@ export function mergeConversationHistorySessions<
             merged.push(durableSession);
             continue;
         }
+        const initial = incompleteInitialById?.get(currentSession.id);
         const currentHistoryRevision = historyRevision(currentSession.historyRevision);
         const durableHistoryRevision = historyRevision(durableSession.historyRevision);
         if (currentHistoryRevision !== durableHistoryRevision) {
             const winner = currentHistoryRevision > durableHistoryRevision ? currentSession : durableSession;
-            merged.push(mergeRendererViewState(winner, currentSession, durableSession));
+            merged.push(mergeRendererViewState(winner, currentSession, durableSession, initial));
             continue;
         }
-        const initial = incompleteInitialById?.get(currentSession.id);
         if (initial && historyRevision(initial.historyRevision) === currentHistoryRevision) {
             const turns = mergeTurns(currentSession.turns, durableSession.turns, initial.turns);
             // The startup mirror can contain only the newest turns. Compare
@@ -1201,24 +1258,27 @@ export function mergeConversationHistorySessions<
             // object is already the acknowledged persistence baseline; keep
             // its identity so a recovery read does not create a spurious
             // upsert (or rewrite a session that the user never edited).
+            // The mirror's composer draft is the exception: when it was
+            // written after the durable record, the process ended before the
+            // debounced save, and mergeRendererViewState keeps that text.
             if (!startupChanged) {
-                merged.push(mergeRendererViewState(durableSession, currentSession, durableSession));
+                merged.push(mergeRendererViewState(durableSession, currentSession, durableSession, initial));
                 continue;
             }
             const base = currentSession.updatedAt > durableSession.updatedAt
                 ? { ...durableSession, ...currentSession } : durableSession;
-            merged.push(mergeRendererViewState(turnsChanged ? { ...base, turns } : base, currentSession, durableSession));
+            merged.push(mergeRendererViewState(turnsChanged ? { ...base, turns } : base, currentSession, durableSession, initial));
             continue;
         }
         if (currentSession.updatedAt <= durableSession.updatedAt) {
-            merged.push(mergeRendererViewState(durableSession, currentSession, durableSession));
+            merged.push(mergeRendererViewState(durableSession, currentSession, durableSession, initial));
             continue;
         }
         merged.push(mergeRendererViewState({
             ...durableSession,
             ...currentSession,
             turns: mergeTurns(currentSession.turns, durableSession.turns)
-        }, currentSession, durableSession));
+        }, currentSession, durableSession, initial));
     }
     for (const currentSession of current) {
         if (!durableById.has(currentSession.id)) merged.push(currentSession);
@@ -1227,8 +1287,13 @@ export function mergeConversationHistorySessions<
     merged.sort((left, right) => right.updatedAt - left.updatedAt);
     const durableFingerprint = durable.map(sessionFingerprint).sort().join('|');
     const mergedFingerprint = merged.map(sessionFingerprint).sort().join('|');
+    // A kept composer draft must reach the durable store even if no clock or turn differs.
+    const composerDraftsChanged = merged.some(session => {
+        const saved = durableById.get(session.id);
+        return saved !== undefined && saved !== session && !sameComposerDraft(session, saved);
+    });
     return {
         sessions: merged,
-        changedFromDurable: startupFieldsChanged || durableFingerprint !== mergedFingerprint
+        changedFromDurable: startupFieldsChanged || composerDraftsChanged || durableFingerprint !== mergedFingerprint
     };
 }
