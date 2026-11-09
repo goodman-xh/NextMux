@@ -10,8 +10,8 @@ import { modelCenterText, modelCenterPriceMetric, modelCenterPriceUnit, modelCen
 import { modelUsageText } from './nextmux-model-usage-locale';
 import { relayEvidenceText, relayMarketplaceText } from './nextmux-relay-marketplace-locale';
 import { relayDelistedText, relayText } from './nextmux-relay-locale';
-import { modelPickerEvidenceText, relayMeasurementNote, relayMultiplierTag, relayMultiplierText } from './nextmux-relay-picker';
-import { INITIAL_RELAY_QUALITY, measuredModelFidelity } from '../common/nextmux-relay-evidence';
+import { modelPickerEvidenceText, relayLatencyText, relayMeasurementNote, relayMultiplierTag, relayMultiplierText } from './nextmux-relay-picker';
+import { INITIAL_RELAY_QUALITY, measuredModelFidelity, measuredRelayLatency } from '../common/nextmux-relay-evidence';
 import { offeringMultiplierBps, offeringPriceSignature, offeringPriceText } from './nextmux-offering-price';
 import { ImeInput } from './nextmux-ime-field';
 import type { ModelPrimaryCategory } from '@nextmux/model-runtime/model-taxonomy';
@@ -36,6 +36,21 @@ export function modelCenterFilterLabel(locale: NextMuxDesktopLocale, filter: Mod
     if (filter === 'all') return modelCenterText(locale, 'allCategories');
     if (filter === 'coding') return modelCapabilityLabel(locale, 'tools');
     return (MODEL_CENTER_CATEGORIES.find(entry => entry.filter === filter)?.categories ?? []).map(category => modelCategoryLabel(locale, category)).join(' / ');
+}
+/**
+ * The latency a store's model row shows: the model's TTFT of the past week, else its API's latest under ≈, with notes
+ * saying whose value it is and, when over a day old, when it was measured. Nothing measured, nothing shown.
+ */
+export function merchantModelLatency(locale: NextMuxDesktopLocale, model: Pick<PlatformOffering, 'network' | 'latencyObservedAt'>,
+    now = Date.now()): { readonly value: string; readonly note?: string } | undefined {
+    const own = measuredRelayLatency(model.network?.lastLatencyMs);
+    const api = own === undefined ? measuredRelayLatency(model.network?.endpointLatencyMs) : undefined;
+    const shown = own ?? api;
+    if (shown === undefined) return undefined;
+    const at = own !== undefined ? model.latencyObservedAt : model.network?.endpointLatencyObservedAt;
+    const notes = [api !== undefined ? relayMeasurementNote(locale, 'latencyFromApi') : '',
+        typeof at === 'number' && at > 0 && at < now - 86_400_000 ? relayMeasurementNote(locale, 'latencyStale', at) : ''].filter(Boolean);
+    return { value: `${api !== undefined ? '≈' : ''}${relayLatencyText(locale, shown)}`, ...(notes.length ? { note: notes.join(' · ') } : {}) };
 }
 type Service = Pick<NextMuxPlatformService, 'getPublicMerchantDirectory' | 'getMerchantSupportCatalog'>;
 type Sort = 'quality' | 'authenticity' | 'latency' | 'multiplier';
@@ -706,7 +721,8 @@ function MerchantModelDrawerBody({ service, merchant, locale, onClose, closing =
                             return `${modelCenterPriceMetric(locale, item.metric)} ${!rate && side === 'official' ? 'US$-' : formattedAmount(rate?.amountMicros, item.currency)}${rate ? ' / ' + modelCenterPriceUnit(locale, item.metric, rate.unitSize) : ''}`;
                         }).join(' · ') || text('pricePending');
                     };
-                    const fullHint = `${model.displayName}\n${text('officialPrice')}: ${priceText('official', false)}\n${offeringPriceText(locale, 'multiplier')}: ${multiplier === null ? offeringPriceText(locale, 'none') : `${relayMultiplierText(locale, multiplier)}`}\n${text('yourPrice')}: ${priceText('user', false)}`;
+                    const latency = merchantModelLatency(locale, model);
+                    const fullHint = `${model.displayName}\n${text('officialPrice')}: ${priceText('official', false)}\n${offeringPriceText(locale, 'multiplier')}: ${multiplier === null ? offeringPriceText(locale, 'none') : `${relayMultiplierText(locale, multiplier)}`}\n${text('yourPrice')}: ${priceText('user', false)}${latency ? `\n${relayText(locale, 'latency')}: ${latency.value}${latency.note ? ` · ${latency.note}` : ''}` : ''}`;
                     const preview = (side: 'official' | 'user'): React.ReactNode => <ModelCenterPricePreview model={model} side={side} locale={locale} />;
                     return <article className='nmx-mc-model' key={model.id} data-supported-model={model.registryModelId} data-price-mode={multiplier === null ? 'direct' : 'multiplier'}>
                         <ModelCenterHint locale={locale} text={fullHint}>
@@ -715,7 +731,7 @@ function MerchantModelDrawerBody({ service, merchant, locale, onClose, closing =
                                     // Authenticity appears once it has been measured, label and value kept on one line.
                                     const score = measuredModelFidelity(model.fidelity);
                                     return score === undefined ? undefined : <> · <span className='nmx-mc-model-evidence'>{modelPickerEvidenceText(locale, 'authenticity')} <bdi dir='ltr'>{score}%</bdi></span></>;
-                                })()}</small></span>
+                                })()}{latency && <> · <span className='nmx-mc-model-evidence'>{relayText(locale, 'latency')} <bdi dir='ltr'>{latency.value}</bdi></span></>}</small></span>
                                 <span className='nmx-mc-price-preview'>{preview('official')}</span><span className='nmx-mc-price-preview'>{preview('user')}</span>
                             </button>
                         </ModelCenterHint>

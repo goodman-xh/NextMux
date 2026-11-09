@@ -54,12 +54,25 @@ export function updateAppearsInDock(state: Pick<NextMuxDesktopUpdateState, 'phas
     return state.phase === 'available' || state.phase === 'downloading' || state.phase === 'ready';
 }
 
+/**
+ * The whole percent of a download, 0–100, as the dock and the Updates panel show it. Rounded down, so 100 only appears
+ * once every byte is in; anything that is not a finite number reads as 0.
+ */
+export function desktopUpdateProgressPercent(progress: unknown): number {
+    const value = Number(progress);
+    return Math.max(0, Math.min(100, Math.floor(Number.isNaN(value) ? 0 : value)));
+}
+
 export interface DesktopUpdateActionModel {
+    /** The whole label, e.g. "Downloading (35%)": the button's accessible name. */
     readonly label: string;
     readonly hint: string;
     readonly tone: 'default' | 'warning';
     readonly action: 'download' | 'details' | 'restart';
     readonly disabled: boolean;
+    /** While bytes arrive: the label's words without the percent, and the percent shown beside them. */
+    readonly labelBase?: string;
+    readonly percent?: number;
 }
 
 /**
@@ -77,17 +90,22 @@ export function resolveDesktopUpdateActionModel(state: NextMuxDesktopUpdateState
     // A ready update restarts NextMux to install it, like the Updates panel's "Restart to update": the quit still asks
     // first when work is running. Closing NextMux installs it too; the tooltip (readyHint) says both.
     const ready = state.phase === 'ready';
-    // Fixed while downloading: a live percent would re-render the whole window on every tick. The Updates panel shows it.
-    const label = desktopUpdateText(locale, downloading ? 'downloadingDock' : ready ? 'restartDock' : failed ? 'retry' : 'update');
+    const text = desktopUpdateText(locale, downloading ? 'downloadingDock' : ready ? 'restartDock' : failed ? 'retry' : 'update');
+    // While bytes arrive the dock says how far along they are: "Downloading (35%)", the word without its ellipsis. The
+    // widget renders only when this whole percent changes (downloadTickNeedsNoRender), at most a hundred times a download.
+    // Verifying after the last byte keeps "Downloading…": its tooltip says what is happening, and 100% would not move.
+    const percent = downloading && !state.preparing ? desktopUpdateProgressPercent(state.progress) : undefined;
+    const labelBase = percent === undefined ? undefined : text.replace(/\s*(?:…|\.\.\.)\s*$/u, '');
     const baseHint = desktopUpdateText(locale, ready ? 'readyHint' : state.preparing ? 'preparing'
         : failed ? 'downloadFailed' : downloading ? 'backgroundHint' : 'availableHint');
     const detail = failed ? String(state.error || state.message || code || '').trim() : '';
     return {
-        label,
+        label: percent === undefined ? text : `${labelBase} (${percent}%)`,
         hint: installFailed && detail ? detail : detail ? `${baseHint} · ${detail}` : baseHint,
         tone: failed ? 'warning' : 'default',
         action: state.phase === 'available' ? 'download' : ready ? 'restart' : 'details',
         disabled: Boolean(busy) || downloading,
+        ...(percent === undefined ? {} : { labelBase, percent }),
     };
 }
 
@@ -125,7 +143,10 @@ export function DesktopUpdateAction({ state, locale, busy, onDownload, onDetails
             else if (model.action === 'restart') restartToInstallUpdate(onRestart, onDetails);
             else onDetails();
         }}>
-        <span>{model.label}</span>
+        {model.percent === undefined ? <span>{model.label}</span> : <>
+            {/* The words may give way to an ellipsis in a narrow dock; the percent never does. */}
+            <span>{model.labelBase}</span>{' '}<span className='nmx-account-update-percent'>({model.percent}%)</span>
+        </>}
     </button>;
 }
 

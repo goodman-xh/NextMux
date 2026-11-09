@@ -30,29 +30,41 @@ export function relayMeasurementExplanation(locale: NextMuxDesktopLocale, measur
     return 'No measurement data yet';
 }
 
-const measurementNotes: Readonly<Record<NextMuxDesktopLocale, readonly [string, string, string]>> = {
+const measurementNotes: Readonly<Record<NextMuxDesktopLocale, readonly [string, string, string, string]>> = {
     en: ['No probe in the last day: the latest of the past 7 days', 'No probe in the last day: the latest of the past 7 days ({time})',
-        'Its models on sale are not checked yet: this is the result of its other listed models'],
-    'zh-CN': ['近一天没有测速，这是 7 天内最近一次的结果', '近一天没有测速，这是 7 天内最近一次的结果（{time}）', '在售模型尚未检测，这是该商家其他已上架模型的结果'],
-    'zh-TW': ['近一天沒有測速，這是 7 天內最近一次的結果', '近一天沒有測速，這是 7 天內最近一次的結果（{time}）', '在售模型尚未檢測，這是該商家其他已上架模型的結果'],
+        'Its models on sale are not checked yet: this is the result of its other listed models',
+        'Not measured for this model yet: the latest first-token latency its API measured for another model'],
+    'zh-CN': ['近一天没有测速，这是 7 天内最近一次的结果', '近一天没有测速，这是 7 天内最近一次的结果（{time}）', '在售模型尚未检测，这是该商家其他已上架模型的结果',
+        '该模型尚未单独测速，这是同一 API 上其他模型最近测得的首字延迟'],
+    'zh-TW': ['近一天沒有測速，這是 7 天內最近一次的結果', '近一天沒有測速，這是 7 天內最近一次的結果（{time}）', '在售模型尚未檢測，這是該商家其他已上架模型的結果',
+        '該模型尚未單獨測速，這是同一 API 上其他模型最近測得的首字延遲'],
     ja: ['直近 1 日の測定がないため、過去 7 日間で最新の結果です', '直近 1 日の測定がないため、過去 7 日間で最新の結果です（{time}）',
-        '販売中のモデルはまだ検証されていないため、このストアの他の掲載モデルの結果です'],
+        '販売中のモデルはまだ検証されていないため、このストアの他の掲載モデルの結果です',
+        'このモデルはまだ個別に測定されていないため、同じ API の他のモデルで最近測定した最初のトークンまでの時間です'],
     ko: ['최근 하루 동안 측정이 없어 지난 7일 중 가장 최근 결과입니다', '최근 하루 동안 측정이 없어 지난 7일 중 가장 최근 결과입니다({time})',
-        '판매 중인 모델은 아직 검증되지 않아 이 스토어의 다른 등록 모델 결과입니다'],
+        '판매 중인 모델은 아직 검증되지 않아 이 스토어의 다른 등록 모델 결과입니다',
+        '이 모델은 아직 따로 측정되지 않아 같은 API의 다른 모델에서 최근 측정한 첫 토큰 지연입니다'],
     es: ['Sin medición en el último día: la más reciente de los últimos 7 días', 'Sin medición en el último día: la más reciente de los últimos 7 días ({time})',
-        'Sus modelos a la venta aún no se han verificado: es el resultado de sus otros modelos publicados'],
+        'Sus modelos a la venta aún no se han verificado: es el resultado de sus otros modelos publicados',
+        'Este modelo aún no se ha medido: es la latencia del primer token más reciente que su API midió con otro modelo'],
     fr: ['Aucune mesure ce dernier jour : la plus récente des 7 derniers jours', 'Aucune mesure ce dernier jour : la plus récente des 7 derniers jours ({time})',
-        'Ses modèles en vente ne sont pas encore vérifiés : c’est le résultat de ses autres modèles publiés'],
+        'Ses modèles en vente ne sont pas encore vérifiés : c’est le résultat de ses autres modèles publiés',
+        'Ce modèle n’a pas encore été mesuré : c’est la latence du premier jeton la plus récente que son API a mesurée pour un autre modèle'],
     de: ['Keine Messung am letzten Tag: die neueste der letzten 7 Tage', 'Keine Messung am letzten Tag: die neueste der letzten 7 Tage ({time})',
-        'Die angebotenen Modelle sind noch nicht geprüft: Das ist das Ergebnis der übrigen gelisteten Modelle'],
+        'Die angebotenen Modelle sind noch nicht geprüft: Das ist das Ergebnis der übrigen gelisteten Modelle',
+        'Dieses Modell wurde noch nicht eigens gemessen: die jüngste Zeit bis zum ersten Token, die seine API für ein anderes Modell gemessen hat'],
     'pt-BR': ['Sem medição no último dia: a mais recente dos últimos 7 dias', 'Sem medição no último dia: a mais recente dos últimos 7 dias ({time})',
-        'Os modelos à venda ainda não foram verificados: este é o resultado dos outros modelos publicados'],
+        'Os modelos à venda ainda não foram verificados: este é o resultado dos outros modelos publicados',
+        'Este modelo ainda não foi medido: é a latência do primeiro token mais recente que a API dele mediu para outro modelo'],
     ru: ['За последние сутки замеров нет: последний результат за 7 дней', 'За последние сутки замеров нет: последний результат за 7 дней ({time})',
-        'Модели в продаже ещё не проверены: это результат других размещённых моделей магазина'],
+        'Модели в продаже ещё не проверены: это результат других размещённых моделей магазина',
+        'Эта модель ещё не измерялась отдельно: это последняя задержка до первого токена, измеренная её API для другой модели'],
     ar: ['لا قياس خلال اليوم الأخير: أحدث نتيجة خلال آخر 7 أيام', 'لا قياس خلال اليوم الأخير: أحدث نتيجة خلال آخر 7 أيام ({time})',
-        'لم تُفحص النماذج المعروضة للبيع بعد: هذه نتيجة النماذج الأخرى المدرجة للمتجر'],
+        'لم تُفحص النماذج المعروضة للبيع بعد: هذه نتيجة النماذج الأخرى المدرجة للمتجر',
+        'لم يُقَس هذا النموذج بعد: هذا أحدث زمن حتى أول رمز قاسته واجهة API الخاصة به لنموذج آخر'],
     hi: ['पिछले एक दिन में कोई माप नहीं: पिछले 7 दिनों का सबसे नया परिणाम', 'पिछले एक दिन में कोई माप नहीं: पिछले 7 दिनों का सबसे नया परिणाम ({time})',
-        'बिक्री वाले मॉडल अभी जाँचे नहीं गए: यह इस स्टोर के अन्य सूचीबद्ध मॉडलों का परिणाम है']
+        'बिक्री वाले मॉडल अभी जाँचे नहीं गए: यह इस स्टोर के अन्य सूचीबद्ध मॉडलों का परिणाम है',
+        'इस मॉडल को अभी अलग से नहीं मापा गया है: यह उसी API पर किसी दूसरे मॉडल के लिए हाल में मापी गई पहले टोकन की देरी है']
 };
 
 /**
@@ -60,9 +72,10 @@ const measurementNotes: Readonly<Record<NextMuxDesktopLocale, readonly [string, 
  * no probe in the last day is the latest of the past 7 days (`observedAt` is when), and an authenticity with no model on
  * sale scored yet is that of the store's other listed models.
  */
-export function relayMeasurementNote(locale: NextMuxDesktopLocale, kind: 'latencyStale' | 'authenticityListed', observedAt?: number): string {
+export function relayMeasurementNote(locale: NextMuxDesktopLocale, kind: 'latencyStale' | 'authenticityListed' | 'latencyFromApi', observedAt?: number): string {
     const notes = measurementNotes[locale] || measurementNotes.en;
     if (kind === 'authenticityListed') return notes[2];
+    if (kind === 'latencyFromApi') return notes[3];
     if (typeof observedAt !== 'number' || !Number.isFinite(observedAt) || observedAt <= 0) return notes[0];
     const time = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(observedAt);
     return notes[1].replace('{time}', time);

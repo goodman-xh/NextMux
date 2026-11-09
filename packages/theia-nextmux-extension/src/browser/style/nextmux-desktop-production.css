@@ -1883,8 +1883,11 @@ body:is(.windows, :has(#window-controls)) .nmx-shell .nmx-titlebar-context {
 .nmx-context-account-dock .nmx-account-update:disabled { cursor: default; opacity: 1; }
 .nmx-context-account-dock .nmx-account-update:focus-visible { outline: 2px solid var(--theia-focusBorder); outline-offset: 2px; }
 .nmx-context-account-dock.has-update .nmx-account-update { flex: 0 0 auto; transition: flex-grow 220ms ease; }
-/* The fixed "Downloading…" label is the longest thing the dock shows before an update is ready. */
-.nmx-context-account-dock .nmx-account-update.is-downloading { max-width: 132px; }
+/* "Downloading (35%)" is the longest thing the dock shows before an update is ready: 152px holds every language at 100%
+   (the widest, French and Japanese, measure about 149px at 12px semibold). The words may still give way to an ellipsis
+   in a narrow dock; the percent never shrinks, and tabular digits keep the button still while the number climbs. */
+.nmx-context-account-dock .nmx-account-update.is-downloading { max-width: 152px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+.nmx-account-update > .nmx-account-update-percent { flex: none; overflow: visible; font-variant-numeric: tabular-nums; }
 
 /* A ready update takes the dock: the name fades out beside the avatar and the button spreads, so no language's label is
    cut off. 300px is wider than the name gets in the widest panel, so it truncates nothing and still gives the fade a width to

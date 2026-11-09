@@ -161,7 +161,7 @@ import { ownModelCategories, ownModelMediaFacts } from './nextmux-own-model-kind
 import { officialDiscoveryText } from './nextmux-official-discovery-locale';
 import { officialProviderLogoAsset } from './nextmux-provider-logos';
 import { closePersistenceText } from './nextmux-close-persistence-locale';
-import { DesktopUpdateAction, desktopUpdateText, isUpdateDownloadErrorCode, updateAppearsInDock } from './nextmux-update-action';
+import { DesktopUpdateAction, desktopUpdateProgressPercent, desktopUpdateText, isUpdateDownloadErrorCode, updateAppearsInDock } from './nextmux-update-action';
 import type { DesktopCommunitySkillInstallReview } from '../common/nextmux-platform-protocol';
 import type { SaveOfficialModelConnectionResult } from '../common/nextmux-platform-protocol';
 import { normalizeCouncilRouteSource } from './nextmux-conversation-history';
@@ -598,7 +598,7 @@ import {
 } from './nextmux-relay-picker';
 import { FavoriteHeartIcon } from './nextmux-favorite-icon';
 import { relayAvailabilityText, relayMarketplaceText } from './nextmux-relay-marketplace-locale';
-import { averageRelayAvailability, averageRelayLatency, INITIAL_RELAY_QUALITY, latestRelayLatency, measuredModelFidelity, measuredRelayAuthenticity, measuredRelayLatency, measuredRelayQuality, relayFeedbackVotes } from '../common/nextmux-relay-evidence';
+import { averageRelayAvailability, averageRelayLatency, INITIAL_RELAY_QUALITY, measuredModelFidelity, measuredRelayAuthenticity, measuredRelayLatency, measuredRelayQuality, relayFeedbackVotes, relayLatencyEvidence } from '../common/nextmux-relay-evidence';
 import { NextMuxLinkOpeningPolicy, type LinkOpeningDecision, type LinkOpeningDestination } from './nextmux-link-opening';
 import { linkOpeningText } from './nextmux-link-opening-locale';
 import { WalletTopupSheet, walletTopupAmountMinor, walletTopupErrorText, walletTopupRangeText, walletTopupText, type WalletTopupStage } from './nextmux-wallet-topup';
@@ -9380,14 +9380,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     /**
-     * A download tick changes numbers only. Outside the Updates page nothing shows them (the dock says "Downloading…"),
-     * and a render would rewrite the page under an open <select>, whose native popup then closes. On the Updates page the
-     * progress bar does move, once a focused dropdown has closed.
+     * A download tick changes numbers only. The dock shows the whole percent ("Downloading (35%)"), so a tick that moves it
+     * renders wherever the person is: at most a hundred renders a download. Other ticks render only on the Updates page,
+     * whose progress bar moves continuously. A render would rewrite the page under an open <select>, whose native popup
+     * then closes, so with a dropdown focused the render waits until it closes.
      */
     protected downloadTickNeedsNoRender(previous: NextMuxDesktopUpdateState, next: NextMuxDesktopUpdateState): boolean {
         if (previous.phase !== 'downloading' || next.phase !== 'downloading' || Boolean(previous.preparing) !== Boolean(next.preparing)
             || previous.version !== next.version || previous.errorCode !== next.errorCode) return false;
-        if (this.activeSection !== 'settings' || this.settingsPanel !== 'updates') return true;
+        const dockPercentMoved = !next.preparing && desktopUpdateProgressPercent(previous.progress) !== desktopUpdateProgressPercent(next.progress);
+        if (!dockPercentMoved && (this.activeSection !== 'settings' || this.settingsPanel !== 'updates')) return true;
         const dropdown = document.activeElement?.closest("select, [role='combobox'], [role='listbox']");
         if (!dropdown) return false;
         this.renderWhenDropdownCloses(dropdown);
@@ -38970,13 +38972,32 @@ export class NextMuxDesktopWidget extends ReactWidget {
             quality: measuredRelayQuality(values),
             authenticity: measuredRelayAuthenticity(values.map(item => item.fidelity)),
             availability: averageRelayAvailability(values.map(item => item.network)),
-            latencyMs: averageRelayLatency(values.map(item => latestRelayLatency(item.network))),
+            // Each offering's own TTFT, else its API's latest; stale (with its time) when every one is over a day old.
+            ...relayLatencyEvidence(values),
             // 平均倍率: mean over the multiplier-priced offerings (model × API); merchant-set prices have no multiplier.
             multiplierBps: averageMultiplierBps(values.map(item => offeringMultiplierBps(item))),
             modelCount: new Set(values.map(item => item.registryModelId)).size
         });
         const options: RelayOption[] = [];
-        if (offerings.length) options.push(aggregate('auto', 'automatic', relayText(this.desktopLocale, 'automaticBest'), offerings));
+        const directoryMerchants = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage?.merchants : this.publicMerchantPage?.merchants;
+        // As for the merchant rows below: a selected store stands in only while the directory is pending.
+        const directoryOf = (merchantId: string): PublicMerchantIdentity | undefined => directoryMerchants?.find(merchant => merchant.id === merchantId)
+            || (directoryMerchants === undefined && this.selectedPublicMerchant?.id === merchantId ? this.selectedPublicMerchant : undefined);
+        if (offerings.length) {
+            const automatic = aggregate('auto', 'automatic', relayText(this.desktopLocale, 'automaticBest'), offerings);
+            // Pictures, video and sound have no TTFT of their own (only text is probed), so a comic list can have no measured
+            // offering: the row then shows the mean latency the directory lists for the stores behind these offerings,
+            // stale when all of those are.
+            const stores = [...new Set(offerings.map(offering => this.offeringMerchantId(offering)))].map(directoryOf)
+                .filter((merchant): merchant is PublicMerchantIdentity => merchant?.metrics?.latencyMs !== undefined);
+            const storeLatency = automatic.latencyMs === undefined && stores.length ? {
+                latencyMs: averageRelayLatency(stores.map(merchant => merchant.metrics?.latencyMs)),
+                ...(stores.every(merchant => merchant.measurement?.latency?.state === 'stale') ? { latencyStale: true,
+                    ...(() => { const times = stores.flatMap(merchant => merchant.measurement?.latency?.observedAt ?? []);
+                        return times.length ? { latencyObservedAt: Math.max(...times) } : {}; })() } : {})
+            } : {};
+            options.push({ ...automatic, ...storeLatency });
+        }
         const merchants = new Map<string, PlatformOffering[]>();
         for (const offering of offerings) {
             const merchantId = this.offeringMerchantId(offering);
@@ -38984,7 +39005,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
             current.push(offering);
             merchants.set(merchantId, current);
         }
-        const directoryMerchants = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage?.merchants : this.publicMerchantPage?.merchants;
         const merchantLabels = new Map((directoryMerchants || []).map(merchant => [merchant.id, merchant.name]));
         if (this.selectedPublicMerchant && managedRelayKey(this.selectedPublicMerchant.id) === this.activeRelayKey) {
             if (!merchantLabels.has(this.selectedPublicMerchant.id)) merchantLabels.set(this.selectedPublicMerchant.id, this.selectedPublicMerchant.name);
@@ -39029,9 +39049,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // An unmeasured directory value is absent, not zero: the offerings' own measurement stands.
             const directoryMetrics = Object.fromEntries(Object.entries(directory?.metrics || {})
                 .filter(([, value]) => value !== undefined)) as NonNullable<PublicMerchantIdentity['metrics']>;
-            options.push({ ...aggregate(
-                managedRelayKey(merchantId), 'managed', merchantLabels.get(merchantId) || values[0]?.providerName || merchantId, values, merchantId
-            ), ...directoryMetrics,
+            // The directory's latency, when it lists one, replaces the offerings' and their staleness with it.
+            const { latencyStale: offeringsStale, latencyObservedAt: offeringsObservedAt, ...fromOfferings } = aggregate(
+                managedRelayKey(merchantId), 'managed', merchantLabels.get(merchantId) || values[0]?.providerName || merchantId, values, merchantId);
+            options.push({ ...fromOfferings, ...directoryMetrics,
+                ...(directoryMetrics.latencyMs === undefined && offeringsStale
+                    ? { latencyStale: true, ...(offeringsObservedAt !== undefined ? { latencyObservedAt: offeringsObservedAt } : {}) } : {}),
                 // The directory's metrics.multiplierBps is its cheapest multiplier (a sort key); the drawer shows the average.
                 ...(directory && directory.averageMultiplierBps !== undefined ? { multiplierBps: directory.averageMultiplierBps ?? undefined } : {}),
                 publicCode: directory?.publicCode, measurement: directory?.measurement,
@@ -56915,7 +56938,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const state = this.updateState;
             const text = (key: Parameters<typeof desktopUpdateText>[1]) => desktopUpdateText(this.desktopLocale, key);
             const status = state.phase === 'checking' ? text('checking')
-                : state.phase === 'downloading' ? state.preparing ? text('preparing') : `${Math.floor(state.progress)}%`
+                : state.phase === 'downloading' ? state.preparing ? text('preparing') : `${desktopUpdateProgressPercent(state.progress)}%`
                     : state.phase === 'current' ? text('current') : state.phase === 'ready' ? text('ready')
                         : state.phase === 'available' ? `${text('update')} · v${state.version}`
                             : state.phase === 'error' ? text('error') : text('waiting');
