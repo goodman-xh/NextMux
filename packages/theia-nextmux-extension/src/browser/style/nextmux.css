@@ -18804,7 +18804,7 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
 }
 
 /* Filled buttons (primary, danger, send) keep their own hover fill; see nextmux-light-contrast.css. */
-.nmx-theme-light :is(button:hover:not(.nmx-primary-button, .is-primary, .is-danger, .nmx-send-button, .nmx-comic-editor-mic.is-active, .nmx-zoom-button, .nmx-board-chips button.is-active, .nmx-board-marks-group button.is-on, .nmx-canvas-tabs-dialog button:last-child, .nmx-camera-confirm, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate, .nmx-comic-setup-toggle, .nmx-comic-chat-recommend.is-on, [role='switch'], .nmx-library-upload-btn, .nmx-library-use-btn, .nmx-comic-studio-lib-zoom, .nmx-library-zoom-btn, .nmx-library-lightbox-close, .nmx-library-delete-ok, .nmx-library-toolbar button[aria-pressed='true'], .nmx-cut-export, .nmx-comic-export-start, .nmx-account-update, .nmx-director-stage button[aria-pressed='true'], .nmx-director-stage .nmx-director-modes > button.is-active, .nmx-director-stage .nmx-director-Play, .nmx-director-stage .nmx-director-Generate, .nmx-director-stage .nmx-director-Primary, .nmx-director-stage .nmx-director-inspector nav button, .nmx-director-stage .nmx-director-catalogue nav button, .nmx-director-stage .nmx-director-colors button, .nmx-director-stage .nmx-director-track button, .nmx-comic-studio-modal button, .nmx-comic-studio-context-menu button, .nmx-comic-studio-lightbox button, .nmx-attachment-lightbox button), button.is-active:not(.nmx-primary-button, .is-primary, .is-danger, .nmx-send-button, .nmx-comic-editor-mic, .nmx-zoom-button, .nmx-board-chips button, .nmx-board-marks-group button.is-on, .nmx-canvas-tabs-dialog button:last-child, .nmx-camera-confirm, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate, .nmx-comic-setup-toggle, .nmx-comic-chat-recommend.is-on, [role='switch'], .nmx-library-upload-btn, .nmx-library-use-btn, .nmx-comic-studio-lib-zoom, .nmx-library-zoom-btn, .nmx-library-lightbox-close, .nmx-library-delete-ok, .nmx-library-toolbar button[aria-pressed='true'], .nmx-cut-export, .nmx-comic-export-start, .nmx-account-update, .nmx-director-stage button[aria-pressed='true'], .nmx-director-stage .nmx-director-modes > button.is-active, .nmx-director-stage .nmx-director-Play, .nmx-director-stage .nmx-director-Generate, .nmx-director-stage .nmx-director-Primary, .nmx-director-stage .nmx-director-inspector nav button, .nmx-director-stage .nmx-director-catalogue nav button, .nmx-director-stage .nmx-director-colors button, .nmx-director-stage .nmx-director-track button, .nmx-comic-studio-modal button, .nmx-comic-studio-context-menu button, .nmx-comic-studio-lightbox button, .nmx-attachment-lightbox button), .nmx-session-row:hover, .nmx-session-row.is-current, .nmx-model-option.is-selected > button) {
+.nmx-theme-light :is(button:hover:not(.nmx-primary-button, .is-primary, .is-danger, .nmx-send-button, .nmx-comic-editor-mic.is-active, .nmx-zoom-button, .nmx-board-chips button.is-active, .nmx-board-marks-group button.is-on, .nmx-canvas-tabs-dialog button:last-child, .nmx-camera-confirm, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate, .nmx-comic-setup-toggle, .nmx-comic-chat-recommend.is-on, [role='switch'], .nmx-library-upload-btn, .nmx-library-use-btn, .nmx-comic-studio-lib-zoom, .nmx-library-zoom-btn, .nmx-library-lightbox-close, .nmx-library-delete-ok, .nmx-library-toolbar button[aria-pressed='true'], .nmx-cut-export, .nmx-comic-export-start, .nmx-account-update, .nmx-director-stage button[aria-pressed='true'], .nmx-director-stage .nmx-director-modes > button.is-active, .nmx-director-stage .nmx-director-Play, .nmx-director-stage .nmx-director-Generate, .nmx-director-stage .nmx-director-Primary, .nmx-director-stage .nmx-director-inspector nav button, .nmx-director-stage .nmx-director-catalogue nav button, .nmx-director-stage .nmx-director-colors button, .nmx-director-stage .nmx-director-track button, .nmx-comic-studio-modal button, .nmx-comic-studio-context-menu button, .nmx-comic-studio-lightbox button, .nmx-attachment-lightbox button, .nmx-library-lightbox button), button.is-active:not(.nmx-primary-button, .is-primary, .is-danger, .nmx-send-button, .nmx-comic-editor-mic, .nmx-zoom-button, .nmx-board-chips button, .nmx-board-marks-group button.is-on, .nmx-canvas-tabs-dialog button:last-child, .nmx-camera-confirm, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate, .nmx-comic-setup-toggle, .nmx-comic-chat-recommend.is-on, [role='switch'], .nmx-library-upload-btn, .nmx-library-use-btn, .nmx-comic-studio-lib-zoom, .nmx-library-zoom-btn, .nmx-library-lightbox-close, .nmx-library-delete-ok, .nmx-library-toolbar button[aria-pressed='true'], .nmx-cut-export, .nmx-comic-export-start, .nmx-account-update, .nmx-director-stage button[aria-pressed='true'], .nmx-director-stage .nmx-director-modes > button.is-active, .nmx-director-stage .nmx-director-Play, .nmx-director-stage .nmx-director-Generate, .nmx-director-stage .nmx-director-Primary, .nmx-director-stage .nmx-director-inspector nav button, .nmx-director-stage .nmx-director-catalogue nav button, .nmx-director-stage .nmx-director-colors button, .nmx-director-stage .nmx-director-track button, .nmx-comic-studio-modal button, .nmx-comic-studio-context-menu button, .nmx-comic-studio-lightbox button, .nmx-attachment-lightbox button, .nmx-library-lightbox button), .nmx-session-row:hover, .nmx-session-row.is-current, .nmx-model-option.is-selected > button) {
     background-color: #ddd9d6 !important;
 }
 
@@ -22613,3 +22613,219 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
 }
 .nmx-theme-light .nmx-browser-tabs-bar > .nmx-browser-new-tab:disabled { background: transparent !important; }
 .nmx-theme-light .nmx-browser-tabs-bar.has-overflow > .nmx-browser-new-tab { box-shadow: -5px 0 0 -4px #cfc9c5; }
+
+/* Model Center bar: 商家入驻, a plain blue underlined text link to the website's merchant console. No fill, border or
+   radius; the blues keep at least 5.2:1 against every bar and panel background of their theme (WCAG AA). */
+.nmx-shell .nmx-model-center-topbar-actions .nmx-merchant-console-link {
+    --nmx-merchant-link: #5aa2ff;
+    --nmx-merchant-link-hover: #8cc0ff;
+    min-width: 0;
+    max-width: 16em;
+    flex: 0 1 auto;
+    margin: 0;
+    margin-inline-end: 4px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    color: var(--nmx-merchant-link);
+    background: transparent;
+    box-shadow: none;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 20px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    cursor: pointer;
+    -webkit-user-drag: none;
+    transition: color .12s ease;
+}
+.nmx-shell .nmx-model-center-topbar-actions .nmx-merchant-console-link:hover {
+    color: var(--nmx-merchant-link-hover);
+}
+.nmx-shell .nmx-model-center-topbar-actions .nmx-merchant-console-link:focus { outline: none; }
+.nmx-shell .nmx-model-center-topbar-actions .nmx-merchant-console-link:focus-visible {
+    outline: 2px solid var(--nmx-merchant-link);
+    outline-offset: 2px;
+}
+.nmx-shell.nmx-theme-light .nmx-model-center-topbar-actions .nmx-merchant-console-link {
+    --nmx-merchant-link: #0a58ca;
+    --nmx-merchant-link-hover: #084298;
+}
+@media (max-width: 760px) {
+    .nmx-shell .nmx-model-center-topbar-actions .nmx-merchant-console-link { max-width: 10em; margin-inline-end: 2px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell .nmx-model-center-topbar-actions .nmx-merchant-console-link { transition: none; }
+}
+
+/* ── Viewer galleries (素材库, coding and 漫剧 viewers): ‹ › on the stage's left and right edges and the "2 / 12" badge.
+   Dark glass in both themes, as the viewers themselves are; physical left and right, like the ← → keys. ── */
+:is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav {
+    position: absolute;
+    z-index: 3;
+    top: 50%;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    margin: 0;
+    padding: 0 !important;
+    border: 1px solid rgb(255 255 255 / 20%) !important;
+    border-radius: 999px;
+    color: #f5f5f7 !important;
+    background: rgb(22 22 26 / 62%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    backdrop-filter: blur(12px) saturate(140%);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 34%);
+    cursor: pointer;
+    pointer-events: auto;
+    transform: translateY(-50%);
+    transition: background-color .15s ease, border-color .15s ease, transform .15s ease, opacity .15s ease;
+    -webkit-app-region: no-drag;
+}
+:is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav.is-previous { left: 10px; }
+:is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav.is-next { right: 10px; }
+.nmx-library-lightbox .nmx-lightbox-nav.is-previous { left: 20px; }
+.nmx-library-lightbox .nmx-lightbox-nav.is-next { right: 20px; }
+:is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav > .codicon {
+    color: inherit !important;
+    font-size: 22px;
+    line-height: 1;
+}
+/* A chevron reads as centred when its point sits a hair toward the direction it shows. */
+:is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav.is-previous > .codicon { transform: translateX(-1px); }
+:is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav.is-next > .codicon { transform: translateX(1px); }
+:is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav:hover:not(:disabled) {
+    border-color: rgb(255 255 255 / 40%) !important;
+    color: #ffffff !important;
+    background: rgb(48 48 56 / 90%) !important;
+    transform: translateY(-50%) scale(1.04);
+}
+:is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav:active:not(:disabled) { transform: translateY(-50%) scale(.95); }
+:is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav:focus { outline: none; }
+:is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: 3px;
+}
+:is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-counter {
+    flex: none;
+    min-height: 26px;
+    display: inline-flex;
+    align-items: center;
+    margin-inline-start: auto;
+    padding: 0 10px;
+    border: 1px solid rgb(255 255 255 / 14%);
+    border-radius: 999px;
+    color: #f4f4f6;
+    background: rgb(24 24 30 / 78%);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: .02em;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    cursor: default;
+    -webkit-user-select: none;
+    user-select: none;
+}
+:is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    border: 0;
+    white-space: nowrap;
+}
+/* 素材库: room on both sides for ‹ ›, so no picture or clip reaches under them. */
+.nmx-library-lightbox.has-gallery .nmx-library-lightbox-stage { padding-inline: 84px; }
+.nmx-library-lightbox.has-gallery .nmx-library-lightbox-media { max-width: min(1240px, calc(100vw - 168px)); }
+.nmx-library-lightbox.has-gallery .nmx-library-lightbox-media.is-video {
+    width: max(min(360px, calc(100vw - 48px)), min(1240px, calc(100vw - 168px), calc((100dvh - 86px) * var(--nmx-zoom-ar, 1.7778))));
+    height: min(calc(100dvh - 86px), calc(min(1240px, calc(100vw - 168px)) / var(--nmx-zoom-ar, 1.7778)));
+    max-width: min(1240px, calc(100vw - 168px));
+}
+/* 素材库's picture: wheel zoom at the pointer, drag once enlarged; the zoom bar keeps clear of its lower edge. */
+.nmx-library-lightbox.is-image .nmx-library-lightbox-stage { padding-bottom: 72px; }
+.nmx-library-lightbox .nmx-library-lightbox-media.is-zoomable {
+    max-height: calc(100dvh - 134px);
+    transform: translate(var(--nmx-image-pan-x, 0px), var(--nmx-image-pan-y, 0px)) scale(var(--nmx-image-zoom, 1));
+    transform-origin: 50% 50%;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    will-change: transform;
+}
+.nmx-library-lightbox .nmx-library-lightbox-media.is-zoomable.is-zoomed { cursor: grab; }
+.nmx-library-lightbox .nmx-library-lightbox-media.is-zoomable.is-panning { cursor: grabbing; }
+.nmx-library-lightbox .nmx-library-lightbox-zoombar {
+    position: absolute;
+    z-index: 3;
+    bottom: 18px;
+    left: 50%;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid rgb(255 255 255 / 14%);
+    border-radius: 999px;
+    color: #f4f4f6;
+    background: rgb(24 24 30 / 82%);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 10px 28px rgb(0 0 0 / 38%);
+    transform: translateX(-50%);
+    cursor: default;
+    -webkit-app-region: no-drag;
+}
+.nmx-library-lightbox .nmx-library-lightbox-zoombar > button {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
+    display: grid;
+    place-items: center;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 999px;
+    color: #f4f4f6 !important;
+    background: transparent !important;
+    cursor: pointer;
+    transition: background-color .14s ease;
+}
+.nmx-library-lightbox .nmx-library-lightbox-zoombar > button > .codicon { color: inherit !important; font-size: 15px; }
+.nmx-library-lightbox .nmx-library-lightbox-zoombar > button:hover:not(:disabled) { color: #ffffff !important; background: rgb(255 255 255 / 12%) !important; }
+.nmx-library-lightbox .nmx-library-lightbox-zoombar > button:disabled { cursor: default; opacity: .38; }
+.nmx-library-lightbox .nmx-library-lightbox-zoombar > button:focus { outline: none; }
+.nmx-library-lightbox .nmx-library-lightbox-zoombar > button:focus-visible { outline: 2px solid #ffffff; outline-offset: 1px; }
+.nmx-library-lightbox .nmx-library-lightbox-zoombar > output {
+    min-width: 52px;
+    color: #f4f4f6;
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+@media (max-width: 640px) {
+    :is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav { width: 38px; height: 38px; min-width: 38px; min-height: 38px; }
+    .nmx-library-lightbox .nmx-lightbox-nav.is-previous { left: 10px; }
+    .nmx-library-lightbox .nmx-lightbox-nav.is-next { right: 10px; }
+    .nmx-library-lightbox.has-gallery .nmx-library-lightbox-stage { padding-inline: 56px; }
+    .nmx-library-lightbox.has-gallery .nmx-library-lightbox-media { max-width: calc(100vw - 112px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    :is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav,
+    .nmx-library-lightbox .nmx-library-lightbox-zoombar > button { transition: none; }
+    :is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav:is(:hover, :active):not(:disabled) { transform: translateY(-50%); }
+}

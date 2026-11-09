@@ -4,6 +4,7 @@ import { comicAssetLibraryMatches, sortComicAssetLibrary, type ComicAssetCategor
 import { comicAssetLibraryText } from './nextmux-comic-asset-library-text';
 import { assetLibraryOperations, runAssetLibraryOperation } from './nextmux-comic-asset-library-operations';
 import { ImeInput } from './nextmux-ime-field';
+import { createImageLightboxState, IMAGE_LIGHTBOX_ZOOM, imageLightboxPercentage, imageLightboxPointer, imageLightboxPosition, imageLightboxText, lightboxGalleryIndex, lightboxKeyAction, updateImageLightbox, type ImageLightboxState, type LightboxGalleryStep } from './nextmux-image-lightbox';
 import '../../src/browser/style/nextmux-comic-asset-library.css';
 
 /**
@@ -64,6 +65,80 @@ export function ComicLibrarySizeControl(props:{readonly locale:string;readonly s
     </div>;
 }
 
+/** The library's tabs: the shared filters plus 文本, so saved texts (scripts, prompts, lines) can be found on their own. */
+type LibraryTab=ComicAssetLibraryFilter|'text';
+const LIBRARY_TABS:readonly LibraryTab[]=['all','image','character','video','audio','text'];
+const libraryTabMatches=(entry:ComicAssetLibraryEntry,tab:LibraryTab):boolean=>tab==='text'?entry.assetType==='text':comicAssetLibraryMatches(entry,tab);
+
+/**
+ * The lightbox's picture, as in PhotoSwipe: the wheel zooms in and out at the pointer (25–400 %), a drag pans it once it
+ * is enlarged, a double-click returns it to 100 %, and the bar below steps the zoom. Keyed by asset, so every picture
+ * opens at 100 %; its own state keeps the cards behind from re-rendering on each wheel step.
+ */
+function LibraryLightboxImage(props:{readonly src:string;readonly alt:string;readonly locale:string;readonly onPress:()=>void}):React.ReactElement {
+    const image=React.useRef<HTMLImageElement|null>(null);
+    const [zoom,setZoom]=React.useState<ImageLightboxState>(()=>updateImageLightbox(createImageLightboxState(),{type:'open',image:{src:props.src,alt:props.alt,name:props.alt}}).state);
+    const current=React.useRef(zoom);
+    const pan=React.useRef<{readonly pointerId:number;readonly x:number;readonly y:number}|undefined>(undefined);
+    const [panning,setPanning]=React.useState(false);
+    // Each change reaches the picture at once, so the next wheel event measures the bounds this one set.
+    const commit=React.useRef((next:ImageLightboxState):void=>{
+        if(next===current.current)return;
+        current.current=next;
+        const node=image.current;
+        if(node){node.style.setProperty('--nmx-image-zoom',String(next.zoomPercent/100));node.style.setProperty('--nmx-image-pan-x',`${next.panX}px`);node.style.setProperty('--nmx-image-pan-y',`${next.panY}px`);}
+        setZoom(next);
+    }).current;
+    React.useEffect(()=>{
+        const stage=image.current?.parentElement;
+        if(!stage)return;
+        // React's wheel listeners are passive; this one can keep the page behind from scrolling while it zooms.
+        const onWheel=(event:WheelEvent):void=>{
+            const state=current.current;
+            const transition=updateImageLightbox(state,{type:'wheel',deltaY:event.deltaY,...imageLightboxPointer(image.current,state,event.clientX,event.clientY)});
+            if(!transition.handled)return;
+            event.preventDefault();event.stopPropagation();
+            commit(transition.state);
+        };
+        stage.addEventListener('wheel',onWheel,{passive:false});
+        return()=>stage.removeEventListener('wheel',onWheel);
+    },[commit]);
+    const endPan=(event:React.PointerEvent<HTMLImageElement>):void=>{
+        if(pan.current?.pointerId!==event.pointerId)return;
+        pan.current=undefined;setPanning(false);
+        if(event.currentTarget.hasPointerCapture?.(event.pointerId))event.currentTarget.releasePointerCapture(event.pointerId);
+    };
+    const zoomBy=(type:'zoom-in'|'zoom-out'|'reset'):void=>commit(updateImageLightbox(current.current,{type}).state);
+    const press=(event:React.SyntheticEvent):void=>{event.stopPropagation();props.onPress();};
+    const label=(key:'zoomIn'|'zoomOut'):string=>imageLightboxText(props.locale,key);
+    return <>
+        <img ref={image} className={`nmx-library-lightbox-media is-zoomable${zoom.zoomPercent>100?' is-zoomed':''}${panning?' is-panning':''}`} src={props.src} alt={props.alt} draggable={false}
+            style={{'--nmx-image-zoom':zoom.zoomPercent/100,'--nmx-image-pan-x':`${zoom.panX}px`,'--nmx-image-pan-y':`${zoom.panY}px`} as React.CSSProperties}
+            onPointerDown={event=>{
+                press(event);
+                if(event.button!==0||current.current.zoomPercent<=100)return;
+                event.preventDefault();
+                event.currentTarget.setPointerCapture?.(event.pointerId);
+                pan.current={pointerId:event.pointerId,x:event.clientX,y:event.clientY};
+                setPanning(true);
+            }}
+            onPointerMove={event=>{
+                const start=pan.current;
+                if(!start||start.pointerId!==event.pointerId)return;
+                pan.current={pointerId:start.pointerId,x:event.clientX,y:event.clientY};
+                commit(updateImageLightbox(current.current,{type:'pan',deltaX:event.clientX-start.x,deltaY:event.clientY-start.y}).state);
+            }}
+            onPointerUp={endPan} onPointerCancel={endPan} onLostPointerCapture={()=>{pan.current=undefined;setPanning(false);}}
+            onMouseDown={press} onMouseUp={props.onPress} onClick={event=>event.stopPropagation()}
+            onDoubleClick={event=>{event.stopPropagation();zoomBy('reset');}}/>
+        <div className='nmx-library-lightbox-zoombar' onPointerDown={press} onMouseDown={press} onClick={event=>event.stopPropagation()} onDoubleClick={event=>event.stopPropagation()}>
+            <button type='button' disabled={zoom.zoomPercent<=IMAGE_LIGHTBOX_ZOOM.min} aria-label={label('zoomOut')} title={label('zoomOut')} onClick={()=>zoomBy('zoom-out')}><i className='codicon codicon-zoom-out' aria-hidden='true'/></button>
+            <output aria-live='polite'>{imageLightboxPercentage(zoom)}</output>
+            <button type='button' disabled={zoom.zoomPercent>=IMAGE_LIGHTBOX_ZOOM.max} aria-label={label('zoomIn')} title={label('zoomIn')} onClick={()=>zoomBy('zoom-in')}><i className='codicon codicon-zoom-in' aria-hidden='true'/></button>
+        </div>
+    </>;
+}
+
 export interface CanvasAssetLibraryDialogProps {
     readonly locale:string;readonly load:()=>Promise<readonly ComicAssetLibraryEntry[]>;
     readonly onUse?:(assetId:string,requestId:string,entry:ComicAssetLibraryEntry)=>Promise<void>;readonly onClose:()=>void;
@@ -85,7 +160,7 @@ export interface CanvasAssetLibraryDialogProps {
 export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):React.ReactElement {
     const t=(key:Parameters<typeof comicAssetLibraryText>[1])=>comicAssetLibraryText(props.locale,key);
     const [librarySize,setLibrarySize]=useComicLibrarySize();
-    const [loadedEntries,setEntries]=React.useState<readonly ComicAssetLibraryEntry[]>(props.entries??[]),[category,setCategory]=React.useState<ComicAssetLibraryFilter>(props.initialFilter??'all');
+    const [loadedEntries,setEntries]=React.useState<readonly ComicAssetLibraryEntry[]>(props.entries??[]),[category,setCategory]=React.useState<LibraryTab>(props.initialFilter??'all');
     const syncedPropEntries=React.useRef(props.entries);
     let entries=loadedEntries;
     if(props.entries!==undefined&&syncedPropEntries.current!==props.entries){
@@ -111,6 +186,12 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
     const lightboxVideoRef=React.useRef<HTMLVideoElement|null>(null);
     const lightboxBackdropDownRef=React.useRef(false);
     const zoomMediaStateRef=React.useRef<{assetId:string;currentTime:number;volume:number;muted:boolean;aspectRatio?:number}|undefined>(undefined);
+    /** ‹ › and ← →: the step through the shown pictures and clips (set each render, read by the key listener). */
+    const stepZoomRef=React.useRef<(step:LightboxGalleryStep)=>boolean>(()=>false);
+    /** The sound last chosen in the lightbox, carried from one clip to the next. */
+    const zoomSoundRef=React.useRef<{readonly volume:number;readonly muted:boolean}|undefined>(undefined);
+    /** What had the focus before the lightbox opened; it gets the focus back when the lightbox closes (the dialog pattern). */
+    const zoomOpenerRef=React.useRef<HTMLElement|null>(null);
     const zoomRestoredSrcRef=React.useRef('');
     const probedPathsRef=React.useRef(new Set<string>());
     const dismissedOverlayOnDownRef=React.useRef(false);
@@ -121,6 +202,9 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
         try{lightboxVideoRef.current?.pause();}catch{/* noop */}
         setZoomedEntry(undefined);
         setZoomAspectRatio(undefined);
+        const opener=zoomOpenerRef.current;
+        zoomOpenerRef.current=null;
+        if(opener?.isConnected)window.requestAnimationFrame(()=>{if(opener.isConnected)opener.focus({preventScroll:true});});
     };
     const [operations]=React.useState(()=>assetLibraryOperations(props.operationScope,props.onUse??props.load));
     const [,render]=React.useReducer(value=>value+1,0),cardLocks=React.useRef(new Set<string>()),mounted=React.useRef(true),preserveError=React.useRef(false);
@@ -152,7 +236,16 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
     },[entries,props.preparePlaybackFiles]);
     React.useEffect(()=>{
         const onKeyDown=(event:KeyboardEvent):void=>{
-            if(event.key!=='Escape'||event.isComposing||operations.busy)return;
+            if(event.isComposing||operations.busy)return;
+            const action=zoomedEntry?lightboxKeyAction(event):undefined;
+            if(action==='previous'||action==='next'){
+                // ← → step through the lightbox wherever the focus sits; the list behind never scrolls. A lone item
+                // leaves the keys alone (a focused clip still seeks with them).
+                if(!stepZoomRef.current(action==='previous'?-1:1))return;
+                event.preventDefault();event.stopPropagation();event.stopImmediatePropagation?.();
+                return;
+            }
+            if(event.key!=='Escape')return;
             event.preventDefault();event.stopPropagation();event.stopImmediatePropagation?.();
             if(zoomedEntry)closeZoom();
             else if(pendingDelete)closeDeletePopover(true);
@@ -244,6 +337,11 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
         }catch{/* noop */}
     },[zoomedEntry?.assetId,zoomedMedia]);
     const openZoom=(entry:ComicAssetLibraryEntry,sourceVideo?:HTMLVideoElement|null):void=>{
+        // Opening (not stepping): remember the focus the lightbox's close button is about to take.
+        if(!zoomedEntry&&typeof document!=='undefined'){
+            const active=document.activeElement as HTMLElement|null;
+            zoomOpenerRef.current=active&&active!==document.body&&typeof active.focus==='function'?active:null;
+        }
         setContextMenu(undefined);
         setPendingDelete(undefined);
         lightboxBackdropDownRef.current=false;
@@ -362,8 +460,21 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
         ||entry.assetName.toLowerCase().includes(query)
         ||(entry.remark&&entry.remark.toLowerCase().includes(query))
         ||Boolean(entry.textContent&&entry.textContent.toLowerCase().includes(query));
-    const visible=sortComicAssetLibrary(entries.filter(entry=>comicAssetLibraryMatches(entry,category)&&matchesSearch(entry)),oldest);
-    const countFor=(filter:ComicAssetLibraryFilter):number=>entries.filter(entry=>comicAssetLibraryMatches(entry,filter)).length;
+    const visible=sortComicAssetLibrary(entries.filter(entry=>libraryTabMatches(entry,category)&&matchesSearch(entry)),oldest);
+    // The lightbox steps through the pictures and clips the grid shows (tab, search and order as on screen), wrapping at both ends.
+    const zoomable=visible.filter(entry=>(entry.assetType==='image'||entry.assetType==='video')&&Boolean(resolveMediaUrl(entry)));
+    const zoomIndex=zoomedEntry?zoomable.findIndex(entry=>entry.assetId===zoomedEntry.assetId):-1;
+    const zoomGallery=zoomIndex>=0&&zoomable.length>1;
+    stepZoomRef.current=step=>{
+        const next=zoomGallery?zoomable[lightboxGalleryIndex(zoomIndex,zoomable.length,step)]:undefined;
+        if(!next||next.assetId===zoomedEntry?.assetId)return false;
+        openZoom(next);
+        // A clip starts from its beginning, at the sound chosen for the one before.
+        const sound=zoomSoundRef.current,state=zoomMediaStateRef.current;
+        if(sound&&state?.assetId===next.assetId)zoomMediaStateRef.current={...state,volume:sound.volume,muted:sound.muted};
+        return true;
+    };
+    const countFor=(tab:LibraryTab):number=>entries.filter(entry=>libraryTabMatches(entry,tab)).length;
     const isCharacterEntry=(entry:ComicAssetLibraryEntry):boolean=>entry.assetCategory==='character'||Boolean(entry.characterBundleId);
     const canReclassify=(entry:ComicAssetLibraryEntry):boolean=>Boolean(props.onCategoryChange&&entry.assetType==='image'&&entry.mediaPath);
     return <div className='nmx-board-tool-backdrop nmx-library-backdrop' onMouseDown={event=>{
@@ -391,7 +502,7 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
                 </div>
             </header>
             <div className='nmx-library-toolbar'>
-                <nav aria-label={t('category')}>{(['all','image','character','video','audio'] as const).map(value=>{
+                <nav aria-label={t('category')}>{LIBRARY_TABS.map(value=>{
                     const label=t(value==='audio'?'audioMedia':value);
                     const count=countFor(value);
                     return <button key={value} type='button' title={label} aria-pressed={category===value} onClick={()=>{setCategory(value);setContextMenu(undefined);setPendingDelete(undefined);}}>
@@ -508,8 +619,17 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
                 </div>;
             })()}
         </section>
-        {zoomedEntry&&zoomedMedia&&<div className='nmx-library-lightbox' role='dialog' aria-modal='true' aria-label={zoomedEntry.assetName}
-            onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closeZoom();}}}
+        {zoomedEntry&&zoomedMedia&&<div className={`nmx-library-lightbox is-${zoomedEntry.assetType==='video'?'video':'image'}${zoomGallery?' has-gallery':''}`} role='dialog' aria-modal='true' aria-label={zoomedEntry.assetName}
+            onKeyDown={event=>{
+                if(event.key==='Escape'){event.preventDefault();event.stopPropagation();closeZoom();return;}
+                if(event.key!=='Tab')return;
+                // Modal: Tab cycles through the lightbox's own controls, never the cards behind it.
+                const focusable=[...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), video[controls], [tabindex]:not([tabindex="-1"])')].filter(element=>element.getClientRects().length>0);
+                const index=focusable.indexOf(document.activeElement as HTMLElement);
+                if(focusable.length&&!(event.shiftKey?index<=0:index<0||index===focusable.length-1))return;
+                event.preventDefault();
+                focusable[event.shiftKey?focusable.length-1:0]?.focus();
+            }}
             onPointerDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=event.target===event.currentTarget;}}
             onMouseDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=event.target===event.currentTarget;}}
             onClick={event=>{event.stopPropagation();const shouldClose=(lightboxBackdropDownRef.current||event.detail===0)&&event.target===event.currentTarget;lightboxBackdropDownRef.current=false;if(shouldClose)closeZoom();}}>
@@ -524,7 +644,14 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
                     <div className='nmx-library-lightbox-caption' data-nmx-literal title={zoomedEntry.assetName}>{zoomedEntry.assetName}</div>
                     {zoomedEntry.durationMs!==undefined&&zoomedEntry.durationMs>0&&<span className='nmx-library-lightbox-duration' data-nmx-literal>{`${(zoomedEntry.durationMs/1000).toFixed(1)}s`}</span>}
                 </div>
-                <button type='button' className='nmx-library-lightbox-close' title={t('close')} aria-label={t('close')}
+                {zoomGallery&&<span className='nmx-lightbox-counter' role='status' aria-live='polite' aria-atomic='true' data-nmx-literal
+                    onPointerDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
+                    onMouseDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
+                    onClick={event=>event.stopPropagation()}>
+                    <span aria-hidden='true'>{`${zoomIndex+1} / ${zoomable.length}`}</span>
+                    <span className='nmx-lightbox-sr'>{imageLightboxPosition(props.locale,zoomIndex+1,zoomable.length)}</span>
+                </span>}
+                <button type='button' className='nmx-library-lightbox-close' autoFocus title={t('close')} aria-label={t('close')}
                     onPointerDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
                     onMouseDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
                     onClick={event=>{event.stopPropagation();closeZoom();}}>×</button>
@@ -573,16 +700,23 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
                         }}
                         onVolumeChange={event=>{
                             const el=event.currentTarget;
+                            zoomSoundRef.current={volume:el.volume,muted:el.muted};
                             if(zoomMediaStateRef.current?.assetId===zoomedEntry.assetId){
                                 zoomMediaStateRef.current={...zoomMediaStateRef.current,volume:el.volume,muted:el.muted};
                             }
                         }}/>
-                    :<img key={zoomedEntry.assetId} className='nmx-library-lightbox-media' src={zoomedMedia} alt={zoomedEntry.assetName}
-                        onPointerDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
-                        onMouseDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
-                        onMouseUp={()=>{lightboxBackdropDownRef.current=false;}}
-                        onClick={event=>event.stopPropagation()}/>}
+                    :<LibraryLightboxImage key={zoomedEntry.assetId} src={zoomedMedia} alt={zoomedEntry.assetName} locale={props.locale}
+                        onPress={()=>{lightboxBackdropDownRef.current=false;}}/>}
             </div>
+            {/* ‹ › on the left and right edges (physical, like ← →), only when there is more than one to show. */}
+            {zoomGallery&&(['previous','next'] as const).map(direction=><button key={direction} type='button' className={`nmx-lightbox-nav is-${direction}`}
+                aria-label={imageLightboxText(props.locale,direction)} title={imageLightboxText(props.locale,direction)}
+                onPointerDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
+                onMouseDown={event=>{event.stopPropagation();lightboxBackdropDownRef.current=false;}}
+                onDoubleClick={event=>event.stopPropagation()}
+                onClick={event=>{event.stopPropagation();stepZoomRef.current(direction==='previous'?-1:1);}}>
+                <i className={`codicon codicon-chevron-${direction==='previous'?'left':'right'}`} aria-hidden='true'/>
+            </button>)}
         </div>}
     </div>;
 }

@@ -555,6 +555,7 @@ function MerchantModelDrawerBody({ service, merchant, locale, onClose, closing =
     const searchTerm = search.trim();
     const requestKey = JSON.stringify([merchant.id, searchTerm, category]);
     const initialCached = getCachedMerchantSupportCatalog(service, merchant.id, searchTerm, category);
+    const refreshPending = React.useRef(!initialCached || Date.now() - initialCached.updatedAt >= 60_000);
     const [page, setPage] = React.useState<{ key: string; offerings: readonly PlatformOffering[]; cursor?: string } | undefined>(() =>
         initialCached ? { key: requestKey, cursor: initialCached.result.nextCursor, offerings: initialCached.result.offerings } : undefined
     );
@@ -570,9 +571,10 @@ function MerchantModelDrawerBody({ service, merchant, locale, onClose, closing =
     const error = failure?.key === requestKey;
     const text = (key: Parameters<typeof modelCenterText>[1], count?: number): string => modelCenterText(locale, key, count);
     const load = React.useCallback(async (after?: string, force = false): Promise<void> => {
-        if (busy.current || composition.current || activeRequest.current !== requestKey) return;
+        if (busy.current || composition.current || activeRequest.current !== requestKey || (after && refreshPending.current)) return;
         const cachedEntry = !after && !force ? getCachedMerchantSupportCatalog(service, merchant.id, searchTerm, category) : undefined;
         if (cachedEntry && Date.now() - cachedEntry.updatedAt < 60_000) {
+            refreshPending.current = false;
             loadedSnapshot.current = { key: requestKey, version: cachedEntry.result.snapshotVersion };
             setPage({ key: requestKey, cursor: cachedEntry.result.nextCursor, offerings: cachedEntry.result.offerings });
             setFailure(undefined);
@@ -609,7 +611,11 @@ function MerchantModelDrawerBody({ service, merchant, locale, onClose, closing =
                 }
             }
         } finally {
-            if (token === generation.current && activeRequest.current === requestKey) { busy.current = false; setLoading(false); }
+            if (token === generation.current && activeRequest.current === requestKey) {
+                busy.current = false;
+                if (!after) refreshPending.current = false;
+                setLoading(false);
+            }
         }
     }, [service, merchant.id, searchTerm, category, requestKey]);
     React.useEffect(() => {
@@ -620,25 +626,26 @@ function MerchantModelDrawerBody({ service, merchant, locale, onClose, closing =
     React.useEffect(() => {
         ++generation.current; busy.current = false;
         const cachedEntry = getCachedMerchantSupportCatalog(service, merchant.id, searchTerm, category);
+        refreshPending.current = !cachedEntry || Date.now() - cachedEntry.updatedAt >= 60_000;
         loadedSnapshot.current = cachedEntry ? { key: requestKey, version: cachedEntry.result.snapshotVersion } : undefined;
         setPage(cachedEntry ? { key: requestKey, cursor: cachedEntry.result.nextCursor, offerings: cachedEntry.result.offerings } : undefined);
         setFailure(undefined); setLoading(!cachedEntry); setExpanded('');
         if (list.current) list.current.scrollTop = 0;
         // No partial IME syllables reach the server. A committed word follows the same debounce as typing.
         const timer = composing ? undefined : window.setTimeout(() => void load(), searchTerm ? 300 : 0);
-        return () => { window.clearTimeout(timer); ++generation.current; };
+        return () => { window.clearTimeout(timer); refreshPending.current = false; ++generation.current; };
     }, [service, merchant.id, category, requestKey, load, composing, searchTerm]);
     const loadMore = React.useCallback((): void => {
-        if (cursor && !loading && !error && !closing) void load(cursor);
+        if (cursor && !loading && !error && !closing && !refreshPending.current && !busy.current) void load(cursor);
     }, [cursor, loading, error, closing, load]);
     React.useEffect(() => {
-        if (!cursor || loading || error || closing || !list.current || !sentinel.current || typeof IntersectionObserver === 'undefined') return;
+        if (!cursor || loading || error || closing || refreshPending.current || !list.current || !sentinel.current || typeof IntersectionObserver === 'undefined') return;
         const observer = new IntersectionObserver(entries => {
             if (entries.some(entry => entry.isIntersecting)) loadMore();
         }, { root: list.current, rootMargin: '160px' });
         observer.observe(sentinel.current);
         return () => observer.disconnect();
-    }, [cursor, loading, error, closing, loadMore]);
+    }, [cursor, currentPage, loading, error, closing, loadMore]);
     const executable = new Map<string, PlatformOffering>();
     // One row per model and price: the same model on two APIs of this merchant at the same price shows once, at
     // different prices twice (same name; the hover and the expanded table show what each one charges).

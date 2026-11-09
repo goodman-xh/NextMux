@@ -1709,6 +1709,26 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
     const renderSourcePickerBlock = (mode: 'image' | 'topic'): React.ReactElement => {
         const accept = mode === 'image' ? 'image/png,image/jpeg,image/webp,image/bmp' : 'image/*,video/*';
         const activeSource = props.sourceFiles[0];
+        // One source at a time: the widget keeps the first usable file (addComicStudioLocalPaths) and its own picker
+        // selects one, so this fallback input takes one too, and a file dropped on the preview card takes its place.
+        const dropOnPreview = {
+            onDragOver: (event: React.DragEvent<HTMLElement>): void => {
+                if (props.generating || !event.dataTransfer?.types.includes('Files')) return;
+                event.preventDefault();
+                if (!draggingFiles) setDraggingFiles(true);
+            },
+            onDragLeave: (event: React.DragEvent<HTMLElement>): void => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDraggingFiles(false);
+            },
+            onDrop: (event: React.DragEvent<HTMLElement>): void => {
+                if (!props.generating) {
+                    handleDrop(event);
+                    return;
+                }
+                event.preventDefault();
+                setDraggingFiles(false);
+            }
+        };
         return (
             <div className='nmx-comic-studio-source-block'>
                 <input
@@ -1750,7 +1770,7 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                         {renderSourceActionsAndLibrary(true)}
                     </>
                 ) : (
-                    <div className='nmx-comic-studio-dropzone-preview' data-source-kind={activeSource.kind}>
+                    <div className={`nmx-comic-studio-dropzone-preview${draggingFiles ? ' is-dragging' : ''}`} data-source-kind={activeSource.kind} {...dropOnPreview}>
                         <div
                             className={`nmx-comic-studio-dropzone-media${(activeSource.kind === 'image' || activeSource.kind === 'video') && activeSource.previewUrl ? ' is-zoomable' : ''}`}
                             onClick={

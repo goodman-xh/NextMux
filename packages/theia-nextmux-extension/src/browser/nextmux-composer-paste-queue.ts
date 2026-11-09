@@ -357,19 +357,27 @@ export function formatByteSizeCompact(bytes: number): string {
     return `${mb >= 10 ? Math.round(mb) : mb.toFixed(1)} MB`;
 }
 
-export function resolvePastedReferenceFilePath(reference: Pick<PastedTextReference, 'name' | 'attachment'>): string {
-    if (reference.attachment?.workspaceRelativePath) {
+export function resolvePastedReferenceFilePath(reference: string | Pick<PastedTextReference, 'name' | 'attachment'>): string {
+    if (typeof reference !== 'string' && reference.attachment?.workspaceRelativePath) {
         return reference.attachment.workspaceRelativePath;
     }
-    const uri = reference.attachment?.uri || '';
-    if (uri.startsWith('file://')) {
+    const rawUri = typeof reference === 'string' ? reference : (reference.attachment?.uri || '');
+    const normalized = rawUri.trim();
+    if (/^file:\/\//i.test(normalized)) {
         try {
-            return decodeURIComponent(new URL(uri).pathname);
+            const parsedUrl = new URL(normalized);
+            const decodedPath = decodeURIComponent(parsedUrl.pathname);
+            if (parsedUrl.hostname && parsedUrl.hostname.toLowerCase() !== 'localhost') {
+                return `//${decodeURIComponent(parsedUrl.hostname)}${decodedPath}`;
+            }
+            return decodedPath.replace(/^[\/\\]([A-Za-z]:[\/\\])/, '$1');
         } catch {
-            return uri.replace(/^file:\/\//, '');
+            return normalized
+                .replace(/^file:\/\//i, '')
+                .replace(/^[\/\\]([A-Za-z]:[\/\\])/, '$1');
         }
     }
-    return uri || reference.name;
+    return normalized || (typeof reference === 'string' ? '' : reference.name);
 }
 
 export function formatPastedTextChipSummary(

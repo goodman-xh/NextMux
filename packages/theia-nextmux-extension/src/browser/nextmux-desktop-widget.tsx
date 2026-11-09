@@ -83,6 +83,13 @@ const LOCAL_MODEL_BILLING_LABEL = '本机模型运行，不计费';
 const APP_PLUGIN_DOCS_URL = 'https://nextmux.app/docs/plugins';
 /** The website's 我的插件: earnings, the Whop account and withdrawals of a plugin seller. */
 const APP_PLUGIN_EARNINGS_URL = 'https://nextmux.app/account/plugins';
+/** The website's merchant console (商家入驻), opened in the system browser from the Model Center bar. */
+const MERCHANT_CONSOLE_URL = 'https://nextmux.app/merchant/console';
+/** The link's text in the Model Center bar: an invitation to merchants, in every desktop language. */
+const MERCHANT_CONSOLE_LABELS: Readonly<Record<NextMuxDesktopLocale, string>> = {
+    'zh-CN': '商家入驻', 'zh-TW': '商家入駐', en: 'Become a Merchant', ja: '加盟店登録', ko: '판매자 입점', es: 'Ser comerciante',
+    fr: 'Devenir marchand', de: 'Händler werden', 'pt-BR': 'Tornar-se comerciante', ru: 'Стать продавцом', ar: 'الانضمام كتاجر', hi: 'मर्चेंट बनें'
+};
 /** Where developers upload plugins for review (the website's plugin pages). */
 import { DataLocationSection } from './nextmux-data-location';
 import { ConversationTabStrip, ConversationVisualTabView, conversationTabsText, type ConversationTabPluginParts, conversationWindowText as tabWindowText, type ComputerViewCapability, type ConversationWindowControls, type ConversationWindowPlacement, type ConversationWindowTextKey } from './nextmux-conversation-tabs-view';
@@ -100,6 +107,8 @@ function conversationTabsFallbackTitle(locale: NextMuxDesktopLocale): string {
     return conversationTabsText(locale, 'conversation');
 }
 import { ConversationMarkdown } from './nextmux-conversation-markdown';
+// The thread's own renderer, read for the pictures a reply shows (codingConversationGallery).
+import { renderConversationMarkdownHtml } from './nextmux-conversation-markdown';
 import { conversationCodeTokenizer, editorLanguageForName, ensureEditorLanguage, ensureNextMuxEditorLanguages } from './nextmux-editor-languages';
 import { ThemeService } from '@theia/core/lib/browser/theming';
 import { ReactWidget } from '@theia/core/lib/browser/widgets/react-widget';
@@ -616,9 +625,16 @@ import {
     createImageLightboxState,
     imageLightboxText,
     imageLightboxPercentage,
+    imageLightboxPosition,
+    lightboxGalleryIndex,
+    lightboxGalleryItems,
+    lightboxGalleryKind,
+    lightboxGalleryOrigin,
+    lightboxKeyAction,
     updateImageLightbox,
     type ImageLightboxCloseSource,
-    type ImageLightboxState
+    type ImageLightboxState,
+    type LightboxGalleryStep
 } from './nextmux-image-lightbox';
 import { mediaRuntimeText } from './nextmux-media-runtime-locale';
 import { isSyntheticModelId, knownModelName, modelDisplayNameOnly } from './nextmux-model-display-name';
@@ -771,6 +787,18 @@ interface ComposerDraftJournalEntry {
     readonly attachments?: readonly QueuedAttachmentReference[];
     /** The conversation's saved draft (draftHash) when this was written: a snapshot still holding it is older than this. */
     readonly base: string;
+}
+
+/** A picture or clip a viewer can step to with ‹ › or ← →, and how it opens (as a click on it does). */
+interface MediaGalleryItem {
+    readonly key: string;
+    readonly open: () => void;
+}
+
+/** A viewer's gallery: its items, listed afresh at each step (a conversation grows while it is open), and the one on show. */
+interface MediaGallery {
+    readonly list: () => readonly MediaGalleryItem[];
+    readonly key: string;
 }
 
 /** A conversation's composer draft as one comparable string (attachments by their references' IDs). */
@@ -5354,6 +5382,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         };
         for (const type of ['dragenter', 'dragover', 'drop'] as const) this.node.addEventListener(type, guardFileDrop);
         this.toDispose.push({ dispose: () => { for (const type of ['dragenter', 'dragover', 'drop'] as const) this.node.removeEventListener(type, guardFileDrop); } });
+        // Which picture or clip a click opens, noted before React's handlers open a viewer: ‹ › then step through its gallery.
+        this.node.addEventListener('click', this.noteMediaGalleryClick, true);
+        this.toDispose.push({ dispose: () => this.node.removeEventListener('click', this.noteMediaGalleryClick, true) });
         const modelListInterval = window.setInterval(() => this.scheduleOwnApiModelListRefresh(), MODEL_LIST_RETRY_MS);
         this.toDispose.push({ dispose: () => { window.clearInterval(modelListInterval); window.clearTimeout(this.modelListRefreshTimer); } });
         // The cloud model list and prices: ask a tiny edge-cached version every ~30 minutes (with jitter,
@@ -11380,6 +11411,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected openAttachmentLightbox(name: string, dataUrl: string): void {
+        this.noteMediaViewerOpener?.();
+        this.adoptMediaGallery?.();
+        // One viewer at a time: a step from a clip to a picture puts the clip away.
+        if (this.mediaViewer) this.mediaViewer = undefined;
         this.attachmentLightboxPath = '';
         this.attachmentLightbox = updateImageLightbox(this.attachmentLightbox, {
             type: 'open',
@@ -11410,8 +11445,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected closeAttachmentLightbox(source: ImageLightboxCloseSource): void {
         this.attachmentLightboxPan = undefined;
         this.attachmentLightboxPath = '';
+        this.mediaGallery = undefined;
         this.attachmentLightbox = updateImageLightbox(this.attachmentLightbox, { type: 'close', source }).state;
         this.update();
+        this.restoreMediaViewerOpener?.();
     }
 
     protected zoomAttachmentLightbox(direction: 'in' | 'out'): void {
@@ -11578,6 +11615,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected async previewTurnImage(sessionId: string, item: NonNullable<CodingTurnRecord['attachments']>[number]): Promise<void> {
         if (item.kind !== 'image') return;
+        const opening = this.mediaOpenToken;
         try {
             let record = this.turnAttachmentPayloads.get(this.turnAttachmentPayloadKey(sessionId, item.id));
             if (!record) {
@@ -11588,6 +11626,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 record = this.attachmentRecordFromBytes(item.name, item.uri, bytes, item.mimeType || '', item.id,
                     item.workspaceRelativePath);
                 this.turnAttachmentPayloads.set(this.turnAttachmentPayloadKey(sessionId, item.id), record);
+                // A click or a ‹ › step made meanwhile wins: this picture, read late, only stays in the cache.
+                if (opening !== this.mediaOpenToken) return;
             }
             if (record) this.previewAttachmentImage(record);
             else {
@@ -25333,21 +25373,33 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected handleThreadFindShortcut = (event: KeyboardEvent): void => {
+        // ← → step through an open viewer's gallery wherever the focus sits (the thread behind never scrolls). A viewer
+        // with one item leaves the keys alone, so a focused clip still seeks with them.
+        if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && this.node.isConnected
+            && (this.mediaViewer || this.attachmentLightbox?.isOpen || this.comicChatUi?.()?.viewer)) {
+            const action = lightboxKeyAction(event);
+            if ((action === 'previous' || action === 'next') && this.stepMediaGallery?.(action === 'previous' ? -1 : 1)) {
+                // The viewer is modal: no other window-level shortcut sees the key behind it.
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                return;
+            }
+        }
         if (event.key === 'Escape' && this.mediaViewer && this.node.isConnected) {
             event.preventDefault();
-            event.stopPropagation();
+            event.stopImmediatePropagation();
             this.closeMediaViewer();
             return;
         }
         if (event.key === 'Escape' && this.attachmentLightbox.isOpen && this.node.isConnected) {
             event.preventDefault();
-            event.stopPropagation();
+            event.stopImmediatePropagation();
             this.closeAttachmentLightbox('escape');
             return;
         }
         if (event.key === 'Escape' && !event.isComposing && this.comicChatUi?.()?.viewer && this.node.isConnected) {
             event.preventDefault();
-            event.stopPropagation();
+            event.stopImmediatePropagation();
             this.closeComicChatViewer();
             return;
         }
@@ -26659,10 +26711,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 const failed = !ownerId || Boolean(key && this.agentOutputAssetErrors.has(key));
                 if (!loaded && !failed && ownerId) this.loadAgentOutputAsset(ownerId, part.asset);
                 const typeLabel = localizeDesktopSurface(this.desktopLocale, part.type === 'image' ? '模型生成的图片' : '模型生成的音频');
+                // As codingConversationGallery keys it: the reply's turn, then which showing of this image it is.
+                const galleryKey = `out:${turnId}:${output.parts.slice(0, index).filter(other => other.type === 'image' && other.asset.sha256 === part.asset.sha256).length}:${part.asset.sha256}`;
                 return <figure className={`nmx-assistant-media is-${part.type}`} key={`${part.type}-${part.asset.sha256}-${index}`}
                     onContextMenu={event=>{if(this.activeSection==='comic'&&ownerId){event.preventDefault();event.stopPropagation();this.openLibrarySaveMenu(event,`output:${ownerId}:${part.asset.sha256}`,{agentOutput:{ownerId,asset:part.asset},assetName:typeLabel});}}}>
                     {loaded ? part.type === 'image'
-                        ? <button type='button' aria-label={typeLabel} onClick={() => this.openAttachmentLightbox(typeLabel, loaded.dataUrl)}><img loading='lazy' decoding='async' src={loaded.dataUrl} alt={typeLabel} /></button>
+                        ? <button type='button' aria-label={typeLabel} data-nmx-gallery='image' data-nmx-gallery-key={galleryKey} onClick={() => this.openAttachmentLightbox(typeLabel, loaded.dataUrl)}><img loading='lazy' decoding='async' src={loaded.dataUrl} alt={typeLabel} /></button>
                         : <audio controls preload='metadata' src={loaded.dataUrl} aria-label={typeLabel}></audio>
                         : <div className={`nmx-assistant-media-state ${failed ? 'is-error' : 'is-loading'}`} role={failed ? 'alert' : 'status'}>
                             <i className={`codicon codicon-${failed ? 'warning' : 'loading codicon-modifier-spin'}`}></i>
@@ -30694,17 +30748,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!resolved) return false;
         const name = fallbackName || resolved.path.split(/[\\/]/).pop() || resolved.path;
         const initialUrl = (kind === 'video' && resolved.path ? this.playbackFileUrlByPath?.get(resolved.path) : undefined) || resolved.url;
+        this.noteMediaViewerOpener?.();
         if (this.activeSection === 'comic' && this.comicChatUi?.()?.surface === 'chat') {
+            // A 漫剧对话 shows its own viewer; the coding viewers are not on screen there and stay closed.
             this.comicChatViewerBackdropDown = false;
             this.comicChatViewerMediaState = kind === 'video'
-                ? { key: `${resolved.path || initialUrl}::${name}`, restoredUrl: '', currentTime: 0, volume: 1, muted: false }
+                ? { key: `${resolved.path || initialUrl}::${name}`, restoredUrl: '', currentTime: 0, volume: this.comicChatViewerSound?.volume ?? 1, muted: this.comicChatViewerSound?.muted ?? false }
                 : undefined;
             this.comicChatUi().viewer = { url: initialUrl, name, kind };
-        }
-        if (kind === 'image') {
+            this.adoptMediaGallery?.();
+        } else if (kind === 'image') {
             this.openAttachmentLightbox(name, initialUrl);
             this.attachmentLightboxPath = resolved.path;
         } else {
+            this.adoptMediaGallery?.();
+            this.setAsideAttachmentLightbox?.();
             this.mediaViewer = { kind, src: initialUrl, name, path: resolved.path };
         }
         if (kind === 'video' && resolved.path && /\.(?:mp4|m4v|mov)$/i.test(resolved.path) && !this.playbackFileUrlByPath?.has(resolved.path)) {
@@ -30735,11 +30793,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
             try { fileKey = new URI(url).path.fsPath(); } catch { fileKey = ''; }
         }
         const initialUrl = (kind === 'video' && fileKey ? this.playbackFileUrlByPath?.get(fileKey) : undefined) || url;
+        this.noteMediaViewerOpener?.();
         this.comicChatViewerBackdropDown = false;
         this.comicChatViewerMediaState = kind === 'video'
-            ? { key: `${fileKey || initialUrl}::${name}`, restoredUrl: '', currentTime: 0, volume: 1, muted: false }
+            ? { key: `${fileKey || initialUrl}::${name}`, restoredUrl: '', currentTime: 0, volume: this.comicChatViewerSound?.volume ?? 1, muted: this.comicChatViewerSound?.muted ?? false }
             : undefined;
         ui.viewer = { url: initialUrl, name, kind };
+        this.adoptMediaGallery?.();
         if (kind === 'video' && fileKey && /\.(?:mp4|m4v|mov)$/i.test(fileKey) && !this.playbackFileUrlByPath?.has(fileKey)) {
             void this.preparePlaybackFileMap?.([fileKey]).then(() => {
                 const upgraded = this.playbackFileUrlByPath?.get(fileKey);
@@ -30761,7 +30821,209 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected closeMediaViewer(): void {
         if (!this.mediaViewer) return;
         this.mediaViewer = undefined;
+        this.mediaGallery = undefined;
         this.update();
+        this.restoreMediaViewerOpener?.();
+    }
+
+    /** The gallery of the viewer on screen: ‹ › and ← → step through it (PhotoSwipe's gallery, wrapping at both ends). */
+    protected mediaGallery?: MediaGallery;
+    /** The gallery a click or a step is opening, taken by the viewer that opens next (a picture may load first). */
+    protected mediaGalleryPending?: MediaGallery & { readonly at: number };
+    protected readonly mediaGalleryElementKeys = new WeakMap<Element, string>();
+    protected mediaGalleryElementCount = 0;
+    /** The pictures in a reply's markdown, by its text (the thread's own renderer, so sources and order match the page). */
+    protected readonly conversationMarkdownImageCache = new Map<string, readonly { readonly source: string; readonly alt: string }[]>();
+    /** The 漫剧 viewer's sound, carried from one clip to the next. */
+    protected comicChatViewerSound?: { readonly volume: number; readonly muted: boolean };
+    /** Counts clicks and ‹ › steps: a picture still being read when another is asked for never opens over it. */
+    protected mediaOpenToken = 0;
+    /** What had the focus before a viewer opened; it gets the focus back when the viewer closes (the dialog pattern). */
+    protected mediaViewerOpener?: HTMLElement;
+
+    /**
+     * As a viewer opens (its close button then takes the focus): remember where the focus was, unless another viewer
+     * already holds it. Keys pressed while the viewer is open never reach the composer or the thread behind it.
+     */
+    protected noteMediaViewerOpener(): void {
+        if (this.attachmentLightbox?.isOpen || this.mediaViewer || this.comicChatUi?.()?.viewer || typeof document === 'undefined') return;
+        const active = document.activeElement;
+        this.mediaViewerOpener = active instanceof HTMLElement && active !== document.body ? active : undefined;
+    }
+
+    /** As the viewer closes: the focus goes back where it was, without scrolling what lies under it. */
+    protected restoreMediaViewerOpener(): void {
+        const opener = this.mediaViewerOpener;
+        this.mediaViewerOpener = undefined;
+        if (opener?.isConnected) window.requestAnimationFrame(() => { if (opener.isConnected) opener.focus({ preventScroll: true }); });
+    }
+
+    /**
+     * Notes the gallery item a click lands on before React's handlers open a viewer. The coding conversation lists its
+     * pictures and clips from its records (its thread renders only the turns near the viewport); any other gallery
+     * (a 漫剧对话, the 素材 panel, a composer's attachments) is the clickable media of its container, in page order.
+     */
+    protected readonly noteMediaGalleryClick = (event: MouseEvent): void => {
+        this.mediaOpenToken++;
+        const origin = lightboxGalleryOrigin(event.target);
+        const gallery = origin ? this.mediaGalleryAround(origin.root, origin.element) : undefined;
+        this.mediaGalleryPending = gallery ? { ...gallery, at: Date.now() } : undefined;
+    };
+
+    protected mediaGalleryAround(root: Element, element: HTMLElement): MediaGallery | undefined {
+        if (root.getAttribute('data-nmx-gallery-root') === 'coding-thread') {
+            const key = this.codingGalleryKey(element);
+            return key ? { list: () => this.codingConversationGallery(), key } : undefined;
+        }
+        const keyOf = (item: Element): string => {
+            let key = this.mediaGalleryElementKeys.get(item);
+            if (!key) this.mediaGalleryElementKeys.set(item, key = `element:${++this.mediaGalleryElementCount}`);
+            return key;
+        };
+        return { list: () => lightboxGalleryItems(root).map(item => ({ key: keyOf(item), open: () => item.click() })), key: keyOf(element) };
+    }
+
+    /** The viewer opening now takes the gallery its click or step chose; one opened any other way stands alone. */
+    protected adoptMediaGallery(): void {
+        const pending = this.mediaGalleryPending;
+        this.mediaGalleryPending = undefined;
+        // A picture read from disk opens a moment after its click; a click long gone no longer speaks for it.
+        this.mediaGallery = pending && Date.now() - pending.at < 15_000 ? { list: pending.list, key: pending.key } : undefined;
+    }
+
+    /** Where the item on show sits in its gallery, when there is another to step to. */
+    protected mediaGalleryPosition(): { readonly index: number; readonly total: number; readonly items: readonly MediaGalleryItem[] } | undefined {
+        const gallery = this.mediaGallery;
+        if (!gallery) return undefined;
+        const items = gallery.list();
+        const index = items.findIndex(item => item.key === gallery.key);
+        return index >= 0 && items.length > 1 ? { index, total: items.length, items } : undefined;
+    }
+
+    /** ‹ › and ← →: the previous or next picture or clip takes the viewer's place, opened as a click on it would. */
+    protected stepMediaGallery(step: LightboxGalleryStep): boolean {
+        const gallery = this.mediaGallery;
+        const position = this.mediaGalleryPosition();
+        if (!gallery || !position) return false;
+        const next = position.items[lightboxGalleryIndex(position.index, position.total, step)];
+        if (!next || next.key === gallery.key) return false;
+        // The counter moves at once, even while the next picture is still read from disk.
+        this.mediaGallery = { list: gallery.list, key: next.key };
+        this.mediaGalleryPending = { ...this.mediaGallery, at: Date.now() };
+        this.mediaOpenToken++;
+        next.open();
+        this.update();
+        return true;
+    }
+
+    /**
+     * The coding conversation's pictures and clips in reading order, from its records: each turn's attached images and
+     * videos, then its reply's generated images and the pictures in its text. Keys match codingGalleryKey's for the same
+     * item on the page, so a click anywhere in the thread starts there and ‹ › reach turns not yet rendered.
+     */
+    protected codingConversationGallery(): readonly MediaGalleryItem[] {
+        const session = this.activeCodingSession();
+        if (!session) return [];
+        const items: MediaGalleryItem[] = [];
+        for (const turn of this.threadListTurns.length ? this.threadListTurns : session.turns) {
+            for (const item of turn.attachments || []) {
+                const video = item.kind !== 'image' && this.turnAttachmentMediaKind(item) === 'video';
+                if (item.kind !== 'image' && !video) continue;
+                // A picture whose file is gone stays out, as its thumbnail says.
+                if (!video && this.turnThumbnailLoads.get(this.turnAttachmentPayloadKey(session.id, item.id)) === 'missing') continue;
+                items.push({ key: `att:${turn.id}:${item.id}`, open: video ? () => this.openTurnAttachment(item) : () => void this.previewTurnImage(session.id, item) });
+            }
+            const ownerId = turn.outputAssetOwnerId || session.id;
+            const seen = new Map<string, number>();
+            const occurrence = (id: string): number => { const count = seen.get(id) || 0; seen.set(id, count + 1); return count; };
+            const pictures = (text: string): void => {
+                for (const image of this.conversationMarkdownImages(text)) {
+                    items.push({ key: `md:${turn.id}:${occurrence(`md:${image.source}`)}:${image.source}`,
+                        open: () => { this.openConversationMedia(image.source, 'image', image.alt); } });
+                }
+            };
+            const output = assistantOutputPresentation(turn.response || '', turn.outputParts);
+            if (output.kind === 'legacy-text') pictures(output.text);
+            else for (const part of output.parts) {
+                if (part.type === 'text') pictures(part.text);
+                else if (part.type === 'image') {
+                    items.push({ key: `out:${turn.id}:${occurrence(`out:${part.asset.sha256}`)}:${part.asset.sha256}`,
+                        open: () => void this.openAgentOutputImage(ownerId, part.asset) });
+                }
+            }
+        }
+        return items;
+    }
+
+    /** The gallery key of a coding-thread item on the page, as codingConversationGallery lists it; undefined for others. */
+    protected codingGalleryKey(element: HTMLElement): string | undefined {
+        const marked = element.getAttribute('data-nmx-gallery-key');
+        if (marked) return marked;
+        // A picture in a reply's text: its source, and how many pictures before it in the reply show the same one.
+        const reply = element.closest<HTMLElement>('[data-nmx-reply]');
+        const turnId = reply?.getAttribute('data-nmx-reply');
+        const source = element.getAttribute('data-nmx-local-src') || element.getAttribute('src') || '';
+        if (!reply || !turnId || element.tagName !== 'IMG' || !source) return undefined;
+        const same = Array.from(reply.querySelectorAll<HTMLElement>('.nmx-assistant-markdown img')).filter(image =>
+            lightboxGalleryKind(image) === 'image' && (image.getAttribute('data-nmx-local-src') || image.getAttribute('src')) === source);
+        const occurrence = same.indexOf(element);
+        return occurrence < 0 ? undefined : `md:${turnId}:${occurrence}:${source}`;
+    }
+
+    /** The pictures a reply's markdown shows, in order: rendered by the thread's own renderer (cached there too). */
+    protected conversationMarkdownImages(text: string): readonly { readonly source: string; readonly alt: string }[] {
+        if (!/!\[|<img/i.test(text)) return [];
+        const cached = this.conversationMarkdownImageCache.get(text);
+        if (cached) return cached;
+        let found: { readonly source: string; readonly alt: string }[] = [];
+        try {
+            const page = new DOMParser().parseFromString(renderConversationMarkdownHtml(normalizeConversationMarkdown(text), this.desktopLocale, conversationCodeTokenizer), 'text/html');
+            found = Array.from(page.querySelectorAll('img')).filter(image => lightboxGalleryKind(image) === 'image')
+                .map(image => ({ source: image.getAttribute('data-nmx-local-src') || image.getAttribute('src') || '', alt: image.getAttribute('alt') || '' }))
+                .filter(image => image.source);
+        } catch { /* a reply that cannot be rendered offers no pictures to step to */ }
+        if (this.conversationMarkdownImageCache.size >= 256) this.conversationMarkdownImageCache.delete(this.conversationMarkdownImageCache.keys().next().value as string);
+        this.conversationMarkdownImageCache.set(text, found);
+        return found;
+    }
+
+    /** A generated image of a reply, read first when its turn has not been on screen. */
+    protected async openAgentOutputImage(ownerId: string, asset: AgentOutputAsset): Promise<void> {
+        const key = this.agentOutputAssetKey(ownerId, asset);
+        if (!this.agentOutputAssetUrls.has(key)) {
+            const opening = this.mediaOpenToken;
+            this.loadAgentOutputAsset(ownerId, asset);
+            await this.agentOutputAssetLoads.get(key);
+            if (opening !== this.mediaOpenToken) return;
+        }
+        const loaded = this.agentOutputAssetUrls.get(key);
+        if (loaded) this.openAttachmentLightbox(localizeDesktopSurface(this.desktopLocale, '模型生成的图片'), loaded.dataUrl);
+    }
+
+    /** One viewer at a time: the picture viewer gives way to a clip opened in its place, keeping their gallery. */
+    protected setAsideAttachmentLightbox(): void {
+        if (!this.attachmentLightbox?.isOpen) return;
+        this.attachmentLightboxPan = undefined;
+        this.attachmentLightbox = createImageLightboxState();
+    }
+
+    /** The viewer's ‹ › on its left and right edges (physical, like ← →) and its "2 / 12" badge, with more than one item. */
+    protected renderMediaGalleryControls(): { readonly counter?: React.ReactNode; readonly nav?: React.ReactNode } {
+        const position = this.mediaGalleryPosition?.();
+        if (!position) return {};
+        const text = (key: 'previous' | 'next'): string => imageLightboxText(this.desktopLocale, key);
+        return {
+            counter: <span className='nmx-lightbox-counter' role='status' aria-live='polite' aria-atomic='true' data-nmx-literal>
+                <span aria-hidden='true'>{`${position.index + 1} / ${position.total}`}</span>
+                <span className='nmx-lightbox-sr'>{imageLightboxPosition(this.desktopLocale, position.index + 1, position.total)}</span>
+            </span>,
+            nav: (['previous', 'next'] as const).map(direction => <button key={direction} type='button' className={`nmx-lightbox-nav is-${direction}`}
+                aria-label={text(direction)} title={text(direction)}
+                onMouseDown={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}
+                onClick={event => { event.stopPropagation(); this.stepMediaGallery(direction === 'previous' ? -1 : 1); }}>
+                <i className={`codicon codicon-chevron-${direction === 'previous' ? 'left' : 'right'}`} aria-hidden='true'></i>
+            </button>)
+        };
     }
 
     protected handleAssistantContentClick(event: React.MouseEvent<HTMLElement>): void {
@@ -46482,6 +46744,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             <header className='nmx-workspace-topbar nmx-model-center-topbar'>
                 <div className='nmx-workspace-topbar-leading'><div className='nmx-model-center-heading'><span><strong>{this.tx('modelCenter')}</strong><small>{this.tx('modelCenterSubtitle')}</small></span></div></div>
                 <div className='nmx-model-center-topbar-actions'>
+                    {/* A plain text link, as on the website's header: the page opens in the system browser. */}
+                    <a className='nmx-merchant-console-link' href={MERCHANT_CONSOLE_URL} title={MERCHANT_CONSOLE_LABELS[this.desktopLocale]} data-nmx-literal
+                        onClick={event => { event.preventDefault(); this.openExternalUrl(MERCHANT_CONSOLE_URL); }}>{MERCHANT_CONSOLE_LABELS[this.desktopLocale]}</a>
                     <span className={`nmx-platform-state ${this.platformCatalog.online ? 'is-online' : ''}`} title={this.catalogLoading ? this.tx('connecting') : this.platformCatalog.online ? localizeDesktopSurface(this.desktopLocale, '服务在线') : this.tx('catalogOffline')} aria-label={this.catalogLoading ? this.tx('connecting') : this.platformCatalog.online ? localizeDesktopSurface(this.desktopLocale, '服务在线') : this.tx('catalogOffline')}>
                         <i className={`codicon codicon-${this.catalogLoading ? 'sync codicon-modifier-spin' : this.platformCatalog.online ? 'check' : 'warning'}`}></i>
                     </span>
@@ -48186,6 +48451,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const routes = this.modelRoutes('coding');
         const route = routes.find(candidate => candidate.id === this.activeModelRouteId);
         const lightbox = this.attachmentLightbox;
+        const viewerGallery = lightbox.isOpen || this.mediaViewer ? this.renderMediaGalleryControls?.() ?? {} : {};
         // No source chosen yet: with 自动最优 on (and signed in), models are picked directly and the platform chooses
         // the route (REQUIREMENTS 3.3-1, audit A03-01 / A04-04).
         const automaticPicker = !this.activeRelayKey && this.modelSwitchDefaultEnabled && this.platformSession?.linked
@@ -48741,7 +49007,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             activeChildContinuation: Boolean(turnSessionId && [...(this.agentChildContinuationStates?.values() || [])].some(state => state.sessionId === turnSessionId)),
                             events: activityEvents
                         });
-                        return <section className={`nmx-task-turn ${_index === 0 ? 'is-first' : ''} ${_index === visibleTurns.length - 1 ? 'is-last' : ''}`} data-turn-id={turn.id} key={turn.id}>
+                        return <section className={`nmx-task-turn ${_index === 0 ? 'is-first' : ''} ${_index === visibleTurns.length - 1 ? 'is-last' : ''}`} data-turn-id={turn.id} key={turn.id} data-nmx-gallery-root='coding-thread'>
                             <div className={`nmx-user-message ${editing ? 'is-editing' : ''}`} data-message-id={conversationMessageId(turn, 'user')} onClickCapture={event => this.handleAssistantContentClick(event)}>{editing
                                 ? <div className='nmx-user-message-editor' data-turn-id={turn.id}>
                                     {this.editingTurnApp && <span className='nmx-turn-app-row'><TurnAppChip name={this.editingTurnApp.name} icon={this.appIconFor(this.editingTurnApp.id)} locale={this.desktopLocale} /></span>}
@@ -48772,7 +49038,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         const state = thumbnail ? 'ready' : this.ensureTurnImageThumbnail?.(ownerId, item) || 'missing';
                                         const path = this.turnAttachmentPath(item);
                                         const title = state === 'missing' ? `${item.name} · ${localizeDesktopSurface(this.desktopLocale, '图片文件已不在原位置')}` : path ? `${item.name}\n${path}` : item.name;
-                                        return <button key={item.id} className={`nmx-turn-image${state === 'loading' ? ' is-loading' : state === 'missing' ? ' is-missing' : ''}`} title={title} onClick={() => void this.previewTurnImage(ownerId, item)}>{thumbnail ? <img src={thumbnail} alt={item.name} /> : <i className={`codicon codicon-${state === 'loading' ? 'loading codicon-modifier-spin' : 'file-media'}`}></i>}<span>{item.name}</span></button>;
+                                        return <button key={item.id} className={`nmx-turn-image${state === 'loading' ? ' is-loading' : state === 'missing' ? ' is-missing' : ''}`} title={title}
+                                            data-nmx-gallery={state === 'missing' ? undefined : 'image'} data-nmx-gallery-key={`att:${turn.id}:${item.id}`} onClick={() => void this.previewTurnImage(ownerId, item)}>{thumbnail ? <img src={thumbnail} alt={item.name} /> : <i className={`codicon codicon-${state === 'loading' ? 'loading codicon-modifier-spin' : 'file-media'}`}></i>}<span>{item.name}</span></button>;
                                     })()
                                     : (() => {
                                         // Videos and audio play in the viewer; every other file opens in the file drawer. The full path is the tooltip.
@@ -48788,6 +49055,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         // A long attachment the AI reads in parts says so under its name (Cherry Studio #12).
                                         const readInParts = turn.attachmentDocuments?.find(document => document.attachmentId === item.id);
                                         return <button type='button' data-nmx-literal key={item.id}
+                                            data-nmx-gallery={this.turnAttachmentMediaKind(item) === 'video' ? 'video' : undefined} data-nmx-gallery-key={`att:${turn.id}:${item.id}`}
                                             className={`nmx-turn-file is-${this.turnAttachmentMediaKind(item)}${readInParts ? ' is-read-in-parts' : ''}`}
                                             title={[name, path, readInParts ? composerAttachmentUiText(this.desktopLocale, 'readInPartsHint') : ''].filter(Boolean).join('\n')}
                                             onClick={() => this.openTurnAttachment(item)}>
@@ -48819,7 +49087,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                      * Contract reference: <div className='nmx-gateway-content' data-nmx-literal>{this.renderAssistantOutput(
                                      *     response
                                      * )}</div>. */}
-                                    <div className='nmx-gateway-content' data-nmx-literal onClickCapture={event => this.handleAssistantContentClick(event)}>{this.renderAssistantOutput(
+                                    <div className='nmx-gateway-content' data-nmx-literal data-nmx-reply={turn.id} onClickCapture={event => this.handleAssistantContentClick(event)}>{this.renderAssistantOutput(
                                         pauseTextAlreadyShown ? '' : response,
                                         pauseTextAlreadyShown ? responseParts?.filter(part => part.type !== 'text') : responseParts,
                                         liveResult?.outputAssetOwnerId || turn.outputAssetOwnerId || codingSession?.id,
@@ -49098,7 +49366,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     )}
                     {(showDraftWorkspace || this.attachments.length > 0 || this.pastedTextReferences.length > 0 || this.hasUnresolvedDraftAttachments(this.activeCodingSessionId)) && <div className='nmx-composer-assets'>
                         {showDraftWorkspace && (workspace ? <span className='nmx-composer-project-chip' title={workspace.path}><i className='codicon codicon-folder'></i><b>{workspace.label}</b><button aria-label={workbenchText(this.desktopLocale, 'removeFolder')} title={workbenchText(this.desktopLocale, 'removeFolder')} disabled={Boolean(this.draftWorkspaceBindingOperation)} onClick={() => void this.removeDraftWorkspace()}><i className='codicon codicon-close'></i></button></span> : <button className='nmx-composer-project-select' disabled={Boolean(this.draftWorkspaceBindingOperation)} onClick={() => void this.chooseDraftWorkspace()}><i className='codicon codicon-folder-opened'></i><span>{workbenchText(this.desktopLocale, 'selectFolder')}</span></button>)}
-                        {this.attachments.length > 0 && <div className='nmx-attachment-chips'>{this.attachments.map(item => {
+                        {this.attachments.length > 0 && <div className='nmx-attachment-chips' data-nmx-gallery-root='composer'>{this.attachments.map(item => {
                             // Without a resolved model (still loading, or another relay selected) nothing is known yet:
                             // no "cannot read" warning. Sending decides again with the route actually used.
                             const delivery = route ? attachmentDelivery(item.attachment, route) : 'native';
@@ -49314,9 +49582,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 </div></div>}
             </div>
             {this.renderTerminalDrawer()}
-            {lightbox.isOpen && <div className='nmx-attachment-lightbox nmx-image-lightbox' role='dialog' aria-modal='true' aria-label={lightbox.image.name || lightbox.image.alt || ''} onMouseDown={() => this.closeAttachmentLightbox('backdrop')}>
-                <section onMouseDown={event => event.stopPropagation()}>
-                    <header><span className='nmx-lightbox-title'><strong title={this.attachmentLightboxPath || lightbox.image.name}>{lightbox.image.name}</strong>{this.attachmentLightboxPath && <small title={this.attachmentLightboxPath} data-nmx-literal>{this.attachmentLightboxPath}</small>}</span><button className='nmx-image-lightbox-close' aria-label={imageLightboxText(this.desktopLocale, 'close')} onClick={() => this.closeAttachmentLightbox('button')}><i className='codicon codicon-close'></i></button></header>
+            {lightbox.isOpen && <div className={`nmx-attachment-lightbox nmx-image-lightbox${viewerGallery.nav ? ' has-gallery' : ''}`} role='dialog' aria-modal='true' aria-label={lightbox.image.name || lightbox.image.alt || ''} onMouseDown={() => this.closeAttachmentLightbox('backdrop')}>
+                <section onMouseDown={event => event.stopPropagation()} onKeyDown={event => this.trapDialogFocus(event)}>
+                    <header><span className='nmx-lightbox-title'><strong title={this.attachmentLightboxPath || lightbox.image.name}>{lightbox.image.name}</strong>{this.attachmentLightboxPath && <small title={this.attachmentLightboxPath} data-nmx-literal>{this.attachmentLightboxPath}</small>}</span>{viewerGallery.counter}<button className='nmx-image-lightbox-close' autoFocus aria-label={imageLightboxText(this.desktopLocale, 'close')} onClick={() => this.closeAttachmentLightbox('button')}><i className='codicon codicon-close'></i></button></header>
                     <div className={`nmx-attachment-lightbox-stage nmx-image-lightbox-stage${lightbox.zoomPercent > 100 ? ' is-zoomed' : ''}${this.attachmentLightboxPan ? ' is-panning' : ''}`} ref={this.bindAttachmentLightboxWheel} onWheel={event => this.onAttachmentLightboxWheel(event)}
                         onPointerDown={event => { if (event.button !== 0 || this.attachmentLightbox.zoomPercent <= 100) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); this.attachmentLightboxPan = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }; event.currentTarget.classList.add('is-panning'); }}
                         onPointerMove={event => this.panAttachmentLightbox(event)}
@@ -49329,16 +49597,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         <output className='nmx-image-lightbox-zoom'>{imageLightboxPercentage(lightbox)}</output>
                         <button disabled={lightbox.zoomPercent >= 400} aria-label={imageLightboxText(this.desktopLocale, 'zoomIn')} onClick={() => this.zoomAttachmentLightbox('in')}><i className='codicon codicon-zoom-in'></i></button>
                     </footer>
+                    {viewerGallery.nav}
                 </section>
             </div>}
-            {this.mediaViewer && <div className={`nmx-attachment-lightbox nmx-media-viewer is-${this.mediaViewer.kind}`} role='dialog' aria-modal='true' aria-label={this.mediaViewer.name} onMouseDown={() => this.closeMediaViewer()}>
-                <section onMouseDown={event => event.stopPropagation()}>
-                    <header><span className='nmx-lightbox-title'><strong title={this.mediaViewer.path || this.mediaViewer.name}>{this.mediaViewer.name}</strong>{this.mediaViewer.path && <small title={this.mediaViewer.path} data-nmx-literal>{this.mediaViewer.path}</small>}</span><button aria-label={imageLightboxText(this.desktopLocale, 'close')} onClick={() => this.closeMediaViewer()}><i className='codicon codicon-close'></i></button></header>
+            {this.mediaViewer && <div className={`nmx-attachment-lightbox nmx-media-viewer is-${this.mediaViewer.kind}${viewerGallery.nav ? ' has-gallery' : ''}`} role='dialog' aria-modal='true' aria-label={this.mediaViewer.name} onMouseDown={() => this.closeMediaViewer()}>
+                <section onMouseDown={event => event.stopPropagation()} onKeyDown={event => this.trapDialogFocus(event)}>
+                    <header><span className='nmx-lightbox-title'><strong title={this.mediaViewer.path || this.mediaViewer.name}>{this.mediaViewer.name}</strong>{this.mediaViewer.path && <small title={this.mediaViewer.path} data-nmx-literal>{this.mediaViewer.path}</small>}</span>{viewerGallery.counter}<button autoFocus aria-label={imageLightboxText(this.desktopLocale, 'close')} onClick={() => this.closeMediaViewer()}><i className='codicon codicon-close'></i></button></header>
                     <div className='nmx-attachment-lightbox-stage'>{this.mediaViewer.failed
                         ? <div className='nmx-media-viewer-error' role='alert'><i className='codicon codicon-warning' aria-hidden='true'></i><span>{localizeDesktopSurface(this.desktopLocale, '媒体文件暂不可用')}</span></div>
                         : this.mediaViewer.kind === 'video'
                         ? <video key={this.mediaViewer.src} src={this.mediaViewer.src} controls autoPlay playsInline preload='metadata' title={this.mediaViewer.path} onError={() => this.markMediaViewerFailed()}></video>
                         : <audio key={this.mediaViewer.src} src={this.mediaViewer.src} controls autoPlay preload='metadata' title={this.mediaViewer.path} onError={() => this.markMediaViewerFailed()}></audio>}</div>
+                    {viewerGallery.nav}
                 </section>
             </div>}
             {this.pendingConversationLinkTarget && <div className='nmx-sheet-backdrop nmx-dialog-backdrop nmx-link-opening-backdrop' onMouseDown={() => this.cancelConversationLinkOpen()}>
@@ -50634,6 +50904,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         ui.prompt = value.slice(0, ui.mode === 'speech' ? 8_000 : COMIC_CHAT_LIMITS.prompt);
         this.rememberComicChatDraft?.();
         // Typing stays in the field (IME-safe); only 发送's state and a voice-over's price follow each keystroke.
+        // The composer counts its own rows (ComicChatComposer's lines state), so crossing four lines needs no render here.
         if (had !== Boolean(ui.prompt.trim()) || ui.mode === 'speech') this.update();
     }
 
@@ -51726,7 +51997,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const adapter = new NativeDictationAdapter(window.nextmuxDesktop, {
             input, read, isComposing: () => isImeFieldComposing(input), write: value => { if (read() !== undefined) { ui.prompt = value.slice(0, ui.mode === 'speech' ? 8_000 : COMIC_CHAT_LIMITS.prompt); this.rememberComicChatDraft?.(); this.update(); } }
         }, this.desktopLocale, window.crypto.randomUUID(), phase => this.onNativeDictationPhase(adapter, phase),
-            level => { if (this.nativeDictation === adapter) this.nativeDictationActivity.set(level); });
+            level => { if (this.nativeDictation === adapter) this.nativeDictationActivity.set(level); },
+            // The microphone chosen in Settings, as the coding composer and the studio's agent bar use.
+            this.selectedMicrophoneId || undefined);
         this.nativeDictation = adapter;
         await adapter.start();
     }
@@ -51879,9 +52152,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!ui.viewer && !this.comicChatViewerZoom) return;
         ui.viewer = undefined;
         this.comicChatViewerZoom = undefined;
+        this.comicChatViewerPan = undefined;
         this.comicChatViewerBackdropDown = false;
         this.comicChatViewerMediaState = undefined;
+        this.mediaGallery = undefined;
         this.update();
+        this.restoreMediaViewerOpener?.();
     }
 
     protected renderComicChatViewer(): React.ReactNode {
@@ -51892,9 +52168,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const zoomState = isImage ? this.currentComicChatViewerZoom(viewer.url, viewer.name) : undefined;
         const close = (): void => this.closeComicChatViewer();
         const isBackdropTarget = (target: EventTarget | null): boolean =>
-            !(target instanceof Element) || !target.closest('video, img, audio, button, a, input, footer, .nmx-lightbox-title');
+            !(target instanceof Element) || !target.closest('video, img, audio, button, a, input, footer, .nmx-lightbox-title, .nmx-lightbox-counter');
         const videoAr = viewer.kind === 'video' ? this.comicChatViewerMediaState?.aspectRatio : undefined;
-        return <div className={`nmx-attachment-lightbox nmx-comic-chat-viewer is-${viewer.kind}`} role='dialog' aria-modal='true' aria-label={viewer.name}
+        const gallery = this.renderMediaGalleryControls?.() ?? {};
+        return <div className={`nmx-attachment-lightbox nmx-comic-chat-viewer is-${viewer.kind}${gallery.nav ? ' has-gallery' : ''}`} role='dialog' aria-modal='true' aria-label={viewer.name}
             onPointerDown={event => { this.comicChatViewerBackdropDown = isBackdropTarget(event.target); }}
             onMouseDown={event => { this.comicChatViewerBackdropDown = isBackdropTarget(event.target); }}
             onClick={event => {
@@ -51902,11 +52179,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.comicChatViewerBackdropDown = false;
                 if (shouldClose) close();
             }}
-            onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } }}>
+            onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } else this.trapDialogFocus(event); }}>
             <section>
-                <header><span className='nmx-lightbox-title'><strong data-nmx-literal>{viewer.name}</strong></span>
+                <header><span className='nmx-lightbox-title'><strong data-nmx-literal>{viewer.name}</strong></span>{gallery.counter}
                     <button type='button' className='nmx-lightbox-close' autoFocus aria-label={this.comicChatT('close')} title={this.comicChatT('close')} onClick={close}><i className='codicon codicon-close' aria-hidden='true'></i></button></header>
-                <div className='nmx-attachment-lightbox-stage' ref={isImage ? this.bindComicChatViewerWheel : undefined} onWheel={isImage ? event => this.onComicChatViewerWheel(event) : undefined}>{viewer.kind === 'video'
+                <div className={`nmx-attachment-lightbox-stage${zoomState && zoomState.zoomPercent > 100 ? ' is-zoomed' : ''}${this.comicChatViewerPan ? ' is-panning' : ''}`}
+                    ref={isImage ? this.bindComicChatViewerWheel : undefined} onWheel={isImage ? event => this.onComicChatViewerWheel(event) : undefined}>{viewer.kind === 'video'
                     ? <video
                         src={viewer.url}
                         style={videoAr ? ({ '--nmx-viewer-video-ar': String(Number(videoAr.toFixed(6))) } as React.CSSProperties) : undefined}
@@ -51946,20 +52224,67 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         }}
                         onVolumeChange={event => {
                             const el = event.currentTarget;
+                            this.comicChatViewerSound = { volume: el.volume, muted: el.muted };
                             if (this.comicChatViewerMediaState) {
                                 this.comicChatViewerMediaState.volume = el.volume;
                                 this.comicChatViewerMediaState.muted = el.muted;
                             }
                         }} />
                     : viewer.kind === 'audio' ? <audio src={viewer.url} controls autoPlay onMouseUp={() => { this.comicChatViewerBackdropDown = false; }} />
-                    : <img style={zoomState ? this.imagePreviewStyle(zoomState) : undefined} src={viewer.url} alt='' draggable={false} onMouseUp={() => { this.comicChatViewerBackdropDown = false; }} />}</div>
+                    : <img style={zoomState ? this.imagePreviewStyle(zoomState) : undefined} src={viewer.url} alt='' draggable={false} onMouseUp={() => { this.comicChatViewerBackdropDown = false; }}
+                        onPointerDown={event => this.startComicChatViewerPan(event)} onPointerMove={event => this.panComicChatViewer(event)}
+                        onPointerUp={event => this.endComicChatViewerPan(event)} onPointerCancel={event => this.endComicChatViewerPan(event)}
+                        onLostPointerCapture={event => { this.comicChatViewerPan = undefined; event.currentTarget.parentElement?.classList.remove('is-panning'); }}
+                        onDoubleClick={event => { event.stopPropagation(); this.resetComicChatViewerZoom(); }} />}</div>
                 {zoomState && <footer>
                     <button type='button' disabled={zoomState.zoomPercent <= 25} aria-label={imageLightboxText(this.desktopLocale, 'zoomOut')} onClick={() => this.zoomComicChatViewer('out')}><i className='codicon codicon-zoom-out'></i></button>
                     <output>{imageLightboxPercentage(zoomState)}</output>
                     <button type='button' disabled={zoomState.zoomPercent >= 400} aria-label={imageLightboxText(this.desktopLocale, 'zoomIn')} onClick={() => this.zoomComicChatViewer('in')}><i className='codicon codicon-zoom-in'></i></button>
                 </footer>}
+                {gallery.nav}
             </section>
         </div>;
+    }
+
+    protected comicChatViewerPan?: { readonly pointerId: number; readonly x: number; readonly y: number };
+
+    /** A drag on the enlarged picture moves it (above 100 %), as in the coding viewer. */
+    protected startComicChatViewerPan(event: React.PointerEvent<HTMLImageElement>): void {
+        const viewer = this.comicChatUi().viewer;
+        if (!viewer || event.button !== 0 || this.currentComicChatViewerZoom(viewer.url, viewer.name).zoomPercent <= 100) return;
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        this.comicChatViewerPan = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+        event.currentTarget.parentElement?.classList.add('is-panning');
+    }
+
+    protected panComicChatViewer(event: React.PointerEvent<HTMLImageElement>): void {
+        const pan = this.comicChatViewerPan, viewer = this.comicChatUi().viewer;
+        if (!pan || pan.pointerId !== event.pointerId || !viewer) return;
+        const state = updateImageLightbox(this.currentComicChatViewerZoom(viewer.url, viewer.name),
+            { type: 'pan', deltaX: event.clientX - pan.x, deltaY: event.clientY - pan.y }).state;
+        this.comicChatViewerPan = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+        this.comicChatViewerZoom = { url: viewer.url, state };
+        // The picture follows the pointer at once; the widget renders when the drag ends.
+        this.applyImagePreviewTransform(event.currentTarget, state);
+    }
+
+    protected endComicChatViewerPan(event: React.PointerEvent<HTMLImageElement>): void {
+        if (this.comicChatViewerPan?.pointerId !== event.pointerId) return;
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+        this.comicChatViewerPan = undefined;
+        this.comicChatViewerBackdropDown = false;
+        event.currentTarget.parentElement?.classList.remove('is-panning');
+        this.update();
+    }
+
+    /** A double-click returns the picture to 100 %. */
+    protected resetComicChatViewerZoom(): void {
+        const viewer = this.comicChatUi().viewer;
+        if (!viewer || viewer.kind === 'video' || viewer.kind === 'audio') return;
+        this.comicChatViewerPan = undefined;
+        this.comicChatViewerZoom = { url: viewer.url, state: updateImageLightbox(this.currentComicChatViewerZoom(viewer.url, viewer.name), { type: 'reset' }).state };
+        this.update();
     }
 
     /** 剪辑 over a conversation (projects without the production desk): uses the single built-in multitrack toolbar without a duplicate outer header. */

@@ -150,7 +150,7 @@ export function ComicChatMediaTile(props: {
     }
     if (media.kind === 'image') {
         return <button type='button' className='nmx-comic-chat-media is-image is-done' style={aspectStyle(media.aspect)} title={t('openLarge')}
-            onClick={() => props.onOpen(media)} onContextMenu={menu}>
+            data-nmx-gallery='image' onClick={() => props.onOpen(media)} onContextMenu={menu}>
             <img src={media.url} alt='' loading='lazy' draggable={false} />
         </button>;
     }
@@ -375,7 +375,8 @@ export function ComicChatThread(props: {
     };
     const bottomLabel = localizeDesktopSurface(props.locale, unseen ? '有新消息，回到底部' : '回到底部');
     return <><div className='nmx-comic-chat-thread' ref={scroller} onClick={props.onContentClick}>
-        <div className='nmx-comic-chat-column'>
+        {/* The viewer's gallery: results, a request's references and the pictures in the text, in thread order. */}
+        <div className='nmx-comic-chat-column' data-nmx-gallery-root=''>
             {props.children}
             {props.turns.map(view => {
                 const { turn } = view;
@@ -392,7 +393,7 @@ export function ComicChatThread(props: {
                 return <section key={turn.id} className={`nmx-comic-chat-turn nmx-task-turn is-${turn.mode}`} data-turn-id={turn.id}>
                     <div className='nmx-comic-chat-ask'>
                         {view.references.length > 0 && <span className='nmx-comic-chat-ask-refs'>{view.references.map(reference => reference.url
-                            ? <button key={reference.id} type='button' className='nmx-comic-chat-ask-ref' title={t('openLarge')} aria-label={t('openLarge')}
+                            ? <button key={reference.id} type='button' className='nmx-comic-chat-ask-ref' title={t('openLarge')} aria-label={t('openLarge')} data-nmx-gallery='image'
                                 onClick={() => props.onOpen({ key: `ref:${reference.id}`, kind: 'image', state: 'done', assetId: reference.id, url: reference.url })}>
                                 <img src={reference.url} alt='' draggable={false} />
                             </button> : <i key={reference.id} className='codicon codicon-file-media' aria-hidden='true'></i>)}</span>}
@@ -631,6 +632,13 @@ export interface ComicChatComposerProps {
 
 const MEDIA_FILE = /^(image\/(png|jpe?g|webp)|video\/(mp4|quicktime|webm))$/i;
 
+/** Lines in the message box, counted up to 9: the box shows 2 to 8 rows, so nothing past that changes its height. */
+function promptLines(text: string): number {
+    let lines = 1;
+    for (let index = 0; index < text.length && lines < 9; index++) if (text.charCodeAt(index) === 10) lines++;
+    return lines;
+}
+
 /**
  * A long paste folds into a marker, as in the coding composer: the message box keeps one line (⟦粘贴文本 1 · …⟧) where
  * the text went, a chip above unfolds it back into the box, and 发送 sends the whole text in its place. Comic prompts
@@ -759,6 +767,10 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
     const [pasteIds, setPasteIds] = React.useState<readonly string[]>([]);
     const [pasteNotice, setPasteNotice] = React.useState('');
     const [preview, setPreview] = React.useState<ComicChatReferenceView>();
+    // The box grows with its text as it is typed. The widget re-renders the dock only when a keystroke changes what it
+    // shows (setComicChatPrompt), so the line count is kept here and catches up whenever the widget hands in a new prompt.
+    const [lines, setLines] = React.useState(() => promptLines(props.prompt));
+    const castPanel = React.useRef<HTMLDivElement>(null);
     const outerTextareaRef = props.textareaRef;
     const bindTextarea = React.useCallback((node: HTMLTextAreaElement | null): void => {
         textarea.current = node;
@@ -794,6 +806,12 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
         layer.scrollTop = textarea.current?.scrollTop ?? 0;
     }, []);
     React.useEffect(() => { paintPastes(textarea.current?.value ?? props.prompt); }, [props.prompt, paintPastes]);
+    React.useEffect(() => { setLines(promptLines(textarea.current?.value ?? props.prompt)); }, [props.prompt]);
+    // The library opens on its first choice (or its way back), so the keyboard carries on from the menu item that opened it.
+    React.useEffect(() => {
+        const panel = popover === 'cast' ? castPanel.current : null;
+        (panel?.querySelector<HTMLButtonElement>('.nmx-comic-chat-cast-grid > button:not(:disabled)') ?? panel?.querySelector<HTMLButtonElement>('header > button'))?.focus();
+    }, [popover]);
     // A reference removed while it is open closes its viewer.
     React.useEffect(() => { if (preview && !props.references.some(reference => reference.key === preview.key)) setPreview(undefined); }, [preview, props.references]);
     React.useEffect(() => {
@@ -861,7 +879,7 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
         if (props.onOpenReference) props.onOpenReference(reference); else setPreview(reference);
     };
     const media = (list: FileList | null | undefined): File[] => [...(list || [])].filter(file => MEDIA_FILE.test(file.type));
-    const rows = Math.max(2, Math.min(8, props.prompt.split('\n').length));
+    const rows = Math.max(2, Math.min(8, lines));
     const picker = props.picker;
     const current = picker.tabs.find(item => item.mode === tab) || picker.tabs[0];
     const modeLabel = (mode: ComicChatMode): string => t(mode);
@@ -871,8 +889,9 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
             <i className='codicon codicon-chevron-down' aria-hidden='true'></i></label>;
     const relayIcon = (kind: string | undefined): string => kind === 'official' ? 'verified-filled' : kind === 'automatic' ? 'sparkle' : kind === 'local' ? 'vm' : 'server-environment';
     const isModelOpen = props.onOpenModel ? Boolean(props.modelOpen) : popover === 'models';
-    return <div className='nmx-comic-chat-dock'>
-        <div className={`nmx-composer-wrap is-rows-${rows > 4 ? 'many' : 'few'}`} ref={box}>
+    // The references' picture and clip chips are the viewer's gallery when one is opened from here.
+    return <div className='nmx-comic-chat-dock' data-nmx-gallery-root=''>
+        <div className={`nmx-composer-wrap is-rows-${lines > 4 ? 'many' : 'few'}`} ref={box}>
             <div className='nmx-comic-chat-modes'>
                 {/* The folder this conversation is filed in sits before the functions, outside the message box. */}
                 {props.folder
@@ -943,6 +962,7 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                             const value = event.currentTarget.value;
                             props.onPrompt(value);
                             paintPastes(value);
+                            setLines(promptLines(value));
                             if (pasteNotice) setPasteNotice('');
                         }}
                         onScroll={event => { if (overlay.current) overlay.current.scrollTop = event.currentTarget.scrollTop; }}
@@ -979,13 +999,30 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                 </div>
                 <div className='nmx-comic-chat-toolbar'>
                     <span className='nmx-comic-chat-add'>
-                        <button type='button' data-nmx-chat-toggle className={`nmx-composer-tool ${popover === 'add' ? 'is-active' : ''}`}
+                        <button type='button' data-nmx-chat-toggle className={`nmx-composer-tool ${popover === 'add' || popover === 'cast' ? 'is-active' : ''}`}
                             title={localizeDesktopSurface(props.locale, '添加内容')} aria-label={localizeDesktopSurface(props.locale, '添加内容')}
-                            aria-expanded={popover === 'add'} onClick={() => setPopover(popover ? undefined : 'add')}><i className='codicon codicon-add' aria-hidden='true'></i></button>
+                            aria-expanded={popover === 'add' || popover === 'cast'} onClick={() => setPopover(popover ? undefined : 'add')}><i className='codicon codicon-add' aria-hidden='true'></i></button>
                         {popover === 'add' && <div className='nmx-comic-chat-popover is-add' role='menu'>
                             <button type='button' role='menuitem' onClick={() => { setPopover(undefined); fileInput.current?.click(); }}><i className='codicon codicon-cloud-upload' aria-hidden='true'></i>{t('upload')}</button>
                             <button type='button' role='menuitem' onClick={() => { setPopover(undefined); props.onPickMaterials(); }}><i className='codicon codicon-library' aria-hidden='true'></i>{t('fromMaterials')}</button>
+                            <button type='button' role='menuitem' aria-haspopup='menu' onClick={() => setPopover('cast')}><i className='codicon codicon-person' aria-hidden='true'></i>{t('fromCast')}
+                                <i className='codicon codicon-chevron-right is-end' aria-hidden='true'></i></button>
                             <small>{props.referenceLimit > 0 ? t('referencesLimit', { n: props.referenceLimit }) : t('noReferencesHere')}</small>
+                        </div>}
+                        {/* 从人物库选择: the library's portraits; a pick joins the references like an uploaded picture. */}
+                        {popover === 'cast' && <div ref={castPanel} className='nmx-comic-chat-popover is-cast' role='menu' aria-label={t('fromCast')}>
+                            <header>
+                                <button type='button' aria-label={t('back')} title={t('back')} onClick={() => setPopover('add')}><i className='codicon codicon-chevron-left' aria-hidden='true'></i></button>
+                                <span>{t('fromCast')}</span>
+                                {props.cast.length > 0 && <button type='button' className='is-end' aria-label={t('openCast')} title={t('openCast')}
+                                    onClick={() => { setPopover(undefined); props.onOpenCast(); }}><i className='codicon codicon-link-external' aria-hidden='true'></i></button>}
+                            </header>
+                            {props.cast.length ? <div className='nmx-comic-chat-cast-grid'>{props.cast.map(item => <button key={item.id} type='button' role='menuitem' title={item.name}
+                                disabled={props.referenceLimit < 1} onClick={() => { setPopover(undefined); props.onPickCast(item.id); }}>
+                                {item.url ? <img src={item.url} alt='' loading='lazy' draggable={false} /> : <i className='codicon codicon-person' aria-hidden='true'></i>}
+                                <span data-nmx-literal>{item.name}</span></button>)}</div>
+                                : <p className='nmx-comic-chat-cast-empty'>{t('castEmpty')} <button type='button' className='nmx-link-button' onClick={() => { setPopover(undefined); props.onOpenCast(); }}>{t('openCast')}</button></p>}
+                            {props.referenceLimit < 1 && props.cast.length > 0 && <small>{t('noReferencesHere')}</small>}
                         </div>}
                         <input ref={fileInput} type='file' hidden multiple accept='image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm'
                             onChange={event => { const files = media(event.currentTarget.files); event.currentTarget.value = ''; if (files.length) props.onFiles(files); }} />
@@ -1156,7 +1193,7 @@ export function ComicMaterialsPanel(props: {
         ? [['all', 'all'], ['image', 'images'], ['character', 'character']]
         : [['all', 'all'], ['image', 'images'], ['character', 'character'], ['video', 'videos'], ['audio', 'audio']];
     const scopeLabel: Readonly<Record<ComicMaterialScope, ComicChatTextKey>> = { chat: 'scopeChat', project: 'scopeProject', all: 'scopeAll' };
-    return <aside ref={panel} tabIndex={-1} className={`nmx-comic-materials ${props.pick ? 'is-picking' : ''}`} aria-label={t('materials')}
+    return <aside ref={panel} tabIndex={-1} className={`nmx-comic-materials ${props.pick ? 'is-picking' : ''}`} aria-label={t('materials')} data-nmx-gallery-root=''
         style={{ '--nmx-library-card-min': COMIC_MATERIAL_SIZES[librarySize] } as React.CSSProperties}
         onKeyDown={event => { if (event.key === 'Escape') { if (document.querySelector('.nmx-comic-chat-viewer, .nmx-attachment-lightbox, .nmx-comic-chat-menu')) return; event.preventDefault(); props.onClose(); } }}>
         <header>
@@ -1175,6 +1212,7 @@ export function ComicMaterialsPanel(props: {
         {props.loading ? <p className='nmx-comic-materials-empty'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i> {t('loadingChats')}</p>
             : shown.length === 0 ? <p className='nmx-comic-materials-empty'>{props.items.length === 0 && props.emptyText || t('noMaterials')}</p>
             : <div className='nmx-comic-materials-grid' role='list'>{shown.map(item => <button key={`${item.path || ''}${item.assetId}`} type='button' role='listitem' data-asset-id={item.assetId}
+                data-nmx-gallery={!props.pick && item.url && item.kind !== 'audio' ? item.kind : undefined}
                 className={`nmx-comic-material is-${item.kind} ${item.assetId === props.focus ? 'is-focus' : ''}`} title={item.prompt || item.title}
                 onClick={() => props.pick ? props.onPick?.(item) : props.onOpen(item)} onContextMenu={event => { event.preventDefault(); props.onMenu(item, event); }}>
                 <span className='nmx-comic-material-thumb' style={item.kind === 'audio' ? undefined : aspectStyle(item.aspect)}>

@@ -525,17 +525,21 @@
 .nmx-shell .nmx-comic-chat-model-all:hover:not(:disabled) { color: var(--nmx-text); border-color: color-mix(in srgb, var(--nmx-accent) 55%, var(--nmx-border)); }
 .nmx-shell .nmx-comic-chat-model-all:disabled { cursor: default; opacity: .45 !important; }
 .nmx-shell .nmx-comic-chat-model-empty { margin: 6px 4px 8px; color: var(--nmx-muted); font-size: 12px; line-height: 1.5; }
-/* 从人物库选择: the library's portraits as a small grid. */
-.nmx-shell .nmx-comic-chat-popover.is-cast { width: 300px; max-width: none; }
+/* 从人物库选择: back to the + menu, the title, a way into the library itself, then the library's portraits as a small grid. */
+.nmx-shell .nmx-comic-chat-popover.is-cast { width: min(300px, calc(100vw - 48px)); max-width: none; }
 .nmx-shell .nmx-comic-chat-popover.is-cast > header { display: flex; align-items: center; gap: 4px; padding: 0 2px 4px; }
-.nmx-shell .nmx-comic-chat-popover.is-cast > header > button { display: grid; place-items: center; width: 24px; height: 24px; margin: 0; padding: 0; border: 0; border-radius: 6px; color: var(--nmx-muted); background: transparent; cursor: pointer; }
-.nmx-shell .nmx-comic-chat-popover.is-cast > header > button:hover { color: var(--nmx-text); background: var(--nmx-panel-2); }
+.nmx-shell .nmx-comic-chat-popover.is-cast > header > span { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--nmx-text); font-size: 12px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.nmx-shell .nmx-comic-chat-popover.is-cast > header > button { display: grid; flex: none; place-items: center; width: 24px; height: 24px; margin: 0; padding: 0; border: 0; border-radius: 6px; color: var(--nmx-muted); background: transparent; cursor: pointer; }
+.nmx-shell .nmx-comic-chat-popover.is-cast > header > button:is(:hover, :focus-visible) { color: var(--nmx-text); background: var(--nmx-panel-2); outline: none; }
+.nmx-shell .nmx-comic-chat-popover.is-cast > header > button > .codicon { font-size: 14px; }
 .nmx-shell .nmx-comic-chat-cast-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 2px; }
 .nmx-shell .nmx-comic-chat-cast-grid > button { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; margin: 0; padding: 0; border: 0; color: var(--nmx-text); background: transparent; cursor: pointer; }
 .nmx-shell .nmx-comic-chat-cast-grid > button > :is(img, .codicon) { width: 100%; aspect-ratio: 3 / 4; border: 1px solid var(--nmx-border); border-radius: 9px; object-fit: cover; background: var(--nmx-panel-2); }
 .nmx-shell .nmx-comic-chat-cast-grid > button > .codicon { display: grid; place-items: center; color: var(--nmx-muted); font-size: 20px; }
 .nmx-shell .nmx-comic-chat-cast-grid > button > span { overflow: hidden; font-size: 11px; white-space: nowrap; text-overflow: ellipsis; text-align: center; }
 .nmx-shell .nmx-comic-chat-cast-grid > button:hover:not(:disabled) > :is(img, .codicon) { border-color: color-mix(in srgb, var(--nmx-accent) 60%, var(--nmx-border)); }
+.nmx-shell .nmx-comic-chat-cast-grid > button:focus-visible { outline: none; }
+.nmx-shell .nmx-comic-chat-cast-grid > button:focus-visible > :is(img, .codicon) { border-color: var(--nmx-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--nmx-accent) 35%, transparent); }
 .nmx-shell .nmx-comic-chat-cast-grid > button:disabled { cursor: not-allowed; opacity: .5; }
 .nmx-shell .nmx-comic-chat-cast-empty { margin: 6px 6px 8px; color: var(--nmx-muted); font-size: 12px; }
 .nmx-shell .nmx-comic-chat-popover.is-add > button > .codicon.is-end { margin-inline-start: auto; font-size: 12px; }
@@ -571,6 +575,11 @@
     cursor: default;
 }
 .nmx-shell .nmx-comic-chat-viewer .nmx-attachment-lightbox-stage > audio { width: min(520px, 80vw); }
+/* With ‹ › on the stage's edges, a clip keeps clear of them; an enlarged picture is dragged. */
+:is(.nmx-shell .nmx-comic-chat-viewer, .nmx-comic-chat-viewer).has-gallery:has(video) .nmx-attachment-lightbox-stage { padding-inline: 64px; }
+:is(.nmx-shell .nmx-comic-chat-viewer, .nmx-comic-chat-viewer).has-gallery .nmx-attachment-lightbox-stage > video { --nmx-v-max-w: min(1112px, calc(100vw - 176px)); }
+:is(.nmx-shell .nmx-comic-chat-viewer, .nmx-comic-chat-viewer) .nmx-attachment-lightbox-stage.is-zoomed > img { cursor: grab; touch-action: none; }
+:is(.nmx-shell .nmx-comic-chat-viewer, .nmx-comic-chat-viewer) .nmx-attachment-lightbox-stage.is-panning > img { cursor: grabbing; }
 
 /* ── The comic sidebar's folders and conversations mirror the coding project list (same rules, comic scope) ── */
 .nmx-comic-context .nmx-project-row, .nmx-comic-context .nmx-context-simple-row { min-height: 31px; display: grid; grid-template-columns: 20px minmax(0, 1fr) 17px; gap: 7px; padding: 0 8px; border-radius: 7px; }
