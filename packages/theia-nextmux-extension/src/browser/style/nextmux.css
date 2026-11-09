@@ -21471,16 +21471,31 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
    and in the comic AI 模型 panel; no seal here, it stays in the Model Center. Tuned for the monochrome surfaces: dark
    #e5b84b is 8.3:1 on #252427, and #f0c75e 7.7:1 on the selected #393239. Light #976100 is 5.2:1 on white and 4.5:1 on
    #f0eeee (the specified #a86f14 reads only 4.2:1 on white); #8f5c0d stays above 4.5:1 on every hover and selected tint. */
+/* The drawers render in a body portal whose surface is itself `.nmx-shell.nmx-theme-*`: `.nmx-theme-light .nmx-shell`
+   alone never matched it, so the light drawer took the dark golds. */
 .nmx-shell { --nmx-deposit-gold: #e5b84b; --nmx-deposit-gold-strong: #f0c75e; }
 .nmx-shell.nmx-theme-light,
 .nmx-theme-light .nmx-shell { --nmx-deposit-gold: #976100; --nmx-deposit-gold-strong: #8f5c0d; }
-.nmx-relay-option-name.is-deposit-verified,
+/* !important and above (0,2,1): `.nmx-shell :is(…, .nmx-composer-popover, …) :is(h2, h3, strong, label)` sets every
+   name in the drawer to the text colour in both themes, and `.nmx-theme-light .nmx-relay-options strong` to #302b2e in
+   the light one, both with !important. Without this only the chosen row was gold. */
+.nmx-relay-options .nmx-relay-option-name.is-deposit-verified,
+.nmx-relay-option-name.is-deposit-verified { color: var(--nmx-deposit-gold) !important; transition: color 100ms ease; }
 .nmx-comic-setup-source-copy > strong.is-deposit-verified { color: var(--nmx-deposit-gold); transition: color 100ms ease; }
-.nmx-relay-option-select:is(:hover, :focus-visible) .nmx-relay-option-name.is-deposit-verified,
+.nmx-relay-option-select:is(:hover, :focus-visible) .nmx-relay-option-name.is-deposit-verified { color: var(--nmx-deposit-gold-strong) !important; }
 .nmx-comic-setup-source:is(:hover, :focus-visible, .is-selected) .nmx-comic-setup-source-copy > strong.is-deposit-verified { color: var(--nmx-deposit-gold-strong); }
 /* The chosen row keeps its gold instead of the picker accent the name otherwise takes. */
 .nmx-relay-option-select.is-selected .nmx-relay-option-name.is-deposit-verified,
 .nmx-shell .nmx-relay-picker-popover .nmx-relay-option-select.is-selected .nmx-relay-option-name.is-deposit-verified { color: var(--nmx-deposit-gold-strong) !important; }
+/* The composer's relay button names a deposit-verified store in gold too (the comic chat and studio buttons have their
+   own rules beside their light styles, in nextmux-comic-chat.css and nextmux-comic-studio-modals.css). It sits on its own chip,
+   darker than the drawer in the light theme (#ecebe8, #ddd9d6 hovered or open), where the drawer's gold would read
+   4.4:1 and 4.0:1: #805300 keeps 5.6:1 and 4.7:1. Dark: #e5b84b is 7.7:1 on the card, #f0c75e 7.5:1 on #363636. */
+/* Each outranks the light trigger rules above it (0,3,1 at rest, 0,5,1 hovered or open) by specificity, not order. */
+.nmx-composer-relay-button > span.is-deposit-verified { color: var(--nmx-deposit-gold) !important; transition: color 100ms ease; }
+.nmx-composer-relay-button:is(:hover:not(:disabled), :focus-visible, .is-open, .is-active, [aria-expanded='true']) > span.is-deposit-verified { color: var(--nmx-deposit-gold-strong) !important; }
+.nmx-theme-light .nmx-composer-relay-button > span.is-deposit-verified:not(.codicon),
+.nmx-theme-light .nmx-composer-relay-button:is(:hover:not(:disabled), :focus-visible, .is-open, .is-active, [aria-expanded='true']) > span.is-deposit-verified:not(.codicon) { color: #805300 !important; }
 .nmx-model-picker-relay-view .nmx-relay-option-metrics { display: contents !important; }
 .nmx-relay-option-metrics.is-delisted,
 .nmx-model-picker-relay-view .nmx-relay-option-metrics.is-delisted {

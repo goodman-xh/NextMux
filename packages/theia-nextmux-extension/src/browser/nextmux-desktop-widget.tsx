@@ -13689,6 +13689,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const relayOpen = Boolean(picker && picker.kind === kind && picker.capability === capability && picker.mode === 'relay');
         const modelOpen = Boolean(picker && picker.kind === kind && picker.capability === capability && picker.mode === 'model');
         const relayLabel = this.comicStudioRelayLabelFor(kind, capability);
+        // 保证金: a deposit-verified store's name reads in gold here too, as in the relay drawer.
+        const relayGold = this.relayDepositVerified?.(this.comicStudioRelayKeyFor(kind, capability), 'comic') === true;
         const candidate = this.comicStepChoiceForKind(kind, capability);
         const modelLabel = candidate?.label || comicStepText(this.desktopLocale, 'none');
         const disabled = Boolean(this.comicStudioModalState?.generating);
@@ -13701,11 +13703,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     aria-haspopup='dialog'
                     aria-expanded={relayOpen}
                     className={`nmx-composer-relay-button${relayOpen ? ' is-open' : ''}`}
-                    title={relayLabel}
+                    title={relayGold ? `${relayLabel} · ${publicMerchantDepositText(this.desktopLocale)}` : relayLabel}
                     onClick={() => this.toggleComicStudioIsolatedPicker(kind, capability, 'relay', relaySelector)}
                 >
                     <i className='codicon codicon-globe' aria-hidden='true' />
-                    <span data-nmx-literal>{relayLabel}</span>
+                    <span data-nmx-literal className={relayGold ? 'is-deposit-verified' : undefined}>{relayLabel}</span>
                     <i className='codicon codicon-chevron-down' aria-hidden='true' />
                 </button>
                 <button
@@ -48829,6 +48831,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const councilConfig = this.effectiveCouncilConfig(codingSession?.id);
         const councilActiveOrPending = this.hasActiveOrPendingCouncilMode(codingSession?.id);
         const councilLeadSlot = councilConfig?.slots.find(slot => slot.roles.includes('lead')) || councilConfig?.slots[0];
+        // 保证金: while the relay button names the chosen store, that name reads in gold as it does in the drawer.
+        const composerRelayGold = !councilActiveOrPending && !composerRelayUnavailable && composerRelay?.kind === 'managed' && composerRelay.depositVerified === true;
+        const composerRelayDeposit = composerRelayGold ? ` · ${publicMerchantDepositText(this.desktopLocale)}` : '';
         return <>
             <header className='nmx-workspace-topbar nmx-coding-topbar'>
                 <div className='nmx-workspace-topbar-leading'>{this.renderThreadFindControl()}</div>
@@ -49499,10 +49504,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             <button className={`nmx-composer-relay-button ${this.codingPopover === 'routes' && this.modelPickerRelayOpen ? 'is-active ' : ''}${composerRelayUnavailable ? 'is-unavailable' : ''}${councilActiveOrPending ? ' is-council-locked' : ''}`}
                                 data-relay-trigger='composer'
                                 aria-disabled={councilActiveOrPending || undefined}
-                                aria-label={localizeDesktopSurface(this.desktopLocale, '选择中转商或自有 API') + '：' + (composerRelay?.label || localizeDesktopSurface(this.desktopLocale, '未选择'))}
+                                aria-label={localizeDesktopSurface(this.desktopLocale, '选择中转商或自有 API') + '：' + (composerRelay?.label || localizeDesktopSurface(this.desktopLocale, '未选择')) + composerRelayDeposit}
                                 aria-expanded={this.codingPopover === 'routes' && this.modelPickerRelayOpen}
-                                title={councilActiveOrPending ? councilModeText(this.desktopLocale, 'disabledComposerNotice') : composerRelay?.label || relayText(this.desktopLocale, composerRelayUnavailable ? 'savedRelayUnavailable' : 'selectRelay')}
-                                onClick={() => this.toggleComposerRelayPicker()}><i className={`codicon codicon-${composerRelayUnavailable ? 'warning' : composerRelay?.kind === 'official' ? 'verified-filled' : composerRelay?.kind === 'automatic' ? 'sparkle' : 'server-environment'}`}></i><span>{(councilActiveOrPending && (councilConfig?.relayLabel || councilConfig?.sourceLabel)) || composerRelay?.label || relayText(this.desktopLocale, composerRelayUnavailable ? 'savedRelayUnavailable' : 'selectRelay')}</span><i className='codicon codicon-chevron-down'></i></button>
+                                title={councilActiveOrPending ? councilModeText(this.desktopLocale, 'disabledComposerNotice') : composerRelay?.label ? composerRelay.label + composerRelayDeposit : relayText(this.desktopLocale, composerRelayUnavailable ? 'savedRelayUnavailable' : 'selectRelay')}
+                                onClick={() => this.toggleComposerRelayPicker()}><i className={`codicon codicon-${composerRelayUnavailable ? 'warning' : composerRelay?.kind === 'official' ? 'verified-filled' : composerRelay?.kind === 'automatic' ? 'sparkle' : 'server-environment'}`}></i><span className={composerRelayGold ? 'is-deposit-verified' : undefined}>{(councilActiveOrPending && (councilConfig?.relayLabel || councilConfig?.sourceLabel)) || composerRelay?.label || relayText(this.desktopLocale, composerRelayUnavailable ? 'savedRelayUnavailable' : 'selectRelay')}</span><i className='codicon codicon-chevron-down'></i></button>
                             <button className={`nmx-route-button ${this.codingPopover === 'routes' && !this.modelPickerRelayOpen ? 'is-active' : ''}${councilActiveOrPending ? ' is-council-locked' : ''}`}
                                 data-model-id={selectedModel?.id || (route ? this.modelKeyForRoute(route) : '')}
                                 data-route-id={route?.id || ''}
@@ -50356,7 +50361,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
             return { mode, ...(selected ? { selected: { key: selected.key, label: selected.label } } : {}), options };
         });
         const summary = COMIC_CHAT_DRAWER_MODES.map(mode => `${label(mode)}：${this.comicChatRecommendedCandidate(mode)?.label || this.comicChatT('noModelFor')}`).join('\n');
-        return { recommended: ui.recommended, relays: [...relays.values()], ...(relay ? { relay: { key: relay.key, label: relay.label, kind: relay.kind } } : {}), tabs, summary };
+        return { recommended: ui.recommended, relays: [...relays.values()],
+            ...(relay ? { relay: { key: relay.key, label: relay.label, kind: relay.kind, ...(this.relayDepositVerified?.(relay.key, 'comic') ? { depositVerified: true as const } : {}) } } : {}), tabs, summary };
+    }
+
+    /**
+     * Whether a relay holds the platform's security deposit, as the drawer rows and the AI 模型 panel decide: the
+     * directory's word while a page lists the store (it follows a payment or a refund with its next page), else its
+     * offerings'. Light enough for every render of a composer button, unlike building all relay options.
+     */
+    protected relayDepositVerified(relayKey: string, workbench: 'coding' | 'comic'): boolean {
+        if (!relayKey.startsWith('managed:')) return false;
+        const merchantId = relayKey.slice('managed:'.length);
+        const pages = [this.publicMerchantPage?.merchants, this.favoriteMerchantPage?.merchants];
+        const listed = pages.flatMap(merchants => merchants || []).find(merchant => merchant.id === merchantId);
+        if (listed) return listed.depositVerified === true;
+        const stepDirectory = this.comicStepDirectoryDeposits?.get(relayKey);
+        if (stepDirectory !== undefined) return stepDirectory;
+        // As in the drawer, the chosen store's snapshot stands in only while no directory page is held.
+        if (pages.every(merchants => merchants === undefined) && this.selectedPublicMerchant?.id === merchantId) return this.selectedPublicMerchant.depositVerified === true;
+        return this.managedOfferings(workbench).some(offering => this.offeringMerchantId(offering) === merchantId && offering.depositVerified === true);
     }
 
     /**

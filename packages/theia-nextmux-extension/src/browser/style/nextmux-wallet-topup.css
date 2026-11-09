@@ -51,19 +51,6 @@
     font-weight: 650;
 }
 
-.nmx-topup-summary > .is-total:has(.nmx-topup-hosted) {
-    flex-wrap: wrap;
-    row-gap: 2px;
-}
-
-.nmx-topup-summary > .is-total .nmx-topup-hosted {
-    flex-basis: 100%;
-    color: var(--nmx-subtle);
-    font-size: 13px;
-    font-weight: 400;
-    text-align: end;
-}
-
 .nmx-topup-sheet .nmx-topup-note {
     display: flex;
     align-items: flex-start;

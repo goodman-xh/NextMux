@@ -27,6 +27,8 @@
     --st-accent-soft: rgba(124, 92, 255, 0.15);
     --st-danger: #ef4444;
     --st-warn: #f59e0b;
+    --st-deposit-gold: #e5b84b;
+    --st-deposit-gold-strong: #f0c75e;
     --st-kind-a: #1fa2ff;
     --st-kind-b: #16c79a;
     position: fixed;
@@ -80,6 +82,8 @@
     --st-accent-soft: rgba(91, 61, 245, 0.11);
     --st-danger: #dc2626;
     --st-warn: #d97706;
+    --st-deposit-gold: #805300;
+    --st-deposit-gold-strong: #805300;
     background: rgba(18, 18, 24, 0.36);
     color-scheme: light;
 }
@@ -603,6 +607,19 @@
 :is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button):is(.is-open, .is-active, [aria-expanded='true']) > :is(span:not(.codicon), .codicon, i),
 .nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button):is(.is-open, .is-active, [aria-expanded='true']) > :is(span:not(.codicon), .codicon, i) {
     color: var(--st-text) !important;
+}
+
+/* 保证金: a deposit-verified store's name reads in gold, as in the relay drawer, one class above the name rules before
+   it. The modal keeps its own theme, so the gold follows --st-*: on #161618/#242428 the dark golds are 9.7:1 and 9.6:1,
+   and #805300 is 6.7:1 on white and 6.1:1 on the #f4f4f6 hover fill. */
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot .nmx-composer-relay-button > span.is-deposit-verified:not(.codicon),
+.nmx-comic-studio-model-slot .nmx-composer-relay-button > span.is-deposit-verified:not(.codicon) {
+    color: var(--st-deposit-gold) !important;
+}
+
+:is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot .nmx-composer-relay-button:is(:hover:not(:disabled), .is-open, .is-active, [aria-expanded='true']) > span.is-deposit-verified:not(.codicon),
+.nmx-comic-studio-model-slot .nmx-composer-relay-button:is(:hover:not(:disabled), .is-open, .is-active, [aria-expanded='true']) > span.is-deposit-verified:not(.codicon) {
+    color: var(--st-deposit-gold-strong) !important;
 }
 
 :is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button):disabled,
