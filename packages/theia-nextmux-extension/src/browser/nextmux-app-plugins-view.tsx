@@ -11,6 +11,7 @@ import { appPluginPackageError, appPluginRuntimeText } from './nextmux-app-plugi
 import { appPluginOptionsText } from './nextmux-app-plugin-options-locale';
 import type {
     AppPluginTrust,
+    AppPluginChatAttachment, AppPluginChatMessage, AppPluginChatModality, AppPluginChatRequest, AppPluginMcpServer,
     AppPluginDiagnostic, AppPluginInfo, AppPluginInspection, AppPluginLocalServer, AppPluginMarketPlugin, AppPluginMine, AppPluginMinePlugin, AppPluginMineVersion,
     AppPluginModel, AppPluginModelChoices, AppPluginOverlayItem, AppPluginParam, AppPluginParamFileValue, AppPluginParamValue, AppPluginPreset, AppPluginRunSnapshot, AppPluginServerProbe, AppPluginSummary, AppPluginUploadProblem, AppPluginVisionModel
 } from '../common/nextmux-app-plugins';
@@ -838,14 +839,24 @@ export interface AppPluginGoalCommand { readonly runId: string; readonly command
 
 export interface AppPluginInlineControlsProps {
     readonly choices?: AppPluginModelChoices;
+    readonly extraModels?: readonly AppPluginModel[];
     readonly modelBusy?: boolean;
     readonly error?: string;
+    readonly chatOpen?: boolean;
+    readonly chatMessages?: readonly AppPluginChatMessage[];
+    readonly chatBusy?: boolean;
+    readonly chatModel?: AppPluginModel | null;
     onSaveModel?(id: string, model: AppPluginModel, vision: AppPluginVisionModel | null): void;
     onChooseModel?(id: string): void;
     onConfigureParams?(id: string, params: Readonly<Record<string, unknown>>): void;
     onPickParamFile?(id: string, paramId: string, label?: string): void;
     onCommand?(command: AppPluginGoalCommand): void;
     onStart?(id: string, goal?: string): void;
+    onToggleChat?(): void;
+    onChatSend?(request: AppPluginChatRequest): void;
+    onChatClear?(): void;
+    onChatSelectModel?(model: AppPluginModel): void;
+    onApplyChatToApp?(text: string): void;
 }
 
 type InlineModelSource = 'platform' | 'openrouter' | 'local';
@@ -856,23 +867,47 @@ const inlineModelKey = (model: AppPluginModel): string =>
 const isJevModel = (model: string): boolean => /(?:^|[\/~_-])jev(?:[\/_-]|$)|^systemone$/i.test(model);
 
 /** Uses the existing platform / connection / local protocol; never saves invented endpoints or API connections. */
-export function appPluginInlineModels(choices: AppPluginModelChoices | undefined, current?: AppPluginModel | null): AppPluginModel[] {
+export function appPluginInlineModels(
+    choices: AppPluginModelChoices | undefined,
+    current?: AppPluginModel | null,
+    options?: { readonly allModels?: boolean; readonly extraModels?: readonly AppPluginModel[] }
+): AppPluginModel[] {
+    const allModels = Boolean(options?.allModels);
     const models: AppPluginModel[] = [];
+    const seen = new Set<string>();
+    const pushModel = (model: AppPluginModel): void => {
+        const key = inlineModelKey(model);
+        if (seen.has(key)) return;
+        seen.add(key);
+        models.push(model);
+    };
     for (const model of choices?.relays || []) {
-        if (!isJevModel(model.model) || !model.routes.length) continue;
-        models.push({ source: 'nextmux', model: model.model, label: model.label,
+        if ((!allModels && !isJevModel(model.model)) || !model.routes.length) continue;
+        pushModel({ source: 'nextmux', model: model.model, label: model.label,
             inputPricePerMillion: model.routes[0].inputPricePerMillion,
             ...(model.images ? { images: true } : {}) });
     }
     for (const connection of choices?.connections || []) {
-        if (!/openrouter/i.test(connection.provider)) continue;
-        for (const model of connection.decisions) if (isJevModel(model.model)) models.push({ ...model, source: 'connection',
-            connectionId: connection.connectionId, connectionLabel: connection.label });
+        if (!allModels && !/openrouter/i.test(connection.provider)) continue;
+        for (const model of connection.decisions || []) {
+            if (!allModels && !isJevModel(model.model)) continue;
+            pushModel({ ...model, source: 'connection',
+                connectionId: connection.connectionId, connectionLabel: connection.label });
+        }
+        if (allModels) {
+            for (const model of connection.vision || []) {
+                pushModel({ ...model, source: 'connection', images: true,
+                    connectionId: connection.connectionId, connectionLabel: connection.label });
+            }
+        }
     }
     for (const server of choices?.local || []) for (const model of server.models) {
-        if (server.protocol !== 'systemone' && !isJevModel(model.model)) continue;
-        models.push({ source: 'local', model: model.model, label: model.label, endpoint: server.endpoint, protocol: server.protocol,
+        if (!allModels && server.protocol !== 'systemone' && !isJevModel(model.model)) continue;
+        pushModel({ source: 'local', model: model.model, label: model.label, endpoint: server.endpoint, protocol: server.protocol,
             ...(model.images ? { images: true } : {}) });
+    }
+    if (allModels && options?.extraModels?.length) {
+        for (const model of options.extraModels) pushModel(model);
     }
     // Existing merchant selections, probed local endpoints and legacy models remain visible until changed.
     if (current) {
@@ -1310,6 +1345,276 @@ export function AppPluginStartDialog(props: {
     </Dialog>;
 }
 
+export interface AppPluginChatPanelProps {
+    readonly locale: Locale;
+    readonly appName?: string;
+    readonly plugin?: AppPluginInfo;
+    readonly run?: AppPluginRunSnapshot;
+    readonly choices?: AppPluginModelChoices;
+    readonly extraModels?: readonly AppPluginModel[];
+    readonly selectedModel?: AppPluginModel | null;
+    readonly messages?: readonly AppPluginChatMessage[];
+    readonly busy?: boolean;
+    readonly error?: string;
+    onSelectModel?(model: AppPluginModel): void;
+    onSend?(request: AppPluginChatRequest): void;
+    onClear?(): void;
+    onApplyToApp?(text: string): void;
+    onClose?(): void;
+}
+
+/**
+ * Interactive Multimodal AI Console & MCP Control Panel for an app tab / plugin:
+ * - Unrestricted model selection across platform relays, own API connections, local servers, and workbench models.
+ * - Multi-modality input & output (text, image, video, audio, structured files/scripts) with one-click download & app injection.
+ * - Full capability & MCP server badge display with live screen frame and plugin signal context injection.
+ */
+export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactElement {
+    const { locale, plugin, run } = props;
+    const zh = locale.startsWith('zh');
+    const defaultModel = props.selectedModel || plugin?.model || (plugin?.vision ? { ...plugin.vision, images: true } : null);
+    const availableModels = appPluginInlineModels(props.choices, defaultModel, { allModels: true, extraModels: props.extraModels });
+    const fallbackModel: AppPluginModel = defaultModel || availableModels[0] || { source: 'nextmux', model: '~typesafe/jev-latest', label: 'Platform AI (Multimodal)', images: true };
+    const models = availableModels.length ? availableModels : [fallbackModel];
+    const [activeKey, setActiveKey] = React.useState<string>(() => inlineModelKey(defaultModel || models[0]));
+    React.useEffect(() => {
+        if (props.selectedModel) setActiveKey(inlineModelKey(props.selectedModel));
+        else if (plugin?.model) setActiveKey(inlineModelKey(plugin.model));
+    }, [props.selectedModel ? inlineModelKey(props.selectedModel) : '', plugin?.model ? inlineModelKey(plugin.model) : '']);
+    const chosenModel = models.find(item => inlineModelKey(item) === activeKey) || models[0];
+
+    const [modality, setModality] = React.useState<AppPluginChatModality>('auto');
+    const [includeScreenshot, setIncludeScreenshot] = React.useState<boolean>(true);
+    const [includeContext, setIncludeContext] = React.useState<boolean>(true);
+    const [draft, setDraft] = React.useState<string>('');
+    const [attachments, setAttachments] = React.useState<readonly AppPluginChatAttachment[]>([]);
+
+    const permissions = plugin?.summary?.permissions?.length
+        ? plugin.summary.permissions
+        : ['screen', 'input', 'audio', 'mcp', 'files', 'multimodal'];
+    const mcpServers: readonly AppPluginMcpServer[] = plugin?.summary?.mcp || [];
+    const declaredPrompts = plugin?.summary?.panel?.quickPrompts;
+    const appTitle = props.appName || run?.name || plugin?.summary?.name || (zh ? '当前应用' : 'Current App');
+    const quickPrompts: readonly { readonly id: string; readonly label: string; readonly prompt: string; readonly modality?: AppPluginChatModality }[] = declaredPrompts?.length
+        ? declaredPrompts
+        : [
+            { id: 'analyze', label: zh ? '分析画面与状态' : 'Analyze Live Screen', prompt: zh ? `分析 ${appTitle} 当前画面、信号读数与窗口状态，并给出下一步操作建议。` : `Analyze the live screen, signals, and window state of ${appTitle}, and suggest the next step.`, modality: 'text' },
+            { id: 'mcp', label: zh ? '调用 MCP 协同操作' : 'Run MCP Workflow', prompt: zh ? `结合 ${appTitle} 的 MCP 工具与插件动作，规划并执行当前任务。` : `Coordinate MCP tools and plugin actions for ${appTitle} to execute the current task.`, modality: 'auto' },
+            { id: 'image', label: zh ? '生成参考图片' : 'Generate Image', prompt: zh ? `根据 ${appTitle} 当前界面内容生成一张高清视觉参考图。` : `Generate a visual reference image based on the current ${appTitle} screen.`, modality: 'image' },
+            { id: 'video', label: zh ? '生成视频预览' : 'Generate Video', prompt: zh ? `为 ${appTitle} 当前场景生成一段动态视频预览。` : `Generate a dynamic video preview for the current ${appTitle} scene.`, modality: 'video' },
+            { id: 'file', label: zh ? '导出脚本/配置文件' : 'Export Script / JSON', prompt: zh ? `根据 ${appTitle} 当前状态导出可复用的 JSON 配置与自动化脚本文件。` : `Export a reusable JSON configuration and automation script file for ${appTitle}.`, modality: 'file' }
+        ];
+
+    const submit = (textValue: string, forcedModality?: AppPluginChatModality): void => {
+        const clean = textValue.trim();
+        if ((!clean && !attachments.length) || props.busy || !props.onSend) return;
+        const usedModality = forcedModality || modality;
+        props.onSend({
+            text: clean || (zh ? '请处理附带的文件与当前画面' : 'Process the attached files and live screen'),
+            model: chosenModel,
+            modality: usedModality,
+            includeScreenshot,
+            includeContext,
+            attachments,
+            pluginId: plugin?.id || run?.pluginId,
+            runId: run?.runId
+        });
+        setDraft('');
+        setAttachments([]);
+    };
+
+    const onSelectFiles = (event: React.ChangeEvent<HTMLInputElement>): void => {
+        const files = Array.from(event.currentTarget.files || []);
+        event.currentTarget.value = '';
+        if (!files.length) return;
+        for (const file of files.slice(0, 4)) {
+            const kind: AppPluginChatAttachment['kind'] = file.type.startsWith('image/') ? 'image'
+                : file.type.startsWith('video/') ? 'video'
+                : file.type.startsWith('audio/') ? 'audio' : 'file';
+            const reader = new FileReader();
+            reader.onload = () => {
+                const dataUrl = typeof reader.result === 'string' ? reader.result : '';
+                if (!dataUrl) return;
+                setAttachments(prev => [...prev, {
+                    id: `${file.name}-${Date.now()}`,
+                    kind,
+                    name: file.name,
+                    mimeType: file.type || 'application/octet-stream',
+                    dataUrl,
+                    sizeBytes: file.size
+                }]);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const messages = props.messages || [];
+
+    return <div className='nmx-plugin-chat-panel' role='region' aria-label={zh ? '插件 AI 控制台' : 'Plugin AI Console'}>
+        <div className='nmx-plugin-chat-header'>
+            <div className='nmx-plugin-chat-title-row'>
+                <span className='nmx-plugin-chat-title'>
+                    <i className='codicon codicon-comment-discussion' aria-hidden='true'></i>
+                    <strong data-nmx-literal>{zh ? '插件 AI 对话与多模态控制台' : 'Plugin AI & Multimodal Console'}</strong>
+                </span>
+                <div className='nmx-plugin-mcp-badges' aria-label={zh ? '已开放能力与 MCP' : 'Enabled Capabilities & MCP'}>
+                    {permissions.map(perm => <span key={perm} className='nmx-plugin-cap-badge' data-nmx-literal>
+                        <i className='codicon codicon-verified-filled' aria-hidden='true'></i>{perm}
+                    </span>)}
+                    {mcpServers.map(server => <span key={server.id} className='nmx-plugin-cap-badge is-mcp' title={server.description || server.url || server.command} data-nmx-literal>
+                        <i className='codicon codicon-plug' aria-hidden='true'></i>MCP · {server.name || server.id}
+                    </span>)}
+                </div>
+                {props.onClear && messages.length > 0 && <button type='button' className='nmx-plugin-chat-clear' onClick={props.onClear}>
+                    <i className='codicon codicon-clear-all' aria-hidden='true'></i>{zh ? '清空对话' : 'Clear'}
+                </button>}
+                {props.onClose && <button type='button' className='nmx-plugin-chat-close' aria-label={t(locale, 'close')} onClick={props.onClose}>
+                    <i className='codicon codicon-close' aria-hidden='true'></i>
+                </button>}
+            </div>
+            <div className='nmx-plugin-chat-toolbar'>
+                <label className='nmx-plugin-field'>
+                    <span>{zh ? '对话模型' : 'Model'}</span>
+                    <select className='nmx-plugin-chat-model-select' value={inlineModelKey(chosenModel)} disabled={props.busy}
+                        onChange={event => {
+                            const nextKey = event.currentTarget.value;
+                            setActiveKey(nextKey);
+                            const found = models.find(item => inlineModelKey(item) === nextKey);
+                            if (found) props.onSelectModel?.(found);
+                        }}>
+                        {models.map(model => <option key={inlineModelKey(model)} value={inlineModelKey(model)}>
+                            {model.label || model.model}{model.source === 'connection' ? ` · ${model.connectionLabel || model.connectionId}`
+                                : model.source === 'local' ? ` · ${model.protocol || 'local'} · ${model.endpoint || ''}`
+                                    : model.merchant ? ` · ${model.merchant}` : ` · ${t(locale, 'relay')}`}
+                        </option>)}
+                    </select>
+                </label>
+                <label className='nmx-plugin-field'>
+                    <span>{zh ? '输出格式' : 'Output'}</span>
+                    <select className='nmx-plugin-chat-modality-select' value={modality} disabled={props.busy}
+                        onChange={event => setModality(event.currentTarget.value as AppPluginChatModality)}>
+                        <option value='auto'>{zh ? '智能多模态 (文字/图/视频/文件)' : 'Auto Multimodal'}</option>
+                        <option value='text'>{zh ? '文字与指令' : 'Text & Actions'}</option>
+                        <option value='image'>{zh ? '图片生成 (PNG/SVG)' : 'Image Generation'}</option>
+                        <option value='video'>{zh ? '视频生成 (MP4/WebM)' : 'Video Generation'}</option>
+                        <option value='audio'>{zh ? '语音合成 (WAV/MP3)' : 'Audio / Speech'}</option>
+                        <option value='file'>{zh ? '结构化文件 (JSON/脚本)' : 'File / Script'}</option>
+                    </select>
+                </label>
+                <label className='nmx-plugin-check'>
+                    <input type='checkbox' checked={includeScreenshot} onChange={event => setIncludeScreenshot(event.currentTarget.checked)} />
+                    <span>{zh ? '附带实时画面' : 'Live Frame'}</span>
+                </label>
+                <label className='nmx-plugin-check'>
+                    <input type='checkbox' checked={includeContext} onChange={event => setIncludeContext(event.currentTarget.checked)} />
+                    <span>{zh ? '附带信号与MCP' : 'Signals & MCP'}</span>
+                </label>
+            </div>
+        </div>
+        <div className='nmx-plugin-chips nmx-plugin-chat-prompts' aria-label={zh ? '快捷指令' : 'Quick Prompts'}>
+            {quickPrompts.map(item => <button type='button' key={item.id} disabled={props.busy} data-nmx-literal
+                onClick={() => {
+                    if (item.modality) setModality(item.modality);
+                    submit(item.prompt, item.modality);
+                }}>
+                {item.label}
+            </button>)}
+        </div>
+        <div className='nmx-plugin-chat-messages' role='log' aria-live='polite'>
+            {messages.length === 0 ? <div className='nmx-plugin-chat-empty'>
+                <i className='codicon codicon-sparkle' aria-hidden='true'></i>
+                <span data-nmx-literal>
+                    {zh
+                        ? `已为「${appTitle}」开放完整插件控制面板权限（实时画面、键鼠动作、MCP 工具、多模型切换及文字/图片/视频/音频/文件多模态输出）。直接输入指令或点击上方快捷按钮开始对话。`
+                        : `Full plugin console permissions enabled for "${appTitle}" (live frame, input actions, MCP tools, unrestricted model selection, and text/image/video/audio/file output).`}
+                </span>
+            </div> : messages.map(msg => <div key={msg.id} className={`nmx-plugin-chat-msg is-${msg.role}`}>
+                <div className='nmx-plugin-chat-msg-head'>
+                    <strong>{msg.role === 'user' ? (zh ? '你' : 'You') : (msg.model || 'AI')}</strong>
+                    {msg.modality && msg.modality !== 'auto' && <span className='nmx-plugin-cap-badge' data-nmx-literal>{msg.modality}</span>}
+                    <span className='nmx-plugin-chat-msg-actions'>
+                        {msg.role === 'assistant' && msg.text && <button type='button' onClick={() => void navigator.clipboard?.writeText?.(msg.text)}>
+                            <i className='codicon codicon-copy' aria-hidden='true'></i>{t(locale, 'copy')}
+                        </button>}
+                        {msg.role === 'assistant' && msg.text && props.onApplyToApp && <button type='button' onClick={() => props.onApplyToApp?.(msg.text)}>
+                            <i className='codicon codicon-terminal' aria-hidden='true'></i>{zh ? '键入应用' : 'Send to App'}
+                        </button>}
+                    </span>
+                </div>
+                {msg.text && <div className='nmx-plugin-chat-text' data-nmx-literal>{msg.text}</div>}
+                {msg.error && <div className='nmx-plugin-muted is-error' data-nmx-literal>{msg.error}</div>}
+                {msg.toolCalls && msg.toolCalls.length > 0 && <div className='nmx-plugin-chat-tools'>
+                    {msg.toolCalls.map((call, idx) => <span key={`${call.name}-${idx}`} className='nmx-plugin-cap-badge is-mcp' data-nmx-literal>
+                        <i className='codicon codicon-tools' aria-hidden='true'></i>{call.name}{call.output ? `: ${call.output}` : ''}
+                    </span>)}
+                </div>}
+                {msg.attachments && msg.attachments.length > 0 && <div className='nmx-plugin-chat-attachments'>
+                    {msg.attachments.map((att, idx) => {
+                        const href = att.dataUrl || att.url || (att.content ? `data:${att.mimeType || 'text/plain'};charset=utf-8,${encodeURIComponent(att.content)}` : '');
+                        if (att.kind === 'image') {
+                            return <div key={att.id || idx} className='nmx-plugin-chat-media is-image'>
+                                {href && <img src={href} alt={att.name} />}
+                                <div className='nmx-plugin-chat-media-bar'>
+                                    <span data-nmx-literal>{att.name}</span>
+                                    {href && <a href={href} download={att.name}>{zh ? '下载图片' : 'Download'}</a>}
+                                </div>
+                            </div>;
+                        }
+                        if (att.kind === 'video') {
+                            return <div key={att.id || idx} className='nmx-plugin-chat-media is-video'>
+                                {href && <video src={href} controls playsInline preload='metadata'></video>}
+                                <div className='nmx-plugin-chat-media-bar'>
+                                    <span data-nmx-literal>{att.name}</span>
+                                    {href && <a href={href} download={att.name}>{zh ? '下载视频' : 'Download'}</a>}
+                                </div>
+                            </div>;
+                        }
+                        if (att.kind === 'audio') {
+                            return <div key={att.id || idx} className='nmx-plugin-chat-media is-audio'>
+                                {href && <audio src={href} controls preload='metadata'></audio>}
+                                <div className='nmx-plugin-chat-media-bar'>
+                                    <span data-nmx-literal>{att.name}</span>
+                                    {href && <a href={href} download={att.name}>{zh ? '下载音频' : 'Download'}</a>}
+                                </div>
+                            </div>;
+                        }
+                        return <div key={att.id || idx} className='nmx-plugin-chat-media is-file'>
+                            <div className='nmx-plugin-chat-media-bar'>
+                                <i className='codicon codicon-file-code' aria-hidden='true'></i>
+                                <strong data-nmx-literal>{att.name}</strong>
+                                {att.mimeType && <small data-nmx-literal>{att.mimeType}</small>}
+                                {href && <a href={href} download={att.name}>{zh ? '下载文件' : 'Download'}</a>}
+                                {att.content && props.onApplyToApp && <button type='button' onClick={() => props.onApplyToApp?.(att.content!)}>
+                                    {zh ? '发送到应用' : 'Send to App'}
+                                </button>}
+                            </div>
+                            {att.content && <pre data-nmx-literal>{att.content.slice(0, 600)}</pre>}
+                        </div>;
+                    })}
+                </div>}
+            </div>)}
+        </div>
+        {attachments.length > 0 && <div className='nmx-plugin-chat-pending-files'>
+            {attachments.map((att, idx) => <span key={att.id || idx} className='nmx-plugin-cap-badge' data-nmx-literal>
+                <i className='codicon codicon-file' aria-hidden='true'></i>{att.name}
+                <button type='button' aria-label={t(locale, 'close')} onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}>×</button>
+            </span>)}
+        </div>}
+        <form className='nmx-plugin-chat-composer' onSubmit={event => { event.preventDefault(); submit(draft); }}>
+            <label className='nmx-plugin-chat-attach' title={zh ? '添加图片/视频/音频/文件附件' : 'Attach image/video/audio/file'}>
+                <input type='file' multiple accept='image/*,video/*,audio/*,.txt,.md,.json,.csv,.js,.ts,.py' onChange={onSelectFiles} />
+                <i className='codicon codicon-clippy' aria-hidden='true'></i>
+            </label>
+            <ImeInput value={draft} maxLength={2000} disabled={props.busy}
+                placeholder={zh ? '输入文字与模型对话、调用 MCP 工具，或生成图片/视频/音频/文件…' : 'Chat with model, invoke MCP tools, or generate image/video/audio/files…'}
+                onChange={event => setDraft(event.currentTarget.value)} />
+            <button type='submit' className='is-primary' disabled={props.busy || (!draft.trim() && !attachments.length)}>
+                {props.busy ? t(locale, 'loading') : (zh ? '发送' : 'Send')}
+            </button>
+        </form>
+    </div>;
+}
+
 /** The plugin running on a tab: time, spend, last decision, and the controls. */
 export function AppPluginRunBar(props: AppPluginInlineControlsProps & { readonly locale: Locale; readonly run: AppPluginRunSnapshot; readonly now: number;
     readonly plugin?: AppPluginInfo; readonly appName?: string;
@@ -1328,6 +1633,9 @@ export function AppPluginRunBar(props: AppPluginInlineControlsProps & { readonly
         {failure && <span className='nmx-plugin-muted is-error' title={failure.detail} data-nmx-literal>{appPluginError(locale, run.readableError || run.error)}</span>}
         {run.goal && <span className='nmx-plugin-runbar-goal' data-nmx-literal title={run.goal}>{run.goal}</span>}
         <span className='nmx-plugin-runbar-actions'>
+            {props.onToggleChat && <button type='button' className={props.chatOpen ? 'is-active' : ''} aria-pressed={Boolean(props.chatOpen)} onClick={props.onToggleChat}>
+                <i className='codicon codicon-comment-discussion' aria-hidden='true'></i>{locale.startsWith('zh') ? 'AI 对话' : 'AI Chat'}
+            </button>}
             {!run.ended && <button type='button' className={props.overlay ? 'is-active' : ''} aria-pressed={props.overlay} onClick={props.onToggleOverlay}>{t(locale, 'overlay')}</button>}
             {!run.ended && !run.paused && props.onPause && <button type='button' onClick={props.onPause}>{t(locale, 'pause')}</button>}
             {!run.ended && run.paused && <button type='button' onClick={props.onResume}>{t(locale, 'resume')}</button>}
@@ -1340,6 +1648,10 @@ export function AppPluginRunBar(props: AppPluginInlineControlsProps & { readonly
             {/* The run bar has its own 停止 above, so its goal button always sends. */}
             <AppPluginGoalControls {...props} plugin={props.plugin} appName={props.appName || run.name} activeRun={run} onStop={undefined} />
         </>}
+        {props.chatOpen && <AppPluginChatPanel locale={locale} appName={props.appName || run.name} plugin={props.plugin} run={run}
+            choices={props.choices} extraModels={props.extraModels} selectedModel={props.chatModel} messages={props.chatMessages}
+            busy={props.chatBusy} error={props.error} onSelectModel={props.onChatSelectModel} onSend={props.onChatSend}
+            onClear={props.onChatClear} onApplyToApp={props.onApplyChatToApp} onClose={props.onToggleChat} />}
         {props.error && <span className='nmx-plugin-muted is-error' role='alert' data-nmx-literal>{props.error}</span>}
     </div>;
 }
@@ -1397,11 +1709,20 @@ export function AppPluginHubDialog(props: AppPluginInlineControlsProps & {
     const showMarket = market.loading || Boolean(market.error) || offers.length > 0 || !props.compatible.length;
     return <Dialog id='nmx-plugin-hub-title' title={`${t(locale, 'tabMarket')} · ${props.appName}`} onClose={props.onClose} closeLabel={t(locale, 'close')} className='nmx-plugin-hub'
         footer={<>
+            {props.onToggleChat && <button type='button' className={props.chatOpen ? 'is-active' : ''} aria-pressed={Boolean(props.chatOpen)} onClick={props.onToggleChat}>
+                <i className='codicon codicon-comment-discussion' aria-hidden='true'></i>{locale.startsWith('zh') ? 'AI 对话面板' : 'AI Console'}
+            </button>}
             <button type='button' onClick={props.onStudio}><i className='codicon codicon-symbol-color' aria-hidden='true'></i>{t(locale, 'studio')}</button>
             <button type='button' onClick={props.onManage}><i className='codicon codicon-settings-gear' aria-hidden='true'></i>{t(locale, 'manage')}</button>
             <span className='nmx-plugin-footer-space'></span>
             <button type='button' onClick={props.onBrowseAll}>{t(locale, 'hubBrowseAll')}</button>
         </>}>
+        {props.chatOpen && <div className='nmx-plugin-hub-chat'>
+            <AppPluginChatPanel locale={locale} appName={props.appName} plugin={props.compatible[0]} run={props.activeRun}
+                choices={props.choices} extraModels={props.extraModels} selectedModel={props.chatModel} messages={props.chatMessages}
+                busy={props.chatBusy} error={props.error} onSelectModel={props.onChatSelectModel} onSend={props.onChatSend}
+                onClear={props.onChatClear} onApplyToApp={props.onApplyChatToApp} onClose={props.onToggleChat} />
+        </div>}
         <section className='nmx-plugin-hub-section'>
             <h3 data-nmx-literal>{t(locale, 'hubInstalled', { app: props.appName })}</h3>
             {props.error && <p className='nmx-plugin-muted is-error' role='alert' data-nmx-literal>{props.error}</p>}

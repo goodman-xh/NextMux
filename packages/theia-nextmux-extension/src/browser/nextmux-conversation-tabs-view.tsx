@@ -166,7 +166,7 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         alreadyOpen: '「{app}」已在这个标签中打开', aiSoundOn: 'AI 打开了声音', aiSoundOff: 'AI 关闭了声音', aiInputOn: 'AI 打开了键鼠', aiInputOff: 'AI 关闭了键鼠', aiToTab: 'AI 把窗口移回标签', aiToDesktop: 'AI 让窗口也显示在桌面',
         waiting: '等待画面', parkForeground: 'Windows 上 AI 只能操作显示在桌面上的窗口，所以这个窗口会留在桌面', parkUwp: '这个应用不接受后台操作，窗口需要留在桌面', parkMinimized: '窗口已最小化：先还原它，AI 才能看到并操作', parkMissing: '找不到这个窗口，它可能已关闭', lockUnavailable: '桌面上的窗口始终可以直接操作',
         reopenApp: "重新打开", reopenRunningTitle: "该应用已经在运行中，是否关闭重新打开？", reopenRunningBody: "关闭当前正在运行的「{app}」并重新打开到当前标签中。", reopenRunningConfirm: "关闭并重新打开", reopenFailed: "未能重新打开应用，请稍后再试",
-        dismissNotice: "关闭通知", windowOwned: "该应用窗口已在另一段对话中打开，请先在原对话关闭标签。", controlHint: "按 Esc 可以退出控制", escStopped: "已按 Esc 退出桌面控制：本轮 AI 不再操作电脑窗口，会改用其他方式继续。", resumeControl: "恢复控制",
+        dismissNotice: "关闭通知", windowOwned: "该应用窗口已在另一段对话中打开，请先在原对话关闭标签。", controlHint: "按Esc可以退出插件控制(请先关闭键鼠)", escStopped: "已按 Esc 退出桌面控制：本轮 AI 不再操作电脑窗口，会改用其他方式继续。", resumeControl: "恢复控制",
         terminateBubble: '点我关闭进程', terminateTitle: '结束「{app}」进程？', terminateBody: '将关闭「{app}」窗口并结束其运行进程，未保存的内容可能会丢失。', terminateConfirm: '结束进程', terminateCancel: '取消', terminateFailed: '未能结束进程，请稍后再试' },
     'zh-TW': { live: '即時', lastFrame: '最近畫面', onlyInTab: '只在分頁', alsoOnDesktop: '也在桌面', placement: '視窗顯示位置',
         inTabHint: '視窗在背景執行，不佔用你的桌面', switchToWindow: '切到此視窗', moveFailed: '視窗無法移動，請稍後再試',
@@ -174,7 +174,7 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         alreadyOpen: '「{app}」已在這個分頁中開啟', aiSoundOn: 'AI 開啟了聲音', aiSoundOff: 'AI 關閉了聲音', aiInputOn: 'AI 開啟了鍵鼠', aiInputOff: 'AI 關閉了鍵鼠', aiToTab: 'AI 把視窗移回分頁', aiToDesktop: 'AI 讓視窗也顯示在桌面',
         waiting: '等待畫面', parkForeground: 'Windows 上 AI 只能操作顯示在桌面上的視窗，所以這個視窗會留在桌面', parkUwp: '這個 App 不接受背景操作，視窗需要留在桌面', parkMinimized: '視窗已最小化：先還原它，AI 才能看到並操作', parkMissing: '找不到這個視窗，它可能已關閉', lockUnavailable: '桌面上的視窗始終可以直接操作',
         reopenApp: "重新開啟", reopenRunningTitle: "此 App 已在執行中，是否關閉並重新開啟？", reopenRunningBody: "關閉目前正在執行的「{app}」，並在目前分頁中重新開啟。", reopenRunningConfirm: "關閉並重新開啟", reopenFailed: "無法重新開啟 App，請稍後再試",
-        dismissNotice: "關閉通知", windowOwned: "此應用程式視窗已在另一段對話中開啟，請先在原對話關閉分頁。", controlHint: "按 Esc 可以退出控制", escStopped: "已按 Esc 結束桌面控制：本輪 AI 不再操作電腦視窗，會改用其他方式繼續。", resumeControl: "恢復控制",
+        dismissNotice: "關閉通知", windowOwned: "此應用程式視窗已在另一段對話中開啟，請先在原對話關閉分頁。", controlHint: "按Esc可以退出外掛控制(請先關閉鍵鼠)", escStopped: "已按 Esc 結束桌面控制：本輪 AI 不再操作電腦視窗，會改用其他方式繼續。", resumeControl: "恢復控制",
         terminateBubble: '點我關閉處理程序', terminateTitle: '結束「{app}」處理程序？', terminateBody: '將關閉「{app}」視窗並結束其執行中的處理程序，未儲存的內容可能會遺失。', terminateConfirm: '結束處理程序', terminateCancel: '取消', terminateFailed: '無法結束處理程序，請稍後再試' },
     en: { live: 'Live', lastFrame: 'Last frame', onlyInTab: 'Tab only', alsoOnDesktop: 'Also on desktop', placement: 'Where the window shows',
         inTabHint: 'Runs in the background, off your desktop', switchToWindow: 'Switch to window', moveFailed: 'Couldn’t move the window. Try again.',
@@ -182,7 +182,7 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         alreadyOpen: '“{app}” is already open in this tab', aiSoundOn: 'The AI turned the sound on', aiSoundOff: 'The AI muted the sound', aiInputOn: 'The AI turned keyboard & mouse on', aiInputOff: 'The AI turned keyboard & mouse off', aiToTab: 'The AI moved the window back into the tab', aiToDesktop: 'The AI also showed the window on the desktop',
         waiting: 'Waiting for the picture', parkForeground: 'On Windows the AI can only work in windows shown on the desktop, so this window stays there', parkUwp: 'This app does not accept input in the background, so its window stays on the desktop', parkMinimized: 'The window is minimized: restore it so the AI can see and use it', parkMissing: 'This window can no longer be found; it may have closed', lockUnavailable: 'Windows on the desktop can always be used directly',
         reopenApp: "Reopen", reopenRunningTitle: "This app is already running. Close and reopen it?", reopenRunningBody: "Close the running “{app}” and reopen it in this tab.", reopenRunningConfirm: "Close and reopen", reopenFailed: "Couldn’t reopen the app. Try again.",
-        dismissNotice: "Dismiss notification", windowOwned: "This app window is open in another conversation. Close its tab there first.", controlHint: "Press Esc to exit control", escStopped: "You pressed Esc to end desktop control: for the rest of this turn the AI won’t operate windows and continues another way.", resumeControl: "Resume control",
+        dismissNotice: "Dismiss notification", windowOwned: "This app window is open in another conversation. Close its tab there first.", controlHint: "Press Esc to exit plugin control (turn off input first)", escStopped: "You pressed Esc to end desktop control: for the rest of this turn the AI won’t operate windows and continues another way.", resumeControl: "Resume control",
         terminateBubble: 'Click to end process', terminateTitle: 'End “{app}” process?', terminateBody: 'This will close the “{app}” window and terminate its running process. Unsaved changes may be lost.', terminateConfirm: 'End process', terminateCancel: 'Cancel', terminateFailed: 'Couldn’t end the process. Try again.' },
     ja: { live: 'ライブ', lastFrame: '最新の画面', onlyInTab: 'タブのみ', alsoOnDesktop: 'デスクトップにも', placement: 'ウィンドウの表示場所',
         inTabHint: 'バックグラウンドで動作し、デスクトップには表示されません', switchToWindow: 'このウィンドウへ切り替え', moveFailed: 'ウィンドウを移動できませんでした。もう一度お試しください。',
@@ -190,7 +190,7 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         alreadyOpen: '「{app}」はこのタブで開いています', aiSoundOn: 'AI がサウンドをオンにしました', aiSoundOff: 'AI がサウンドを消音しました', aiInputOn: 'AI がキー・マウスをオンにしました', aiInputOff: 'AI がキー・マウスをオフにしました', aiToTab: 'AI がウィンドウをタブに戻しました', aiToDesktop: 'AI がウィンドウをデスクトップにも表示しました',
         waiting: '画面を待っています', parkForeground: 'Windows では AI はデスクトップに表示されたウィンドウしか操作できないため、このウィンドウはデスクトップに残ります', parkUwp: 'このアプリはバックグラウンドでの操作を受け付けないため、ウィンドウはデスクトップに残ります', parkMinimized: 'ウィンドウが最小化されています。元に戻すと AI が表示・操作できます', parkMissing: 'このウィンドウが見つかりません。閉じられた可能性があります', lockUnavailable: 'デスクトップ上のウィンドウは常に直接操作できます',
         reopenApp: "再度開く", reopenRunningTitle: "このアプリは実行中です。閉じて開き直しますか？", reopenRunningBody: "実行中の「{app}」を閉じて、このタブで開き直します。", reopenRunningConfirm: "閉じて開き直す", reopenFailed: "アプリを開き直せませんでした。もう一度お試しください。",
-        dismissNotice: "通知を閉じる", windowOwned: "このアプリのウィンドウは別の会話で開いています。先にそちらのタブを閉じてください。", controlHint: "Esc キーで操作を終了", escStopped: "Esc でデスクトップ操作を終了しました。このターンの間、AI はウィンドウを操作せず別の方法で続けます。", resumeControl: "操作を再開",
+        dismissNotice: "通知を閉じる", windowOwned: "このアプリのウィンドウは別の会話で開いています。先にそちらのタブを閉じてください。", controlHint: "Escでプラグイン制御を終了(先に操作をオフにしてください)", escStopped: "Esc でデスクトップ操作を終了しました。このターンの間、AI はウィンドウを操作せず別の方法で続けます。", resumeControl: "操作を再開",
         terminateBubble: 'クリックでプロセス終了', terminateTitle: '「{app}」のプロセスを終了しますか？', terminateBody: '「{app}」のウィンドウを閉じて実行中のプロセスを終了します。保存されていない内容は失われる可能性があります。', terminateConfirm: 'プロセスを終了', terminateCancel: 'キャンセル', terminateFailed: 'プロセスを終了できませんでした。もう一度お試しください。' },
     ko: { live: '실시간', lastFrame: '최근 화면', onlyInTab: '탭에만', alsoOnDesktop: '데스크톱에도', placement: '창 표시 위치',
         inTabHint: '백그라운드에서 실행되며 데스크톱에 표시되지 않습니다', switchToWindow: '이 창으로 전환', moveFailed: '창을 옮기지 못했습니다. 다시 시도하세요.',
@@ -198,7 +198,7 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         alreadyOpen: '“{app}”은(는) 이미 이 탭에 열려 있습니다', aiSoundOn: 'AI가 소리를 켰습니다', aiSoundOff: 'AI가 소리를 껐습니다', aiInputOn: 'AI가 키보드·마우스를 켰습니다', aiInputOff: 'AI가 키보드·마우스를 껐습니다', aiToTab: 'AI가 창을 탭으로 되돌렸습니다', aiToDesktop: 'AI가 창을 데스크톱에도 표시했습니다',
         waiting: '화면을 기다리는 중', parkForeground: 'Windows에서는 AI가 데스크톱에 표시된 창만 조작할 수 있어 이 창은 데스크톱에 남습니다', parkUwp: '이 앱은 백그라운드 입력을 받지 않아 창이 데스크톱에 남아야 합니다', parkMinimized: '창이 최소화되었습니다. 복원해야 AI가 보고 조작할 수 있습니다', parkMissing: '이 창을 찾을 수 없습니다. 닫혔을 수 있습니다', lockUnavailable: '데스크톱에 있는 창은 언제나 직접 조작할 수 있습니다',
         reopenApp: "다시 열기", reopenRunningTitle: "이 앱이 이미 실행 중입니다. 닫고 다시 열까요?", reopenRunningBody: "실행 중인 “{app}”을(를) 닫고 현재 탭에서 다시 엽니다.", reopenRunningConfirm: "닫고 다시 열기", reopenFailed: "앱을 다시 열지 못했습니다. 다시 시도하세요.",
-        dismissNotice: "알림 닫기", windowOwned: "이 앱 창은 다른 대화에서 열려 있습니다. 먼저 해당 탭을 닫으세요.", controlHint: "Esc 키를 눌러 제어 종료", escStopped: "Esc로 데스크톱 제어를 종료했습니다. 이번 턴 동안 AI는 창을 조작하지 않고 다른 방법으로 계속합니다.", resumeControl: "제어 재개",
+        dismissNotice: "알림 닫기", windowOwned: "이 앱 창은 다른 대화에서 열려 있습니다. 먼저 해당 탭을 닫으세요.", controlHint: "Esc로 플러그인 제어 종료(먼저 입력을 꺼주세요)", escStopped: "Esc로 데스크톱 제어를 종료했습니다. 이번 턴 동안 AI는 창을 조작하지 않고 다른 방법으로 계속합니다.", resumeControl: "제어 재개",
         terminateBubble: '클릭하여 프로세스 종료', terminateTitle: '“{app}” 프로세스를 종료할까요?', terminateBody: '“{app}” 창을 닫고 실행 중인 프로세스를 종료합니다. 저장하지 않은 내용은 사라질 수 있습니다.', terminateConfirm: '프로세스 종료', terminateCancel: '취소', terminateFailed: '프로세스를 종료하지 못했습니다. 다시 시도하세요.' },
     es: { live: 'En vivo', lastFrame: 'Última imagen', onlyInTab: 'Solo en la pestaña', alsoOnDesktop: 'También en el escritorio', placement: 'Dónde se muestra la ventana',
         inTabHint: 'Se ejecuta en segundo plano, fuera de tu escritorio', switchToWindow: 'Ir a la ventana', moveFailed: 'No se pudo mover la ventana. Inténtalo de nuevo.',
@@ -206,7 +206,7 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         alreadyOpen: '«{app}» ya está abierta en esta pestaña', aiSoundOn: 'La IA activó el sonido', aiSoundOff: 'La IA silenció el sonido', aiInputOn: 'La IA activó teclado y ratón', aiInputOff: 'La IA desactivó teclado y ratón', aiToTab: 'La IA devolvió la ventana a la pestaña', aiToDesktop: 'La IA mostró la ventana también en el escritorio',
         waiting: 'Esperando la imagen', parkForeground: 'En Windows la IA solo puede usar ventanas visibles en el escritorio, así que esta ventana se queda allí', parkUwp: 'Esta app no acepta acciones en segundo plano, así que su ventana se queda en el escritorio', parkMinimized: 'La ventana está minimizada: restáurala para que la IA pueda verla y usarla', parkMissing: 'No se encuentra esta ventana; puede que se haya cerrado', lockUnavailable: 'Las ventanas en el escritorio siempre se pueden usar directamente',
         reopenApp: "Volver a abrir", reopenRunningTitle: "Esta app ya está en ejecución. ¿Cerrarla y volver a abrirla?", reopenRunningBody: "Cierra «{app}» y vuelve a abrirla en esta pestaña.", reopenRunningConfirm: "Cerrar y volver a abrir", reopenFailed: "No se pudo volver a abrir la app. Inténtalo de nuevo.",
-        dismissNotice: "Cerrar notificación", windowOwned: "Esta ventana está abierta en otra conversación. Cierra primero su pestaña.", controlHint: "Pulsa Esc para salir del control", escStopped: "Pulsaste Esc para salir del control del escritorio: durante el resto de este turno la IA no manejará ventanas y seguirá de otra forma.", resumeControl: "Reanudar control",
+        dismissNotice: "Cerrar notificación", windowOwned: "Esta ventana está abierta en otra conversación. Cierra primero su pestaña.", controlHint: "Pulsa Esc para salir del control del plugin (desactiva antes teclado y ratón)", escStopped: "Pulsaste Esc para salir del control del escritorio: durante el resto de este turno la IA no manejará ventanas y seguirá de otra forma.", resumeControl: "Reanudar control",
         terminateBubble: 'Haz clic para cerrar el proceso', terminateTitle: '¿Finalizar el proceso de «{app}»?', terminateBody: 'Se cerrará la ventana de «{app}» y finalizará su proceso en ejecución. Los cambios no guardados podrían perderse.', terminateConfirm: 'Finalizar proceso', terminateCancel: 'Cancelar', terminateFailed: 'No se pudo finalizar el proceso. Inténtalo de nuevo.' },
     fr: { live: 'En direct', lastFrame: 'Dernière image', onlyInTab: 'Onglet seul', alsoOnDesktop: 'Aussi sur le bureau', placement: 'Affichage de la fenêtre',
         inTabHint: 'S’exécute en arrière-plan, hors de votre bureau', switchToWindow: 'Aller à la fenêtre', moveFailed: 'Impossible de déplacer la fenêtre. Réessayez.',
@@ -214,7 +214,7 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         alreadyOpen: '« {app} » est déjà ouverte dans cet onglet', aiSoundOn: 'L’IA a activé le son', aiSoundOff: 'L’IA a coupé le son', aiInputOn: 'L’IA a activé clavier et souris', aiInputOff: 'L’IA a désactivé clavier et souris', aiToTab: 'L’IA a remis la fenêtre dans l’onglet', aiToDesktop: 'L’IA a aussi affiché la fenêtre sur le bureau',
         waiting: 'En attente de l’image', parkForeground: 'Sous Windows, l’IA ne peut utiliser que les fenêtres affichées sur le bureau : cette fenêtre y reste', parkUwp: 'Cette app n’accepte pas d’actions en arrière-plan : sa fenêtre reste sur le bureau', parkMinimized: 'La fenêtre est réduite : restaurez-la pour que l’IA puisse la voir et l’utiliser', parkMissing: 'Cette fenêtre est introuvable ; elle a peut-être été fermée', lockUnavailable: 'Les fenêtres sur le bureau restent toujours utilisables directement',
         reopenApp: "Rouvrir", reopenRunningTitle: "Cette app est déjà en cours d’exécution. La fermer et la rouvrir ?", reopenRunningBody: "Fermez « {app} » et rouvrez-la dans cet onglet.", reopenRunningConfirm: "Fermer et rouvrir", reopenFailed: "Impossible de rouvrir l’app. Réessayez.",
-        dismissNotice: "Fermer la notification", windowOwned: "Cette fenêtre est ouverte dans une autre conversation. Fermez d’abord son onglet.", controlHint: "Appuyez sur Échap pour quitter le contrôle", escStopped: "Vous avez appuyé sur Échap pour quitter le contrôle du bureau : pour le reste de ce tour, l’IA ne manipule plus les fenêtres et continue autrement.", resumeControl: "Reprendre le contrôle",
+        dismissNotice: "Fermer la notification", windowOwned: "Cette fenêtre est ouverte dans une autre conversation. Fermez d’abord son onglet.", controlHint: "Appuyez sur Échap pour quitter le contrôle du plugin (désactivez d’abord clavier/souris)", escStopped: "Vous avez appuyé sur Échap pour quitter le contrôle du bureau : pour le reste de ce tour, l’IA ne manipule plus les fenêtres et continue autrement.", resumeControl: "Reprendre le contrôle",
         terminateBubble: 'Cliquer pour arrêter le processus', terminateTitle: 'Arrêter le processus de « {app} » ?', terminateBody: 'La fenêtre de « {app} » sera fermée et son processus en cours sera arrêté. Les modifications non enregistrées peuvent être perdues.', terminateConfirm: 'Arrêter le processus', terminateCancel: 'Annuler', terminateFailed: 'Impossible d’arrêter le processus. Réessayez.' },
     de: { live: 'Live', lastFrame: 'Letztes Bild', onlyInTab: 'Nur im Tab', alsoOnDesktop: 'Auch auf dem Desktop', placement: 'Wo das Fenster erscheint',
         inTabHint: 'Läuft im Hintergrund, nicht auf Ihrem Desktop', switchToWindow: 'Zum Fenster wechseln', moveFailed: 'Das Fenster ließ sich nicht verschieben. Bitte erneut versuchen.',
@@ -222,7 +222,7 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         alreadyOpen: '„{app}“ ist in diesem Tab bereits geöffnet', aiSoundOn: 'Die KI hat den Ton eingeschaltet', aiSoundOff: 'Die KI hat den Ton stummgeschaltet', aiInputOn: 'Die KI hat Tastatur & Maus eingeschaltet', aiInputOff: 'Die KI hat Tastatur & Maus ausgeschaltet', aiToTab: 'Die KI hat das Fenster zurück in den Tab gelegt', aiToDesktop: 'Die KI zeigt das Fenster auch auf dem Desktop',
         waiting: 'Warte auf das Bild', parkForeground: 'Unter Windows kann die KI nur Fenster auf dem Desktop bedienen, daher bleibt dieses Fenster dort', parkUwp: 'Diese App nimmt keine Eingaben im Hintergrund an, daher bleibt ihr Fenster auf dem Desktop', parkMinimized: 'Das Fenster ist minimiert: Stellen Sie es wieder her, damit die KI es sehen und bedienen kann', parkMissing: 'Dieses Fenster wurde nicht gefunden; es wurde möglicherweise geschlossen', lockUnavailable: 'Fenster auf dem Desktop lassen sich immer direkt bedienen',
         reopenApp: "Erneut öffnen", reopenRunningTitle: "Diese App läuft bereits. Schließen und erneut öffnen?", reopenRunningBody: "Die laufende App „{app}“ schließen und in diesem Tab erneut öffnen.", reopenRunningConfirm: "Schließen und erneut öffnen", reopenFailed: "Die App ließ sich nicht erneut öffnen. Bitte erneut versuchen.",
-        dismissNotice: "Hinweis schließen", windowOwned: "Dieses App-Fenster ist in einer anderen Unterhaltung geöffnet. Schließen Sie dort zuerst den Tab.", controlHint: "Esc drücken, um die Steuerung zu beenden", escStopped: "Mit Esc wurde die Desktopsteuerung beendet: Für den Rest dieses Zugs bedient die KI keine Fenster und macht anders weiter.", resumeControl: "Steuerung fortsetzen",
+        dismissNotice: "Hinweis schließen", windowOwned: "Dieses App-Fenster ist in einer anderen Unterhaltung geöffnet. Schließen Sie dort zuerst den Tab.", controlHint: "Esc beendet die Plugin-Steuerung (zuerst Eingabe ausschalten)", escStopped: "Mit Esc wurde die Desktopsteuerung beendet: Für den Rest dieses Zugs bedient die KI keine Fenster und macht anders weiter.", resumeControl: "Steuerung fortsetzen",
         terminateBubble: 'Klicken, um Prozess zu beenden', terminateTitle: 'Prozess von „{app}“ beenden?', terminateBody: 'Das Fenster von „{app}“ wird geschlossen und der laufende Prozess beendet. Ungespeicherte Inhalte können verloren gehen.', terminateConfirm: 'Prozess beenden', terminateCancel: 'Abbrechen', terminateFailed: 'Der Prozess konnte nicht beendet werden. Bitte erneut versuchen.' },
     'pt-BR': { live: 'Ao vivo', lastFrame: 'Última imagem', onlyInTab: 'Só na aba', alsoOnDesktop: 'Também na área de trabalho', placement: 'Onde a janela aparece',
         inTabHint: 'Roda em segundo plano, fora da sua área de trabalho', switchToWindow: 'Ir para a janela', moveFailed: 'Não foi possível mover a janela. Tente de novo.',
@@ -230,7 +230,7 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         alreadyOpen: '“{app}” já está aberto nesta aba', aiSoundOn: 'A IA ligou o som', aiSoundOff: 'A IA silenciou o som', aiInputOn: 'A IA ativou teclado e mouse', aiInputOff: 'A IA desativou teclado e mouse', aiToTab: 'A IA devolveu a janela à aba', aiToDesktop: 'A IA também mostrou a janela na área de trabalho',
         waiting: 'Aguardando a imagem', parkForeground: 'No Windows a IA só consegue usar janelas visíveis na área de trabalho, então esta janela fica lá', parkUwp: 'Este app não aceita ações em segundo plano, então a janela fica na área de trabalho', parkMinimized: 'A janela está minimizada: restaure-a para que a IA possa vê-la e usá-la', parkMissing: 'Esta janela não foi encontrada; ela pode ter sido fechada', lockUnavailable: 'Janelas na área de trabalho sempre podem ser usadas diretamente',
         reopenApp: "Reabrir", reopenRunningTitle: "Este app já está em execução. Fechar e reabrir?", reopenRunningBody: "Feche “{app}” e abra-o novamente nesta aba.", reopenRunningConfirm: "Fechar e reabrir", reopenFailed: "Não foi possível reabrir o app. Tente novamente.",
-        dismissNotice: "Fechar notificação", windowOwned: "Esta janela está aberta em outra conversa. Feche a aba lá primeiro.", controlHint: "Pressione Esc para sair do controle", escStopped: "Você pressionou Esc para sair do controle da área de trabalho: no restante deste turno a IA não opera janelas e continua de outra forma.", resumeControl: "Retomar controle",
+        dismissNotice: "Fechar notificação", windowOwned: "Esta janela está aberta em outra conversa. Feche a aba lá primeiro.", controlHint: "Pressione Esc para sair do controle do plugin (desative antes teclado e mouse)", escStopped: "Você pressionou Esc para sair do controle da área de trabalho: no restante deste turno a IA não opera janelas e continua de outra forma.", resumeControl: "Retomar controle",
         terminateBubble: 'Clique para encerrar o processo', terminateTitle: 'Encerrar o processo de “{app}”?', terminateBody: 'A janela de “{app}” será fechada e o processo em execução será encerrado. Alterações não salvas podem ser perdidas.', terminateConfirm: 'Encerrar processo', terminateCancel: 'Cancelar', terminateFailed: 'Não foi possível encerrar o processo. Tente de novo.' },
     ru: { live: 'В эфире', lastFrame: 'Последний кадр', onlyInTab: 'Только во вкладке', alsoOnDesktop: 'И на рабочем столе', placement: 'Где показывать окно',
         inTabHint: 'Работает в фоне и не занимает рабочий стол', switchToWindow: 'Перейти к окну', moveFailed: 'Не удалось переместить окно. Попробуйте ещё раз.',
@@ -238,7 +238,7 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         alreadyOpen: '«{app}» уже открыто в этой вкладке', aiSoundOn: 'ИИ включил звук', aiSoundOff: 'ИИ выключил звук', aiInputOn: 'ИИ включил клавиатуру и мышь', aiInputOff: 'ИИ выключил клавиатуру и мышь', aiToTab: 'ИИ вернул окно во вкладку', aiToDesktop: 'ИИ показал окно и на рабочем столе',
         waiting: 'Ожидание изображения', parkForeground: 'В Windows ИИ может работать только с окнами на рабочем столе, поэтому это окно остаётся там', parkUwp: 'Это приложение не принимает ввод в фоне, поэтому окно остаётся на рабочем столе', parkMinimized: 'Окно свёрнуто: разверните его, чтобы ИИ мог его видеть и управлять им', parkMissing: 'Окно не найдено; возможно, оно закрыто', lockUnavailable: 'Окном на рабочем столе всегда можно пользоваться напрямую',
         reopenApp: "Открыть снова", reopenRunningTitle: "Приложение уже запущено. Закрыть и открыть снова?", reopenRunningBody: "Закройте работающее приложение «{app}» и откройте его снова в этой вкладке.", reopenRunningConfirm: "Закрыть и открыть снова", reopenFailed: "Не удалось открыть приложение снова. Повторите попытку.",
-        dismissNotice: "Закрыть уведомление", windowOwned: "Это окно открыто в другой беседе. Сначала закройте его вкладку там.", controlHint: "Нажмите Esc, чтобы завершить управление", escStopped: "Вы нажали Esc и завершили управление рабочим столом: до конца этого хода ИИ не управляет окнами и продолжает другим способом.", resumeControl: "Возобновить управление",
+        dismissNotice: "Закрыть уведомление", windowOwned: "Это окно открыто в другой беседе. Сначала закройте его вкладку там.", controlHint: "Нажмите Esc для выхода из управления плагином (сначала выключите ввод)", escStopped: "Вы нажали Esc и завершили управление рабочим столом: до конца этого хода ИИ не управляет окнами и продолжает другим способом.", resumeControl: "Возобновить управление",
         terminateBubble: 'Нажмите, чтобы завершить процесс', terminateTitle: 'Завершить процесс «{app}»?', terminateBody: 'Окно «{app}» будет закрыто, а его запущенный процесс завершён. Несохранённые данные могут быть потеряны.', terminateConfirm: 'Завершить процесс', terminateCancel: 'Отмена', terminateFailed: 'Не удалось завершить процесс. Попробуйте ещё раз.' },
     ar: { live: 'مباشر', lastFrame: 'آخر لقطة', onlyInTab: 'في علامة التبويب فقط', alsoOnDesktop: 'وعلى سطح المكتب أيضًا', placement: 'مكان عرض النافذة',
         inTabHint: 'تعمل في الخلفية بعيدًا عن سطح مكتبك', switchToWindow: 'الانتقال إلى النافذة', moveFailed: 'تعذّر نقل النافذة. حاول مرة أخرى.',
@@ -246,7 +246,7 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         alreadyOpen: '«{app}» مفتوح بالفعل في علامة التبويب هذه', aiSoundOn: 'شغّل الذكاء الاصطناعي الصوت', aiSoundOff: 'كتم الذكاء الاصطناعي الصوت', aiInputOn: 'فعّل الذكاء الاصطناعي لوحة المفاتيح والفأرة', aiInputOff: 'أوقف الذكاء الاصطناعي لوحة المفاتيح والفأرة', aiToTab: 'أعاد الذكاء الاصطناعي النافذة إلى علامة التبويب', aiToDesktop: 'أظهر الذكاء الاصطناعي النافذة على سطح المكتب أيضًا',
         waiting: 'بانتظار الصورة', parkForeground: 'في Windows يمكن للذكاء الاصطناعي العمل فقط في النوافذ الظاهرة على سطح المكتب، لذا تبقى هذه النافذة هناك', parkUwp: 'لا يقبل هذا التطبيق الإدخال في الخلفية، لذا تبقى نافذته على سطح المكتب', parkMinimized: 'النافذة مصغّرة: استعدها ليتمكن الذكاء الاصطناعي من رؤيتها واستخدامها', parkMissing: 'تعذّر العثور على هذه النافذة؛ ربما أُغلقت', lockUnavailable: 'يمكن دائمًا استخدام النافذة مباشرةً على سطح المكتب',
         reopenApp: "إعادة الفتح", reopenRunningTitle: "هذا التطبيق يعمل بالفعل. هل تريد إغلاقه وإعادة فتحه؟", reopenRunningBody: "أغلق التطبيق «{app}» الجاري تشغيله وأعد فتحه في علامة التبويب الحالية.", reopenRunningConfirm: "إغلاق وإعادة فتح", reopenFailed: "تعذرت إعادة فتح التطبيق. حاول مجددًا.",
-        dismissNotice: "إغلاق الإشعار", windowOwned: "نافذة هذا التطبيق مفتوحة في محادثة أخرى. أغلق علامة تبويبها هناك أولاً.", controlHint: "اضغط Esc للخروج من التحكم", escStopped: "ضغطت Esc لإنهاء التحكم في سطح المكتب: لبقية هذا الدور لن يشغّل الذكاء الاصطناعي النوافذ وسيتابع بطريقة أخرى.", resumeControl: "استئناف التحكم",
+        dismissNotice: "إغلاق الإشعار", windowOwned: "نافذة هذا التطبيق مفتوحة في محادثة أخرى. أغلق علامة تبويبها هناك أولاً.", controlHint: "اضغط Esc للخروج من تحكم الإضافة (أوقف الإدخال أولاً)", escStopped: "ضغطت Esc لإنهاء التحكم في سطح المكتب: لبقية هذا الدور لن يشغّل الذكاء الاصطناعي النوافذ وسيتابع بطريقة أخرى.", resumeControl: "استئناف التحكم",
         terminateBubble: 'انقر لإنهاء العملية', terminateTitle: 'إنهاء عملية «{app}»؟', terminateBody: 'سيتم إغلاق نافذة «{app}» وإنهاء عمليتها قيد التشغيل. قد تُفقد التغييرات غير المحفوظة.', terminateConfirm: 'إنهاء العملية', terminateCancel: 'إلغاء', terminateFailed: 'تعذّر إنهاء العملية. حاول مرة أخرى.' },
     hi: { live: 'लाइव', lastFrame: 'अंतिम फ़्रेम', onlyInTab: 'सिर्फ़ टैब में', alsoOnDesktop: 'डेस्कटॉप पर भी', placement: 'विंडो कहाँ दिखे',
         inTabHint: 'बैकग्राउंड में चलती है, आपके डेस्कटॉप पर नहीं', switchToWindow: 'विंडो पर जाएँ', moveFailed: 'विंडो को हटाया नहीं जा सका। फिर से कोशिश करें।',
@@ -254,7 +254,7 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         alreadyOpen: '“{app}” इस टैब में पहले से खुला है', aiSoundOn: 'AI ने ध्वनि चालू की', aiSoundOff: 'AI ने ध्वनि म्यूट की', aiInputOn: 'AI ने कीबोर्ड-माउस चालू किया', aiInputOff: 'AI ने कीबोर्ड-माउस बंद किया', aiToTab: 'AI ने विंडो को टैब में वापस रखा', aiToDesktop: 'AI ने विंडो को डेस्कटॉप पर भी दिखाया',
         waiting: 'तस्वीर का इंतज़ार', parkForeground: 'Windows पर AI सिर्फ़ डेस्कटॉप पर दिख रही विंडो चला सकता है, इसलिए यह विंडो वहीं रहती है', parkUwp: 'यह ऐप बैकग्राउंड में इनपुट नहीं लेता, इसलिए इसकी विंडो डेस्कटॉप पर रहती है', parkMinimized: 'विंडो छोटी (मिनिमाइज़) है: AI को दिखाने और चलाने के लिए इसे वापस खोलें', parkMissing: 'यह विंडो नहीं मिली; शायद बंद हो गई है', lockUnavailable: 'डेस्कटॉप पर विंडो को हमेशा सीधे चलाया जा सकता है',
         reopenApp: "फिर से खोलें", reopenRunningTitle: "यह ऐप पहले से चल रहा है। क्या इसे बंद करके फिर से खोलें?", reopenRunningBody: "चल रहे “{app}” को बंद करके मौजूदा टैब में फिर से खोलें।", reopenRunningConfirm: "बंद करके फिर से खोलें", reopenFailed: "ऐप फिर से नहीं खुल सका। दोबारा कोशिश करें.",
-        dismissNotice: "सूचना बंद करें", windowOwned: "यह ऐप विंडो दूसरी बातचीत में खुली है। पहले वहाँ उसका टैब बंद करें।", controlHint: "नियंत्रण से बाहर निकलने के लिए Esc दबाएँ", escStopped: "आपने डेस्कटॉप नियंत्रण समाप्त करने के लिए Esc दबाया: इस बारी के बाकी हिस्से में AI विंडो नहीं चलाएगा और दूसरे तरीके से जारी रखेगा।", resumeControl: "नियंत्रण फिर शुरू करें",
+        dismissNotice: "सूचना बंद करें", windowOwned: "यह ऐप विंडो दूसरी बातचीत में खुली है। पहले वहाँ उसका टैब बंद करें।", controlHint: "प्लगइन नियंत्रण से बाहर निकलने के लिए Esc दबाएँ (पहले कीबोर्ड-माउस बंद करें)", escStopped: "आपने डेस्कटॉप नियंत्रण समाप्त करने के लिए Esc दबाया: इस बारी के बाकी हिस्से में AI विंडो नहीं चलाएगा और दूसरे तरीके से जारी रखेगा।", resumeControl: "नियंत्रण फिर शुरू करें",
         terminateBubble: 'प्रोसेस बंद करने के लिए क्लिक करें', terminateTitle: '“{app}” प्रोसेस समाप्त करें?', terminateBody: 'यह “{app}” विंडो को बंद कर देगा और इसके चल रहे प्रोसेस को समाप्त कर देगा। बिना सहेजे गए बदलाव खो सकते हैं।', terminateConfirm: 'प्रोसेस समाप्त करें', terminateCancel: 'रद्द करें', terminateFailed: 'प्रोसेस समाप्त नहीं किया जा सका। फिर से कोशिश करें।' }
 };
 
@@ -287,7 +287,7 @@ export interface ComputerViewCapability {
 }
 
 export type ConversationWindowPointer = {
-    readonly kind: 'click' | 'doubleClick' | 'scroll';
+    readonly kind: 'click' | 'doubleClick' | 'scroll' | 'move';
     /** Fractions of the window (0–1), so the tab's scaling never matters. */
     readonly x: number;
     readonly y: number;
@@ -337,18 +337,28 @@ export interface ConversationWindowControls {
 }
 
 const SPECIAL_KEYS: Readonly<Record<string, string>> = {
-    Enter: 'enter', Backspace: 'backspace', Tab: 'tab', Escape: 'escape', Delete: 'delete', Home: 'home', End: 'end', PageUp: 'pageup', PageDown: 'pagedown',
+    Enter: 'enter', Backspace: 'backspace', Tab: 'tab', Escape: 'escape', Delete: 'delete', Insert: 'insert', Home: 'home', End: 'end', PageUp: 'pageup', PageDown: 'pagedown',
     ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down',
     ...Object.fromEntries(Array.from({ length: 12 }, (_, index) => [`F${index + 1}`, `f${index + 1}`]))
 };
+const CODE_KEYS: Readonly<Record<string, string>> = {
+    Space: 'space', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backquote: '`',
+    NumpadEnter: 'enter', NumpadDecimal: '.', NumpadAdd: '=', NumpadSubtract: '-', NumpadMultiply: '8', NumpadDivide: '/'
+};
 /** A key press in the tab as the helper's key name and modifiers; undefined when it is plain text (sent as typed text). */
-function keyChord(event: React.KeyboardEvent): { key: string; modifiers: string[] } | undefined {
+export function keyChord(event: Pick<React.KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>): { key: string; modifiers: string[] } | undefined {
     const modifiers = [event.metaKey && 'cmd', event.ctrlKey && 'ctrl', event.altKey && 'alt'].filter((value): value is string => Boolean(value));
-    const special = SPECIAL_KEYS[event.key];
+    const code = event.code || '';
+    const special = SPECIAL_KEYS[event.key] || (code === 'NumpadEnter' ? 'enter' : undefined);
     if (!special && !modifiers.length) return undefined;
-    const code = event.code;
-    const key = special || (/^Key[A-Z]$/.test(code) ? code.slice(3).toLowerCase() : /^Digit\d$/.test(code) ? code.slice(5)
-        : { Space: 'space', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backquote: '`' }[code]);
+    const byCode = /^Key[A-Z]$/.test(code) ? code.slice(3).toLowerCase()
+        : /^Digit\d$/.test(code) ? code.slice(5)
+        : /^Numpad\d$/.test(code) ? code.slice(6)
+        : CODE_KEYS[code];
+    const fallback = modifiers.length && typeof event.key === 'string' && event.key.length === 1 && /^[a-z0-9`\-=\[\]\\;',./]$/i.test(event.key)
+        ? event.key.toLowerCase()
+        : undefined;
+    const key = special || byCode || fallback;
     if (!key) return undefined;
     return { key, modifiers: event.shiftKey ? [...modifiers, 'shift'] : modifiers };
 }
@@ -399,6 +409,8 @@ export interface ConversationTabPluginParts {
     readonly headerExtra?: React.ReactNode;
     readonly bar?: React.ReactNode;
     readonly overlay?: React.ReactNode;
+    readonly running?: boolean;
+    readonly onStop?: () => void;
     /** Plugin studio: pick areas (drag) and points with their colour (click) on the live picture, as plugin.json values. */
     readonly studio?: { readonly labels: Readonly<Record<'studio' | 'studioHint' | 'copy' | 'copied' | 'close' | 'studioArea' | 'studioPoint', string>>; onClose(): void };
 }
@@ -716,6 +728,13 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             } else setNotice('moveFailed');
         }, () => setNotice('moveFailed')).finally(() => setMoving(false));
     };
+    const hoverMove = React.useRef<{ x: number; y: number; lastAt: number; inFlight: boolean; pending?: { x: number; y: number }; timer?: ReturnType<typeof setTimeout> }>({
+        x: -1, y: -1, lastAt: 0, inFlight: false
+    });
+    const resetHoverMove = (): void => {
+        if (hoverMove.current.timer) { clearTimeout(hoverMove.current.timer); hoverMove.current.timer = undefined; }
+        hoverMove.current.pending = undefined;
+    };
     const toggleMouse = (on: boolean): void => {
         setMouse(on);
         void latest.current?.setUserInput?.(on);
@@ -723,6 +742,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         // restarted capture or the AI's tabs.set never takes the focus from the user's message box.
         if (on) requestAnimationFrame(() => { if (latest.current?.keys) keyboard.current?.focus({ preventScroll: true }); });
         if (!on) {
+            resetHoverMove();
             inputQueue.current.cancel();
             if (pendingText.current.timer) { clearTimeout(pendingText.current.timer); pendingText.current.timer = undefined; }
             pendingText.current.text = '';
@@ -736,6 +756,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         setParkReason(state.parkReason);
         setMouse(state.userInput);
         if (!state.userInput) {
+            resetHoverMove();
             inputQueue.current.cancel();
             if (pendingText.current.timer) { clearTimeout(pendingText.current.timer); pendingText.current.timer = undefined; }
             pendingText.current.text = ''; pendingText.current.target = undefined;
@@ -763,6 +784,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         drainPendingText();
     };
     React.useEffect(() => () => {
+        resetHoverMove();
         inputQueue.current.cancel();
         if (pendingText.current.timer) { clearTimeout(pendingText.current.timer); pendingText.current.timer = undefined; }
         pendingText.current.text = '';
@@ -779,12 +801,13 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         if (pending.timer) return;
         pending.timer = setTimeout(drainPendingText, 8);
     };
-    const onKeyboardDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-        if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+    const onKeyboardDown = (event: React.KeyboardEvent<HTMLElement>): void => {
+        if (event.defaultPrevented || event.nativeEvent?.isComposing || event.keyCode === 229) return;
         const chord = keyChord(event);
         if (!chord) return;
         event.preventDefault();
         event.stopPropagation();
+        event.nativeEvent?.stopImmediatePropagation?.();
         flushPendingText();
         drainWheel();
         const target = latest.current;
@@ -806,7 +829,14 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     };
     // Scrolls add up over a short while so a trackpad flick is one request, not dozens.
     const wheel = React.useRef<{ delta: number; x: number; y: number; timer?: ReturnType<typeof setTimeout>; generation?: number; target?: ConversationWindowControls }>({ delta: 0, x: 0, y: 0 });
-    React.useEffect(() => () => { if (wheel.current.timer) clearTimeout(wheel.current.timer); wheel.current = { delta: 0, x: 0, y: 0 }; }, [streamKey]);
+    React.useEffect(() => () => {
+        resetHoverMove();
+        hoverMove.current.x = -1;
+        hoverMove.current.y = -1;
+        hoverMove.current.lastAt = 0;
+        if (wheel.current.timer) clearTimeout(wheel.current.timer);
+        wheel.current = { delta: 0, x: 0, y: 0 };
+    }, [streamKey]);
     const drainWheel = (): void => {
         const pending = wheel.current;
         if (pending.timer) { clearTimeout(pending.timer); pending.timer = undefined; }
@@ -819,6 +849,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         if (!mouse || !video.current) return;
         const at = pictureFraction(video.current, event.clientX, event.clientY);
         if (!at) return;
+        resetHoverMove();
         flushPendingText();
         const pending = wheel.current;
         if (pending.generation !== inputQueue.current.currentGeneration) pending.delta = 0;
@@ -829,10 +860,48 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     };
     const dragStart = React.useRef<{ x: number; y: number; clientX: number; clientY: number; pointerId: number } | undefined>(undefined);
     const suppressClick = React.useRef(false);
+    const flushHoverMove = (): void => {
+        const state = hoverMove.current;
+        if (state.timer) { clearTimeout(state.timer); state.timer = undefined; }
+        if (state.inFlight || !state.pending) return;
+        const target = latest.current;
+        const next = state.pending;
+        state.pending = undefined;
+        if (!target) return;
+        const now = Date.now();
+        const elapsed = now - state.lastAt;
+        if (elapsed < 32) {
+            state.pending = next;
+            state.timer = setTimeout(flushHoverMove, 32 - elapsed);
+            return;
+        }
+        state.x = next.x;
+        state.y = next.y;
+        state.lastAt = now;
+        state.inFlight = true;
+        void Promise.resolve(target.pointer({ kind: 'move', x: next.x, y: next.y })).catch(() => false).finally(() => {
+            state.inFlight = false;
+            if (state.pending) flushHoverMove();
+        });
+    };
+    const onPointerMove = (event: React.PointerEvent<HTMLVideoElement>): void => {
+        if (!live || !mouse || !video.current) return;
+        if (dragStart.current && (event.buttons & 1) === 1) return;
+        const at = pictureFraction(video.current, event.clientX, event.clientY);
+        if (!at) return;
+        const state = hoverMove.current;
+        const refX = state.pending ? state.pending.x : state.x;
+        const refY = state.pending ? state.pending.y : state.y;
+        if (refX >= 0 && Math.hypot(at.x - refX, at.y - refY) < 0.002) return;
+        state.pending = at;
+        flushHoverMove();
+    };
     const onPointerDown = (event: React.PointerEvent<HTMLVideoElement>): void => {
         if (!mouse || event.button !== 0 || !video.current) return;
         const at = pictureFraction(video.current, event.clientX, event.clientY);
         if (!at) return;
+        resetHoverMove();
+        if (latest.current?.keys) keyboard.current?.focus({ preventScroll: true });
         dragStart.current = { x: at.x, y: at.y, clientX: event.clientX, clientY: event.clientY, pointerId: event.pointerId };
         // A drag released outside the picture still ends here.
         try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* not capturable */ }
@@ -846,6 +915,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         const to = pictureFraction(video.current, event.clientX, event.clientY);
         if (!to) return;
         suppressClick.current = true;
+        resetHoverMove();
         flushPendingText();
         drainWheel();
         if (latest.current?.keys) keyboard.current?.focus({ preventScroll: true });
@@ -856,6 +926,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         if (suppressClick.current) { suppressClick.current = false; return; }
         if (!video.current) return;
         if (!mouse) { setNotice('mouseOff'); return; }
+        resetHoverMove();
         flushPendingText();
         drainWheel();
         if (latest.current?.keys) keyboard.current?.focus({ preventScroll: true });
@@ -868,6 +939,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         if (!video.current) return;
         event.preventDefault();
         if (!mouse) { setNotice('mouseOff'); return; }
+        resetHoverMove();
         flushPendingText();
         drainWheel();
         if (latest.current?.keys) keyboard.current?.focus({ preventScroll: true });
@@ -946,8 +1018,43 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             setNotice('terminateFailed');
         }).finally(() => setTerminating(false));
     };
+    const pluginEscActive = Boolean(props.plugin?.running && typeof props.plugin.onStop === 'function');
+    const pluginStopRef = React.useRef(props.plugin?.onStop);
+    pluginStopRef.current = props.plugin?.onStop;
+    React.useEffect(() => {
+        if (!visible || mouse || !pluginEscActive || windowMenuOpen || terminateModalOpen || reopenModalOpen || props.plugin?.studio) return undefined;
+        const onKeyDown = (event: KeyboardEvent): void => {
+            if (event.key !== 'Escape' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.defaultPrevented) return;
+            const targetNode = event.target as HTMLElement | null;
+            if (targetNode && (targetNode.tagName === 'INPUT' || targetNode.tagName === 'TEXTAREA' || targetNode.tagName === 'SELECT' || targetNode.isContentEditable)) return;
+            event.preventDefault();
+            event.stopPropagation();
+            pluginStopRef.current?.();
+        };
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, [visible, mouse, pluginEscActive, windowMenuOpen, terminateModalOpen, reopenModalOpen, Boolean(props.plugin?.studio)]);
+    const onSectionKeyDownCapture = (event: React.KeyboardEvent<HTMLElement>): void => {
+        if (!live || !mouse || !latest.current?.keys) return;
+        if (windowMenuOpen || terminateModalOpen || reopenModalOpen || props.plugin?.studio) return;
+        const targetNode = event.target as HTMLElement | null;
+        if (targetNode === keyboard.current) return;
+        const tag = targetNode?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || targetNode?.isContentEditable) return;
+        if (targetNode?.closest?.('.nmx-app-plugin-bar, .nmx-visual-tab-windows, .nmx-visual-tab-terminate-modal')) return;
+        keyboard.current?.focus({ preventScroll: true });
+        const chord = keyChord(event);
+        if (chord) {
+            onKeyboardDown(event);
+        } else if (!event.metaKey && !event.ctrlKey && !event.altKey && typeof event.key === 'string' && event.key.length === 1 && !event.nativeEvent?.isComposing) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.nativeEvent?.stopImmediatePropagation?.();
+            sendText(event.key);
+        }
+    };
     const appDisplayName = tab.title || tab.target;
-    return <section className={`nmx-visual-tab is-${tab.status}${live ? ' is-live' : ''}${mouse ? ' is-pointer' : ''}`} aria-label={tab.title}>
+    return <section className={`nmx-visual-tab is-${tab.status}${live ? ' is-live' : ''}${mouse ? ' is-pointer' : ''}`} aria-label={tab.title} onKeyDownCapture={onSectionKeyDownCapture}>
         <header>
             <button type='button' className={`${live ? 'nmx-visual-tab-live' : `is-${tab.status}`}${canTerminate ? ' nmx-visual-tab-live is-interactive' : ''}`}
                 title={`${conversationTabsText(locale, kind)} · ${tab.target}${canTerminate ? ` · ${conversationWindowText(locale, 'terminateBubble')}` : ''}`}
@@ -1025,8 +1132,8 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         {props.plugin?.bar}
         <div className='nmx-visual-tab-screen' ref={screen}>
             <video ref={video} muted playsInline aria-label={tab.title} aria-hidden={!live} className={live ? 'is-ready' : undefined} data-window-key={streamKey || undefined}
-                style={pictureStyle} onClick={onClick} onContextMenu={onContextMenu} onPointerDown={onPointerDown} onPointerUp={onPointerUp}
-                onPointerCancel={() => { dragStart.current = undefined; }} onWheel={onWheel}></video>
+                style={pictureStyle} onClick={onClick} onContextMenu={onContextMenu} onPointerMove={onPointerMove} onPointerDown={onPointerDown} onPointerUp={onPointerUp}
+                onPointerCancel={() => { dragStart.current = undefined; resetHoverMove(); }} onPointerLeave={resetHoverMove} onWheel={onWheel}></video>
             {!live && (tab.frameUrl
                 ? <img src={tab.frameUrl} alt={tab.title} draggable={false} />
                 : <div className='nmx-visual-tab-empty'>
@@ -1036,8 +1143,8 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                     {!tab.windowRef && <p>{conversationTabsText(locale, 'desktopHint')}</p>}
                 </div>)}
             {live && mouse && controls?.keys && <textarea ref={keyboard} className='nmx-visual-tab-keys' aria-label={conversationWindowText(locale, 'mouse')} tabIndex={-1}
-                autoCapitalize='off' autoCorrect='off' spellCheck={false} onKeyDown={onKeyboardDown} onInput={onKeyboardInput} onCompositionEnd={onKeyboardCompositionEnd}></textarea>}
-            {live && (mouse || placement === 'tab') && <p className='nmx-visual-tab-note'><i className='codicon codicon-eye-closed' aria-hidden='true'></i>{conversationWindowText(locale, mouse ? 'controlHint' : 'inTabHint')}</p>}
+                autoCapitalize='off' autoCorrect='off' spellCheck={false} onKeyDownCapture={onKeyboardDown} onKeyDown={onKeyboardDown} onInput={onKeyboardInput} onCompositionEnd={onKeyboardCompositionEnd}></textarea>}
+            {live && (pluginEscActive || (!mouse && placement === 'tab')) && <p className='nmx-visual-tab-note'><i className='codicon codicon-eye-closed' aria-hidden='true'></i>{conversationWindowText(locale, pluginEscActive ? 'controlHint' : 'inTabHint')}</p>}
             {(notice || announced) && <div
                 className={`nmx-visual-tab-toast ${notice ? 'is-error' : 'is-info'}${toastFading ? ' is-fading-out is-leaving' : ''}`}
                 role='status'

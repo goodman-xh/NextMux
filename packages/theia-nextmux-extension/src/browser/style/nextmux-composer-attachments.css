@@ -1208,14 +1208,41 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 .nmx-shell .nmx-visual-tab > header strong { color: var(--nmx-text); font-weight: 600; white-space: nowrap; }
 .nmx-shell .nmx-visual-tab > header span { min-width: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }
 .nmx-shell .nmx-visual-tab > header { min-height: 28px; }
-.nmx-shell .nmx-visual-tab > header em { margin-inline-end: auto; font-style: normal; font-size: 12px; }
-.nmx-shell .nmx-visual-tab > header em:has(+ .nmx-visual-tab-windows),
-.nmx-shell .nmx-visual-tab > header em:has(+ .nmx-visual-tab-live-bubble + .nmx-visual-tab-windows) { margin-inline-end: 0; }
+.nmx-shell .nmx-visual-tab > header :is(em, button.nmx-visual-tab-live, button[class^='is-']) {
+    appearance: none;
+    -webkit-appearance: none;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 8px;
+    margin: 0;
+    margin-inline-end: auto;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    box-shadow: none;
+    font: inherit;
+    font-style: normal;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    color: var(--nmx-muted);
+    user-select: none;
+}
+.nmx-shell .nmx-visual-tab > header :is(em, button.nmx-visual-tab-live, button[class^='is-']):disabled {
+    opacity: 1;
+    cursor: default;
+}
+.nmx-shell .nmx-visual-tab > header :is(em, button.nmx-visual-tab-live, button[class^='is-']):has(+ .nmx-visual-tab-windows),
+.nmx-shell .nmx-visual-tab > header :is(em, button.nmx-visual-tab-live, button[class^='is-']):has(+ .nmx-visual-tab-live-bubble + .nmx-visual-tab-windows) { margin-inline-end: 0; }
 /* "已断开" keeps its left position and the plain-text "重新打开" link sits right
  * beside it; the flexible gap moves to the reopen button (or disappears when a
  * window switcher follows it). */
-.nmx-shell .nmx-visual-tab > header em:has(+ .nmx-visual-tab-reopen),
-.nmx-shell .nmx-visual-tab > header em:has(+ .nmx-visual-tab-live-bubble + .nmx-visual-tab-reopen) { margin-inline-end: 0; }
+.nmx-shell .nmx-visual-tab > header :is(em, button.nmx-visual-tab-live, button[class^='is-']):has(+ .nmx-visual-tab-reopen),
+.nmx-shell .nmx-visual-tab > header :is(em, button.nmx-visual-tab-live, button[class^='is-']):has(+ .nmx-visual-tab-live-bubble + .nmx-visual-tab-reopen) { margin-inline-end: 0; }
 .nmx-shell .nmx-visual-tab > header button.nmx-visual-tab-reopen {
     flex: none;
     display: inline-flex;
@@ -1265,8 +1292,8 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
     color: var(--nmx-link, #0550ae);
     background: transparent !important;
 }
-.nmx-shell .nmx-visual-tab > header em.is-connected { color: #3fa46a; }
-.nmx-shell .nmx-visual-tab > header em.is-error { color: var(--nmx-danger, #c4314b); }
+.nmx-shell .nmx-visual-tab > header :is(em, button).is-connected { color: #3fa46a; }
+.nmx-shell .nmx-visual-tab > header :is(em, button).is-error { color: var(--nmx-danger, #c4314b); }
 .nmx-shell .nmx-visual-tab-windows { position: relative; margin-inline-end: auto; display: inline-flex; align-items: center; min-width: 0; max-width: 320px; }
 .nmx-shell .nmx-visual-tab-window-trigger {
     display: inline-flex; align-items: center; gap: 5px; height: 24px; max-width: 100%; padding: 0 8px;
@@ -1325,18 +1352,33 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 .nmx-shell .nmx-visual-tab-screen { position: relative; }
 .nmx-shell .nmx-visual-tab-screen > video { background: transparent; opacity: 0; pointer-events: none; transition: opacity 160ms ease-out; }
 .nmx-shell .nmx-visual-tab-screen > video.is-ready { opacity: 1; pointer-events: auto; }
-.nmx-shell .nmx-visual-tab > header em.nmx-visual-tab-live { display: inline-flex; align-items: center; gap: 6px; color: var(--nmx-text); font-weight: 600; }
-.nmx-shell .nmx-visual-tab > header em.nmx-visual-tab-live.is-interactive {
-    height: 24px; padding: 0 8px; margin-inline-start: -4px;
-    border: 1px solid transparent; border-radius: 6px;
-    cursor: pointer; user-select: none;
+.nmx-shell .nmx-visual-tab > header :is(em, button).nmx-visual-tab-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--nmx-text);
+    font-weight: 600;
+    border-color: color-mix(in srgb, var(--nmx-border) 72%, transparent);
+    background: color-mix(in srgb, var(--nmx-text) 4%, transparent);
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab > header :is(em, button).nmx-visual-tab-live {
+    border-color: color-mix(in srgb, var(--nmx-border-strong, var(--nmx-border)) 88%, transparent);
+    background: color-mix(in srgb, var(--nmx-text) 5%, var(--nmx-panel, transparent));
+}
+.nmx-shell .nmx-visual-tab > header :is(em, button).nmx-visual-tab-live.is-interactive {
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
     transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
-.nmx-shell .nmx-visual-tab > header em.nmx-visual-tab-live.is-interactive:hover {
-    border-color: color-mix(in srgb, #e5484d 38%, var(--nmx-border));
+.nmx-shell .nmx-visual-tab > header :is(em, button).nmx-visual-tab-live.is-interactive:hover:not(:disabled) {
+    border-color: color-mix(in srgb, #e5484d 42%, var(--nmx-border));
     background: color-mix(in srgb, #e5484d 10%, transparent);
+    cursor: pointer;
 }
-.nmx-shell .nmx-visual-tab > header em.nmx-visual-tab-live.is-interactive:focus-visible {
+.nmx-shell .nmx-visual-tab > header :is(em, button).nmx-visual-tab-live.is-interactive:focus-visible {
     outline: 2px solid var(--nmx-focus, #6b8afd); outline-offset: 1px;
 }
 /* Static on purpose: an endless pulse kept the GPU redrawing the window (~10% GPU) for as long as a tab was open. */

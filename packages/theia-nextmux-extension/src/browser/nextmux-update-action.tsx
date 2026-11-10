@@ -91,21 +91,19 @@ export function resolveDesktopUpdateActionModel(state: NextMuxDesktopUpdateState
     // first when work is running. Closing NextMux installs it too; the tooltip (readyHint) says both.
     const ready = state.phase === 'ready';
     const text = desktopUpdateText(locale, downloading ? 'downloadingDock' : ready ? 'restartDock' : failed ? 'retry' : 'update');
-    // While bytes arrive the dock says how far along they are: "Downloading (35%)", the word without its ellipsis. The
-    // widget renders only when this whole percent changes (downloadTickNeedsNoRender), at most a hundred times a download.
-    // Verifying after the last byte keeps "Downloading…": its tooltip says what is happening, and 100% would not move.
-    const percent = downloading && !state.preparing ? desktopUpdateProgressPercent(state.progress) : undefined;
-    const labelBase = percent === undefined ? undefined : text.replace(/\s*(?:…|\.\.\.)\s*$/u, '');
+    // While downloading, the dock button shows only the whole percent ("0%".."100%"), without words or parentheses.
+    // The widget renders only when this whole percent changes (downloadTickNeedsNoRender), at most a hundred times a download.
+    const percent = downloading ? desktopUpdateProgressPercent(state.progress) : undefined;
     const baseHint = desktopUpdateText(locale, ready ? 'readyHint' : state.preparing ? 'preparing'
         : failed ? 'downloadFailed' : downloading ? 'backgroundHint' : 'availableHint');
     const detail = failed ? String(state.error || state.message || code || '').trim() : '';
     return {
-        label: percent === undefined ? text : `${labelBase} (${percent}%)`,
+        label: percent === undefined ? text : `${percent}%`,
         hint: installFailed && detail ? detail : detail ? `${baseHint} · ${detail}` : baseHint,
         tone: failed ? 'warning' : 'default',
         action: state.phase === 'available' ? 'download' : ready ? 'restart' : 'details',
         disabled: Boolean(busy) || downloading,
-        ...(percent === undefined ? {} : { labelBase, percent }),
+        ...(percent === undefined ? {} : { percent }),
     };
 }
 
@@ -143,10 +141,7 @@ export function DesktopUpdateAction({ state, locale, busy, onDownload, onDetails
             else if (model.action === 'restart') restartToInstallUpdate(onRestart, onDetails);
             else onDetails();
         }}>
-        {model.percent === undefined ? <span>{model.label}</span> : <>
-            {/* The words may give way to an ellipsis in a narrow dock; the percent never does. */}
-            <span>{model.labelBase}</span>{' '}<span className='nmx-account-update-percent'>({model.percent}%)</span>
-        </>}
+        {model.percent === undefined ? <span>{model.label}</span> : <span className='nmx-account-update-percent'>{model.label}</span>}
     </button>;
 }
 
