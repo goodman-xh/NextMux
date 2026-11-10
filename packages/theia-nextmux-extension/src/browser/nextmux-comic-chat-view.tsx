@@ -4,6 +4,7 @@ import type { NextMuxDesktopLocale } from './nextmux-locale';
 import { localizeDesktopSurface } from './nextmux-surface-locale';
 import { relayText } from './nextmux-relay-locale';
 import { publicMerchantDepositText } from '../common/nextmux-public-merchants';
+import { DepositVerifiedHint, depositVerifiedHintText, type DepositVerifiedHintAnchor } from './nextmux-deposit-verified';
 import { ImeTextarea } from './nextmux-ime-field';
 import { ConversationMarkdown, type CodeTokenizer } from './nextmux-conversation-markdown';
 import { StreamText } from './nextmux-conversation-stream';
@@ -557,8 +558,9 @@ export interface ComicChatModelTab {
 export interface ComicChatModelPicker {
     readonly recommended: boolean;
     readonly relays: readonly { readonly key: string; readonly label: string; readonly kind: string; readonly modes: readonly ComicChatMode[] }[];
-    /** depositVerified: the chosen store holds the platform's security deposit (its name reads in gold, as in the drawer). */
-    readonly relay?: { readonly key: string; readonly label: string; readonly kind: string; readonly depositVerified?: true };
+    /** depositVerified: the chosen store holds the platform's security deposit: its name reads in the deposit rainbow, and its hint shows what the store says of itself. */
+    readonly relay?: { readonly key: string; readonly label: string; readonly kind: string; readonly depositVerified?: true;
+        readonly publicCode?: string; readonly storeTagline?: string; readonly storeDescription?: string };
     readonly tabs: readonly ComicChatModelTab[];
     /** 推荐模型: which model each function uses now, one line per function, for the switch's tooltip. */
     readonly summary: string;
@@ -1032,12 +1034,14 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                     <span className='nmx-composer-spacer'></span>
                     <span className='nmx-comic-chat-pickers is-open'>
                         <span className='nmx-comic-chat-drawers'>
-                            <button type='button' className={`nmx-composer-relay-button ${props.relayOpen ? 'is-active' : ''}`} aria-expanded={props.relayOpen}
-                                title={picker.relay ? picker.relay.label + (picker.relay.depositVerified ? ` · ${publicMerchantDepositText(props.locale)}` : '') : relayText(props.locale, 'selectRelay')}
+                            {(button => picker.relay?.depositVerified ? <DepositVerifiedHint locale={props.locale}
+                                text={depositVerifiedHintText(props.locale, { ...picker.relay, name: picker.relay.label })}>{button}</DepositVerifiedHint> : button())((anchor?: DepositVerifiedHintAnchor) =>
+                            <button type='button' className={`nmx-composer-relay-button ${props.relayOpen ? 'is-active' : ''}`} aria-expanded={props.relayOpen} {...anchor}
+                                title={picker.relay?.depositVerified ? undefined : picker.relay?.label || relayText(props.locale, 'selectRelay')}
                                 aria-label={relayText(props.locale, 'selectRelay') + (picker.relay ? `：${picker.relay.label}${picker.relay.depositVerified ? ` · ${publicMerchantDepositText(props.locale)}` : ''}` : '')}
                                 onClick={() => { setPopover(undefined); props.onOpenRelay(); }}>
                                 <i className={`codicon codicon-${relayIcon(picker.relay?.kind)}`} aria-hidden='true'></i>
-                                <span className={picker.relay?.depositVerified ? 'is-deposit-verified' : undefined} data-nmx-literal={Boolean(picker.relay) || undefined}>{picker.relay?.label || relayText(props.locale, 'selectRelay')}</span><i className='codicon codicon-chevron-down' aria-hidden='true'></i></button>
+                                <span className={picker.relay?.depositVerified ? 'is-deposit-verified' : undefined} data-nmx-literal={Boolean(picker.relay) || undefined}>{picker.relay?.label || relayText(props.locale, 'selectRelay')}</span><i className='codicon codicon-chevron-down' aria-hidden='true'></i></button>)}
                             <button type='button' data-nmx-chat-toggle className={`nmx-route-button ${isModelOpen ? 'is-active' : ''}`} aria-expanded={isModelOpen}
                                 title={props.model?.label || t('selectModel')}
                                 disabled={!picker.relay && !props.model}

@@ -11,7 +11,7 @@ import {
     comicStepSourceLabel, comicStepText
 } from './nextmux-comic-step-models';
 import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
-import { publicMerchantDepositText } from '../common/nextmux-public-merchants';
+import { DepositVerifiedHint, depositVerifiedHintText, type DepositVerifiedHintAnchor, type DepositVerifiedStore } from './nextmux-deposit-verified';
 
 /**
  * “AI 模型”: one small panel where the whole comic workflow gets its models — a relay for every
@@ -224,7 +224,7 @@ export interface ComicSetupSource {
     readonly listed: readonly ComicStepCapability[];
     /** Its best model's rank (lower is better). */
     readonly rank: number;
-    /** A relay holding the platform's security deposit: its name is gold in the list (no seal here, as in the relay drawer). */
+    /** A relay holding the platform's security deposit: its name is drawn in the deposit rainbow, and resting on it shows the store's hint. */
     readonly depositVerified?: boolean;
 }
 
@@ -292,6 +292,8 @@ export interface ComicModelSetupProps {
     readonly pendingRelays?: Partial<Record<ComicStepCapability, readonly ComicStepRelay[]>>;
     /** The relay directory's word on each listed relay's security deposit, by source key (`managed:<merchant>`). */
     readonly depositVerified?: ReadonlyMap<string, boolean>;
+    /** What the directory shows of each listed relay (public number, introduction), by source key, for the hint of a deposit-verified name. */
+    readonly storeProfiles?: ReadonlyMap<string, Omit<DepositVerifiedStore, 'name'>>;
     /** The relay whose models are being read. */
     readonly loadingRelayKey?: string;
     readonly busy?: boolean;
@@ -445,14 +447,22 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
         requestAnimationFrame(() => sourceList.current?.querySelector<HTMLElement>('[aria-selected="true"], button')?.focus({ preventScroll: false }));
     };
     const sourceIcon = (source: ComicSetupSource): React.ReactNode => <span className='nmx-comic-setup-source-icon' aria-hidden='true'><i className={`codicon codicon-${SOURCE_ICONS[source.kind]}`}></i></span>;
-    const sourceCopy = (source: ComicSetupSource): React.ReactNode => <span className='nmx-comic-setup-source-copy'>
-        <strong data-nmx-literal={source.kind === 'managed' || source.kind === 'official' || undefined}
-            className={source.depositVerified ? 'is-deposit-verified' : undefined} title={source.depositVerified ? publicMerchantDepositText(props.locale) : undefined}>{sourceName(source)}</strong>
-        <span className='nmx-comic-setup-caps'>
-            {source.steps.map(capability => <em key={capability}>{label(capability)}</em>)}
-            {source.listed.map(capability => <em key={capability} className='is-listed'>{label(capability)}</em>)}
-        </span>
-    </span>;
+    const sourceCopy = (source: ComicSetupSource): React.ReactNode => {
+        // The name stays the copy's own child (its ellipsis and colour rules are written for that), so the hint of a
+        // deposit-verified store hangs on the name itself: seal and name, public number, introduction, the deposit line.
+        const name = (anchor?: DepositVerifiedHintAnchor): React.ReactElement => <strong data-nmx-literal={source.kind === 'managed' || source.kind === 'official' || undefined}
+            className={source.depositVerified ? 'is-deposit-verified' : undefined} {...anchor}>{sourceName(source)}</strong>;
+        const profile = props.storeProfiles?.get(source.key);
+        const offering = !profile ? props.steps.flatMap(item => item.candidates).find(candidate => candidate.source.key === source.key && candidate.offering)?.offering : undefined;
+        return <span className='nmx-comic-setup-source-copy'>
+            {source.depositVerified ? <DepositVerifiedHint locale={props.locale}
+                text={depositVerifiedHintText(props.locale, { ...(profile?.publicCode ? { publicCode: profile.publicCode } : {}), storeTagline: profile ? profile.storeTagline : offering?.storeTagline, storeDescription: profile ? profile.storeDescription : offering?.storeDescription, name: sourceName(source) })}>{name}</DepositVerifiedHint> : name()}
+            <span className='nmx-comic-setup-caps'>
+                {source.steps.map(capability => <em key={capability}>{label(capability)}</em>)}
+                {source.listed.map(capability => <em key={capability} className='is-listed'>{label(capability)}</em>)}
+            </span>
+        </span>;
+    };
 
     const renderSources = (): React.ReactNode => <section className='nmx-comic-setup-block' aria-labelledby={`${id}-source`}>
         <header className='nmx-comic-setup-block-head'>

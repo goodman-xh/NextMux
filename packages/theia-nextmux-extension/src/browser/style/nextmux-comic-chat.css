@@ -412,10 +412,14 @@
     color: #141213 !important;
 }
 /* 保证金: a deposit-verified store keeps its gold, one class above each rule before. #805300, as on the coding composer's
-   relay button: 6.7:1 on the white chip, 4.7:1 on the #ddd9d6 hover fill, where the drawer's #976100 falls to 3.7:1. */
+   relay button: 6.7:1 on the white chip, 4.7:1 on the #ddd9d6 hover fill, where the drawer's #976100 falls to 3.7:1. The
+   name itself is drawn in the deposit rainbow (nextmux.css); here it keeps its weight over the 600 of the rule before,
+   and takes the rainbow's deeper stops, as the fill darkens on hover. */
 .nmx-shell.nmx-theme-light .nmx-comic-chat-drawers:not(.nmx-studio-isolated-drawers) > button > span.is-deposit-verified:not(.codicon),
 .nmx-shell.nmx-theme-light .nmx-comic-chat-drawers:not(.nmx-studio-isolated-drawers) > button:is(:hover:not(:disabled), .is-open, .is-active, [aria-expanded='true']) > span.is-deposit-verified:not(.codicon) {
     color: #805300 !important;
+    font-weight: 700;
+    background-image: var(--nmx-deposit-rainbow-strong);
 }
 .nmx-shell.nmx-theme-light .nmx-comic-chat-drawers:not(.nmx-studio-isolated-drawers) > button > small {
     border: 1px solid rgba(24, 24, 27, 0.14);

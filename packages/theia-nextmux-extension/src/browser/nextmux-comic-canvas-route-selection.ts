@@ -7,6 +7,11 @@ export interface CanvasRouteConnection {
     readonly label: string;
     readonly available: boolean;
     readonly routes: readonly CanvasModelRoute[];
+    /** 保证金: a relay holding the platform's security deposit, and what its store shows of itself (every route of a relay carries them). */
+    readonly depositVerified?: true;
+    readonly publicCode?: string;
+    readonly storeTagline?: string;
+    readonly storeDescription?: string;
 }
 
 export function canvasRouteSourceKind(route: CanvasModelChoice): CanvasApiSourceKind {
@@ -18,10 +23,12 @@ export function canvasRouteSourceKey(route: CanvasModelChoice): string {
         ? `own:${route.connectionId || route.key}` : `relay:${route.source || route.key}`);
 }
 export function canvasRouteConnections(families: readonly CanvasModelFamily[], kind: CanvasApiSourceKind): readonly CanvasRouteConnection[] {
-    const groups = new Map<string, { key: string; kind: CanvasApiSourceKind; label: string; available: boolean; routes: CanvasModelRoute[] }>();
+    const groups = new Map<string, { key: string; kind: CanvasApiSourceKind; label: string; available: boolean; routes: CanvasModelRoute[] } & Pick<CanvasRouteConnection, 'depositVerified' | 'publicCode' | 'storeTagline' | 'storeDescription'>>();
     for (const family of families) for (const route of family.routes) {
         if (canvasRouteSourceKind(route) !== kind) continue;
-        const key = canvasRouteSourceKey(route), group = groups.get(key) ?? { key, kind, label: route.sourceLabel || route.source, available: false, routes: [] };
+        const key = canvasRouteSourceKey(route), group = groups.get(key) ?? { key, kind, label: route.sourceLabel || route.source, available: false, routes: [],
+            ...(route.depositVerified ? { depositVerified: true as const } : {}), ...(route.publicCode ? { publicCode: route.publicCode } : {}),
+            ...(route.storeTagline ? { storeTagline: route.storeTagline } : {}), ...(route.storeDescription ? { storeDescription: route.storeDescription } : {}) };
         if (!group.routes.some(item => item.key === route.key && item.modelId === route.modelId)) group.routes.push(route);
         group.available ||= route.available;
         groups.set(key, group);

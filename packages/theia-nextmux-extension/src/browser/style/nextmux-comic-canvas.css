@@ -107,6 +107,10 @@
     --cv-ring: var(--nmx-text); --cv-ring-soft: color-mix(in srgb, var(--nmx-text) 20%, transparent);
     --cv-shadow-0: 0 1px 2px rgb(0 0 0 / 35%); --cv-shadow-1: 0 6px 22px rgb(0 0 0 / 22%);
     --cv-shadow-2: 0 18px 48px rgb(0 0 0 / 42%), 0 2px 8px rgb(0 0 0 / 26%);
+    /* 保证金: a relay holding the platform's security deposit, as everywhere (the stops of nextmux.css). */
+    --cv-deposit-gold: #e5b84b; --cv-deposit-gold-strong: #f0c75e;
+    --cv-deposit-rainbow: linear-gradient(90deg, #ff4d6d 0%, #ff922b 18%, #ffd43b 36%, #38d9a9 54%, #4dabf7 72%, #9775fa 86%, #f783ac 100%);
+    --cv-deposit-rainbow-strong: linear-gradient(90deg, #ff6b85 0%, #ffa94d 18%, #ffe066 36%, #63e6be 54%, #74c0fc 72%, #b197fc 86%, #faa2c1 100%);
 }
 .nmx-board {
     --xy-background-color: var(--nmx-bg);
@@ -136,6 +140,9 @@
     --cv-ring: #7546c3; --cv-ring-soft: color-mix(in srgb, #7546c3 18%, transparent);
     --cv-shadow-0: 0 1px 2px rgb(16 24 40 / 8%); --cv-shadow-1: 0 6px 20px rgb(16 24 40 / 9%);
     --cv-shadow-2: 0 18px 44px rgb(16 24 40 / 14%), 0 2px 6px rgb(16 24 40 / 8%);
+    --cv-deposit-gold: #805300; --cv-deposit-gold-strong: #805300;
+    --cv-deposit-rainbow: linear-gradient(90deg, #c9183b 0%, #c05600 18%, #9e7200 35%, #099268 52%, #1864ab 70%, #5f3dc4 85%, #a61e4d 100%);
+    --cv-deposit-rainbow-strong: linear-gradient(90deg, #c9183b 0%, #c05600 18%, #9e7200 35%, #099268 52%, #1864ab 70%, #5f3dc4 85%, #a61e4d 100%);
 }
 .nmx-board-modal-layer { color-scheme: var(--nmx-color-scheme, normal); }
 /* Native dropdown lists follow the canvas theme too (Windows paints them with the select's own colours). */
@@ -314,6 +321,28 @@
 .nmx-board-route-source-row { display: flex; align-items: center; gap: 6px; flex: 0 0 100%; min-width: 0; }
 .nmx-board-route-source-row .is-connection { flex: 1 1 0; min-width: 0; }
 .nmx-board-route-source-row .is-connection select { flex: 1 1 0; min-width: 0; width: 0; max-width: 100%; }
+/* The relay field draws its own list (CanvasConnectionField): the system's paints every row alike, and a relay holding
+   the platform's security deposit reads in the deposit rainbow in the field and in the list. The field's fill is
+   #eff2f5 in the light theme, where the rainbow takes its deeper stops (green 3.5:1) over a gold of 6.0:1. */
+.nmx-board-select-list {
+    position: absolute; z-index: 35; box-sizing: border-box; display: flex; flex-direction: column; gap: 1px; max-width: min(320px, calc(100% - 16px)); max-height: min(280px, calc(100% - 16px));
+    padding: 4px; overflow-y: auto; border: 1px solid var(--nmx-border); border-radius: 10px; color: var(--nmx-text); background: var(--nmx-panel); box-shadow: var(--cv-shadow-2);
+    font-size: 12px; outline: none; animation: nmx-canvas-pop .12s ease-out;
+}
+.nmx-board-select-list > [role='option'] { display: flex; align-items: center; gap: 8px; flex: none; min-height: 28px; padding: 0 8px; border-radius: 7px; white-space: nowrap; cursor: pointer; }
+.nmx-board-select-list > [role='option'].is-active { background: var(--nmx-hover, var(--nmx-panel-2)); }
+.nmx-board-select-list > [role='option'][aria-disabled='true'] { color: var(--nmx-muted); cursor: default; }
+.nmx-board-select-list > [role='option'] > span { flex: 0 1 auto; min-width: 0; margin-inline-end: auto; overflow: hidden; text-overflow: ellipsis; }
+.nmx-board-select-list > [role='option'] > small { flex: none; color: var(--nmx-muted); font-size: 11px; }
+.nmx-board-select-list > [role='option'] > .codicon { flex: none; font-size: 13px; color: var(--cv-running); }
+/* The select is as wide as the name it shows, so all seven stops fall on the name; a press anywhere in the field opens the list. */
+.nmx-board-field.is-connection.is-deposit-verified select.is-deposit-verified { flex: 0 1 auto; width: auto; max-width: 100%; field-sizing: content; background-origin: content-box; }
+.nmx-board-field.is-connection.is-deposit-verified select.is-deposit-verified,
+.nmx-board-select-list > [role='option'] > span.is-deposit-verified {
+    color: var(--cv-deposit-gold); font-weight: 700; background-image: var(--cv-deposit-rainbow); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.nmx-board-field.is-connection.is-deposit-verified:is(:hover, :focus-within) select.is-deposit-verified,
+.nmx-board-select-list > [role='option'].is-active > span.is-deposit-verified { color: var(--cv-deposit-gold-strong); background-image: var(--cv-deposit-rainbow-strong); }
 .nmx-board-field.is-number { padding-right: 9px; }
 .nmx-board-field.is-number input { width: 54px; height: 26px; border: 0; color: inherit; background: transparent; font: inherit; font-size: 12px; text-align: right; }
 .nmx-board-field.is-number input:focus { outline: none; }

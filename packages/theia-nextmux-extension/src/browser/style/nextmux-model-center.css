@@ -10,6 +10,9 @@
     --mc-gold: #e5b84b;
     --mc-gold-strong: #f0c75e;
     --mc-gold-ink: #1d1b1e;
+    /* The deposit rainbow of a verified store's name (the stops of --nmx-deposit-rainbow in nextmux.css). */
+    --mc-rainbow: linear-gradient(90deg, #ff4d6d 0%, #ff922b 18%, #ffd43b 36%, #38d9a9 54%, #4dabf7 72%, #9775fa 86%, #f783ac 100%);
+    --mc-rainbow-strong: linear-gradient(90deg, #ff6b85 0%, #ffa94d 18%, #ffe066 36%, #63e6be 54%, #74c0fc 72%, #b197fc 86%, #faa2c1 100%);
     color: var(--mc-text);
     min-width: 0;
     container-type: inline-size;
@@ -26,6 +29,8 @@
     --mc-gold: #976100;
     --mc-gold-strong: #8f5c0d;
     --mc-gold-ink: #fff;
+    --mc-rainbow: linear-gradient(90deg, #e01e45 0%, #d96500 18%, #b88600 35%, #0ca678 52%, #1971c2 70%, #6741d9 85%, #c2255c 100%);
+    --mc-rainbow-strong: linear-gradient(90deg, #c9183b 0%, #c05600 18%, #9e7200 35%, #099268 52%, #1864ab 70%, #5f3dc4 85%, #a61e4d 100%);
 }
 .nmx-shell .nmx-mc-directory button,
 .nmx-mc-directory button {
@@ -86,18 +91,22 @@
 .nmx-mc-identity code { min-width: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }
 .nmx-shell .nmx-mc-identity button { padding: 0; width: 20px; height: 18px; }
 .nmx-mc-identity .codicon { color: var(--mc-muted); font-size: 12px; }
-/* A store holding the platform's security deposit: its name in gold, the gold seal right after it. Beside the seal the
-   name is only as wide as its text, so an ellipsis marks a cut (the fade would cut every name short). */
+/* A store holding the platform's security deposit: its name in the deposit rainbow (the gold stays its colour, under
+   the clipped gradient), the gold seal right after it. Beside the seal the name is only as wide as its text, so all
+   seven stops fall on it and an ellipsis marks a cut (the fade would cut every name short). */
 .nmx-mc-identity > .nmx-mc-name-line { display: flex; align-items: center; gap: 5px; width: 100%; max-width: 100%; min-width: 0; }
 .nmx-mc-name-line > .nmx-mc-hint:first-child { flex: 0 1 auto; min-width: 0; }
 .nmx-mc-name-line > .nmx-mc-hint:first-child > strong { text-overflow: ellipsis; -webkit-mask-image: none; mask-image: none; }
 .nmx-mc-name-line > .nmx-mc-hint:last-child { flex: none; border-radius: 50%; }
 .nmx-mc-identity strong.is-deposit-verified,
-.nmx-mc-drawer h3.is-deposit-verified { color: var(--mc-gold); transition: color 120ms ease; }
+.nmx-mc-drawer h3.is-deposit-verified { color: var(--mc-gold); font-weight: 700; background-image: var(--mc-rainbow); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; transition: color 120ms ease; }
 .nmx-mc-deposit-seal { display: block; flex: none; color: var(--mc-gold); transition: color 120ms ease; }
 .nmx-mc-merchant[data-deposit-verified]:hover :is(strong.is-deposit-verified, .nmx-mc-deposit-seal),
 .nmx-mc-hint:is(:hover, :focus-visible) > :is(strong.is-deposit-verified, h3.is-deposit-verified, .nmx-mc-deposit-seal),
 .nmx-mc-drawer-title:hover :is(h3.is-deposit-verified, .nmx-mc-deposit-seal) { color: var(--mc-gold-strong); }
+.nmx-mc-merchant[data-deposit-verified]:hover strong.is-deposit-verified,
+.nmx-mc-hint:is(:hover, :focus-visible) > :is(strong.is-deposit-verified, h3.is-deposit-verified),
+.nmx-mc-drawer-title:hover h3.is-deposit-verified { background-image: var(--mc-rainbow-strong); }
 .nmx-mc-drawer-title { display: flex; align-items: flex-start; gap: 7px; min-width: 0; }
 .nmx-mc-drawer-title > .nmx-mc-hint:first-child { flex: 0 1 auto; min-width: 0; }
 /* Level with the first line of the 17px title, which can wrap to two. */

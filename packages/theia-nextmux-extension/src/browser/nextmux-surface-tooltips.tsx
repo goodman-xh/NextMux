@@ -1,9 +1,13 @@
 import * as React from '@theia/core/shared/react';
 import { createPortal } from '@theia/core/shared/react-dom';
+import { DepositVerifiedSeal } from './nextmux-deposit-verified';
 
-/** Delegation includes portal menus and disabled buttons, without changing their click/keyboard handlers. */
+/**
+ * Delegation includes portal menus and disabled buttons, without changing their click/keyboard handlers. An element
+ * marked data-deposit-verified (a store holding the platform's security deposit) gets the gold seal before its first line.
+ */
 export function SurfaceTooltips({ scope }: { readonly scope: string }): React.ReactElement | null {
-    const [tip, setTip] = React.useState<{ text: string; anchor: HTMLElement; host: Element }>();
+    const [tip, setTip] = React.useState<{ text: string; anchor: HTMLElement; host: Element; seal?: boolean }>();
     const bubble = React.useRef<HTMLDivElement>(null);
     const id = React.useId();
     React.useLayoutEffect(() => {
@@ -89,7 +93,7 @@ export function SurfaceTooltips({ scope }: { readonly scope: string }): React.Re
                 timer = undefined;
                 if (!button.isConnected || !button.getClientRects().length) { clear(); return; }
                 button.setAttribute('aria-describedby', [described, id].filter(Boolean).join(' '));
-                setTip({ text: label(button), anchor: button, host: button.closest('dialog[open]') ?? document.body });
+                setTip({ text: label(button), anchor: button, host: button.closest('dialog[open]') ?? document.body, seal: button.hasAttribute('data-deposit-verified') });
             }, immediate ? 0 : 220);
         };
         const over = (event: MouseEvent): void => show(event.target);
@@ -120,5 +124,5 @@ export function SurfaceTooltips({ scope }: { readonly scope: string }): React.Re
         dir={getComputedStyle(tip.anchor).direction} lang={tip.anchor.closest('[lang]')?.getAttribute('lang') || undefined}
         style={{ position: 'fixed', zIndex: 10000, pointerEvents: 'none', left: 0, top: 0, visibility: 'hidden', boxSizing: 'border-box',
             maxWidth: 'min(320px, calc(100vw - 16px))', maxHeight: 'calc(100vh - 16px)', overflow: 'hidden', padding: '8px 11px', borderRadius: 7, background: '#242424', color: '#fff', border: '1px solid #555',
-            boxShadow: '0 4px 18px #0005', fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{tip.text}</div>, tip.host) : null;
+            boxShadow: '0 4px 18px #0005', fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{tip.seal && <DepositVerifiedSeal size={13} />}{tip.text}</div>, tip.host) : null;
 }

@@ -29,6 +29,8 @@
     --st-warn: #f59e0b;
     --st-deposit-gold: #e5b84b;
     --st-deposit-gold-strong: #f0c75e;
+    --st-deposit-rainbow: linear-gradient(90deg, #ff4d6d 0%, #ff922b 18%, #ffd43b 36%, #38d9a9 54%, #4dabf7 72%, #9775fa 86%, #f783ac 100%);
+    --st-deposit-rainbow-strong: linear-gradient(90deg, #ff6b85 0%, #ffa94d 18%, #ffe066 36%, #63e6be 54%, #74c0fc 72%, #b197fc 86%, #faa2c1 100%);
     --st-kind-a: #1fa2ff;
     --st-kind-b: #16c79a;
     position: fixed;
@@ -84,6 +86,8 @@
     --st-warn: #d97706;
     --st-deposit-gold: #805300;
     --st-deposit-gold-strong: #805300;
+    --st-deposit-rainbow: linear-gradient(90deg, #e01e45 0%, #d96500 18%, #b88600 35%, #0ca678 52%, #1971c2 70%, #6741d9 85%, #c2255c 100%);
+    --st-deposit-rainbow-strong: linear-gradient(90deg, #c9183b 0%, #c05600 18%, #9e7200 35%, #099268 52%, #1864ab 70%, #5f3dc4 85%, #a61e4d 100%);
     background: rgba(18, 18, 24, 0.36);
     color-scheme: light;
 }
@@ -609,17 +613,24 @@
     color: var(--st-text) !important;
 }
 
-/* 保证金: a deposit-verified store's name reads in gold, as in the relay drawer, one class above the name rules before
-   it. The modal keeps its own theme, so the gold follows --st-*: on #161618/#242428 the dark golds are 9.7:1 and 9.6:1,
-   and #805300 is 6.7:1 on white and 6.1:1 on the #f4f4f6 hover fill. */
+/* 保证金: a deposit-verified store's name reads in the deposit rainbow over its gold, as in the relay drawer, one class
+   above the name rules before it. The modal keeps its own theme, so both follow --st-*: on #161618/#242428 the dark
+   golds are 9.7:1 and 9.6:1, and #805300 is 6.7:1 on white and 6.1:1 on the #f4f4f6 hover fill. The name's box ends
+   with its text (the chevron keeps its place at the far end), so all seven stops fall on the name. */
 :is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot .nmx-composer-relay-button > span.is-deposit-verified:not(.codicon),
 .nmx-comic-studio-model-slot .nmx-composer-relay-button > span.is-deposit-verified:not(.codicon) {
+    flex: 0 1 auto;
+    margin-inline-end: auto;
     color: var(--st-deposit-gold) !important;
+    font-weight: 700;
+    background-image: var(--st-deposit-rainbow);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
 }
 
 :is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot .nmx-composer-relay-button:is(:hover:not(:disabled), .is-open, .is-active, [aria-expanded='true']) > span.is-deposit-verified:not(.codicon),
 .nmx-comic-studio-model-slot .nmx-composer-relay-button:is(:hover:not(:disabled), .is-open, .is-active, [aria-expanded='true']) > span.is-deposit-verified:not(.codicon) {
     color: var(--st-deposit-gold-strong) !important;
+    background-image: var(--st-deposit-rainbow-strong);
 }
 
 :is(.nmx-comic-studio-modal, .nmx-comic-studio-modal-backdrop) .nmx-comic-studio-model-slot :is(.nmx-composer-relay-button, .nmx-route-button):disabled,

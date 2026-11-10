@@ -95,6 +95,11 @@ export interface CanvasModelChoice {
     /** Stable merchant / own-connection identity, independent of model variants and display labels. */
     readonly sourceKey?: string;
     readonly sourceLabel?: string;
+    /** 保证金: the relay holds the platform's security deposit; with what its store shows of itself, for the name's hint. */
+    readonly depositVerified?: true;
+    readonly publicCode?: string;
+    readonly storeTagline?: string;
+    readonly storeDescription?: string;
 }
 
 /** A route of a fixed-list model, with whether it can run (an unchecked route counts while its check runs). */

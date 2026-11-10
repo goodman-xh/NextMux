@@ -1029,18 +1029,43 @@
 .nmx-app-control-icon-wrap { position: relative; display: block; flex: 0 0 auto; }
 .nmx-app-control-icon-wrap > .nmx-app-control-icon { width: 100%; height: 100%; }
 .nmx-app-control-pointer { position: absolute; left: -3px; bottom: -4px; width: 9px; height: 12px; filter: drop-shadow(0 1px 1px rgb(0 0 0 / .35)); pointer-events: none; }
-.nmx-composer-app-row { display: flex; justify-content: flex-start; margin: 0 0 8px; padding: 0 2px; }
-.nmx-composer-app { display: inline-flex; align-items: center; gap: 8px; max-width: min(320px, 100%); height: 34px; padding: 0 4px 0 8px; border: 1px solid var(--nmx-border); border-radius: 9px; color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 5%, transparent); font-size: 12.5px; line-height: 1; }
-.nmx-composer-app .nmx-app-control-icon-wrap { width: 22px; height: 22px; margin-inline-start: 1px; }
-.nmx-composer-app-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.nmx-composer-app .nmx-composer-app-remove { flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; color: var(--nmx-muted); background: transparent; cursor: pointer; }
+/* The picked apps: one chip each in a list that wraps. One app keeps the roomy chip; two to five use compact chips
+ * that never take more than half a line, so any composer width (a narrow side panel, a split view, a full window)
+ * shows them without overflow, each name cut with an ellipsis. */
+.nmx-composer-app-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 6px 10px; min-width: 0; margin: 0 0 8px; padding: 0 2px; }
+.nmx-composer-app-list { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.nmx-composer-app { box-sizing: border-box; display: inline-flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0; max-width: 320px; height: 34px; padding: 0 4px 0 8px; border: 1px solid var(--nmx-border); border-radius: 9px; color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 5%, transparent); font-size: 12.5px; line-height: 1; transition: border-color .14s ease, background-color .14s ease; }
+.nmx-composer-app:hover { border-color: var(--nmx-border-strong); background: color-mix(in srgb, var(--nmx-text) 7%, transparent); }
+.nmx-composer-app .nmx-app-control-icon-wrap { flex: 0 0 auto; margin-inline-start: 1px; }
+.nmx-composer-app-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.nmx-composer-app .nmx-composer-app-remove { flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; color: var(--nmx-muted); background: transparent; cursor: pointer; transition: color .12s ease, background-color .12s ease; }
 .nmx-composer-app .nmx-composer-app-remove:hover:not(:disabled) { color: var(--nmx-text); background: var(--nmx-hover); }
+.nmx-composer-app .nmx-composer-app-remove:focus-visible { outline: 2px solid var(--nmx-focus-ring, #6b8afd); outline-offset: 1px; }
+.nmx-composer-app .nmx-composer-app-remove:disabled { opacity: .45; cursor: default; }
 .nmx-composer-app .nmx-composer-app-remove > i { font-size: 13px; }
-.nmx-turn-app-row { display: flex; justify-content: flex-start; margin-bottom: 6px; }
+/* With several apps the list takes the whole line, so half of it is a real width for the chips to stay within. */
+.nmx-composer-app-row.is-multiple .nmx-composer-app-list { flex: 1 1 100%; }
+.nmx-composer-app-row.is-multiple .nmx-composer-app { gap: 6px; height: 30px; max-width: min(180px, calc(50% - 3px)); padding: 0 3px 0 7px; border-radius: 8px; font-size: 12px; }
+.nmx-composer-app-row.is-multiple .nmx-composer-app-remove { width: 20px; height: 20px; }
+.nmx-composer-app-count { flex: 0 0 auto; display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; color: var(--nmx-muted); background: color-mix(in srgb, var(--nmx-text) 7%, transparent); font-size: 11px; font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap; }
+/* An app whose tab is still opening: not yet part of the message. */
+.nmx-composer-app.is-pending { border-style: dashed; color: var(--nmx-muted); }
+.nmx-composer-app-busy { flex: 0 0 auto; display: grid; place-items: center; width: 20px; height: 20px; color: var(--nmx-muted); }
+.nmx-composer-app-busy > i { font-size: 14px; }
+/* Medium and narrow composers adapt chip widths smoothly across split views and side panels. */
+@container nmx-composer-width (max-width: 520px) {
+    .nmx-composer-app { max-width: min(240px, 100%); }
+    .nmx-composer-app-row.is-multiple .nmx-composer-app { max-width: calc(50% - 3px); }
+}
+/* A composer too narrow for two chips side by side shows one to a line. */
+@container nmx-composer-width (max-width: 380px) {
+    .nmx-composer-app,
+    .nmx-composer-app-row.is-multiple .nmx-composer-app { max-width: 100%; }
+}
+.nmx-turn-app-row { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-start; margin-bottom: 6px; }
 .nmx-turn-app { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; height: 24px; padding: 0 9px 0 7px; border-radius: 7px; color: var(--nmx-muted); background: color-mix(in srgb, var(--nmx-text) 7%, transparent); font-size: 12px; line-height: 1; }
 .nmx-turn-app > .nmx-app-control-glyph { width: 13px; height: 13px; }
 .nmx-turn-app > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nmx-composer-app-row { align-items: center; gap: 10px; flex-wrap: wrap; }
 .nmx-composer-app-notice { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--nmx-muted); font-size: 12px; line-height: 1.4; }
 .nmx-composer-app-notice > button { flex: 0 0 auto; height: 24px; padding: 0 9px; border: 1px solid var(--nmx-border); border-radius: 7px; color: var(--nmx-text); background: transparent; font-size: 12px; cursor: pointer; }
 .nmx-composer-app-notice > button:hover { background: var(--nmx-hover); }
@@ -1049,6 +1074,108 @@
 .nmx-composer .nmx-composer-app-notice > button { height: 24px; color: var(--nmx-text); background: transparent; }
 .nmx-composer .nmx-composer-app-notice > button:hover { background: var(--nmx-hover); }
 .nmx-composer .nmx-composer-app-notice { margin-inline-start: 2px; }
+
+/* 应用操控's in-app picker: a card above the button row (a child of .nmx-composer-wrap, like the permission menu, so
+ * the row's own clipping never cuts it). It carries its own colours for both themes: the list must read the same over
+ * any conversation background. */
+.nmx-app-control-popover {
+    --nmx-acp-surface: #252427; --nmx-acp-text: #f0edf0; --nmx-acp-muted: #b3aeb8; --nmx-acp-faint: #918b97;
+    --nmx-acp-line: #39373d; --nmx-acp-border: #514b56; --nmx-acp-hover: #303035; --nmx-acp-field: #1d1c1f;
+    --nmx-acp-accent: #ee7ea5; --nmx-acp-on-accent: #2a1620; --nmx-acp-good: #35c9a5; --nmx-acp-ring: #8a8391;
+    --nmx-acp-selected: color-mix(in srgb, var(--nmx-acp-accent) 14%, var(--nmx-acp-surface));
+    --nmx-acp-selected-hover: color-mix(in srgb, var(--nmx-acp-accent) 18%, var(--nmx-acp-hover));
+    position: absolute; z-index: 56; inset-inline-start: 0; bottom: calc(100% + 8px); box-sizing: border-box;
+    display: flex; flex-direction: column; width: min(340px, 100%); max-height: min(460px, calc(100vh - 150px)); overflow: hidden;
+    border: 1px solid var(--nmx-acp-border); border-radius: 12px; color: var(--nmx-acp-text); background: var(--nmx-acp-surface);
+    box-shadow: 0 16px 44px rgb(0 0 0 / .36), 0 2px 8px rgb(0 0 0 / .22); font-size: 13px; line-height: 1.35; text-align: start;
+    animation: nmx-app-control-in .14s ease-out;
+}
+:is(.nmx-theme-light, [data-nextmux-theme='light']) .nmx-app-control-popover {
+    --nmx-acp-surface: #ffffff; --nmx-acp-text: #302b34; --nmx-acp-muted: #655c6b; --nmx-acp-faint: #6f6675;
+    --nmx-acp-line: #ece7ee; --nmx-acp-border: #d7cedb; --nmx-acp-hover: #f3f1f5; --nmx-acp-field: #f6f4f7;
+    --nmx-acp-accent: #ad3561; --nmx-acp-on-accent: #ffffff; --nmx-acp-good: #137a61; --nmx-acp-ring: #8d8493;
+    --nmx-acp-selected: color-mix(in srgb, var(--nmx-acp-accent) 9%, var(--nmx-acp-surface));
+    --nmx-acp-selected-hover: color-mix(in srgb, var(--nmx-acp-accent) 13%, var(--nmx-acp-hover));
+    box-shadow: 0 16px 40px rgb(48 43 52 / .16), 0 2px 8px rgb(48 43 52 / .08);
+}
+/* Above the button row, at the start edge, where the permission menu also opens. */
+.nmx-composer-wrap > .nmx-app-control-popover { inset-inline-start: 2px; bottom: 40px; width: min(340px, calc(100% - 4px)); }
+@keyframes nmx-app-control-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.nmx-app-control-popover .nmx-app-control-head { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 10px 8px 8px 12px; }
+.nmx-app-control-popover .nmx-app-control-head > strong { flex: 1 1 auto; min-width: 0; overflow: hidden; color: var(--nmx-acp-text); font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-app-control-popover .nmx-app-control-count { flex: 0 0 auto; display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 999px; color: var(--nmx-acp-muted); background: color-mix(in srgb, var(--nmx-acp-text) 8%, var(--nmx-acp-surface)); font-size: 11.5px; font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap; transition: color .16s ease, background-color .16s ease; }
+.nmx-app-control-popover .nmx-app-control-count.has-picks { color: var(--nmx-acp-accent); background: color-mix(in srgb, var(--nmx-acp-accent) 16%, var(--nmx-acp-surface)); }
+.nmx-app-control-popover .nmx-app-control-count.is-full { color: var(--nmx-acp-on-accent); background: var(--nmx-acp-accent); font-weight: 600; }
+/* A click on a dimmed row at the limit: the counter answers. */
+.nmx-app-control-popover .nmx-app-control-count.is-nudged { animation: nmx-app-control-nudge .32s ease; }
+@keyframes nmx-app-control-nudge { 0%, 100% { transform: none; } 30% { transform: scale(1.12); } 60% { transform: scale(.97); } }
+.nmx-app-control-popover .nmx-app-control-close,
+.nmx-app-control-popover .nmx-app-control-search-clear { flex: 0 0 auto; display: grid; place-items: center; width: 24px; height: 24px; min-height: 0; padding: 0; border: 0; border-radius: 7px; color: var(--nmx-acp-muted); background: transparent; cursor: pointer; transition: color .12s ease, background-color .12s ease; }
+.nmx-app-control-popover .nmx-app-control-search-clear { width: 20px; height: 20px; border-radius: 6px; }
+.nmx-app-control-popover :is(.nmx-app-control-close, .nmx-app-control-search-clear):hover { color: var(--nmx-acp-text); background: var(--nmx-acp-hover); }
+.nmx-app-control-popover :is(.nmx-app-control-close, .nmx-app-control-search-clear) > i { font-size: 14px; }
+.nmx-app-control-popover .nmx-app-control-search-clear > i { font-size: 12px; }
+
+.nmx-app-control-popover .nmx-app-control-search { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; box-sizing: border-box; height: 32px; margin: 0 8px 8px; padding: 0 6px 0 9px; border: 1px solid var(--nmx-acp-line); border-radius: 8px; color: var(--nmx-acp-faint); background: var(--nmx-acp-field); cursor: text; transition: border-color .14s ease, box-shadow .14s ease; }
+.nmx-app-control-popover .nmx-app-control-search:focus-within { border-color: var(--nmx-acp-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--nmx-acp-accent) 24%, transparent); }
+.nmx-app-control-popover .nmx-app-control-search > i { flex: 0 0 auto; font-size: 14px; }
+.nmx-app-control-popover .nmx-app-control-search > input { flex: 1 1 auto; min-width: 0; height: 100%; margin: 0; padding: 0; border: 0; outline: 0; box-shadow: none; color: var(--nmx-acp-text); background: transparent; font: inherit; font-size: 13px; }
+.nmx-app-control-popover .nmx-app-control-search > input::placeholder { color: var(--nmx-acp-faint); opacity: 1; }
+
+/* The list was refreshed in the background while the last one stays on screen. */
+.nmx-app-control-popover .nmx-app-control-refreshing { flex: 0 0 auto; display: block; height: 2px; margin: -5px 8px 3px; overflow: hidden; border-radius: 2px; background: var(--nmx-acp-line); }
+.nmx-app-control-popover .nmx-app-control-refreshing::after { content: ''; display: block; width: 36%; height: 100%; border-radius: 2px; background: var(--nmx-acp-accent); animation: nmx-app-control-refresh 1.1s ease-in-out infinite; }
+@keyframes nmx-app-control-refresh { from { transform: translateX(-110%); } to { transform: translateX(290%); } }
+
+.nmx-app-control-popover .nmx-app-control-list { flex: 1 1 auto; display: flex; flex-direction: column; gap: 1px; min-height: 120px; padding: 0 6px 6px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.nmx-app-control-popover .nmx-app-control-list::-webkit-scrollbar { width: 10px; }
+.nmx-app-control-popover .nmx-app-control-list::-webkit-scrollbar-track { background: transparent; }
+.nmx-app-control-popover .nmx-app-control-list::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px; background: color-mix(in srgb, var(--nmx-acp-text) 22%, transparent); background-clip: padding-box; }
+.nmx-app-control-popover .nmx-app-control-list::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--nmx-acp-text) 38%, transparent); background-clip: padding-box; }
+
+.nmx-app-control-popover .nmx-app-control-item { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; box-sizing: border-box; width: 100%; min-width: 0; height: 42px; min-height: 0; margin: 0; padding: 0 8px; border: 0; border-radius: 8px; outline: 0; color: var(--nmx-acp-text); background: transparent; font: inherit; font-size: 13px; text-align: start; cursor: pointer; transition: background-color .1s ease, opacity .14s ease; }
+.nmx-app-control-popover .nmx-app-control-item.is-active { background: var(--nmx-acp-hover); }
+.nmx-app-control-popover .nmx-app-control-item.is-selected { background: var(--nmx-acp-selected); }
+.nmx-app-control-popover .nmx-app-control-item.is-selected.is-active { background: var(--nmx-acp-selected-hover); }
+.nmx-app-control-popover .nmx-app-control-item.is-dimmed { opacity: .5; cursor: not-allowed; }
+.nmx-app-control-popover .nmx-app-control-item.is-dimmed.is-active { background: transparent; }
+.nmx-app-control-popover .nmx-app-control-item.is-pending { cursor: progress; }
+.nmx-app-control-popover .nmx-app-control-item > .nmx-app-control-icon { width: 28px; height: 28px; border-radius: 6px; }
+.nmx-app-control-popover .nmx-app-control-item-name { flex: 1 1 auto; min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-app-control-popover .nmx-app-control-running { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; color: var(--nmx-acp-muted); font-size: 11.5px; line-height: 1; white-space: nowrap; }
+.nmx-app-control-popover .nmx-app-control-running > i { width: 6px; height: 6px; border-radius: 50%; background: var(--nmx-acp-good); box-shadow: 0 0 0 2px color-mix(in srgb, var(--nmx-acp-good) 22%, transparent); }
+/* The multi-select mark: an empty ring, filled with a check once the app is picked. */
+.nmx-app-control-popover .nmx-app-control-check { flex: 0 0 auto; display: grid; place-items: center; box-sizing: border-box; width: 18px; height: 18px; border: 1.5px solid var(--nmx-acp-ring); border-radius: 50%; color: var(--nmx-acp-on-accent); transition: border-color .12s ease, background-color .12s ease; }
+.nmx-app-control-popover .nmx-app-control-item.is-selected .nmx-app-control-check { border-color: var(--nmx-acp-accent); background: var(--nmx-acp-accent); }
+.nmx-app-control-popover .nmx-app-control-item.is-pending .nmx-app-control-check { border-color: transparent; color: var(--nmx-acp-muted); }
+.nmx-app-control-popover .nmx-app-control-check > i { font-size: 12px; font-weight: 700; }
+.nmx-app-control-popover .nmx-app-control-item.is-pending .nmx-app-control-check > i { font-size: 14px; font-weight: 400; }
+
+.nmx-app-control-popover .nmx-app-control-loading { display: flex; flex-direction: column; gap: 1px; }
+.nmx-app-control-popover .nmx-app-control-loading-text { padding: 4px 8px 6px; color: var(--nmx-acp-muted); font-size: 12px; }
+.nmx-app-control-popover .nmx-app-control-skeleton { display: flex; align-items: center; gap: 10px; height: 42px; padding: 0 8px; }
+.nmx-app-control-popover .nmx-app-control-skeleton > :is(i, b) { display: block; border-radius: 6px; background: color-mix(in srgb, var(--nmx-acp-text) 9%, var(--nmx-acp-surface)); animation: nmx-app-control-pulse 1.2s ease-in-out infinite; }
+.nmx-app-control-popover .nmx-app-control-skeleton > i { flex: 0 0 auto; width: 28px; height: 28px; }
+.nmx-app-control-popover .nmx-app-control-skeleton > b { flex: 0 1 auto; width: 46%; height: 10px; border-radius: 5px; }
+.nmx-app-control-popover .nmx-app-control-skeleton:nth-child(odd) > b { width: 62%; }
+@keyframes nmx-app-control-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+.nmx-app-control-popover .nmx-app-control-empty { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 108px; padding: 12px; color: var(--nmx-acp-muted); font-size: 12.5px; text-align: center; }
+.nmx-app-control-popover .nmx-app-control-empty > i { font-size: 20px; opacity: .7; }
+
+.nmx-app-control-popover .nmx-app-control-foot { flex: 0 0 auto; padding: 6px; border-top: 1px solid var(--nmx-acp-line); }
+.nmx-app-control-popover .nmx-app-control-browse { display: flex; align-items: center; gap: 8px; box-sizing: border-box; width: 100%; height: 34px; min-height: 0; margin: 0; padding: 0 8px; border: 0; border-radius: 8px; color: var(--nmx-acp-text); background: transparent; font: inherit; font-size: 13px; text-align: start; cursor: pointer; transition: background-color .12s ease; }
+.nmx-app-control-popover .nmx-app-control-browse:hover { background: var(--nmx-acp-hover); }
+.nmx-app-control-popover .nmx-app-control-browse > i { flex: 0 0 auto; width: 28px; color: var(--nmx-acp-muted); font-size: 15px; text-align: center; }
+.nmx-app-control-popover .nmx-app-control-browse > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-app-control-popover :is(.nmx-app-control-close, .nmx-app-control-search-clear, .nmx-app-control-browse):focus-visible,
+.nmx-app-control-popover .nmx-app-control-item:focus-visible { outline: 2px solid var(--nmx-acp-accent); outline-offset: -2px; }
+/* A short window: fewer rows rather than a card taller than the conversation. */
+@media (max-height: 560px) { .nmx-app-control-popover { max-height: min(320px, calc(100vh - 120px)); } }
+@media (prefers-reduced-motion: reduce) {
+    .nmx-app-control-popover, .nmx-app-control-popover .nmx-app-control-count.is-nudged, .nmx-app-control-popover .nmx-app-control-skeleton > :is(i, b) { animation: none; }
+    .nmx-app-control-popover .nmx-app-control-refreshing::after { animation-duration: 2.4s; }
+}
 
 /* Settings → tool permissions: what happens to the apps NextMux opened for tabs. */
 .nmx-settings-panel .nmx-tab-app-close { margin-top: 10px; padding: 14px 12px 14px 16px; border: 1px solid var(--nmx-border); border-radius: 10px; gap: 16px; }

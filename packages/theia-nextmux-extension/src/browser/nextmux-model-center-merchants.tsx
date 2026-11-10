@@ -18,6 +18,9 @@ import type { ModelPrimaryCategory } from '@nextmux/model-runtime/model-taxonomy
 import { modelCapabilityLabel, modelCategoryLabel } from './nextmux-model-taxonomy-locale';
 import { ModelTaxonomyTags } from './nextmux-model-taxonomy-tags';
 import { FavoriteHeartIcon } from './nextmux-favorite-icon';
+import { DepositVerifiedSeal, depositVerifiedHintText } from './nextmux-deposit-verified';
+
+export { DepositVerifiedSeal };
 
 export type ModelCenterCapability = 'all' | 'coding' | 'reasoning' | '3d' | 'image' | 'video' | 'audio';
 
@@ -161,9 +164,12 @@ export function resetModelCenterRefreshCooldownsForTest(): void {
     merchantSupportPendingByService = new WeakMap();
 }
 
-/** Portalled hints cannot be clipped by the scroll area or the price drawer. */
-export function ModelCenterHint({ text, locale, children, focusable = false, keepOpenOnClick = false, className }: {
-    text: string; locale: NextMuxDesktopLocale; children: React.ReactNode; focusable?: boolean; keepOpenOnClick?: boolean; className?: string;
+/**
+ * Portalled hints cannot be clipped by the scroll area or the price drawer. `depositVerified` puts the gold seal before
+ * the first line: the hint of a store's name when the store holds the platform's security deposit.
+ */
+export function ModelCenterHint({ text, locale, children, focusable = false, keepOpenOnClick = false, className, depositVerified = false }: {
+    text: string; locale: NextMuxDesktopLocale; children: React.ReactNode; focusable?: boolean; keepOpenOnClick?: boolean; className?: string; depositVerified?: boolean;
 }): React.ReactElement {
     const id = React.useId();
     const anchor = React.useRef<HTMLSpanElement>(null);
@@ -192,23 +198,8 @@ export function ModelCenterHint({ text, locale, children, focusable = false, kee
         aria-describedby={position ? id : undefined} onMouseEnter={show} onMouseLeave={() => { if (!anchor.current?.contains(document.activeElement)) setPosition(undefined); }}
         onFocus={show} onClick={() => { if (!keepOpenOnClick) setPosition(undefined); }} onBlur={() => { if (!anchor.current?.matches(':hover')) setPosition(undefined); }} onKeyDown={event => { if (event.key === 'Escape' && position) { event.stopPropagation(); setPosition(undefined); } }}>
         {children}{position && createPortal(<span ref={tooltip} id={id} className='nmx-mc-tooltip' role='tooltip' dir={locale === 'ar' ? 'rtl' : 'ltr'} lang={locale}
-            style={position}>{text}</span>, document.body)}
+            style={position}>{depositVerified && <DepositVerifiedSeal size={13} />}{text}</span>, document.body)}
     </span>;
-}
-
-/**
- * The gold seal of a store holding the platform's security deposit: a scalloped rosette in the theme's gold with a check
- * in the surface's ink. It is not the outlined `verified` mark of the authenticity metric beside it on the card.
- */
-export function DepositVerifiedSeal({ size = 14 }: { size?: number }): React.ReactElement {
-    return <svg className='nmx-mc-deposit-seal' width={size} height={size} viewBox='0 0 16 16' aria-hidden='true' focusable='false'>
-        <g fill='currentColor'>
-            <circle cx='8' cy='8' r='5.6' />
-            {[0, 45, 90, 135, 180, 225, 270, 315].map(angle => <circle key={angle} r='2.3'
-                cx={(8 + 5 * Math.cos(angle * Math.PI / 180)).toFixed(2)} cy={(8 + 5 * Math.sin(angle * Math.PI / 180)).toFixed(2)} />)}
-        </g>
-        <path d='M5.4 8.2l1.75 1.75 3.6-3.65' fill='none' stroke='var(--mc-gold-ink, #1d1b1e)' strokeWidth='1.55' strokeLinecap='round' strokeLinejoin='round' />
-    </svg>;
 }
 
 /**
@@ -471,10 +462,12 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
                 const outputs = merchantOutputCategories(merchant.outputCategories);
                 const storeIntro = (merchant.storeTagline || merchant.storeDescription || '').trim();
                 const storeIntroDisplay = storeIntro || text('noStoreIntro');
-                // A store holding the security deposit: its name in gold and the gold seal after it, both saying so on hover.
+                // A store holding the security deposit: its name in the deposit rainbow and the gold seal after it. Its name's
+                // hint is the one every surface shows: seal and name, public number, introduction, the deposit line.
                 const deposit = merchant.depositVerified === true ? publicMerchantDepositText(locale) : '';
-                const nameHint = hint(<strong className={deposit ? 'is-deposit-verified' : undefined}>{merchant.name}</strong>,
-                    [merchant.name, deposit, storeIntroDisplay].filter(Boolean).join('\n'));
+                const nameHint = deposit
+                    ? <ModelCenterHint text={depositVerifiedHintText(locale, merchant)} locale={locale} focusable depositVerified><strong className='is-deposit-verified'>{merchant.name}</strong></ModelCenterHint>
+                    : hint(<strong>{merchant.name}</strong>, [merchant.name, storeIntroDisplay].join('\n'));
                 return <article className='nmx-mc-merchant' key={merchant.id} data-model-center-merchant={merchant.id} data-deposit-verified={deposit ? 'true' : undefined}>
                     <div className='nmx-mc-identity'>{deposit ? <span className='nmx-mc-name-line'>{nameHint}{hint(<DepositVerifiedSeal />, deposit)}</span> : nameHint}
                         {hint(
@@ -693,7 +686,7 @@ function MerchantModelDrawerBody({ service, merchant, locale, onClose, closing =
             }}>
             <header><div>{merchant.depositVerified === true
                 ? <div className='nmx-mc-drawer-title'>
-                    <ModelCenterHint locale={locale} text={`${merchant.name}\n${publicMerchantDepositText(locale)}`} focusable><h3 className='is-deposit-verified'>{merchant.name}</h3></ModelCenterHint>
+                    <ModelCenterHint locale={locale} text={depositVerifiedHintText(locale, merchant)} focusable depositVerified><h3 className='is-deposit-verified'>{merchant.name}</h3></ModelCenterHint>
                     <ModelCenterHint locale={locale} text={publicMerchantDepositText(locale)} focusable><DepositVerifiedSeal size={16} /></ModelCenterHint>
                 </div>
                 : <ModelCenterHint locale={locale} text={merchant.name} focusable><h3>{merchant.name}</h3></ModelCenterHint>}
