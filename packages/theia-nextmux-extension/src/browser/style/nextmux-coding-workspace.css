@@ -70,7 +70,7 @@
    insets on both sides, normal alignment would put the menu at the far end of
    its area (away from the row): the self-alignment holds it against the row,
    and each flip mirrors it. */
-.nmx-desktop-widget .nmx-coding-context :is(.nmx-session-menu, .nmx-project-menu) {
+.nmx-desktop-widget :is(.nmx-coding-context, .nmx-comic-context) :is(.nmx-session-menu, .nmx-project-menu) {
     position: fixed;
     inset: auto auto 8px 8px;
     z-index: 2600;
@@ -84,26 +84,26 @@
     align-self: start;
     position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
 }
-.nmx-desktop-widget .nmx-coding-context .nmx-session-menu {
+.nmx-desktop-widget :is(.nmx-coding-context, .nmx-comic-context) .nmx-session-menu {
     position-anchor: --nmx-session-hover-anchor;
     min-width: 202px;
 }
-.nmx-desktop-widget .nmx-coding-context .nmx-project-menu {
+.nmx-desktop-widget :is(.nmx-coding-context, .nmx-comic-context) .nmx-project-menu {
     position-anchor: --nmx-project-menu-anchor;
 }
-.nmx-desktop-widget .nmx-coding-context .nmx-project-header {
+.nmx-desktop-widget :is(.nmx-coding-context, .nmx-comic-context) .nmx-project-header {
     anchor-name: --nmx-project-menu-anchor;
     anchor-scope: --nmx-project-menu-anchor;
 }
-[dir='rtl'] .nmx-desktop-widget .nmx-coding-context :is(.nmx-session-menu, .nmx-project-menu),
-.nmx-desktop-widget[dir='rtl'] .nmx-coding-context :is(.nmx-session-menu, .nmx-project-menu),
-.nmx-desktop-widget [dir='rtl'] .nmx-coding-context :is(.nmx-session-menu, .nmx-project-menu) {
+[dir='rtl'] .nmx-desktop-widget :is(.nmx-coding-context, .nmx-comic-context) :is(.nmx-session-menu, .nmx-project-menu),
+.nmx-desktop-widget[dir='rtl'] :is(.nmx-coding-context, .nmx-comic-context) :is(.nmx-session-menu, .nmx-project-menu),
+.nmx-desktop-widget [dir='rtl'] :is(.nmx-coding-context, .nmx-comic-context) :is(.nmx-session-menu, .nmx-project-menu) {
     inset: auto 8px 8px auto;
     position-area: bottom span-right;
     justify-self: start;
 }
 /* Another row's time card must never cover an open menu. */
-.nmx-coding-context:has(:is(.nmx-session-menu, .nmx-project-menu)) .nmx-session-time-tooltip {
+:is(.nmx-coding-context, .nmx-comic-context):has(:is(.nmx-session-menu, .nmx-project-menu)) .nmx-session-time-tooltip {
     display: none !important;
 }
 
@@ -1337,51 +1337,102 @@
 .nmx-plugin-runbar-actions > button.is-active { background: var(--nmx-hover); }
 .nmx-plugin-runbar-actions > button.is-danger { border-color: transparent; color: #fff; background: var(--nmxv-danger-fill, #c64541); }
 .nmx-plugin-runbar-actions > button.is-danger:hover { background: var(--nmxv-danger-fill-hover, #b23a36); }
-.nmx-plugin-runbar > .nmx-plugin-chat-panel { flex: 1 1 100%; margin-top: 6px; }
 .nmx-plugin-hub-chat { margin-bottom: 12px; }
+/* Floating Resizable Top-Right AI Console Overlay inside .nmx-visual-tab-screen */
+.nmx-plugin-chat-overlay {
+  position: absolute; top: 10px; right: 10px; z-index: 28;
+  display: flex; flex-direction: column; min-width: 220px; min-height: 180px;
+  max-width: calc(100% - 20px); max-height: calc(100% - 20px);
+  border-radius: 13px; pointer-events: auto;
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .42), 0 2px 8px rgba(0, 0, 0, .24);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+.nmx-shell.nmx-theme-light .nmx-plugin-chat-overlay {
+  box-shadow: 0 12px 34px rgba(15, 23, 42, .16), 0 2px 6px rgba(15, 23, 42, .08);
+}
+.nmx-plugin-chat-overlay-body {
+  display: flex; flex-direction: column; width: 100%; height: 100%; min-width: 0; min-height: 0;
+}
+.nmx-plugin-chat-overlay-body > .nmx-plugin-chat-panel {
+  flex: 1 1 auto; width: 100%; height: 100%; min-height: 0; padding: 9px 11px; gap: 7px;
+  border-radius: 13px; overflow: hidden;
+  background: color-mix(in srgb, var(--nmx-panel, #16181d) 92%, #0b0d11);
+  border: 1px solid color-mix(in srgb, var(--nmx-border) 95%, rgba(255, 255, 255, .08));
+}
+.nmx-shell.nmx-theme-light .nmx-plugin-chat-overlay-body > .nmx-plugin-chat-panel {
+  background: rgba(255, 255, 255, .96);
+  border-color: #cbd5e1 !important;
+}
+.nmx-plugin-chat-overlay-body .nmx-plugin-chat-messages {
+  flex: 1 1 0; min-height: 0; max-height: none; padding: 8px 4px; gap: 9px;
+}
+.nmx-plugin-chat-resize-left {
+  position: absolute; top: 8px; bottom: 14px; left: -4px; width: 8px; z-index: 3;
+  cursor: ew-resize; touch-action: none;
+}
+.nmx-plugin-chat-resize-bottom {
+  position: absolute; left: 14px; right: 8px; bottom: -4px; height: 8px; z-index: 3;
+  cursor: ns-resize; touch-action: none;
+}
+.nmx-plugin-chat-resize-corner {
+  position: absolute; left: -4px; bottom: -4px; width: 15px; height: 15px; z-index: 4;
+  cursor: nesw-resize; touch-action: none;
+}
+.nmx-plugin-chat-resize-corner::after {
+  content: ''; position: absolute; left: 5px; bottom: 5px; width: 6px; height: 6px;
+  border-left: 1.5px solid color-mix(in srgb, var(--nmx-muted) 55%, transparent);
+  border-bottom: 1.5px solid color-mix(in srgb, var(--nmx-muted) 55%, transparent);
+  border-bottom-left-radius: 2px; pointer-events: none;
+}
 .nmx-plugin-chat-panel {
-  display: flex; flex-direction: column; gap: 10px; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 12px;
   border: 1px solid var(--nmx-border); border-radius: 12px;
   background: color-mix(in srgb, var(--nmx-panel, #16181d) 94%, transparent);
-  color: var(--nmx-text); font-size: 13px; box-sizing: border-box;
+  color: var(--nmx-text); font-size: 12.5px; box-sizing: border-box;
 }
 .nmx-shell.nmx-theme-light .nmx-plugin-chat-panel {
   background: color-mix(in srgb, var(--nmx-panel, #ffffff) 98%, #f8fafc);
 }
-.nmx-plugin-chat-header { display: flex; flex-direction: column; gap: 8px; }
-.nmx-plugin-chat-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.nmx-plugin-chat-title { display: inline-flex; align-items: center; gap: 6px; color: var(--nmx-text); font-size: 13px; }
-.nmx-plugin-mcp-badges { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-inline-end: auto; }
+.nmx-plugin-chat-header { display: flex; flex-direction: column; flex: 0 0 auto; }
+.nmx-plugin-chat-title-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.nmx-plugin-chat-title { display: inline-flex; align-items: center; gap: 6px; color: var(--nmx-text); font-size: 12.5px; min-width: 0; overflow: hidden; }
+.nmx-plugin-chat-title > strong { flex: 0 0 auto; }
+.nmx-plugin-chat-subtitle {
+  color: var(--nmx-muted); font-size: 11px; font-weight: 400;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nmx-plugin-chat-header-actions { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 .nmx-plugin-cap-badge {
   display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px;
   border: 1px solid color-mix(in srgb, var(--nmx-border) 80%, transparent); border-radius: 999px;
   background: color-mix(in srgb, var(--nmx-text) 5%, transparent);
   color: var(--nmx-muted); font-size: 11px; line-height: 1; white-space: nowrap;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis;
 }
-.nmx-plugin-cap-badge.is-mcp {
-  border-color: color-mix(in srgb, #3b82f6 40%, var(--nmx-border));
-  background: color-mix(in srgb, #3b82f6 10%, transparent);
+.nmx-plugin-cap-badge.is-tool {
+  border-color: color-mix(in srgb, #3b82f6 38%, var(--nmx-border));
+  background: color-mix(in srgb, #3b82f6 9%, transparent);
   color: var(--nmx-text);
 }
+.nmx-plugin-cap-badge.is-tool.is-error {
+  border-color: color-mix(in srgb, #ef4444 45%, var(--nmx-border));
+  background: color-mix(in srgb, #ef4444 10%, transparent);
+  color: #f87171;
+}
+.nmx-shell.nmx-theme-light .nmx-plugin-cap-badge.is-tool.is-error { color: #dc2626; }
 .nmx-plugin-cap-badge > button {
   border: 0; background: transparent; color: inherit; padding: 0 2px; cursor: pointer; font-size: 12px; line-height: 1;
 }
 .nmx-plugin-chat-clear, .nmx-plugin-chat-close {
-  display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px; height: 22px; padding: 0 7px;
   border: 1px solid var(--nmx-border); border-radius: 6px; background: transparent;
-  color: var(--nmx-muted); font-size: 11.5px; cursor: pointer;
+  color: var(--nmx-muted); font-size: 11px; cursor: pointer;
 }
+.nmx-plugin-chat-close { width: 22px; padding: 0; }
 .nmx-plugin-chat-clear:hover, .nmx-plugin-chat-close:hover { color: var(--nmx-text); background: var(--nmx-hover); }
-.nmx-plugin-chat-prompts { display: flex; flex-wrap: wrap; gap: 6px; }
-.nmx-plugin-chat-prompts > button {
-  height: 24px; padding: 0 9px; border: 1px solid var(--nmx-border); border-radius: 999px;
-  background: color-mix(in srgb, var(--nmx-text) 3%, transparent); color: var(--nmx-text);
-  font-size: 11.5px; cursor: pointer; white-space: nowrap;
-}
-.nmx-plugin-chat-prompts > button:hover:not(:disabled) { background: var(--nmx-hover); }
 .nmx-plugin-chat-messages {
-  display: flex; flex-direction: column; gap: 12px; max-height: 280px; overflow-y: auto;
-  padding: 10px 6px; border-top: 1px solid color-mix(in srgb, var(--nmx-border) 50%, transparent);
+  display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto;
+  padding: 8px 6px; border-top: 1px solid color-mix(in srgb, var(--nmx-border) 50%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--nmx-border) 50%, transparent);
 }
 .nmx-plugin-chat-empty {
@@ -1501,47 +1552,40 @@
 }
 .nmx-plugin-chat-media-bar > a:hover, .nmx-plugin-chat-media-bar > button:hover { background: var(--nmx-hover); }
 .nmx-plugin-chat-composer-card {
-  display: flex; flex-direction: column; gap: 6px; padding: 8px 10px;
-  border: 1px solid var(--nmx-border); border-radius: 14px;
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 5px; padding: 7px 9px;
+  border: 1px solid var(--nmx-border); border-radius: 12px;
   background: color-mix(in srgb, var(--nmx-text) 3%, var(--nmx-panel, #16181d));
 }
 .nmx-shell.nmx-theme-light .nmx-plugin-chat-composer-card {
   background: #ffffff; border-color: #cbd5e1 !important;
 }
 .nmx-plugin-chat-textarea {
-  width: 100%; min-height: 36px; max-height: 140px; padding: 2px 2px; resize: none;
+  width: 100%; min-height: 32px; max-height: 110px; padding: 2px 2px; resize: none;
   border: 0 !important; outline: 0 !important; box-shadow: none !important;
-  background: transparent !important; color: var(--nmx-text); font: inherit; line-height: 1.5;
+  background: transparent !important; color: var(--nmx-text); font: inherit; line-height: 1.45;
 }
 .nmx-plugin-chat-composer-bar {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: nowrap;
 }
 .nmx-plugin-chat-composer-tools {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; flex: 1 1 auto;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-width: 0; flex: 1 1 auto;
+}
+.nmx-plugin-chat-composer-tools .nmx-composer-relay-button,
+.nmx-plugin-chat-composer-tools .nmx-route-button {
+  max-width: 120px; height: 24px; padding: 0 7px; font-size: 11px;
+}
+.nmx-plugin-chat-composer-tools .nmx-composer-relay-button > span,
+.nmx-plugin-chat-composer-tools .nmx-route-button > span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .nmx-plugin-chat-attach {
-  display: inline-grid; place-items: center; width: 26px; height: 26px; flex: 0 0 26px;
+  display: inline-grid; place-items: center; width: 24px; height: 24px; flex: 0 0 24px;
   border: 1px solid var(--nmx-border); border-radius: 999px; color: var(--nmx-muted); cursor: pointer;
 }
 .nmx-plugin-chat-attach:hover { color: var(--nmx-text); background: var(--nmx-hover); }
 .nmx-plugin-chat-attach > input[type='file'] { display: none; }
-.nmx-plugin-chat-toggle-pill, .nmx-plugin-chat-modality-pill {
-  display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 9px;
-  border: 1px solid var(--nmx-border); border-radius: 999px; background: transparent;
-  color: var(--nmx-muted); font-size: 11.5px; cursor: pointer; white-space: nowrap;
-}
-.nmx-plugin-chat-toggle-pill:hover { color: var(--nmx-text); background: var(--nmx-hover); }
-.nmx-plugin-chat-toggle-pill.is-active {
-  color: var(--nmx-text);
-  border-color: color-mix(in srgb, #3b82f6 45%, var(--nmx-border));
-  background: color-mix(in srgb, #3b82f6 12%, transparent);
-}
-.nmx-plugin-chat-modality-select {
-  border: 0 !important; outline: 0 !important; background: transparent !important;
-  color: var(--nmx-text); font-size: 11.5px; cursor: pointer;
-}
 .nmx-plugin-chat-send-btn {
-  width: 28px; height: 28px; flex: 0 0 28px; border-radius: 999px;
+  width: 26px; height: 26px; flex: 0 0 26px; border-radius: 999px;
   display: inline-grid; place-items: center; border: 0;
   background: var(--nmx-text); color: var(--nmx-panel, #16181d); cursor: pointer;
 }

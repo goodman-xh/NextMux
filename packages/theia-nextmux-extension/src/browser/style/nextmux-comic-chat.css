@@ -127,6 +127,8 @@
 /* A result never grows taller than about 60% of the window: portrait pictures narrow instead of running off screen. */
 .nmx-shell .nmx-comic-chat-media:is(.is-image, .is-video)[style*='--nmx-media-ratio'] { width: min(100%, calc(min(60vh, 600px) * var(--nmx-media-ratio, 1))); }
 .nmx-shell .nmx-comic-chat-media.is-image.is-done { cursor: zoom-in; }
+.nmx-shell .nmx-comic-chat-media.nmx-video-card.is-video.is-done { margin: 0; max-width: 100%; cursor: pointer; }
+.nmx-shell .nmx-comic-chat-media.nmx-video-card.is-video.is-done > .nmx-video-card-still { width: 100%; height: 100%; }
 .nmx-shell .nmx-comic-chat-media.is-video.is-done > video { cursor: pointer; background: #000; object-fit: contain; }
 .nmx-shell .nmx-comic-chat-media.is-audio { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
 .nmx-shell .nmx-comic-chat-media.is-audio > .codicon { color: var(--nmx-muted); font-size: 16px; }
@@ -348,6 +350,11 @@
 .nmx-shell .nmx-comic-material { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; padding: 0; border: 0; color: var(--nmx-text); background: transparent; text-align: start; cursor: pointer; }
 .nmx-shell .nmx-comic-material-thumb { position: relative; display: grid; place-items: center; width: 100%; aspect-ratio: 1 !important; overflow: hidden; border: 1px solid var(--nmx-border); border-radius: 10px; color: var(--nmx-muted); background: var(--nmx-panel-2); }
 .nmx-shell .nmx-comic-material-thumb > :is(img, video) { width: 100%; height: 100%; object-fit: cover; }
+.nmx-shell .nmx-comic-material-thumb > .nmx-video-card-still { width: 100%; height: 100%; min-height: 0; }
+.nmx-shell .nmx-comic-material-thumb > .nmx-video-card-still > .nmx-video-card-play { width: 30px; height: 30px; }
+.nmx-shell .nmx-comic-material-thumb > .nmx-video-card-still > .nmx-video-card-play > svg { width: 14px; height: 14px; }
+.nmx-shell .nmx-comic-material-thumb > .nmx-video-card-still > .nmx-video-card-play > .codicon { font-size: 14px; }
+.nmx-shell .nmx-comic-material-thumb > .nmx-video-card-still > .nmx-video-card-time { right: 5px; bottom: 5px; height: 17px; padding: 0 5px; font-size: 10px; }
 .nmx-shell .nmx-comic-material-thumb > .codicon { font-size: 22px; }
 .nmx-shell .nmx-comic-material-play { position: absolute; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: #fff; background: rgba(0, 0, 0, .5); font-size: 14px !important; }
 .nmx-shell .nmx-comic-material:hover .nmx-comic-material-thumb { border-color: color-mix(in srgb, var(--nmx-accent) 55%, var(--nmx-border)); }

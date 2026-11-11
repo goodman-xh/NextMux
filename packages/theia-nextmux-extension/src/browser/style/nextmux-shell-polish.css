@@ -324,8 +324,23 @@
     color: var(--nmx-text);
     background: var(--nmx-panel-2);
 }
-.nmx-comic-studio .nmx-shot-list-actions > button.is-danger { color: #d9a0a8; }
-.nmx-shell.nmx-theme-light .nmx-comic-studio .nmx-shot-list-actions > button.is-danger { color: #b0434f; }
+.nmx-comic-studio .nmx-shot-list-actions > button.is-danger { color: #ff8b86; }
+.nmx-comic-studio .nmx-shot-list-actions > button.is-danger:hover:not(:disabled) {
+    border-color: rgba(248, 81, 73, .45);
+    color: #ffa198;
+    background: rgba(248, 81, 73, .16);
+}
+.nmx-shell.nmx-theme-light .nmx-comic-studio .nmx-shot-list-actions > button.is-danger {
+    border-color: rgba(180, 35, 24, .28);
+    color: #b42318;
+    background: rgba(220, 38, 38, .06);
+}
+.nmx-shell.nmx-theme-light .nmx-comic-studio .nmx-shot-list-actions > button.is-danger:hover:not(:disabled) {
+    border-color: rgba(180, 35, 24, .42) !important;
+    color: #991b1b !important;
+    background: rgba(220, 38, 38, .12) !important;
+    filter: none !important;
+}
 .nmx-shell.nmx-theme-light .nmx-comic-studio .nmx-timeline button { border-color: #d9c3d1; color: #6b3f58; background: #f7eff4; }
 .nmx-shell.nmx-theme-light .nmx-comic-studio .nmx-timeline button.is-active { border-color: #c98aa6; color: #5d2a43; background: #f3e1ea; }
 .nmx-shell.nmx-theme-light .nmx-comic-studio .nmx-timeline button.audio { border-color: #a9cfd5; color: #235a63; background: #e6f2f4; }

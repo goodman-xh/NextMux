@@ -255,6 +255,7 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
     };
     const favoriteIds = props.favorites.map(([id]) => id).filter(id => /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(id));
     const favoriteKey = view === 'favorites' ? JSON.stringify(favoriteIds) : '';
+    const filterKey = JSON.stringify([view, view === 'capability' ? capability : 'all', query.trim(), sort, direction, favoriteKey]);
     const requestKey = JSON.stringify([view, view === 'capability' ? capability : 'all', query.trim(), sort, direction, favoriteKey, props.directoryVersion]);
     const cachedDirectory = getCachedMerchantDirectoryPage(service, requestKey);
     const [page, setPage] = React.useState<PublicMerchantDirectoryPage | undefined>(() => cachedDirectory?.page);
@@ -322,19 +323,26 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
     const sentinel = React.useRef<HTMLDivElement>(null);
     const activeRequest = React.useRef(requestKey);
     activeRequest.current = requestKey;
+    const pageRef = React.useRef(page);
+    pageRef.current = page;
+    const previousFilterKey = React.useRef<string | undefined>(undefined);
     const request = (): PublicMerchantDirectoryQuery => ({ query: query.trim(), sort, direction,
         capability: view === 'capability' ? capability : 'all' });
 
     React.useEffect(() => {
         const token = ++generation.current;
+        const sameFilter = previousFilterKey.current === filterKey;
+        previousFilterKey.current = filterKey;
         const force = forceNextLoad.current === requestKey;
         forceNextLoad.current = undefined;
         const cooldownKey = tabCooldownKey;
         const cachedEntry = !force ? getCachedMerchantDirectoryPage(service, requestKey) : undefined;
+        const retainedPage = cachedEntry?.page ?? (sameFilter ? pageRef.current : undefined);
         busy.current = true;
-        setPage(cachedEntry?.page);
-        setLoading(!cachedEntry || force);
-        setError(false); setDetail(undefined); setDetailClosing(false);
+        setPage(retainedPage);
+        setLoading(force || !retainedPage);
+        setError(false);
+        if (!sameFilter) { setDetail(undefined); setDetailClosing(false); }
         const timer = window.setTimeout(() => {
             const operation = view === 'favorites' ? loadModelCenterFavorites(service, request(), favoriteIds, force)
                 : service.getPublicMerchantDirectory(request(), force);
@@ -343,7 +351,7 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
                 if (token === generation.current) setPage(result);
             })
                 .catch(() => {
-                    if (token === generation.current && !cachedEntry) setError(true);
+                    if (token === generation.current && !retainedPage) setError(true);
                     // A refresh that failed was not a refresh: it may be tried again at once.
                     if (force) {
                         delete modelCenterCooldownUntilByTab[cooldownKey];

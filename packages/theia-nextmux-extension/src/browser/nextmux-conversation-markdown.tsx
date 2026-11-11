@@ -2,7 +2,7 @@ import * as React from 'react';
 import markdownit = require('@theia/core/shared/markdown-it');
 import markdownitEmoji = require('@theia/core/shared/markdown-it-emoji');
 import DOMPurify = require('@theia/core/shared/dompurify');
-import { filePathPillHtml, isLocalConversationTarget, normalizeLocalFileLinkTarget } from './nextmux-conversation-media';
+import { filePathPillHtml, isLocalConversationTarget, isVideoTarget, normalizeLocalFileLinkTarget } from './nextmux-conversation-media';
 import type { NextMuxDesktopLocale } from './nextmux-locale';
 import { markdownText } from './nextmux-markdown-locale';
 import { markdownMath } from './nextmux-markdown-math';
@@ -104,6 +104,65 @@ function tokenClass(type: string): string | undefined {
 const HTML_ESCAPES: Readonly<Record<string, string>> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 function escapeHtml(value: string): string {
     return value.replace(/[&<>"']/g, character => HTML_ESCAPES[character]);
+}
+
+/**
+ * The placeholder a clip leaves in rendered HTML (a picture-syntax clip or a `<video>` tag): the conversation turns it
+ * into a video card after rendering (decorateConversationMedia), where local paths resolve against the project.
+ */
+function videoPlaceholderHtml(source: string, label?: string, poster?: string): string {
+    return `<span class="nmx-md-video" data-nmx-video="${escapeHtml(source)}"`
+        + (label ? ` data-nmx-video-label="${escapeHtml(label)}"` : '')
+        + (poster ? ` data-nmx-video-poster="${escapeHtml(poster)}"` : '') + '></span>';
+}
+
+const VIDEO_TAG_OPEN = /<video\b([^<>]*)>/iy;
+const VIDEO_TAG_CHILD = /\s*(?:<(source|track)\b([^<>]*)>|<\/(?:source|track)\s*>|[^<]+)/iy;
+const VIDEO_TAG_CLOSE = /\s*<\/video\s*>/iy;
+const HTML_ENTITIES: Readonly<Record<string, string>> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'" };
+
+function videoTagAttributes(raw: string): Map<string, string> {
+    const attributes = new Map<string, string>();
+    for (const match of raw.matchAll(/([a-z][\w-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+        const name = match[1].toLowerCase();
+        if (!attributes.has(name)) attributes.set(name, (match[2] ?? match[3] ?? '').replace(/&(amp|lt|gt|quot|apos|#39);/g, (_, entity: string) => HTML_ENTITIES[entity]).trim());
+    }
+    return attributes;
+}
+
+/**
+ * A `<video>` a model writes into its reply, read at `position`: `<video src="…" poster="…" title="…">`, alone or
+ * closed by `</video>` with `<source src="…">` / `<track>` children and fallback text in between. Only the clip's address (a web
+ * address, a clip carried in the reply, or a local clip by its name), its poster and its title are kept; a tag
+ * without a usable address is not a clip and stays text.
+ */
+export function readVideoTag(text: string, position: number, limit = text.length): { readonly source: string; readonly poster?: string; readonly label?: string; readonly end: number } | undefined {
+    VIDEO_TAG_OPEN.lastIndex = position;
+    const open = VIDEO_TAG_OPEN.exec(text);
+    if (!open || VIDEO_TAG_OPEN.lastIndex > limit) return undefined;
+    const attributes = videoTagAttributes(open[1]);
+    let source = attributes.get('src') || '';
+    let end = VIDEO_TAG_OPEN.lastIndex;
+    // Children count only when `</video>` closes them inside this paragraph; otherwise the opening tag stands alone.
+    let cursor = end, childSource = '';
+    for (let step = 0; step < 256 && cursor < limit; step++) {
+        VIDEO_TAG_CLOSE.lastIndex = cursor;
+        if (VIDEO_TAG_CLOSE.exec(text) && VIDEO_TAG_CLOSE.lastIndex <= limit) {
+            end = VIDEO_TAG_CLOSE.lastIndex;
+            source ||= childSource;
+            break;
+        }
+        VIDEO_TAG_CHILD.lastIndex = cursor;
+        const child = VIDEO_TAG_CHILD.exec(text);
+        if (!child || VIDEO_TAG_CHILD.lastIndex > limit) break;
+        if (child[1]?.toLowerCase() === 'source' && !childSource) childSource = videoTagAttributes(child[2] || '').get('src') || '';
+        cursor = VIDEO_TAG_CHILD.lastIndex;
+    }
+    const web = /^https?:\/\/[^\s"'<>]+$/i.test(source);
+    if (!web && !(isVideoTarget(source) && (/^data:/i.test(source) || isLocalConversationTarget(source)))) return undefined;
+    const poster = attributes.get('poster');
+    const label = attributes.get('title') || attributes.get('aria-label');
+    return { source, ...(poster ? { poster } : {}), ...(label ? { label } : {}), end };
 }
 
 const MAX_HIGHLIGHT_CHARS = 60_000;
@@ -244,6 +303,20 @@ function createRenderer(): MarkdownIt {
         return true;
     });
 
+    // A `<video>` tag in a reply becomes the placeholder a clip written as a picture leaves (readVideoTag keeps only its
+    // address, poster and title); anything else that looks like HTML stays escaped text under `html: false`.
+    md.inline.ruler.before('escape', 'nmx_video_html', (state, silent) => {
+        if (state.src.charCodeAt(state.pos) !== 0x3C /* < */) return false;
+        const video = readVideoTag(state.src, state.pos, state.posMax);
+        if (!video) return false;
+        if (!silent) {
+            const token = state.push('html_inline', '', 0);
+            token.content = videoPlaceholderHtml(video.source, video.label, video.poster);
+        }
+        state.pos = video.end;
+        return true;
+    });
+
     // CJK-friendly strong emphasis (`**注意：**内容`, `**加粗（含中文括号）**紧接中文`, `**100%**提升`, `中文**（括号）**`):
     // CommonMark right/left-flanking rules fail when `**` sits between punctuation and CJK/word characters.
     md.inline.ruler2.before('balance_pairs', 'nmx_cjk_friendly_strong', state => {
@@ -280,7 +353,8 @@ function createRenderer(): MarkdownIt {
     md.validateLink = (url: string): boolean => {
         const value = url.trim().toLowerCase();
         if (/^(?:vbscript|javascript):/.test(value)) return false;
-        if (value.startsWith('data:')) return /^data:image\/(?:gif|png|jpeg|webp);/.test(value);
+        // A clip carried in the reply (`![](data:video/mp4;base64,…)`) shows as a video card.
+        if (value.startsWith('data:')) return /^data:image\/(?:gif|png|jpeg|webp);/.test(value) || isVideoTarget(value);
         return true;
     };
     // The sanitizer only keeps web schemes in href/src; a local target moves
@@ -425,6 +499,9 @@ function createRenderer(): MarkdownIt {
     };
     const image = md.renderer.rules.image;
     md.renderer.rules.image = (tokens, index, options, environment, self) => {
+        // A clip written as a picture (`![demo](out/demo.mp4)`) is a video card, not a broken image.
+        const video = tokens[index].attrGet('src') || '';
+        if (isVideoTarget(video)) return videoPlaceholderHtml(video, tokens[index].content || tokens[index].attrGet('title') || '');
         tokens[index].attrSet('loading', 'lazy');
         tokens[index].attrSet('decoding', 'async');
         tokens[index].attrSet('referrerpolicy', 'no-referrer');
@@ -473,7 +550,8 @@ export function renderConversationMarkdownHtml(markdown: string, locale: NextMux
     // DOMPurify itself returns its input unchanged when the DOM it needs is missing (`isSupported` false).
     const html = (typeof DOMPurify?.sanitize === 'function' && DOMPurify.isSupported === true
         ? DOMPurify.sanitize(renderConversationMarkdownUnsanitized(markdown, locale, tokenizer), {
-            ADD_ATTR: ['loading', 'decoding', 'referrerpolicy', 'class', 'role', 'tabindex', 'title', 'data-path', 'data-href', 'data-alert', 'data-nmx-preview-code', 'data-preview-lang'],
+            ADD_ATTR: ['loading', 'decoding', 'referrerpolicy', 'class', 'role', 'tabindex', 'title', 'data-path', 'data-href', 'data-alert', 'data-nmx-preview-code', 'data-preview-lang',
+                'data-nmx-video', 'data-nmx-video-label', 'data-nmx-video-poster'],
             FORBID_TAGS: ['style', 'form'],
             ALLOW_UNKNOWN_PROTOCOLS: false
         })

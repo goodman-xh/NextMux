@@ -37,7 +37,15 @@ const FAMILY_PROVIDERS: readonly (readonly [RegExp, RegExp])[] = [
     [/^pixverse/, /^pixverse/],
     [/^pika/, /^pika/],
     [/^suno/, /^suno/],
-    [/^jev/, /^(?:typesafe|opencode)/],
+    [/^jev/, /^(?:typesafe|typesafe-ai|opencode)/],
+    [/^openjev/, /^openjev/],
+    [/^(?:tev1|kev)-/, /^jaredpalmer$/],
+    [/^mercury-decide/, /^inception$/],
+    [/^solar-decide/, /^upstage$/],
+    [/^span-0[12]/, /^respan$/],
+    [/^clef-/, /^(?:@cf\/)?cloudflare$/],
+    [/^drex/, /^nace-ai$/],
+    [/^decisions-fast/, /^parallel$/],
 ];
 
 function add<T extends CatalogModel>(map: Map<string, T[]>, key: string, model: T): void {

@@ -1663,7 +1663,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
  * Light theme: a touch greyer so large surfaces are not glaring white, and
  * the sent-prompt bubble sits visibly darker than the conversation page.
  * ------------------------------------------------------------------------ */
-:is(.nmx-shell, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light {
+:is(.nmx-shell, .nmx-board-modal-layer, .nmx-desktop-widget, .nmx-model-effort-portal).nmx-theme-light {
     --nmx-bg: #ecebe8;
     --nmx-panel: #f4f3f0;
     --nmx-panel-2: #e4e2de;
@@ -1685,7 +1685,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 #theia-app-shell:has(.nmx-theme-light) #theia-top-panel { background: #e4e2de !important; }
 /* The model and relay drawers keep the pickers' own white surface and border (nextmux.css): painted here, their frame
    turned warm grey around a still-white list. `:where` keeps this rule's specificity for every other surface. */
-.nmx-shell.nmx-theme-light :is(.nmx-composer, .nmx-composer-popover:not(:where(.nmx-model-picker-popover, .nmx-slash-command-popover)), .nmx-header-popover, .nmx-account-menu, .nmx-session-menu, .nmx-model-picker, .nmx-model-effort-menu, .nmx-follow-up-menu, .nmx-settings-panel, .nmx-settings-group) {
+.nmx-shell.nmx-theme-light :is(.nmx-composer, .nmx-composer-popover:not(:where(.nmx-model-picker-popover, .nmx-slash-command-popover)), .nmx-header-popover, .nmx-account-menu, .nmx-session-menu, .nmx-project-menu, .nmx-model-picker, .nmx-model-effort-menu, .nmx-follow-up-menu, .nmx-settings-panel, .nmx-settings-group) {
     background: #f4f3f0 !important;
     border-color: #dcd8d4 !important;
 }
@@ -1708,8 +1708,10 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 .nmx-shell.nmx-theme-light :is(.nmx-assistant-markdown, .nmx-user-markdown) a.nmx-file-link:hover { background: transparent !important; border-color: transparent !important; box-shadow: none !important; color: #020617 !important; }
 
 /* The base secondary button in nextmux.css is dark-only hex; light surfaces use the theme tokens. */
-:is(.nmx-shell, .nmx-model-effort-portal, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light .nmx-secondary-button { color: var(--nmx-text, #1e293b) !important; background: var(--nmx-panel-2, #f1f5f9) !important; border-color: var(--nmx-border-strong, var(--nmx-border, #cbd5e1)) !important; }
-:is(.nmx-shell, .nmx-model-effort-portal, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light .nmx-secondary-button:hover:not(:disabled) { color: var(--nmx-text, #0f172a) !important; background: var(--nmx-hover, #e2e8f0) !important; }
+:is(.nmx-shell, .nmx-model-effort-portal, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light .nmx-secondary-button:not(.is-danger) { color: var(--nmx-text, #1e293b) !important; background: var(--nmx-panel-2, #f1f5f9) !important; border-color: var(--nmx-border-strong, var(--nmx-border, #cbd5e1)) !important; }
+:is(.nmx-shell, .nmx-model-effort-portal, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light .nmx-secondary-button:not(.is-danger):hover:not(:disabled) { color: var(--nmx-text, #0f172a) !important; background: var(--nmx-hover, #e2e8f0) !important; }
+:is(.nmx-shell, .nmx-model-effort-portal, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light .nmx-secondary-button.is-danger { color: #b42318 !important; background: #fef2f2 !important; border-color: #fecdca !important; }
+:is(.nmx-shell, .nmx-model-effort-portal, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light .nmx-secondary-button.is-danger:hover:not(:disabled) { color: #991b1b !important; background: #fee2e2 !important; border-color: #fda29b !important; filter: none !important; }
 
 /* Settings → System permissions */
 .nmx-shell .nmx-system-permissions { display: grid; gap: 14px; }

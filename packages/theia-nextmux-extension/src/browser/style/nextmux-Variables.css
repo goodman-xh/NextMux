@@ -387,11 +387,13 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
 }
 
 /* Delete is unavailable while the conversation runs ("请先停止当前对话"). */
-#nextmux\.desktop\.widget .nmx-shell :is(.nmx-session-menu, .nmx-chat-context-menu) > button:is([aria-disabled='true'], .is-blocked),
+#nextmux\.desktop\.widget .nmx-shell :is(.nmx-session-menu, .nmx-project-menu, .nmx-chat-context-menu) > button:is([aria-disabled='true'], .is-blocked),
+.nmx-model-effort-portal .nmx-session-menu > button:is([aria-disabled='true'], .is-blocked),
 #nextmux\.desktop\.widget .nmx-shell .nmx-session-row :is(button, [role='button']).is-blocked {
     opacity: .42 !important;
     cursor: not-allowed !important;
     background: transparent !important;
+    filter: none !important;
 }
 
 /* Council role sub-conversations hang under their parent conversation row (`│ └ 「岗位」 title`). Each row keeps the
@@ -3085,13 +3087,13 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
 }
 
 /* Secondary buttons never disappear on light surfaces. */
-#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light :is(.nmx-secondary-button, .nmx-start-frame-cancel) {
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light :is(.nmx-secondary-button:not(.is-danger), .nmx-start-frame-cancel) {
     border: 1px solid #d8d2cd !important;
     background: #f4f1ee !important;
     color: #3d383b !important;
 }
 
-#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light :is(.nmx-secondary-button, .nmx-start-frame-cancel):hover:not(:disabled) {
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light :is(.nmx-secondary-button:not(.is-danger), .nmx-start-frame-cancel):hover:not(:disabled) {
     background: #e9e5e1 !important;
     color: #252225 !important;
 }

@@ -7,6 +7,7 @@ import { publicMerchantDepositText } from '../common/nextmux-public-merchants';
 import { DepositVerifiedHint, depositVerifiedHintText, type DepositVerifiedHintAnchor } from './nextmux-deposit-verified';
 import { ImeTextarea } from './nextmux-ime-field';
 import { ConversationMarkdown, type CodeTokenizer } from './nextmux-conversation-markdown';
+import { fillVideoCardStill, videoCardText } from './nextmux-video-card';
 import { StreamText } from './nextmux-conversation-stream';
 import { DictationButton, type DictationActivity } from './nextmux-dictation-button';
 import type { NativeDictationPhase } from './nextmux-native-dictation-adapter';
@@ -68,6 +69,7 @@ export interface ComicChatMediaView {
     readonly kind: ComicChatMediaKind;
     readonly state: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
     readonly url?: string;
+    readonly poster?: string;
     /** The project asset once the result is filed (素材库, 剪辑). */
     readonly assetId?: string;
     readonly aspect?: ComicChatAspect;
@@ -116,7 +118,7 @@ export function ComicChatSkills(props: { readonly locale: NextMuxDesktopLocale; 
     </section>;
 }
 
-/** One result: a picture (click: view large), a clip (click: play / pause) or a sound; right-click opens its menu. */
+/** One result: a picture or clip (click: view & play large) or a sound; right-click opens its menu. */
 export function ComicChatMediaTile(props: {
     readonly locale: NextMuxDesktopLocale;
     readonly media: ComicChatMediaView;
@@ -128,8 +130,18 @@ export function ComicChatMediaTile(props: {
 }): React.ReactElement {
     const t = (key: ComicChatTextKey): string => comicChatText(props.locale, key);
     const { media } = props;
-    const video = React.useRef<HTMLVideoElement>(null);
-    const [playing, setPlaying] = React.useState(false);
+    const cardRef = React.useRef<HTMLButtonElement>(null);
+    const stillRef = React.useRef<HTMLSpanElement>(null);
+    React.useEffect(() => {
+        if (media.kind !== 'video' || media.state !== 'done' || !media.url || !stillRef.current) return undefined;
+        return fillVideoCardStill(stillRef.current, {
+            url: media.url,
+            ...(media.poster ? { poster: media.poster } : {}),
+            locale: props.locale,
+            immediate: true,
+            ...(media.aspect || !cardRef.current ? {} : { ratioTarget: cardRef.current })
+        });
+    }, [media.kind, media.state, media.url, media.poster, media.aspect, props.locale]);
     const menu = (event: React.MouseEvent): void => { event.preventDefault(); props.onMenu(media, event); };
     const visual = media.kind === 'image' || media.kind === 'video';
     if (media.state !== 'done' || !media.url) {
@@ -157,16 +169,16 @@ export function ComicChatMediaTile(props: {
         </button>;
     }
     if (media.kind === 'video') {
-        const toggle = (): void => {
-            const element = video.current;
-            if (!element) return;
-            if (element.paused) void element.play().catch(() => undefined); else element.pause();
-        };
-        return <div className={`nmx-comic-chat-media is-video is-done ${playing ? 'is-playing' : ''}`} style={aspectStyle(media.aspect)} onContextMenu={menu}>
-            <video ref={video} src={media.url} preload='metadata' playsInline onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => setPlaying(false)}
-                onClick={toggle} onDoubleClick={() => void video.current?.requestFullscreen?.().catch(() => undefined)} />
-            {!playing && <button type='button' className='nmx-comic-chat-play' aria-label={t('play')} onClick={toggle}><i className='codicon codicon-play' aria-hidden='true'></i></button>}
-        </div>;
+        const style: React.CSSProperties = media.aspect
+            ? aspectStyle(media.aspect)
+            : { aspectRatio: 'var(--nmx-video-ratio, 16 / 9)', '--nmx-media-ratio': '1.7778' } as React.CSSProperties;
+        return <button ref={cardRef} type='button' className='nmx-comic-chat-media nmx-video-card is-video is-done'
+            style={style} title={t('openLarge')} aria-label={videoCardText(props.locale, 'play', { name: media.prompt || '' })}
+            data-nmx-gallery='video' data-nmx-video-src={media.url} onClick={() => props.onOpen(media)} onContextMenu={menu}>
+            <span ref={stillRef} className='nmx-video-card-still' data-state='loading'>
+                <span className='nmx-video-card-play' aria-hidden='true'><i className='codicon codicon-play' aria-hidden='true'></i></span>
+            </span>
+        </button>;
     }
     return <div className='nmx-comic-chat-media is-audio is-done' onContextMenu={menu}>
         <i className={`codicon codicon-${media.kind === 'music' ? 'music' : 'mic'}`} aria-hidden='true'></i>
@@ -1224,12 +1236,23 @@ export function ComicMaterialsPanel(props: {
                 onClick={() => props.pick ? props.onPick?.(item) : props.onOpen(item)} onContextMenu={event => { event.preventDefault(); props.onMenu(item, event); }}>
                 <span className='nmx-comic-material-thumb' style={item.kind === 'audio' ? undefined : aspectStyle(item.aspect)}>
                     {item.kind === 'image' && item.url ? <img src={item.url} alt='' loading='lazy' draggable={false} />
-                        : item.kind === 'video' && item.url ? <video src={item.url} preload='metadata' muted playsInline />
+                        : item.kind === 'video' && item.url ? <ComicMaterialVideoThumb url={item.url} locale={props.locale} />
                             : <i className={`codicon codicon-${item.kind === 'audio' ? 'music' : 'file-media'}`} aria-hidden='true'></i>}
-                    {item.kind === 'video' && <i className='codicon codicon-play nmx-comic-material-play' aria-hidden='true'></i>}
+                    {item.kind === 'video' && !item.url && <i className='codicon codicon-play nmx-comic-material-play' aria-hidden='true'></i>}
                 </span>
                 <strong data-nmx-literal>{item.title}</strong>
                 <small data-nmx-literal={item.project ? true : undefined}>{item.project || t(item.origin === 'chat' ? 'fromChat' : item.origin === 'flow' ? 'fromFlow' : 'imported')}</small>
             </button>)}</div>}
     </aside>;
+}
+
+function ComicMaterialVideoThumb(props: { readonly url: string; readonly locale: NextMuxDesktopLocale }): React.ReactElement {
+    const stillRef = React.useRef<HTMLSpanElement>(null);
+    React.useEffect(() => {
+        if (!stillRef.current) return undefined;
+        return fillVideoCardStill(stillRef.current, { url: props.url, locale: props.locale, immediate: true });
+    }, [props.url, props.locale]);
+    return <span ref={stillRef} className='nmx-video-card-still' data-state='loading'>
+        <span className='nmx-video-card-play' aria-hidden='true'><i className='codicon codicon-play' aria-hidden='true'></i></span>
+    </span>;
 }

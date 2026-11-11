@@ -152,7 +152,7 @@ const OwnModelFactsLine = React.memo(function OwnModelFactsLine({ locale, model,
     if (model.reasoningEfforts?.length) capabilities.add('reasoning');
     const facts = { id: model.id, label: model.label, kind: ownModelKind(model, catalog), capabilities: [...capabilities],
         input: model.inputModalities || catalog?.input || [], output: model.outputModalities?.length ? model.outputModalities : catalog?.output || [] };
-    if (!context && input === undefined && !modelTaxonomyView(locale, facts).badges.length) return null;
+    if (!context && (input === undefined || output === undefined) && !modelTaxonomyView(locale, facts).badges.length) return null;
     return <small className='nmx-own-model-facts' dir='auto'>
         {context ? <span>{t('context', { n: tokenText(context) })}</span> : null}
         {input !== undefined && output !== undefined ? <span title={apiPrice ? t('priceApi') : `${t('priceReference')} · ${reference!.source}`}>

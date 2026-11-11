@@ -8026,13 +8026,13 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
 }
 
 .nmx-scheduled-actions > .nmx-scheduled-delete:hover {
-    color: var(--theia-errorForeground, var(--nmx-accent));
+    color: var(--nmx-danger, #c64541);
 }
 
 /* Armed for deletion: the next click deletes the plan. */
 .nmx-scheduled-actions > .nmx-scheduled-delete.is-armed {
     color: #fff;
-    background: var(--theia-errorForeground, #d9534f);
+    background: var(--nmxv-danger-fill, #c64541);
 }
 
 @container nmx-schedules (max-width: 520px) {
@@ -9081,8 +9081,8 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     white-space: nowrap;
 }
 
-.nmx-running-sites strong { color: #d7d2d4; font-size: 13px; }
-.nmx-running-sites small { color: #7f797c; font-size: 14px; }
+.nmx-running-sites strong { color: var(--nmx-text, #d7d2d4); font-size: 13px; }
+.nmx-running-sites small { color: var(--nmx-muted, #7f797c); font-size: 14px; }
 
 .nmx-running-sites nav {
     display: flex;
@@ -9093,8 +9093,14 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
 
 .nmx-running-sites button.is-danger {
     border-color: #663f44;
-    color: #ca858b;
+    color: #ef9a9a;
     background: #2b2022;
+}
+
+.nmx-running-sites button.is-danger:hover:not(:disabled) {
+    border-color: #8a4b52;
+    color: #ffb4ab;
+    background: #3d2428;
 }
 
 .nmx-running-sites details {
@@ -9225,15 +9231,15 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     position: absolute;
     inset: 30px 0 auto auto;
     z-index: 25;
-    min-width: 120px;
+    min-width: 140px;
     padding: 4px;
-    border: 1px solid var(--theia-dropdown-border, #403a3e);
+    border: 1px solid var(--nmx-border, #403a3e);
     border-radius: 8px;
-    background: var(--theia-dropdown-background, #242123);
+    background: var(--nmx-dialog-background, #242123);
     box-shadow: 0 8px 24px #0004;
 }
 
-.nmx-coding-context .nmx-project-menu button {
+:is(.nmx-coding-context, .nmx-comic-context) .nmx-project-menu button {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -9241,12 +9247,20 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     min-height: 30px;
     padding: 5px 8px;
     border-radius: 5px;
-    color: var(--theia-errorForeground, #ed9595);
+    color: var(--nmx-text, #e6e2e4);
 }
 
-.nmx-coding-context .nmx-project-menu button:focus-visible {
+:is(.nmx-coding-context, .nmx-comic-context) .nmx-project-menu button:focus-visible {
     outline: 2px solid var(--theia-focusBorder, #6a9ce8);
     outline-offset: -2px;
+}
+
+.nmx-project-menu-note {
+    display: block;
+    padding: 4px 8px 2px;
+    color: var(--nmx-muted, #8e878b);
+    font-size: 11.5px;
+    line-height: 1.4;
 }
 
 .nmx-thread-dialog > label.nmx-project-delete-checkbox {
@@ -10217,16 +10231,30 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     padding: 0;
 }
 
-.nmx-primary-button {
+.nmx-primary-button:not(.is-danger) {
     border-color: #d7d4d5 !important;
     color: #242223 !important;
     background: #dedcdd !important;
     box-shadow: none !important;
 }
 
-.nmx-primary-button:hover:not(:disabled) {
+.nmx-primary-button:not(.is-danger):hover:not(:disabled) {
     border-color: #f0eeee !important;
     background: #efeded !important;
+}
+
+.nmx-primary-button.is-danger {
+    border-color: #c64541 !important;
+    color: #ffffff !important;
+    background: #c64541 !important;
+    box-shadow: none !important;
+}
+
+.nmx-primary-button.is-danger:hover:not(:disabled):not(.is-blocked):not([aria-disabled='true']) {
+    border-color: #b23a36 !important;
+    color: #ffffff !important;
+    background: #b23a36 !important;
+    filter: none !important;
 }
 
 :is(.nmx-shell, .nmx-model-effort-portal, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light .nmx-primary-button:not(.is-danger) {
@@ -15293,10 +15321,28 @@ body.theia-dark .nmx-file-editor-tabs:hover::-webkit-scrollbar-thumb,
 }
 
 .nmx-theme-light .nmx-thread-dialog > header button,
-.nmx-theme-light .nmx-thread-dialog > footer button {
+.nmx-theme-light .nmx-thread-dialog > footer button:not(.is-danger):not(.is-primary):not(.is-danger-subtle) {
     color: #484246 !important;
     border-color: #d9d3cf !important;
     background: #efebe8 !important;
+}
+
+.nmx-theme-light .nmx-thread-dialog > footer button.is-danger {
+    color: #ffffff !important;
+    border-color: #c64541 !important;
+    background: #c64541 !important;
+}
+
+.nmx-theme-light .nmx-thread-dialog > footer button.is-danger:hover:not(:disabled):not(.is-blocked):not([aria-disabled='true']) {
+    color: #ffffff !important;
+    border-color: #b23a36 !important;
+    background: #b23a36 !important;
+    filter: none !important;
+}
+
+.nmx-thread-dialog > footer button:is(.is-blocked, [aria-disabled='true']) {
+    cursor: not-allowed;
+    opacity: .46;
 }
 
 .nmx-theme-light .nmx-thread-dialog > footer button.is-primary {
@@ -18720,7 +18766,32 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     transform: none;
 }
 
-:is(.nmx-shell, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light {
+:is(.nmx-portal, .nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-board-modal-layer, .nmx-relay-metric-tooltip, .nmx-thread-timeline-preview, .nmx-file-path-tooltip):not(.nmx-theme-light) {
+    --nmx-bg: #151515;
+    --nmx-panel: #1c1a1b;
+    --nmx-panel-2: #232123;
+    --nmx-border: #302d2f;
+    --nmx-border-strong: #413d40;
+    --nmx-text: #eeecee;
+    --nmx-subtle: #b1adb1;
+    --nmx-muted: #7b777c;
+    --nmx-hover: #2b282a;
+    --nmx-selected: #343033;
+    --nmx-focus-ring: #a9a2a7;
+    --nmx-overlay: rgba(0, 0, 0, .58);
+    --nmx-danger: #ef8989;
+    --nmx-on-accent: #fff;
+    --nmx-menu-background: #242123;
+    --nmx-menu-border: #3b373a;
+    --nmx-menu-foreground: #ece9eb;
+    --nmx-menu-muted: #a39da1;
+    --nmx-menu-hover: #343033;
+    --nmx-dialog-background: #211f20;
+    --nmx-control-background: #292628;
+    --nmx-control-hover: #363134;
+}
+
+:is(.nmx-shell, .nmx-board-modal-layer, .nmx-desktop-widget, .nmx-portal, .nmx-model-picker-portal, .nmx-model-effort-portal, .nmx-offering-price-pop, .nmx-relay-metric-tooltip, .nmx-thread-timeline-preview, .nmx-file-path-tooltip).nmx-theme-light {
     --nmx-bg: #f1efed;
     --nmx-panel: #f8f7f5;
     --nmx-panel-2: #e9e6e3;
@@ -18771,7 +18842,7 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     border-color: #e4e0dd !important;
 }
 
-.nmx-theme-light :is(.nmx-composer, .nmx-composer-popover, .nmx-header-popover, .nmx-account-menu, .nmx-session-menu, .nmx-thread-dialog, .nmx-permission-sheet, .nmx-file-save-confirm > section, .nmx-settings-panel, .nmx-settings-group, .nmx-model-picker, .nmx-model-effort-menu, .nmx-follow-up-menu) {
+.nmx-theme-light :is(.nmx-composer, .nmx-composer-popover, .nmx-header-popover, .nmx-account-menu, .nmx-session-menu, .nmx-project-menu, .nmx-thread-dialog, .nmx-permission-sheet, .nmx-file-save-confirm > section, .nmx-settings-panel, .nmx-settings-group, .nmx-model-picker, .nmx-model-effort-menu, .nmx-follow-up-menu) {
     color: #302c2f !important;
     background: #f8f7f5 !important;
     border-color: #e4e0dd !important;
@@ -18783,7 +18854,7 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     border-color: #e4e0dd !important;
 }
 
-.nmx-theme-light :is(.nmx-session-open, .nmx-project-row, .nmx-context-actions button, .nmx-context-heading button, .nmx-project-conversation-toggle, .nmx-route-button, .nmx-permission-button, .nmx-model-option > button, .nmx-model-effort-menu > button, .nmx-follow-up-menu > button, .nmx-user-message, .nmx-agent-message) {
+.nmx-theme-light :is(.nmx-session-open, .nmx-project-row, .nmx-context-actions button:not(.is-danger), .nmx-context-heading button:not(.is-danger), .nmx-project-conversation-toggle, .nmx-route-button, .nmx-permission-button, .nmx-model-option > button, .nmx-model-effort-menu > button, .nmx-follow-up-menu > button:not(.is-danger), .nmx-user-message, .nmx-agent-message) {
     color: #302c2f !important;
 }
 
@@ -18829,7 +18900,7 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
 
 .nmx-theme-light .nmx-session-open > span,
 .nmx-theme-light .nmx-project-conversation-toggle > span,
-.nmx-theme-light .nmx-context-nav button > span,
+.nmx-theme-light .nmx-context-nav button:not(.is-danger) > span,
 .nmx-theme-light .nmx-session-menu button:not(.is-danger),
 .nmx-theme-light .nmx-session-menu button:not(.is-danger) > span,
 .nmx-theme-light .nmx-account-trigger-copy > strong,
@@ -18839,7 +18910,7 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
 
 .nmx-theme-light .nmx-session-menu button.is-danger,
 .nmx-theme-light .nmx-session-menu button.is-danger > span {
-    color: #9f3039 !important;
+    color: #b42318 !important;
 }
 
 .nmx-theme-light .nmx-empty-task h2,
@@ -18877,7 +18948,7 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     background: #b8304c !important;
 }
 
-.nmx-theme-light .nmx-context-nav button {
+.nmx-theme-light .nmx-context-nav button:not(.is-danger) {
     color: #302c2f !important;
 }
 
@@ -20633,10 +20704,11 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item + .lm-Menu
 /* Dialogs, popovers and their controls share the same readable surface tokens
    in both themes. This covers permission, route, notification and confirmation
    surfaces without turning light mode into pure white. */
-.nmx-shell :is(
+:is(.nmx-shell, .nmx-model-effort-portal) :is(
     .nmx-header-popover,
     .nmx-composer-popover,
     .nmx-session-menu,
+    .nmx-project-menu,
     .nmx-follow-up-menu,
     .nmx-message-menu,
     .nmx-turn-copy-menu,
@@ -20650,10 +20722,11 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item + .lm-Menu
     background: var(--nmx-dialog-background) !important;
 }
 
-.nmx-shell :is(
+:is(.nmx-shell, .nmx-model-effort-portal) :is(
     .nmx-header-popover,
     .nmx-composer-popover,
     .nmx-session-menu,
+    .nmx-project-menu,
     .nmx-follow-up-menu,
     .nmx-message-menu,
     .nmx-turn-copy-menu,
@@ -20665,10 +20738,11 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item + .lm-Menu
     color: var(--nmx-text) !important;
 }
 
-.nmx-shell :is(
+:is(.nmx-shell, .nmx-model-effort-portal) :is(
     .nmx-header-popover,
     .nmx-composer-popover,
     .nmx-session-menu,
+    .nmx-project-menu,
     .nmx-follow-up-menu,
     .nmx-message-menu,
     .nmx-turn-copy-menu,
@@ -20680,10 +20754,11 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item + .lm-Menu
     color: var(--nmx-subtle) !important;
 }
 
-.nmx-shell :is(
+:is(.nmx-shell, .nmx-model-effort-portal) :is(
     .nmx-header-popover,
     .nmx-composer-popover,
     .nmx-session-menu,
+    .nmx-project-menu,
     .nmx-follow-up-menu,
     .nmx-message-menu,
     .nmx-turn-copy-menu,
@@ -20697,10 +20772,11 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item + .lm-Menu
     background: transparent !important;
 }
 
-.nmx-shell :is(
+:is(.nmx-shell, .nmx-model-effort-portal) :is(
     .nmx-header-popover,
     .nmx-composer-popover,
     .nmx-session-menu,
+    .nmx-project-menu,
     .nmx-follow-up-menu,
     .nmx-message-menu,
     .nmx-turn-copy-menu,
@@ -20713,7 +20789,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item + .lm-Menu
     background: var(--nmx-control-hover) !important;
 }
 
-.nmx-shell :is(.nmx-file-save-confirm, .nmx-turn-edit-confirm, .nmx-full-access-confirm, .nmx-permission-sheet) :is(button.is-primary, button.nmx-primary-button) {
+.nmx-shell :is(.nmx-file-save-confirm, .nmx-turn-edit-confirm, .nmx-full-access-confirm, .nmx-permission-sheet) :is(button.is-primary:not(.is-danger), button.nmx-primary-button:not(.is-danger)) {
     color: var(--nmx-on-accent) !important;
     border-color: var(--nmx-accent) !important;
     background: var(--nmx-accent) !important;
@@ -20985,15 +21061,28 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     border-color: #e3ded9 !important;
 }
 
-.nmx-shell.nmx-theme-light .nmx-official-sheet :is(.nmx-connection-actions button, .nmx-official-form-actions button):not(.nmx-primary-button) {
+.nmx-shell.nmx-theme-light .nmx-official-sheet :is(.nmx-connection-actions button, .nmx-official-form-actions button):not(.nmx-primary-button):not(.is-danger) {
     color: #3d383b !important;
     background: #f4f1ee !important;
     border-color: #d8d2cd !important;
 }
 
-.nmx-shell.nmx-theme-light .nmx-official-sheet :is(.nmx-connection-actions button, .nmx-official-form-actions button):not(.nmx-primary-button):hover:not(:disabled) {
+.nmx-shell.nmx-theme-light .nmx-official-sheet :is(.nmx-connection-actions button, .nmx-official-form-actions button):not(.nmx-primary-button):not(.is-danger):hover:not(:disabled) {
     color: #252225 !important;
     background: #e9e5e1 !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-official-sheet :is(.nmx-connection-actions button, .nmx-official-form-actions button).is-danger {
+    color: #b42318 !important;
+    background: #fef2f2 !important;
+    border-color: #fecdca !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-official-sheet :is(.nmx-connection-actions button, .nmx-official-form-actions button).is-danger:hover:not(:disabled) {
+    color: #991b1b !important;
+    background: #fee2e2 !important;
+    border-color: #fda29b !important;
+    filter: none !important;
 }
 
 .nmx-shell.nmx-theme-light .nmx-official-sheet .nmx-primary-button {
@@ -22918,4 +23007,215 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     :is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav,
     .nmx-library-lightbox .nmx-library-lightbox-zoombar > button { transition: none; }
     :is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav:is(:hover, :active):not(:disabled) { transform: translateY(-50%); }
+}
+
+/* ---------------------------------------------------------------------------
+ * Inline conversation video cards (nextmux-video-card.ts): non-black extracted
+ * first-frame still, duration badge, and play button that opens the viewer.
+ * ------------------------------------------------------------------------ */
+span.nmx-md-video[data-nmx-video] {
+    display: none;
+}
+
+.nmx-video-card {
+    position: relative;
+    display: block;
+    box-sizing: border-box;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--nmx-border, rgba(255, 255, 255, .11));
+    border-radius: 12px;
+    color: var(--nmx-text, #f4f4f6);
+    background: color-mix(in srgb, var(--nmx-text, #f4f4f6) 5%, var(--nmx-panel, #1b1d22));
+    text-align: start;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.nmx-video-card.is-inline {
+    width: min(100%, 560px, calc(min(54vh, 420px) * var(--nmx-video-ratio, 1.7778)));
+    max-width: 100%;
+    aspect-ratio: var(--nmx-video-ratio, 16 / 9);
+    margin: 8px 0;
+}
+
+.nmx-video-card.is-inline.is-preview {
+    margin-top: 6px;
+}
+
+.nmx-video-card:hover {
+    border-color: color-mix(in srgb, var(--nmx-accent, #7b5cff) 48%, var(--nmx-border, rgba(255, 255, 255, .18)));
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .2);
+}
+
+.nmx-video-card:focus-visible {
+    outline: 2px solid var(--nmx-accent, #7b5cff);
+    outline-offset: 2px;
+}
+
+.nmx-video-card-still {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 96px;
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .018));
+}
+
+.nmx-video-card-still[data-sound='true'] {
+    background: radial-gradient(circle at 50% 42%, rgba(123, 92, 255, .18), rgba(24, 26, 32, .85));
+}
+
+.nmx-video-card-still > .nmx-video-card-picture,
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-video-card img.nmx-video-card-picture {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    object-fit: cover;
+    cursor: pointer;
+    pointer-events: none;
+}
+
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-video-card img.nmx-video-card-picture:hover {
+    box-shadow: none;
+}
+
+.nmx-video-card-play {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    margin: auto;
+    border: 1px solid rgba(255, 255, 255, .24);
+    border-radius: 999px;
+    color: #ffffff;
+    background: rgba(15, 17, 23, .64);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .32);
+    pointer-events: none;
+    transition: transform 140ms ease, background-color 140ms ease;
+}
+
+.nmx-video-card-play > svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+    transform: translateX(1px);
+}
+
+.nmx-video-card-play > .codicon {
+    color: inherit;
+    font-size: 20px;
+}
+
+.nmx-video-card:is(:hover, :focus-visible) .nmx-video-card-play {
+    transform: scale(1.06);
+    background: rgba(15, 17, 23, .78);
+}
+
+.nmx-video-card-time {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 6px;
+    color: #f8fafc;
+    background: rgba(15, 17, 23, .72);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+}
+
+.nmx-video-card-time:empty,
+.nmx-video-card-still[data-state='failed'] > .nmx-video-card-play,
+.nmx-video-card-still[data-state='failed'] > .nmx-video-card-time {
+    display: none;
+}
+
+.nmx-video-card-note {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 16px;
+    color: var(--nmx-muted, #9ca3af);
+    font-size: 12.5px;
+    line-height: 1.45;
+    text-align: center;
+    pointer-events: none;
+}
+
+.nmx-theme-light .nmx-video-card,
+.nmx-desktop-widget.nmx-theme-light .nmx-video-card,
+.nmx-shell.nmx-theme-light .nmx-video-card,
+[data-nextmux-theme='light'] .nmx-video-card {
+    border-color: rgba(24, 24, 27, .14);
+    color: #18181b;
+    background: #f3f2f5;
+}
+
+.nmx-theme-light .nmx-video-card:hover,
+.nmx-desktop-widget.nmx-theme-light .nmx-video-card:hover,
+.nmx-shell.nmx-theme-light .nmx-video-card:hover,
+[data-nextmux-theme='light'] .nmx-video-card:hover {
+    border-color: color-mix(in srgb, var(--nmx-accent, #6d4aff) 46%, rgba(24, 24, 27, .22));
+    box-shadow: 0 8px 22px rgba(15, 23, 42, .1);
+}
+
+.nmx-theme-light .nmx-video-card-still,
+.nmx-desktop-widget.nmx-theme-light .nmx-video-card-still,
+.nmx-shell.nmx-theme-light .nmx-video-card-still,
+[data-nextmux-theme='light'] .nmx-video-card-still {
+    background: linear-gradient(135deg, #eceaf0, #e2dfe7);
+}
+
+.nmx-theme-light .nmx-video-card-still[data-sound='true'],
+.nmx-desktop-widget.nmx-theme-light .nmx-video-card-still[data-sound='true'],
+.nmx-shell.nmx-theme-light .nmx-video-card-still[data-sound='true'],
+[data-nextmux-theme='light'] .nmx-video-card-still[data-sound='true'] {
+    background: radial-gradient(circle at 50% 42%, rgba(109, 74, 255, .14), #dedbe5);
+}
+
+.nmx-theme-light .nmx-video-card-note,
+.nmx-desktop-widget.nmx-theme-light .nmx-video-card-note,
+.nmx-shell.nmx-theme-light .nmx-video-card-note,
+[data-nextmux-theme='light'] .nmx-video-card-note {
+    color: #52525b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nmx-video-card,
+    .nmx-video-card-play {
+        transition: none;
+    }
+    .nmx-video-card:is(:hover, :focus-visible) .nmx-video-card-play {
+        transform: none;
+    }
 }

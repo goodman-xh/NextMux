@@ -31,14 +31,16 @@ const MUSIC_NAME = MODEL_NAME_PATTERNS.music;
 // cloud classifier puts it: Nano Banana, Jimeng and "wanx-v1" draw, Stable Audio is music (before sound effects), MMAudio
 // a sound effect, Sambert and Kling's voice/TTS ids speak (before the Kling video rule), "4sdance_2.5" and
 // "video-subtitle-pro" make video.
+const MODERATION_NAME = /moderation|(?:^|[\s/_.-])(?:llama-?guard|shieldgemma|wildguard|prompt-?guard|granite-?guardian|aegis-[\w-]*guard|qwen\d*[\w.-]*guard|nemoguard)(?:$|[\s/_.-])/;
+
 const NAME_RULES: readonly [OwnModelKind, RegExp][] = [
     ['decision', MODEL_NAME_PATTERNS.decision],
     ['rerank', MODEL_NAME_PATTERNS.rerank],
-    ['moderation', /moderation|guard/],
+    ['moderation', MODERATION_NAME],
     ['embedding', MODEL_NAME_PATTERNS.embedding],
     ['transcription', MODEL_NAME_PATTERNS.transcription],
-    ['music', MUSIC_NAME],
     ['sound_effect', MODEL_NAME_PATTERNS.sound_effect],
+    ['music', MUSIC_NAME],
     // Before the "wan-<n>" video rule: the dashed spelling of "wan2.2-t2i-flash" ("wan-2.2-t2i-flash") is a picture model.
     ['image', /(^|[/_-])wanx?-?\d[\d.]*[-_](?:t2i|i2i|imageedit|image)|(^|[/_-])wanx-v\d/],
     ['speech', MODEL_NAME_PATTERNS.speech],
@@ -75,11 +77,11 @@ export function ownModelKind(model: OwnModelFacts, catalog?: ModelTaskMetadata):
         if (output.includes('image')) return 'image';
         if (output.includes('3d')) return '3d';
         if (output.includes('audio')) {
-            if (MUSIC_NAME.test(name) || capabilities.includes('music_generation')) return 'music';
             if (MODEL_NAME_PATTERNS.sound_effect.test(name) || capabilities.includes('sound_effect_generation') || capabilities.includes('text_to_sound_effect')) return 'sound_effect';
+            if (MUSIC_NAME.test(name) || capabilities.includes('music_generation')) return 'music';
             return output.includes('text') ? 'llm' : 'speech';
         }
-        if (output.includes('text')) return /rerank/.test(name) ? 'rerank' : /moderation|guard/.test(name) ? 'moderation' : MODEL_NAME_PATTERNS['3d'].test(name) ? '3d' : 'llm';
+        if (output.includes('text')) return /rerank/.test(name) ? 'rerank' : MODERATION_NAME.test(name) ? 'moderation' : MODEL_NAME_PATTERNS['3d'].test(name) ? '3d' : 'llm';
     }
     if (capabilities.includes('music_generation')) return 'music';
     if (capabilities.includes('sound_effect_generation') || capabilities.includes('text_to_sound_effect')) return 'sound_effect';

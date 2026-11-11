@@ -1,7 +1,14 @@
 import * as React from '@theia/core/shared/react';
 import type { NextMuxDesktopLocale } from './nextmux-locale';
-import type { ProviderImportRequest } from '../common/nextmux-provider-import';
+import {
+    parseProviderImportLink,
+    parseProviderImportUrl,
+    parseV1ImportUrl,
+    type ProviderImportRequest
+} from '../common/nextmux-provider-import';
 import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
+
+export { parseProviderImportLink, parseProviderImportUrl, parseV1ImportUrl, type ProviderImportRequest };
 
 /**
  * A relay's "Apply to NextMux" link opens the ＋ Compatible API form with its values filled in.

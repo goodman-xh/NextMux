@@ -131,7 +131,7 @@ export function RelaySwitchControl({ locale, model, enabled, onChange, global = 
             onChange={event => onChange(event.currentTarget.checked)} />
         <span className='nmx-checkbox-indicator' aria-hidden='true'></span>
         <span>{text.label}</span>
-        {anchor && ReactDOM.createPortal(<div ref={tooltip} id={id} role='tooltip' className='nmx-same-model-switch-tooltip'
+        {anchor && ReactDOM.createPortal(<div ref={tooltip} id={id} role='tooltip' className={`nmx-same-model-switch-tooltip${control.current?.closest('.nmx-theme-light') ? ' nmx-theme-light' : ''}`}
             lang={locale} dir={locale === 'ar' ? 'rtl' : 'ltr'}
             style={{ width, left: Math.max(8, Math.min(anchor.left, window.innerWidth - width - 8)),
                 top: Math.max(8, Math.min(anchor.top - height - 6, window.innerHeight - height - 8)) }}>{text.hint}</div>, document.body)}

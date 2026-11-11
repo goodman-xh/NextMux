@@ -7,7 +7,12 @@
  * conversation's project, shows images inline, and turns every local link
  * into a file chip whose tooltip is the full path. Clicks are handled by the
  * widget: images and videos open in the viewer, other files in the file drawer.
+ * A clip written as a picture (`![](out/demo.mp4)`) or a `<video>` tag becomes a
+ * video card in its place; a link to a clip keeps its chip and gets a card under
+ * its paragraph (nextmux-video-card.ts).
  */
+
+import { createVideoCard, isLoadableVideoUrl, isNetworkFileUrl, isVideoDataUrl } from './nextmux-video-card';
 
 export type ConversationMediaKind = 'image' | 'video' | 'audio' | 'file';
 
@@ -22,6 +27,13 @@ export function conversationMediaKind(path: string): ConversationMediaKind {
     if (VIDEO.has(extension)) return 'video';
     if (AUDIO.has(extension)) return 'audio';
     return 'file';
+}
+
+/** A clip by its name (`demo.mp4`, `https://…/clip.webm?sig=…`) or carried in the reply (`data:video/mp4;base64,…`). */
+export function isVideoTarget(target: string): boolean {
+    const value = target.trim();
+    if (/^data:/i.test(value)) return isVideoDataUrl(value);
+    return conversationMediaKind(value) === 'video';
 }
 
 /** True for targets that point at the local file system rather than the web. */
@@ -229,13 +241,63 @@ export function compactFileLinkLabel(rawText: string): string {
     return rawText.replace(/\\/g, '/').replace(/(\/[^/]+)\/+$/, '$1');
 }
 
+export interface ConversationMediaOptions {
+    /** The reader's language, for the video cards' labels. */
+    readonly locale?: string;
+    /**
+     * Whether a picture on a file server (`file://server/share/…`) may load without a click. Never by default: loading
+     * one lets Windows sign in to that server on its own. The widget allows those inside the conversation's own roots.
+     * Clips on a file server never load by themselves; their chip opens them on a click, which asks first.
+     */
+    readonly allowNetworkFile?: (resolved: ResolvedConversationTarget) => boolean;
+}
+
+/** Link previews a message shows at most; clips written into the reply itself always show. */
+const VIDEO_PREVIEWS = 4;
+
+/** The last name of a path or web address (`clip.mp4` of `https://…/clip.mp4?sig=…`). */
+function clipName(value: string, web: boolean): string {
+    const clean = value.replace(/[?#].*$/, '').replace(/[\\/]+$/, '');
+    const name = clean.slice(Math.max(clean.lastIndexOf('/'), clean.lastIndexOf('\\')) + 1);
+    if (!web) return name;
+    try { return decodeURIComponent(name); } catch { return name; }
+}
+
+interface ConversationClip { readonly url: string; readonly path?: string; readonly name: string }
+
+/** What a card plays for a target: a web address, a clip carried in the reply, or a file on this computer. */
+function conversationClip(target: string, resolve: (target: string) => ResolvedConversationTarget | undefined): ConversationClip | undefined {
+    const value = target.trim();
+    if (!value) return undefined;
+    if (/^(?:https?|blob|data):/i.test(value)) {
+        if (!isLoadableVideoUrl(value)) return undefined;
+        const web = /^https?:/i.test(value);
+        return web ? { url: value, path: value, name: clipName(value, true) } : { url: value, name: '' };
+    }
+    if (!isLocalConversationTarget(value)) return undefined;
+    const resolved = resolve(value);
+    return resolved && isLoadableVideoUrl(resolved.url) ? { url: resolved.url, path: resolved.path, name: clipName(resolved.path, false) } : undefined;
+}
+
+/** A poster the reply gave a clip: a picture on the web, carried in the reply, or on this computer. */
+function conversationPoster(target: string, resolve: (target: string) => ResolvedConversationTarget | undefined): string | undefined {
+    const value = target.trim();
+    if (!value) return undefined;
+    if (/^https?:\/\/[^\s]+$/i.test(value) || /^data:image\/(?:png|jpeg|webp|gif);/i.test(value)) return value;
+    if (!isLocalConversationTarget(value) || conversationMediaKind(value) !== 'image') return undefined;
+    const resolved = resolve(value);
+    return resolved && /^file:\/\/\//i.test(resolved.url) ? resolved.url : undefined;
+}
+
 /**
  * Decorate local images and file links in a rendered Markdown host.
  * `resolve` maps a raw target to a path/URL, or undefined when unresolvable.
  */
 export function decorateConversationMedia(element: HTMLElement | undefined, resolve: (target: string) => ResolvedConversationTarget | undefined,
-    classifyLocalFile?: (target: string) => ConversationMediaKind | undefined): void {
+    classifyLocalFile?: (target: string) => ConversationMediaKind | undefined, options: ConversationMediaOptions = {}): void {
     if (!element) return;
+    const document = element.ownerDocument;
+    const locale = options.locale || 'en';
     linkLocalPaths(element, target => /[\\/]/.test(target) || Boolean(classifyLocalFile ? classifyLocalFile(target) : resolve(target)));
     for (const image of element.querySelectorAll<HTMLImageElement>('img[data-nmx-local-src]')) {
         if (image.dataset.nmxMediaReady) continue;
@@ -244,11 +306,33 @@ export function decorateConversationMedia(element: HTMLElement | undefined, reso
         if (!resolved) { image.classList.add('is-missing'); continue; }
         image.dataset.nmxPath = resolved.path;
         image.title = resolved.path;
+        // A picture on a file server waits for a click (which asks first) instead of loading by itself.
+        if (isNetworkFileUrl(resolved.url) && options.allowNetworkFile?.(resolved) !== true) { image.classList.add('is-missing'); continue; }
         image.src = resolved.url;
         image.addEventListener('error', () => image.classList.add('is-missing'), { once: true });
     }
     for (const image of element.querySelectorAll<HTMLImageElement>('img:not([data-nmx-local-src])')) {
         if (!image.title && image.src && !image.closest('.nmx-site-icon')) image.title = image.getAttribute('src') || '';
+    }
+    // A clip written as a picture or a <video> tag: a card in its place. One the card may not load by itself (a file
+    // server, a path no project resolves) stays a path chip, so its click opens it the way any file link does.
+    const shown = new Set<string>();
+    for (const placeholder of element.querySelectorAll<HTMLElement>('span.nmx-md-video[data-nmx-video]')) {
+        const source = (placeholder.getAttribute('data-nmx-video') || '').trim();
+        const label = (placeholder.getAttribute('data-nmx-video-label') || '').trim();
+        const clip = conversationClip(source, resolve);
+        if (!clip) {
+            if (isLocalConversationTarget(source) && !/^(?:blob|data):/i.test(source)) {
+                const host = document.createElement('span');
+                host.innerHTML = filePathPillHtml(source);
+                placeholder.replaceWith(host.firstElementChild as HTMLElement);
+            } else placeholder.replaceWith(label || source);
+            continue;
+        }
+        shown.add(clip.url);
+        const poster = conversationPoster(placeholder.getAttribute('data-nmx-video-poster') || '', resolve);
+        placeholder.replaceWith(createVideoCard(document, { url: clip.url, ...(clip.path ? { path: clip.path } : {}), ...(poster ? { poster } : {}),
+            label: label || clip.name, locale }));
     }
     for (const anchor of element.querySelectorAll<HTMLElement>('a[data-href], .nmx-file-path-pill[data-href]')) {
         if (anchor.dataset.nmxFileLink || anchor.closest('pre') || anchor.querySelector('img')) continue;
@@ -267,5 +351,33 @@ export function decorateConversationMedia(element: HTMLElement | undefined, reso
         // path uses the same two-part structure and keyboard semantics.
         if (anchor.classList.contains('nmx-file-link')) pill.classList.add('nmx-file-link');
         anchor.replaceWith(pill);
+    }
+    // A link to a clip (a path chip, a web address, a clip carried in the reply) keeps its place in the sentence and
+    // gets a card under its paragraph, as chat apps unfurl a link. Code, tables, headings and thinking never do; a
+    // clip that cannot be shown takes its card away again (the link stays).
+    let previews = 0;
+    const lastCard = new Map<Element, Element>();
+    for (const link of element.querySelectorAll<HTMLElement>('.nmx-file-path-pill[data-nmx-file-link], a[href], a[data-href]')) {
+        if (previews >= VIDEO_PREVIEWS) break;
+        if (link.querySelector('img') || link.closest('pre, code, td, th, h1, h2, h3, h4, h5, h6, .nmx-md-think, .nmx-video-card')) continue;
+        const pillKind = link.dataset.nmxFileLink;
+        const target = pillKind !== undefined ? pillKind === 'video' ? link.dataset.nmxFileTarget || link.getAttribute('data-href') || '' : ''
+            : link.getAttribute('data-href') || link.getAttribute('href') || '';
+        if (!target || pillKind === undefined && (!/^(?:https?|data):/i.test(target) || !isVideoTarget(target))) continue;
+        const clip = conversationClip(target, resolve);
+        const block = link.closest('p, li');
+        if (!clip || !block || shown.has(clip.url)) continue;
+        shown.add(clip.url);
+        previews++;
+        let card: HTMLElement | undefined;
+        let gone = false;
+        card = createVideoCard(document, { url: clip.url, ...(clip.path ? { path: clip.path } : {}), preview: true, locale,
+            label: clip.name || link.textContent?.trim() || '', onUnavailable: () => { if (card) card.remove(); else gone = true; } });
+        if (gone) continue;
+        if (block.tagName === 'LI') block.append(card);
+        else {
+            (lastCard.get(block) || block).after(card);
+            lastCard.set(block, card);
+        }
     }
 }

@@ -286,6 +286,8 @@ export interface ComputerViewCapability {
     readonly preference: ConversationWindowPlacement;
 }
 
+export type ConversationPointerModifier = 'cmd' | 'ctrl' | 'alt' | 'shift';
+
 export type ConversationWindowPointer = {
     readonly kind: 'click' | 'doubleClick' | 'scroll' | 'move';
     /** Fractions of the window (0–1), so the tab's scaling never matters. */
@@ -293,16 +295,30 @@ export type ConversationWindowPointer = {
     readonly y: number;
     readonly direction?: 'up' | 'down' | 'left' | 'right';
     readonly amount?: number;
-    readonly button?: 'left' | 'right';
+    readonly button?: 'left' | 'right' | 'middle';
+    readonly modifiers?: readonly ConversationPointerModifier[];
     /** Windows: both clicks of a double-click in one input call. */
     readonly whole?: boolean;
 } | {
     readonly kind: 'drag';
-    /** Fractions of the window (0–1). Left button only. */
+    /** Fractions of the window (0–1). */
     readonly from: { readonly x: number; readonly y: number };
     readonly to: { readonly x: number; readonly y: number };
     readonly durationMs?: number;
+    readonly button?: 'left' | 'right' | 'middle';
+    readonly modifiers?: readonly ConversationPointerModifier[];
 };
+
+export function pointerModifiers(
+    event: Pick<React.MouseEvent | React.PointerEvent, 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>
+): ConversationPointerModifier[] {
+    const mods: ConversationPointerModifier[] = [];
+    if (event.metaKey) mods.push('cmd');
+    if (event.ctrlKey) mods.push('ctrl');
+    if (event.altKey) mods.push('alt');
+    if (event.shiftKey) mods.push('shift');
+    return mods;
+}
 
 /** What a tab can do with the app window it shows (this computer's windows only). */
 export interface ConversationWindowControls {
@@ -313,7 +329,7 @@ export interface ConversationWindowControls {
     /** The tab's sound switch can mute the app. */
     readonly canMute: boolean;
     /** Start the live view: the window's own capture stream, where the window is and whether its sound is on. */
-    readonly start: () => Promise<{ readonly stream?: MediaStream; readonly placement?: ConversationWindowPlacement; readonly sound?: boolean }>;
+    readonly start: (options?: { readonly preferSnapshot?: boolean }) => Promise<{ readonly stream?: MediaStream; readonly placement?: ConversationWindowPlacement; readonly sound?: boolean; readonly snapshotStream?: boolean }>;
     /** Move the window to the tab only, or onto the desktop in front. Resolves to where it is afterwards. */
     readonly place: (placement: ConversationWindowPlacement) => Promise<ConversationWindowPlacement | undefined>;
     readonly pointer: (input: ConversationWindowPointer) => Promise<boolean>;
@@ -389,14 +405,60 @@ function captureCornerRadius(video: HTMLVideoElement): number {
     } catch { return 0; }
 }
 
+const INTERIOR_GRID_FRACTIONS = [0.2, 0.35, 0.5, 0.65, 0.8] as const;
+
+/**
+ * Checks a 5×5 interior grid (`[0.2..0.8]²`) of RGBA pixels: returns true ONLY when all 25 interior sample points
+ * are transparent (`alpha < 8`) or pure `0,0,0` black (`r + g + b === 0`), so legitimate dark-themed apps with any
+ * non-zero UI pixel are never misclassified as failed captures.
+ */
+export function isBlankOrPureBlackSample(pixels: ArrayLike<number>, width: number, height: number): boolean {
+    if (width <= 0 || height <= 0 || pixels.length < width * height * 4) return true;
+    for (const fy of INTERIOR_GRID_FRACTIONS) {
+        const py = Math.min(height - 1, Math.max(0, Math.floor(fy * height)));
+        for (const fx of INTERIOR_GRID_FRACTIONS) {
+            const px = Math.min(width - 1, Math.max(0, Math.floor(fx * width)));
+            const idx = (py * width + px) * 4;
+            const a = pixels[idx + 3] ?? 0;
+            const sum = (pixels[idx] ?? 0) + (pixels[idx + 1] ?? 0) + (pixels[idx + 2] ?? 0);
+            if (a >= 8 && sum > 0) return false;
+        }
+    }
+    return true;
+}
+
+export function isBlankOrPureBlackVideoFrame(video: HTMLVideoElement): boolean {
+    if (!video.videoWidth || !video.videoHeight) return true;
+    const sampleW = Math.max(16, Math.min(128, video.videoWidth));
+    const sampleH = Math.max(16, Math.min(128, video.videoHeight));
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = sampleW;
+        canvas.height = sampleH;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (!context) return false;
+        context.drawImage(video, 0, 0, sampleW, sampleH);
+        const data = context.getImageData(0, 0, sampleW, sampleH).data;
+        return isBlankOrPureBlackSample(data, sampleW, sampleH);
+    } catch {
+        return false;
+    }
+}
+
 /** Where a pointer event falls on the video's picture (object-fit: contain), as fractions of the window. */
-function pictureFraction(video: HTMLVideoElement, clientX: number, clientY: number): { x: number; y: number } | undefined {
+export function pictureFraction(video: HTMLVideoElement, clientX: number, clientY: number, clamp = false): { x: number; y: number } | undefined {
     const rect = video.getBoundingClientRect();
     if (!video.videoWidth || !video.videoHeight || !rect.width || !rect.height) return undefined;
     const scale = Math.min(rect.width / video.videoWidth, rect.height / video.videoHeight);
     const width = video.videoWidth * scale, height = video.videoHeight * scale;
     const x = (clientX - rect.left - (rect.width - width) / 2) / width;
     const y = (clientY - rect.top - (rect.height - height) / 2) / height;
+    if (clamp) {
+        return {
+            x: Math.max(0, Math.min(1, x)),
+            y: Math.max(0, Math.min(1, y))
+        };
+    }
     return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x, y } : undefined;
 }
 
@@ -408,11 +470,173 @@ function pictureFraction(video: HTMLVideoElement, clientX: number, clientY: numb
 export interface ConversationTabPluginParts {
     readonly headerExtra?: React.ReactNode;
     readonly bar?: React.ReactNode;
+    readonly floatingChat?: React.ReactNode;
     readonly overlay?: React.ReactNode;
     readonly running?: boolean;
     readonly onStop?: () => void;
     /** Plugin studio: pick areas (drag) and points with their colour (click) on the live picture, as plugin.json values. */
     readonly studio?: { readonly labels: Readonly<Record<'studio' | 'studioHint' | 'copy' | 'copied' | 'close' | 'studioArea' | 'studioPoint', string>>; onClose(): void };
+}
+
+export const PLUGIN_CHAT_SIZE_STORAGE_KEY = 'nextmux.desktop.pluginChatSize.v1';
+export const PLUGIN_CHAT_DEFAULT_SIZE = { width: 340, height: 380 } as const;
+export const PLUGIN_CHAT_MIN_WIDTH = 280;
+export const PLUGIN_CHAT_MIN_HEIGHT = 240;
+
+export function clampPluginChatOverlaySize(
+    desired: { readonly width: number; readonly height: number },
+    container?: { readonly width: number; readonly height: number }
+): { width: number; height: number } {
+    const rawW = Number.isFinite(desired.width) ? Math.round(desired.width) : PLUGIN_CHAT_DEFAULT_SIZE.width;
+    const rawH = Number.isFinite(desired.height) ? Math.round(desired.height) : PLUGIN_CHAT_DEFAULT_SIZE.height;
+    if (!container || !(container.width > 0) || !(container.height > 0)) {
+        return {
+            width: Math.max(PLUGIN_CHAT_MIN_WIDTH, Math.min(960, rawW)),
+            height: Math.max(PLUGIN_CHAT_MIN_HEIGHT, Math.min(900, rawH))
+        };
+    }
+    const availW = Math.max(220, Math.floor(container.width - 20));
+    const availH = Math.max(180, Math.floor(container.height - 20));
+    return {
+        width: Math.max(Math.min(PLUGIN_CHAT_MIN_WIDTH, availW), Math.min(rawW, availW)),
+        height: Math.max(Math.min(PLUGIN_CHAT_MIN_HEIGHT, availH), Math.min(rawH, availH))
+    };
+}
+
+function readStoredPluginChatSize(): { width: number; height: number } {
+    try {
+        const raw = typeof window !== 'undefined' ? window.localStorage?.getItem(PLUGIN_CHAT_SIZE_STORAGE_KEY) : undefined;
+        if (!raw) return { ...PLUGIN_CHAT_DEFAULT_SIZE };
+        const parsed = JSON.parse(raw) as { width?: unknown; height?: unknown };
+        const width = typeof parsed?.width === 'number' && Number.isFinite(parsed.width) ? parsed.width : PLUGIN_CHAT_DEFAULT_SIZE.width;
+        const height = typeof parsed?.height === 'number' && Number.isFinite(parsed.height) ? parsed.height : PLUGIN_CHAT_DEFAULT_SIZE.height;
+        return clampPluginChatOverlaySize({ width, height });
+    } catch {
+        return { ...PLUGIN_CHAT_DEFAULT_SIZE };
+    }
+}
+
+function FloatingPluginChatOverlay(props: {
+    readonly containerSize?: { readonly width: number; readonly height: number };
+    readonly children: React.ReactNode;
+}): React.ReactElement {
+    const [savedSize, setSavedSize] = React.useState<{ width: number; height: number }>(() => readStoredPluginChatSize());
+    const clamped = clampPluginChatOverlaySize(savedSize, props.containerSize);
+    const dragRef = React.useRef<{
+        edge: 'left' | 'bottom' | 'corner';
+        pointerId: number;
+        startX: number;
+        startY: number;
+        startWidth: number;
+        startHeight: number;
+    }>();
+
+    const persistSize = (next: { width: number; height: number }): void => {
+        try {
+            window.localStorage?.setItem(PLUGIN_CHAT_SIZE_STORAGE_KEY, JSON.stringify(next));
+        } catch { /* ignore storage quota */ }
+    };
+
+    const onResizePointerDown = (edge: 'left' | 'bottom' | 'corner') => (event: React.PointerEvent<HTMLDivElement>): void => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        dragRef.current = {
+            edge,
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            startWidth: clamped.width,
+            startHeight: clamped.height
+        };
+        try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* ignore */ }
+    };
+
+    const onResizePointerMove = (event: React.PointerEvent<HTMLDivElement>): void => {
+        event.stopPropagation();
+        const active = dragRef.current;
+        if (!active || active.pointerId !== event.pointerId) return;
+        event.preventDefault();
+        const nextWidth = active.edge === 'left' || active.edge === 'corner'
+            ? active.startWidth + (active.startX - event.clientX)
+            : active.startWidth;
+        const nextHeight = active.edge === 'bottom' || active.edge === 'corner'
+            ? active.startHeight + (event.clientY - active.startY)
+            : active.startHeight;
+        const next = clampPluginChatOverlaySize({ width: nextWidth, height: nextHeight }, props.containerSize);
+        setSavedSize(next);
+    };
+
+    const onResizePointerUp = (event: React.PointerEvent<HTMLDivElement>): void => {
+        event.stopPropagation();
+        const active = dragRef.current;
+        if (!active || active.pointerId !== event.pointerId) return;
+        dragRef.current = undefined;
+        try {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+        } catch { /* ignore */ }
+        const nextWidth = active.edge === 'left' || active.edge === 'corner'
+            ? active.startWidth + (active.startX - event.clientX)
+            : active.startWidth;
+        const nextHeight = active.edge === 'bottom' || active.edge === 'corner'
+            ? active.startHeight + (event.clientY - active.startY)
+            : active.startHeight;
+        const next = clampPluginChatOverlaySize({ width: nextWidth, height: nextHeight }, props.containerSize);
+        setSavedSize(next);
+        persistSize(next);
+    };
+
+    const stopBubble = (event: React.SyntheticEvent): void => {
+        event.stopPropagation();
+    };
+
+    return (
+        <div
+            className='nmx-plugin-chat-overlay'
+            style={{ width: `${clamped.width}px`, height: `${clamped.height}px` }}
+            onPointerDown={stopBubble}
+            onPointerMove={stopBubble}
+            onPointerUp={stopBubble}
+            onMouseDown={stopBubble}
+            onClick={stopBubble}
+            onDoubleClick={stopBubble}
+            onAuxClick={stopBubble}
+            onContextMenu={stopBubble}
+            onWheel={stopBubble}
+        >
+            <div
+                className='nmx-plugin-chat-resize-left'
+                role='separator'
+                aria-orientation='vertical'
+                onPointerDown={onResizePointerDown('left')}
+                onPointerMove={onResizePointerMove}
+                onPointerUp={onResizePointerUp}
+                onPointerCancel={onResizePointerUp}
+            />
+            <div
+                className='nmx-plugin-chat-resize-bottom'
+                role='separator'
+                aria-orientation='horizontal'
+                onPointerDown={onResizePointerDown('bottom')}
+                onPointerMove={onResizePointerMove}
+                onPointerUp={onResizePointerUp}
+                onPointerCancel={onResizePointerUp}
+            />
+            <div
+                className='nmx-plugin-chat-resize-corner'
+                role='presentation'
+                onPointerDown={onResizePointerDown('corner')}
+                onPointerMove={onResizePointerMove}
+                onPointerUp={onResizePointerUp}
+                onPointerCancel={onResizePointerUp}
+            />
+            <div className='nmx-plugin-chat-overlay-body'>
+                {props.children}
+            </div>
+        </div>
+    );
 }
 
 const round4 = (value: number): number => Math.round(Math.max(0, Math.min(1, value)) * 10000) / 10000;
@@ -674,6 +898,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         };
         const observer = new ResizeObserver(measure);
         observer.observe(element);
+        observer.observe(container);
         element.addEventListener('loadedmetadata', measure);
         measure();
         return () => { observer.disconnect(); element.removeEventListener('loadedmetadata', measure); };
@@ -701,6 +926,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         ...(cornerRadius ? { borderRadius: cornerRadius * fit } : {}) } : undefined;
     const placementRef = React.useRef(placement);
     placementRef.current = placement;
+    const snapshotStreamRef = React.useRef(false);
     // Nobody sees the picture while NextMux is minimised or fully covered (Chromium reports that as hidden): the
     // capture stops then, and starts again when the window shows, so an open tab costs nothing in the background.
     const [visible, setVisible] = React.useState(() => document.visibilityState !== 'hidden');
@@ -716,14 +942,30 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     }, [streamKey, visible]);
     React.useEffect(() => {
         setLive(false);
+        snapshotStreamRef.current = false;
         if (!streamKey || !visible) return undefined;
         let stream: MediaStream | undefined;
         let disposed = false;
+        let fallbackUsed = false;
+        let loadWatchdogTimer: ReturnType<typeof setTimeout> | undefined;
+        let blackWatchdogTimer: ReturnType<typeof setTimeout> | undefined;
+        let activeLoadedListener: (() => void) | undefined;
         const element = video.current;
         let measuredWidth = 0, measuredHeight = 0, measuredScale = 0;
+        const clearWatchdogs = (): void => {
+            if (loadWatchdogTimer) { clearTimeout(loadWatchdogTimer); loadWatchdogTimer = undefined; }
+            if (blackWatchdogTimer) { clearTimeout(blackWatchdogTimer); blackWatchdogTimer = undefined; }
+            if (activeLoadedListener && element) {
+                element.removeEventListener('loadeddata', activeLoadedListener);
+                activeLoadedListener = undefined;
+            }
+        };
         const measure = (): void => {
             if (!element?.videoWidth || !element.videoHeight) return;
-            const scale = placementRef.current === 'tab' ? 1 : Math.max(1, window.devicePixelRatio || 1);
+            const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || navigator.userAgent);
+            const scale = snapshotStreamRef.current || (placementRef.current === 'tab' && isMac)
+                ? 1
+                : Math.max(1, (typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1);
             const width = element.videoWidth / scale, height = element.videoHeight / scale;
             setNatural(prev => prev && prev.width === width && prev.height === height ? prev : { width, height });
             if (element.videoWidth !== measuredWidth || element.videoHeight !== measuredHeight || scale !== measuredScale) {
@@ -734,22 +976,83 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         // Shown once the first frame is decoded, so the last frame never gives way to an empty or resizing box.
         const reveal = (): void => { if (!disposed) { measure(); setLive(true); } };
         element?.addEventListener('resize', measure);
-        void latest.current?.start().then(result => {
-            if (disposed) { result.stream?.getTracks().forEach(track => track.stop()); return; }
-            if (result.placement) { placementRef.current = result.placement; setPlacement(result.placement); }
-            if (result.sound !== undefined) setSound(result.sound);
-            stream = result.stream;
-            if (!stream || !element) return;
-            element.srcObject = stream;
-            if (element.readyState >= 2) reveal(); else element.addEventListener('loadeddata', reveal, { once: true });
-            void element.play().catch(() => undefined);
-            // The app closed the window: fall back to the last frame.
-            stream.getVideoTracks()[0]?.addEventListener('ended', () => { if (!disposed) setLive(false); });
-        }).catch(() => undefined);
+
+        const attachStream = (preferSnapshot: boolean): void => {
+            if (!preferSnapshot) snapshotStreamRef.current = false;
+            void latest.current?.start(preferSnapshot ? { preferSnapshot: true } : undefined).then(result => {
+                if (disposed) { result?.stream?.getTracks().forEach(track => track.stop()); return; }
+                snapshotStreamRef.current = Boolean(result?.snapshotStream || preferSnapshot);
+                if (result?.placement) { placementRef.current = result.placement; setPlacement(result.placement); }
+                if (result?.sound !== undefined) setSound(result.sound);
+                const nextStream = result?.stream;
+                const triggerSnapshotFallback = (): void => {
+                    if (disposed || preferSnapshot || fallbackUsed) return;
+                    fallbackUsed = true;
+                    clearWatchdogs();
+                    attachStream(true);
+                };
+                if (!nextStream || !element) {
+                    if (!preferSnapshot && !fallbackUsed) triggerSnapshotFallback();
+                    return;
+                }
+                clearWatchdogs();
+                const previousStream = stream;
+                stream = nextStream;
+                element.srcObject = nextStream;
+                if (previousStream && previousStream !== nextStream) {
+                    previousStream.getTracks().forEach(track => track.stop());
+                }
+                const onReady = (): void => {
+                    if (disposed || stream !== nextStream) return;
+                    if (loadWatchdogTimer) { clearTimeout(loadWatchdogTimer); loadWatchdogTimer = undefined; }
+                    activeLoadedListener = undefined;
+                    reveal();
+                    if (!preferSnapshot && !fallbackUsed) {
+                        blackWatchdogTimer = setTimeout(() => {
+                            blackWatchdogTimer = undefined;
+                            if (!disposed && !fallbackUsed && stream === nextStream && element && isBlankOrPureBlackVideoFrame(element)) {
+                                triggerSnapshotFallback();
+                            }
+                        }, 900);
+                    }
+                };
+                if (!preferSnapshot && !fallbackUsed) {
+                    loadWatchdogTimer = setTimeout(() => {
+                        loadWatchdogTimer = undefined;
+                        if (!disposed && !fallbackUsed && stream === nextStream && element.readyState < 2) {
+                            triggerSnapshotFallback();
+                        }
+                    }, 1500);
+                }
+                if (element.readyState >= 2) {
+                    onReady();
+                } else {
+                    activeLoadedListener = onReady;
+                    element.addEventListener('loadeddata', onReady, { once: true });
+                }
+                void element.play().catch(() => undefined);
+                // The app closed the window (or WGC revoked the source): try snapshot fallback once, else fall back to last frame.
+                nextStream.getVideoTracks()[0]?.addEventListener('ended', () => {
+                    if (disposed || stream !== nextStream) return;
+                    if (!preferSnapshot && !fallbackUsed) {
+                        triggerSnapshotFallback();
+                    } else {
+                        setLive(false);
+                    }
+                });
+            }).catch(() => {
+                if (!disposed && !preferSnapshot && !fallbackUsed) {
+                    fallbackUsed = true;
+                    clearWatchdogs();
+                    attachStream(true);
+                }
+            });
+        };
+        attachStream(false);
         return () => {
             disposed = true;
+            clearWatchdogs();
             element?.removeEventListener('resize', measure);
-            element?.removeEventListener('loadeddata', reveal);
             stream?.getTracks().forEach(track => track.stop());
             if (element) element.srcObject = null;
         };
@@ -778,33 +1081,40 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     const dismissToast = (): void => {
         setNoticeFading(false); setAnnouncedFading(false); setNotice(undefined); setAnnounced(undefined);
     };
+    const generationBumpRef = React.useRef(0);
+    const bumpStreamGeneration = (): void => {
+        generationBumpRef.current += 1;
+        setGeneration(generationBumpRef.current);
+    };
     const move = (next: ConversationWindowPlacement): void => {
         if (moving || !latest.current) return;
+        const genBefore = generationBumpRef.current;
         setMoving(true); setNotice(undefined);
         void latest.current.place(next).then(result => {
             if (result) {
+                const changed = result !== placementRef.current;
+                placementRef.current = result;
                 setPlacement(result);
-                if (result !== placementRef.current) {
-                    placementRef.current = result;
-                    setGeneration(value => value + 1);
+                if (changed || generationBumpRef.current === genBefore) {
+                    bumpStreamGeneration();
                 }
             } else setNotice('moveFailed');
         }, () => setNotice('moveFailed')).finally(() => setMoving(false));
     };
-    const hoverMove = React.useRef<{ x: number; y: number; lastAt: number; inFlight: boolean; pending?: { x: number; y: number }; timer?: ReturnType<typeof setTimeout> }>({
-        x: -1, y: -1, lastAt: 0, inFlight: false
-    });
-    const resetHoverMove = (): void => {
-        if (hoverMove.current.timer) { clearTimeout(hoverMove.current.timer); hoverMove.current.timer = undefined; }
-        hoverMove.current.pending = undefined;
-    };
+    const [windowMenuOpen, setWindowMenuOpen] = React.useState(false);
+    const [terminateModalOpen, setTerminateModalOpen] = React.useState(false);
+    const localOverlayOpen = windowMenuOpen || terminateModalOpen || reopenModalOpen || Boolean(props.plugin?.studio);
+    const overlayOpenRef = React.useRef(localOverlayOpen);
+    overlayOpenRef.current = localOverlayOpen;
     const toggleMouse = (on: boolean): void => {
         setMouse(on);
         void latest.current?.setUserInput?.(on);
         // Typing goes to the app right after the user turns the switch on. Only then (and on a click in the picture): a
         // restarted capture or the AI's tabs.set never takes the focus from the user's message box.
         if (on) requestAnimationFrame(() => {
-            if (latest.current?.keys && !hasOpenOverlayOrModal(sectionRef.current, Boolean(props.plugin?.studio))) {
+            const active = typeof document !== 'undefined' ? document.activeElement as HTMLElement | null : null;
+            const inPluginChat = Boolean(active?.closest?.('.nmx-plugin-chat-overlay, .nmx-plugin-chat-panel'));
+            if (latest.current?.keys && !inPluginChat && !hasOpenOverlayOrModal(sectionRef.current, overlayOpenRef.current)) {
                 keyboard.current?.focus({ preventScroll: true });
             }
         });
@@ -830,12 +1140,44 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             keyboard.current?.blur();
         }
         if (state.sound !== undefined) setSound(state.sound);
-        if (state.placement && state.placement !== placementRef.current) { placementRef.current = state.placement; setPlacement(state.placement); setGeneration(value => value + 1); }
+        if (state.placement && state.placement !== placementRef.current) {
+            placementRef.current = state.placement;
+            setPlacement(state.placement);
+            bumpStreamGeneration();
+        }
     }), [controls]);
+    const toggleSound = (on: boolean): void => {
+        void latest.current?.setSound(on).then(result => {
+            if (result === undefined) setNotice('soundFailed'); else setSound(result);
+        }, () => setNotice('soundFailed'));
+    };
     // Typing: a hidden text field takes the keys while the picture is focused, so input methods (Chinese, Japanese …)
     // compose as usual; finished text goes to the app in short batches, shortcuts and special keys one by one.
     const keyboard = React.useRef<HTMLTextAreaElement>(null);
     const inputQueue = React.useRef(new ConversationWindowInputQueue());
+    const handledKeyEvents = React.useRef(new WeakSet<object>());
+    const hoverMove = React.useRef<{ x: number; y: number; lastAt: number; inFlight: boolean; pending?: { x: number; y: number }; timer?: ReturnType<typeof setTimeout> }>({
+        x: -1, y: -1, lastAt: 0, inFlight: false
+    });
+    const resetHoverMove = (): void => {
+        if (hoverMove.current.timer) { clearTimeout(hoverMove.current.timer); hoverMove.current.timer = undefined; }
+        hoverMove.current.pending = undefined;
+    };
+    const isOverlayBlockingInput = (): boolean => typeof hasOpenOverlayOrModal === 'function' && typeof sectionRef !== 'undefined'
+        ? hasOpenOverlayOrModal(sectionRef.current, typeof overlayOpenRef !== 'undefined' ? overlayOpenRef.current : false)
+        : false;
+    const notifyMouseOff = (): void => {
+        if (typeof setNotice === 'function') setNotice('mouseOff');
+    };
+    const extractMods = (event: { readonly metaKey?: boolean; readonly ctrlKey?: boolean; readonly altKey?: boolean; readonly shiftKey?: boolean }): ConversationPointerModifier[] => {
+        if (typeof pointerModifiers === 'function') return pointerModifiers(event as Pick<React.MouseEvent, 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>);
+        const mods: ConversationPointerModifier[] = [];
+        if (event.metaKey) mods.push('cmd');
+        if (event.ctrlKey) mods.push('ctrl');
+        if (event.altKey) mods.push('alt');
+        if (event.shiftKey) mods.push('shift');
+        return mods;
+    };
     // A batch belongs to the window it was typed for: switching tabs before it is sent never redirects it.
     const pendingText = React.useRef<{ text: string; timer?: ReturnType<typeof setTimeout>; generation?: number; target?: ConversationWindowControls }>({ text: '' });
     const drainPendingText = (): void => {
@@ -869,10 +1211,13 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         pending.timer = setTimeout(drainPendingText, 8);
     };
     const onKeyboardDown = (event: React.KeyboardEvent<HTMLElement>): void => {
+        const rawNative = event.nativeEvent as unknown as object | undefined;
+        if (rawNative && typeof rawNative === 'object' && handledKeyEvents.current.has(rawNative)) return;
         if (event.defaultPrevented || event.nativeEvent?.isComposing || event.keyCode === 229) return;
-        if (hasOpenOverlayOrModal(sectionRef.current, windowMenuOpen || terminateModalOpen || reopenModalOpen || Boolean(props.plugin?.studio))) return;
+        if (isOverlayBlockingInput()) return;
         const chord = keyChord(event);
         if (!chord) return;
+        if (rawNative && typeof rawNative === 'object') handledKeyEvents.current.add(rawNative);
         event.preventDefault();
         event.stopPropagation();
         event.nativeEvent?.stopImmediatePropagation?.();
@@ -883,37 +1228,39 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     };
     const onKeyboardInput = (event: React.FormEvent<HTMLTextAreaElement>): void => {
         if ((event.nativeEvent as InputEvent).isComposing) return;
-        if (hasOpenOverlayOrModal(sectionRef.current, windowMenuOpen || terminateModalOpen || reopenModalOpen || Boolean(props.plugin?.studio))) return;
+        if (isOverlayBlockingInput()) return;
         sendText(event.currentTarget.value);
         event.currentTarget.value = '';
     };
     const onKeyboardCompositionEnd = (event: React.CompositionEvent<HTMLTextAreaElement>): void => {
-        if (hasOpenOverlayOrModal(sectionRef.current, windowMenuOpen || terminateModalOpen || reopenModalOpen || Boolean(props.plugin?.studio))) return;
+        if (isOverlayBlockingInput()) return;
         sendText(event.currentTarget.value || event.data);
         event.currentTarget.value = '';
     };
-    const toggleSound = (on: boolean): void => {
-        void latest.current?.setSound(on).then(result => {
-            if (result === undefined) setNotice('soundFailed'); else setSound(result);
-        }, () => setNotice('soundFailed'));
-    };
     // Scrolls add up over a short while so a trackpad flick is one request, not dozens.
-    const wheel = React.useRef<{ delta: number; x: number; y: number; timer?: ReturnType<typeof setTimeout>; generation?: number; target?: ConversationWindowControls }>({ delta: 0, x: 0, y: 0 });
+    const wheel = React.useRef<{ deltaX: number; deltaY: number; x: number; y: number; timer?: ReturnType<typeof setTimeout>; generation?: number; target?: ConversationWindowControls }>({ deltaX: 0, deltaY: 0, x: 0, y: 0 });
     React.useEffect(() => () => {
         resetHoverMove();
         hoverMove.current.x = -1;
         hoverMove.current.y = -1;
         hoverMove.current.lastAt = 0;
         if (wheel.current.timer) clearTimeout(wheel.current.timer);
-        wheel.current = { delta: 0, x: 0, y: 0 };
+        wheel.current = { deltaX: 0, deltaY: 0, x: 0, y: 0 };
     }, [streamKey]);
     const drainWheel = (): void => {
         const pending = wheel.current;
         if (pending.timer) { clearTimeout(pending.timer); pending.timer = undefined; }
-        const delta = pending.delta, target = pending.target, x = pending.x, y = pending.y;
-        pending.delta = 0; pending.target = undefined;
-        if (Math.abs(delta) < 4 || !target) return;
-        void inputQueue.current.enqueue(() => target.pointer({ kind: 'scroll', x, y, direction: delta > 0 ? 'down' : 'up', amount: Math.min(10, Math.max(1, Math.round(Math.abs(delta) / 40))) }), pending.generation);
+        const deltaX = pending.deltaX, deltaY = pending.deltaY, target = pending.target, x = pending.x, y = pending.y, gen = pending.generation;
+        pending.deltaX = 0; pending.deltaY = 0; pending.target = undefined;
+        if (!target) return;
+        if (Math.abs(deltaY) >= 4) {
+            const amountY = Math.min(10, Math.max(1, Math.round(Math.abs(deltaY) / 40)));
+            void inputQueue.current.enqueue(() => target.pointer({ kind: 'scroll', x, y, direction: deltaY > 0 ? 'down' : 'up', amount: amountY }), gen);
+        }
+        if (Math.abs(deltaX) >= 4) {
+            const amountX = Math.min(10, Math.max(1, Math.round(Math.abs(deltaX) / 40)));
+            void inputQueue.current.enqueue(() => target.pointer({ kind: 'scroll', x, y, direction: deltaX > 0 ? 'right' : 'left', amount: amountX }), gen);
+        }
     };
     const onWheel = (event: React.WheelEvent<HTMLVideoElement>): void => {
         if (!mouse || !video.current) return;
@@ -922,14 +1269,22 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         resetHoverMove();
         flushPendingText();
         const pending = wheel.current;
-        if (pending.generation !== inputQueue.current.currentGeneration) pending.delta = 0;
+        if (pending.generation !== inputQueue.current.currentGeneration) { pending.deltaX = 0; pending.deltaY = 0; }
         pending.generation = inputQueue.current.currentGeneration;
-        pending.delta += event.deltaY; pending.x = at.x; pending.y = at.y; pending.target = latest.current;
+        const rawDeltaX = Number.isFinite(event.deltaX) ? event.deltaX : 0;
+        const rawDeltaY = Number.isFinite(event.deltaY) ? event.deltaY : 0;
+        if (event.shiftKey && rawDeltaX === 0 && rawDeltaY !== 0) {
+            pending.deltaX += rawDeltaY;
+        } else {
+            pending.deltaX += rawDeltaX;
+            pending.deltaY += rawDeltaY;
+        }
+        pending.x = at.x; pending.y = at.y; pending.target = latest.current;
         if (pending.timer) return;
         pending.timer = setTimeout(drainWheel, 24);
     };
-    const dragStart = React.useRef<{ x: number; y: number; clientX: number; clientY: number; pointerId: number } | undefined>(undefined);
-    const suppressClick = React.useRef(false);
+    const dragStart = React.useRef<{ x: number; y: number; clientX: number; clientY: number; pointerId: number; button: 'left' | 'middle' | 'right' } | undefined>(undefined);
+    const suppressPointerButtons = React.useRef<{ click: boolean; context: boolean; aux: boolean }>({ click: false, context: false, aux: false });
     const flushHoverMove = (): void => {
         const state = hoverMove.current;
         if (state.timer) { clearTimeout(state.timer); state.timer = undefined; }
@@ -955,8 +1310,8 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         });
     };
     const onPointerMove = (event: React.PointerEvent<HTMLVideoElement>): void => {
-        if (!live || !mouse || !video.current) return;
-        if (dragStart.current && (event.buttons & 1) === 1) return;
+        if ((typeof live !== 'undefined' && !live) || !mouse || !video.current) return;
+        if (dragStart.current && ((event.buttons ?? 0) & 7) !== 0) return;
         const at = pictureFraction(video.current, event.clientX, event.clientY);
         if (!at) return;
         const state = hoverMove.current;
@@ -967,80 +1322,146 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         flushHoverMove();
     };
     const onPointerDown = (event: React.PointerEvent<HTMLVideoElement>): void => {
-        if (!mouse || event.button !== 0 || !video.current) return;
+        const btn = event.button ?? 0;
+        if (!mouse || (btn !== 0 && btn !== 1 && btn !== 2) || !video.current) return;
         const at = pictureFraction(video.current, event.clientX, event.clientY);
         if (!at) return;
+        suppressPointerButtons.current = { click: false, context: false, aux: false };
         resetHoverMove();
         if (latest.current?.keys) keyboard.current?.focus({ preventScroll: true });
-        dragStart.current = { x: at.x, y: at.y, clientX: event.clientX, clientY: event.clientY, pointerId: event.pointerId };
+        dragStart.current = {
+            x: at.x,
+            y: at.y,
+            clientX: event.clientX,
+            clientY: event.clientY,
+            pointerId: event.pointerId,
+            button: btn === 2 ? 'right' : btn === 1 ? 'middle' : 'left'
+        };
         // A drag released outside the picture still ends here.
         try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* not capturable */ }
     };
-    const onPointerUp = (event: React.PointerEvent<HTMLVideoElement>): void => {
+    const finishPointerDrag = (event: React.PointerEvent<HTMLVideoElement>, cancelled: boolean): void => {
         const start = dragStart.current;
         dragStart.current = undefined;
         try { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* released */ }
+        if (cancelled) resetHoverMove();
         if (!start || start.pointerId !== event.pointerId || !mouse || !video.current) return;
+        if (cancelled && event.clientX === 0 && event.clientY === 0) return;
         if (Math.hypot(event.clientX - start.clientX, event.clientY - start.clientY) < 8) return;
-        const to = pictureFraction(video.current, event.clientX, event.clientY);
+        const to = pictureFraction(video.current, event.clientX, event.clientY, true);
         if (!to) return;
-        suppressClick.current = true;
+        suppressPointerButtons.current = {
+            click: start.button === 'left',
+            context: start.button === 'right',
+            aux: start.button === 'middle'
+        };
         resetHoverMove();
         flushPendingText();
         drainWheel();
         if (latest.current?.keys) keyboard.current?.focus({ preventScroll: true });
+        const mods = extractMods(event);
         const target = latest.current;
-        if (target) void inputQueue.current.enqueue(() => target.pointer({ kind: 'drag', from: { x: start.x, y: start.y }, to, durationMs: 250 }));
+        if (target) {
+            void inputQueue.current.enqueue(() => target.pointer({
+                kind: 'drag',
+                from: { x: start.x, y: start.y },
+                to,
+                durationMs: 250,
+                ...(start.button !== 'left' ? { button: start.button } : {}),
+                ...(mods.length ? { modifiers: mods } : {})
+            }));
+        }
+    };
+    const onPointerUp = (event: React.PointerEvent<HTMLVideoElement>): void => finishPointerDrag(event, false);
+    const onPointerCancel = (event: React.PointerEvent<HTMLVideoElement>): void => finishPointerDrag(event, true);
+    const onMouseDown = (event: React.MouseEvent<HTMLVideoElement>): void => {
+        if (event.button === 1) event.preventDefault();
     };
     const onClick = (event: React.MouseEvent<HTMLVideoElement>): void => {
-        if (suppressClick.current) { suppressClick.current = false; return; }
+        if (suppressPointerButtons.current.click) { suppressPointerButtons.current.click = false; return; }
         if (!video.current) return;
-        if (!mouse) { setNotice('mouseOff'); return; }
+        if (!mouse) { notifyMouseOff(); return; }
         resetHoverMove();
         flushPendingText();
         drainWheel();
         if (latest.current?.keys) keyboard.current?.focus({ preventScroll: true });
         const at = pictureFraction(video.current, event.clientX, event.clientY);
+        const mods = extractMods(event);
         // On Windows, restore:true returns focus to NextMux after a single click; pass whole:true on detail===2 so double-click is atomic.
         const target = latest.current, double = event.detail === 2;
-        if (at && target) void inputQueue.current.enqueue(() => target.pointer({ kind: double ? 'doubleClick' : 'click', ...(double ? { whole: true } : {}), ...at }));
+        if (at && target) {
+            void inputQueue.current.enqueue(() => target.pointer({
+                kind: double ? 'doubleClick' : 'click',
+                ...(double ? { whole: true } : {}),
+                ...(mods.length ? { modifiers: mods } : {}),
+                ...at
+            }));
+        }
+    };
+    const onAuxClick = (event: React.MouseEvent<HTMLVideoElement>): void => {
+        if (event.button !== 1 || !video.current) return;
+        event.preventDefault();
+        if (suppressPointerButtons.current.aux) { suppressPointerButtons.current.aux = false; return; }
+        if (!mouse) { notifyMouseOff(); return; }
+        resetHoverMove();
+        flushPendingText();
+        drainWheel();
+        if (latest.current?.keys) keyboard.current?.focus({ preventScroll: true });
+        const at = pictureFraction(video.current, event.clientX, event.clientY);
+        const mods = extractMods(event);
+        const target = latest.current;
+        if (at && target) {
+            void inputQueue.current.enqueue(() => target.pointer({
+                kind: 'click',
+                button: 'middle',
+                ...(mods.length ? { modifiers: mods } : {}),
+                ...at
+            }));
+        }
     };
     const onContextMenu = (event: React.MouseEvent<HTMLVideoElement>): void => {
         if (!video.current) return;
         event.preventDefault();
-        if (!mouse) { setNotice('mouseOff'); return; }
+        if (suppressPointerButtons.current.context) { suppressPointerButtons.current.context = false; return; }
+        if (!mouse) { notifyMouseOff(); return; }
         resetHoverMove();
         flushPendingText();
         drainWheel();
         if (latest.current?.keys) keyboard.current?.focus({ preventScroll: true });
         const at = pictureFraction(video.current, event.clientX, event.clientY);
+        const mods = extractMods(event);
         const target = latest.current;
-        if (at && target) void inputQueue.current.enqueue(() => target.pointer({ kind: 'click', button: 'right', ...at }));
+        if (at && target) {
+            void inputQueue.current.enqueue(() => target.pointer({
+                kind: 'click',
+                button: 'right',
+                ...(mods.length ? { modifiers: mods } : {}),
+                ...at
+            }));
+        }
     };
     const statusText = live ? conversationWindowText(locale, 'live')
         : `${tab.frameUrl && streamKey ? `${conversationWindowText(locale, 'lastFrame')} · ` : ''}${conversationTabsText(locale, tab.status)}`;
     const windows = tab.windows?.length ? tab.windows : tabWindows(tab);
     const activeWindow = windows.find(item => tab.windowRef && item.pid === tab.windowRef.pid && item.windowId === tab.windowRef.windowId) || windows[windows.length - 1];
-    const [windowMenuOpen, setWindowMenuOpen] = React.useState(false);
     const windowMenuRef = React.useRef<HTMLDivElement>(null);
     React.useEffect(() => {
         if (!windowMenuOpen) return undefined;
-        const onMouseDown = (event: MouseEvent): void => {
+        const onDocMouseDown = (event: MouseEvent): void => {
             if (windowMenuRef.current && !windowMenuRef.current.contains(event.target as Node | null)) setWindowMenuOpen(false);
         };
         const onKeyDown = (event: KeyboardEvent): void => {
             if (event.key === 'Escape') setWindowMenuOpen(false);
         };
-        document.addEventListener('mousedown', onMouseDown);
+        document.addEventListener('mousedown', onDocMouseDown);
         document.addEventListener('keydown', onKeyDown);
         return () => {
-            document.removeEventListener('mousedown', onMouseDown);
+            document.removeEventListener('mousedown', onDocMouseDown);
             document.removeEventListener('keydown', onKeyDown);
         };
     }, [windowMenuOpen]);
     const canTerminate = Boolean(streamKey && (live || tab.status === 'connected') && typeof controls?.terminateProcess === 'function');
     const [liveBubbleState, setLiveBubbleState] = React.useState<'hidden' | 'visible' | 'fading'>('hidden');
-    const [terminateModalOpen, setTerminateModalOpen] = React.useState(false);
     const [terminating, setTerminating] = React.useState(false);
     React.useEffect(() => {
         if (!canTerminate) {
@@ -1091,13 +1512,13 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     const pluginEscActive = Boolean(props.plugin?.running && typeof props.plugin.onStop === 'function');
     const pluginStopRef = React.useRef(props.plugin?.onStop);
     pluginStopRef.current = props.plugin?.onStop;
-    const localOverlayOpen = windowMenuOpen || terminateModalOpen || reopenModalOpen || Boolean(props.plugin?.studio);
     React.useEffect(() => {
         if (!visible || mouse || !pluginEscActive || localOverlayOpen) return undefined;
         const onKeyDown = (event: KeyboardEvent): void => {
             if (event.key !== 'Escape' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.defaultPrevented || event.isComposing) return;
             if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen)) return;
             const targetNode = event.target as HTMLElement | null;
+            if (targetNode?.closest?.('.nmx-plugin-chat-overlay, .nmx-plugin-chat-panel')) return;
             const isTextInput = targetNode?.tagName === 'INPUT' && !['checkbox', 'radio'].includes(((targetNode as HTMLInputElement).type || 'text').toLowerCase());
             if (targetNode && (isTextInput || targetNode.tagName === 'TEXTAREA' || targetNode.tagName === 'SELECT' || targetNode.isContentEditable)) return;
             event.preventDefault();
@@ -1109,8 +1530,10 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     }, [visible, mouse, pluginEscActive, localOverlayOpen]);
     React.useEffect(() => {
         if (!visible || !live || !mouse || localOverlayOpen) return undefined;
+        const isPluginChatNode = (node: HTMLElement | null): boolean => Boolean(node?.closest?.('.nmx-plugin-chat-overlay, .nmx-plugin-chat-panel'));
         const isTextEntryNode = (node: HTMLElement | null): boolean => {
             if (!node) return false;
+            if (isPluginChatNode(node)) return true;
             const tag = node.tagName;
             if (tag === 'TEXTAREA' || tag === 'SELECT' || node.isContentEditable) return true;
             if (tag === 'INPUT') {
@@ -1123,13 +1546,32 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         if (!hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen) && !isTextEntryNode(active) && latest.current?.keys) {
             keyboard.current?.focus({ preventScroll: true });
         }
+        const onWindowKeyDownCapture = (event: KeyboardEvent): void => {
+            if (!keyboard.current || document.activeElement !== keyboard.current) return;
+            if ((event.target as HTMLElement | null)?.closest?.('.nmx-plugin-chat-overlay, .nmx-plugin-chat-panel')) return;
+            if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen)) return;
+            if (event.isComposing || event.keyCode === 229) return;
+            const target = latest.current;
+            if (!target?.keys) return;
+            const chord = keyChord(event);
+            if (!chord) return;
+            handledKeyEvents.current.add(event);
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation?.();
+            flushPendingText();
+            drainWheel();
+            void inputQueue.current.enqueue(() => target.keys!({ key: chord.key, ...(chord.modifiers.length ? { modifiers: chord.modifiers } : {}) }));
+        };
         const onKeyDown = (event: KeyboardEvent): void => {
+            if (handledKeyEvents.current.has(event)) return;
             if (event.key !== 'Escape' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.defaultPrevented || event.isComposing) return;
             if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen)) return;
             const targetNode = event.target as HTMLElement | null;
             if (targetNode === keyboard.current || isTextEntryNode(targetNode)) return;
             const target = latest.current;
             if (!target?.keys) return;
+            handledKeyEvents.current.add(event);
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation?.();
@@ -1138,18 +1580,22 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             drainWheel();
             void inputQueue.current.enqueue(() => target.keys!({ key: 'escape' }));
         };
+        if (typeof window !== 'undefined') window.addEventListener('keydown', onWindowKeyDownCapture, true);
         document.addEventListener('keydown', onKeyDown);
-        return () => document.removeEventListener('keydown', onKeyDown);
+        return () => {
+            if (typeof window !== 'undefined') window.removeEventListener('keydown', onWindowKeyDownCapture, true);
+            document.removeEventListener('keydown', onKeyDown);
+        };
     }, [visible, live, mouse, localOverlayOpen]);
     const onSectionKeyDownCapture = (event: React.KeyboardEvent<HTMLElement>): void => {
         if (!live || !mouse || !latest.current?.keys) return;
         if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen)) return;
         const targetNode = event.target as HTMLElement | null;
         if (targetNode === keyboard.current) return;
+        if (targetNode?.closest?.('.nmx-app-plugin-bar, .nmx-plugin-runbar, .nmx-plugin-chat-panel, .nmx-plugin-chat-overlay, .nmx-visual-tab-windows, .nmx-visual-tab-terminate-modal')) return;
         const tag = targetNode?.tagName;
         const isTextInput = tag === 'INPUT' && !['checkbox', 'radio'].includes(((targetNode as HTMLInputElement).type || 'text').toLowerCase());
         if (isTextInput || tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'BUTTON' && event.key !== 'Escape') || targetNode?.isContentEditable) return;
-        if (targetNode?.closest?.('.nmx-app-plugin-bar, .nmx-plugin-runbar, .nmx-plugin-chat-panel, .nmx-visual-tab-windows, .nmx-visual-tab-terminate-modal')) return;
         keyboard.current?.focus({ preventScroll: true });
         const chord = keyChord(event);
         if (chord) {
@@ -1240,8 +1686,9 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         {props.plugin?.bar}
         <div className='nmx-visual-tab-screen' ref={screen}>
             <video ref={video} muted playsInline aria-label={tab.title} aria-hidden={!live} className={live ? 'is-ready' : undefined} data-window-key={streamKey || undefined}
-                style={pictureStyle} onClick={onClick} onContextMenu={onContextMenu} onPointerMove={onPointerMove} onPointerDown={onPointerDown} onPointerUp={onPointerUp}
-                onPointerCancel={() => { dragStart.current = undefined; resetHoverMove(); }} onPointerLeave={resetHoverMove} onWheel={onWheel}></video>
+                style={pictureStyle} onMouseDown={onMouseDown} onClick={onClick} onAuxClick={onAuxClick} onContextMenu={onContextMenu}
+                onPointerMove={onPointerMove} onPointerDown={onPointerDown} onPointerUp={onPointerUp}
+                onPointerCancel={onPointerCancel} onPointerLeave={resetHoverMove} onWheel={onWheel}></video>
             {!live && (tab.frameUrl
                 ? <img src={tab.frameUrl} alt={tab.title} draggable={false} />
                 : <div className='nmx-visual-tab-empty'>
@@ -1277,6 +1724,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             </div>}
             {live && props.plugin?.overlay && pictureBox && <div className='nmx-visual-tab-overlay' style={pictureBox}>{props.plugin.overlay}</div>}
             {live && props.plugin?.studio && pictureBox && <PluginStudio video={video} box={pictureBox} studio={props.plugin.studio} />}
+            {props.plugin?.floatingChat && <FloatingPluginChatOverlay containerSize={screenSize}>{props.plugin.floatingChat}</FloatingPluginChatOverlay>}
         </div>
         {reopenModalOpen && <div className='nmx-visual-tab-terminate-modal-backdrop' role='presentation'
             onClick={() => { if (!reopenBusy.current) setReopenModalOpen(false); }}>

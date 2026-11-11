@@ -12,6 +12,13 @@
 export type ConversationVisualTabKind = 'remote-desktop' | 'local-desktop' | 'virtual-machine';
 export type ConversationVisualTabStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
+export interface ConversationWindowCaptureResult {
+    readonly stream?: MediaStream;
+    readonly placement?: 'tab' | 'desktop';
+    readonly sound?: boolean;
+    readonly snapshotStream?: boolean;
+}
+
 export interface ConversationTabWindowItem {
     readonly pid: number;
     readonly windowId: number;

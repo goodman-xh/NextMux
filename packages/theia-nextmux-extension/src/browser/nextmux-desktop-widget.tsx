@@ -75,6 +75,7 @@ import { ClipboardService } from '@theia/core/lib/browser/clipboard-service';
 import { MessageService } from '@theia/core/lib/common/message-service';
 import { composerMarkdownSegments, decorateConversationLinks, normalizeConversationMarkdown, removeAdjacentComposerLink } from './nextmux-markdown';
 import { conversationMediaKind, decorateConversationMedia, isLocalConversationTarget, isValidLocalFileLinkCandidate, type ResolvedConversationTarget } from './nextmux-conversation-media';
+import { cachedVideoStill, pauseAudibleMedia, releaseMediaElement } from './nextmux-video-card';
 import { conversationFileUri, conversationTurnFileEvidence, resolveConversationFileTarget, type ConversationFileEvidence } from './nextmux-conversation-file-target';
 import {
     activeTabFor, attachTabWindow, closeVisualTab, CONVERSATION_TAB_ID, CONVERSATION_TABS_STORAGE_KEY, emptyConversationTabs,
@@ -93,7 +94,7 @@ import { AppPluginBuyDialog, AppPluginChatPanel, AppPluginInstallDialog, AppPlug
     appPluginPriceCents, appPluginUploadProblemText, pluginsForApp, usd, type AppPluginStartOptions, type AppPluginsTab } from './nextmux-app-plugins-view';
 import { appPluginError, appPluginReason, appPluginText } from './nextmux-app-plugins-locale';
 import { appPluginOptionsText, appPluginParamExtensions, isAppPluginImportFile } from './nextmux-app-plugin-options-locale';
-import type { AppPluginChatAttachment, AppPluginChatMessage, AppPluginChatRequest, AppPluginFingerprint, AppPluginInfo, AppPluginInspection, AppPluginLicense, AppPluginLicenseCheck, AppPluginMarketPlugin, AppPluginMessage, AppPluginMine, AppPluginModel, AppPluginModelChoices, AppPluginRunSnapshot, AppPluginVisionModel } from '../common/nextmux-app-plugins';
+import { pluginChatConversationUuid, PLUGIN_CHAT_DEFAULT_CONVERSATION_UUID, type AppPluginChatAttachment, type AppPluginChatMessage, type AppPluginChatRequest, type AppPluginFingerprint, type AppPluginInfo, type AppPluginInspection, type AppPluginLicense, type AppPluginLicenseCheck, type AppPluginMarketPlugin, type AppPluginMessage, type AppPluginMine, type AppPluginModel, type AppPluginModelChoices, type AppPluginRunSnapshot, type AppPluginVisionModel } from '../common/nextmux-app-plugins';
 /** The billing line of a run on a model on this computer (translated through the surface table). */
 const LOCAL_MODEL_BILLING_LABEL = '本机模型运行，不计费';
 /** The skill plugin developer guide (docs/SKILL_PLUGIN_DEVELOPMENT.md, published on the website). */
@@ -187,7 +188,7 @@ import { reasoningControlText } from './nextmux-reasoning-controls-locale';
 import { ComicImagePicker, type ComicImageChoice } from './nextmux-comic-image-picker';
 import { matchCatalogModel } from './nextmux-own-model-match';
 import { groupModelsByName } from '../common/nextmux-model-name';
-import { ownModelCategories, ownModelMediaFacts } from './nextmux-own-model-kind';
+import { ownModelCategories, ownModelKind, ownModelMediaFacts } from './nextmux-own-model-kind';
 import { officialDiscoveryText } from './nextmux-official-discovery-locale';
 import { officialProviderLogoAsset } from './nextmux-provider-logos';
 import { closePersistenceText } from './nextmux-close-persistence-locale';
@@ -940,6 +941,129 @@ export function isInsufficientBalanceFailure(value: unknown): boolean {
     const message = records.map(record => typeof record.message === 'string' ? record.message : '').find(Boolean) || (typeof value === 'string' ? value : '');
     return code === 'wallet_balance_insufficient' || code === 'insufficient_balance' || kind || status === 402
         || /(?:insufficient\s+balance|余额不足|余额不够|잔액이 부족|saldo insuficiente)/i.test(message);
+}
+
+const NON_CHAT_IMPORTED_MODEL_RE = /(?:^|[/._-])(?:embedding|embeddings|embed|moderation|rerank|reranker|guard|whisper|transcribe|asr|tts|dall[-_]?e|gpt-image|flux|stable-diffusion|sdxl|midjourney|sora|veo|seedance|hailuo|vidu|kling|runway|suno|udio)(?:$|[/._-\d])/i;
+
+/**
+ * Picks the first non-embedding, non-moderation, non-media chat/coding LLM from discovered `/v1/models`
+ * when a provider import link omits `&model=...`.
+ */
+export function pickDefaultImportedChatModel(
+    models: readonly {
+        readonly id: string;
+        readonly label?: string;
+        readonly capabilities?: readonly string[];
+        readonly inputModalities?: readonly string[];
+        readonly outputModalities?: readonly string[];
+        readonly toolsSupported?: boolean;
+    }[],
+    catalog?: readonly PlatformRegistryModel[]
+): string {
+    if (!Array.isArray(models) || !models.length) return '';
+    const valid = models.filter(entry => {
+        const id = typeof entry?.id === 'string' ? entry.id.trim() : '';
+        if (!id) return false;
+        if (NON_CHAT_IMPORTED_MODEL_RE.test(`${id} ${entry.label || ''}`)) return false;
+        const caps = (entry.capabilities || []).map((item: string) => String(item).toLocaleLowerCase());
+        if (caps.some((cap: string) => cap === 'embedding' || cap === 'moderation' || cap === 'rerank')) return false;
+        const kind = ownModelKind(entry, catalog ? matchCatalogModel(id, entry.label, catalog) : undefined);
+        return kind === 'llm';
+    });
+    if (!valid.length) return '';
+    const preferred = valid.find(entry => entry.toolsSupported === true
+        || (entry.capabilities || []).some((cap: string) => /^(?:tools|function_calling|coding|chat)$/i.test(String(cap))));
+    return (preferred || valid[0]).id.trim();
+}
+
+/**
+ * Formats NextMux `/v1` HTTP 402 (`wallet_balance_insufficient`) and HTTP 401 (`api_key_invalid`)
+ * gateway errors so readable upstream detail and wallet top-up / API key guidance are surfaced clearly.
+ */
+export function formatV1GatewayFailure(
+    locale: NextMuxDesktopLocale,
+    value: unknown,
+    source: 'own_api' | 'relay' | 'local' = 'own_api'
+): { readonly text: string; readonly detail: string; readonly isBalance402: boolean; readonly isAuth401: boolean } | undefined {
+    if (!value) return undefined;
+    const records: Readonly<Record<string, unknown>>[] = [];
+    const pushRecord = (item: unknown): void => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return;
+        const rec = item as Readonly<Record<string, unknown>>;
+        if (!records.includes(rec)) records.push(rec);
+    };
+    if (value instanceof Error) pushRecord({ ...value, message: value.message, name: value.name });
+    else pushRecord(value);
+    for (const root of [...records]) {
+        for (const key of ['error', 'failure', 'details', 'cause', 'data', 'readableError']) {
+            pushRecord(root[key]);
+        }
+    }
+    const rawStr = typeof value === 'string' ? value : value instanceof Error ? value.message : '';
+    const codeFromRecords = records
+        .map(rec => typeof rec.code === 'string' ? rec.code.trim().toLocaleLowerCase() : '')
+        .find(Boolean) || '';
+    const codeMatch = !codeFromRecords && rawStr
+        ? rawStr.match(/\b(wallet_balance_insufficient|insufficient_balance|api_key_invalid|invalid_api_key|api_key_revoked|api_key_expired)\b/i)?.[1]?.toLocaleLowerCase() || ''
+        : '';
+    const code = codeFromRecords || codeMatch;
+    const statusFromRecords = records
+        .map(rec => Number(rec.status ?? rec.httpStatus))
+        .find(candidate => Number.isSafeInteger(candidate) && candidate >= 100 && candidate <= 599);
+    const statusMatch = statusFromRecords === undefined && rawStr
+        ? Number(rawStr.match(/\bHTTP\s+(401|402)\b/i)?.[1] || 0) || undefined
+        : undefined;
+    const status = statusFromRecords ?? statusMatch;
+
+    const rawDetail = (
+        records.map(rec => typeof rec.detail === 'string' ? rec.detail.trim() : '').find(Boolean)
+        || records.map(rec => typeof rec.upstreamMessage === 'string' ? rec.upstreamMessage.trim() : '').find(Boolean)
+        || records.map(rec => typeof rec.message === 'string' ? rec.message.trim() : '').find(Boolean)
+        || rawStr.trim()
+        || modelFailure(locale, value, { source }).detail
+        || ''
+    )
+        .replace(/Bearer\s+\S+/gi, '[redacted]')
+        .replace(/\bsk-[A-Za-z0-9_-]{6,}\b/gi, '[redacted]')
+        .replace(/\bsecret\b/gi, '[credential]')
+        .replace(/https?:\/\/\S+/gi, match => {
+            try { return new URL(match).host; } catch { return ''; }
+        })
+        .replace(/[\u0000\r\n]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 400);
+
+    const isBalance402 = code === 'wallet_balance_insufficient'
+        || (status === 402 && (source === 'own_api' || code === 'insufficient_balance' || /wallet|nextmux|top[\s-]*up|充值|余额/i.test(rawDetail)));
+    const isAuth401 = code === 'api_key_invalid' || code === 'invalid_api_key' || code === 'api_key_revoked' || code === 'api_key_expired'
+        || (status === 401 && (source === 'own_api' || /api[_ -]?key|sk-nmx|bearer|密钥/i.test(rawDetail)));
+
+    if (!isBalance402 && !isAuth401) return undefined;
+
+    if (isBalance402) {
+        const base = locale === 'zh-TW'
+            ? '錢包餘額不足（HTTP 402 · wallet_balance_insufficient），請前往錢包儲值後繼續。'
+            : locale.startsWith('zh')
+                ? '钱包余额不足（HTTP 402 · wallet_balance_insufficient），请前往钱包充值后继续。'
+                : 'Insufficient wallet balance (HTTP 402 · wallet_balance_insufficient). Please top up your wallet to continue.';
+        const includeDetail = Boolean(rawDetail && rawDetail !== 'wallet_balance_insufficient' && !base.includes(rawDetail));
+        const text = includeDetail
+            ? (locale.startsWith('zh') ? `${base} 详情：${rawDetail}` : `${base} Detail: ${rawDetail}`)
+            : base;
+        return { text, detail: rawDetail || 'wallet_balance_insufficient', isBalance402: true, isAuth401: false };
+    }
+
+    const base = locale === 'zh-TW'
+        ? 'API Key 無效或已失效（HTTP 401 · api_key_invalid），請在模型中心檢查或重新匯入金鑰。'
+        : locale.startsWith('zh')
+            ? 'API Key 无效或已失效（HTTP 401 · api_key_invalid），请在模型中心检查或重新导入密钥。'
+            : 'Invalid or revoked API key (HTTP 401 · api_key_invalid). Check or re-import your key in Model Center.';
+    const includeDetail = Boolean(rawDetail && rawDetail !== 'api_key_invalid' && !base.includes(rawDetail));
+    const text = includeDetail
+        ? (locale.startsWith('zh') ? `${base} 详情：${rawDetail}` : `${base} Detail: ${rawDetail}`)
+        : base;
+    return { text, detail: rawDetail || 'api_key_invalid', isBalance402: false, isAuth401: true };
 }
 
 function finiteNonNegativeNumber(value: unknown, fallback = 0): number {
@@ -5447,9 +5571,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
         } catch {
             this.expandedProjectConversationLists.clear();
         }
-        this.loadProjectBrowsers();
-        this.loadScheduledTasks();
-        void this.restoreScheduledTasks();
+        if (!this.detachedConversationId) {
+            this.loadProjectBrowsers();
+            this.loadScheduledTasks();
+            void this.restoreScheduledTasks();
+        }
         this.loadNotifications();
         this.loadManagedPriceNotices();
         void Promise.resolve().then(() => this.platformService.setAgentUiLabels(this.agentUiLabels())).catch(() => undefined);
@@ -5597,7 +5723,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.initializeDesktopBridge();
         this.initializeBrowserController();
         this.startBrowserToolBridge();
-        this.scheduleIdleConversationImportScan();
+        if (!this.detachedConversationId) this.scheduleIdleConversationImportScan();
         const localizationObserver = new MutationObserver(mutations => {
             if (this.localizationMutationSuppressed) return;
             const needsLocalization = mutations.some(mutation => {
@@ -5804,11 +5930,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.toDispose.push({ dispose: () => { clearInterval(scheduledTaskTimer); clearTimeout(firstScheduledTaskCheck); } });
         this.toDispose.push({ dispose: () => this.releaseComicVisualPreview() });
         this.toDispose.push({ dispose: () => this.stopVoiceInput(false) });
-        if (navigator.mediaDevices?.addEventListener) {
-            const refreshMicrophones = (): void => { void this.loadMicrophones(false); };
-            navigator.mediaDevices.addEventListener('devicechange', refreshMicrophones);
-            this.toDispose.push({ dispose: () => navigator.mediaDevices.removeEventListener('devicechange', refreshMicrophones) });
-        }
         window.addEventListener('keydown', this.handleThreadFindShortcut, true);
         this.toDispose.push({ dispose: () => window.removeEventListener('keydown', this.handleThreadFindShortcut, true) });
         window.addEventListener('keydown', this.handleBrowserAddressShortcut, true);
@@ -5920,16 +6041,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.scheduleSurfaceLocalization();
         void this.initializeConversationWindows();
         void this.refreshSkills();
-        void this.loadCommunitySkills(false);
+        if (!this.detachedConversationId) void this.loadCommunitySkills(false);
         void this.refreshMcpServers();
-        void this.loadCatalog();
-        void this.loadPublicMerchantPage();
+        void this.loadCatalog(false, this.detachedConversationId ? ['catalog'] : ['catalog', 'registry', 'global']);
+        if (!this.detachedConversationId) void this.loadPublicMerchantPage();
         void this.loadDeviceSession();
         void this.loadOfficialModels();
-        void this.loadTerminalRuntime();
-        void this.loadMediaState(true);
-        void this.loadComicExportState(true);
-        void this.loadMicrophones(false);
+        if (!this.detachedConversationId) {
+            void this.loadTerminalRuntime();
+            void this.loadMediaState(true);
+            void this.loadComicExportState(true);
+        }
         // Open-source tools (FFmpeg, subtitle recogniser) download quietly once the app has settled.
         if (!this.detachedConversationId) window.setTimeout(() => {
             if (!this.isDisposed) void this.platformService.ensureDesktopComponents(this.desktopLocale).catch(() => undefined);
@@ -6583,6 +6705,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // Reopening onto a plugins page loads what it shows, as opening that page by hand does.
         if (this.activeSection === 'coding' && this.codingPanel === 'extensions') this.loadCodingPluginsTab?.(this.codingPluginsTab?.() || 'plugins');
         else if (this.activeSection === 'settings' && this.settingsPanel === 'plugins') void this.loadAppPlugins?.(true);
+        else if (this.activeSection === 'settings' && this.settingsPanel === 'system') void this.loadMicrophones?.(false);
         this.billingTab = saved.billingTab;
         this.modelCenterView = saved.modelCenterView;
         this.modelCapabilityFilter = saved.modelCapabilityFilter;
@@ -6873,7 +6996,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected browserToolBridgeActive(): boolean {
         return [...this.conversationAgentRuns.values()].some(conversationAgentRunActive) || this.runningScheduledTaskIds.size > 0 || this.agentChildContinuationStates.size > 0
-            || this.computerToolRequestsInFlight.size > 0 || this.browserToolRequestsInFlight.size > 0;
+            || this.appPluginChatActiveRequests.size > 0 || this.computerToolRequestsInFlight.size > 0 || this.browserToolRequestsInFlight.size > 0;
     }
 
     /** Conversations whose run may still call computer or browser tools. */
@@ -6882,6 +7005,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         for (const run of this.conversationAgentRuns.values()) if (conversationAgentRunActive(run) && run.activeAgentSessionId) ids.add(run.activeAgentSessionId);
         for (const id of this.scheduledAgentRuns.keys()) ids.add(id);
         for (const state of this.agentChildContinuationStates.values()) if (state.sessionId) ids.add(state.sessionId);
+        for (const active of this.appPluginChatActiveRequests.values()) if (active.parentConversationId) ids.add(active.parentConversationId);
         for (const request of this.computerToolRequestsInFlight.values()) ids.add(request.conversationId);
         for (const id of this.browserToolConversationQueues.keys()) ids.add(id);
         return [...ids].slice(0, 64);
@@ -7076,6 +7200,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
      */
     protected async computerRequestRunActive(request: DesktopComputerToolRequest): Promise<boolean> {
         const { conversationId, runId } = request;
+        if (runId?.startsWith('plugin-chat-run:')) {
+            const streamId = runId.slice('plugin-chat-run:'.length);
+            for (const active of this.appPluginChatActiveRequests.values()) {
+                if (active.requestId === streamId && !active.controller.signal.aborted
+                    && (!active.parentConversationId || active.parentConversationId === conversationId)) {
+                    return true;
+                }
+            }
+            return false;
+        }
         for (const [sessionId, run] of this.conversationAgentRuns) {
             if (conversationAgentRunActive(run) && (sessionId === conversationId || run.activeAgentSessionId === conversationId
                 || Boolean(runId && run.activeAgentRunId === runId))) return true;
@@ -7125,6 +7259,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
         request = { ...request, expiresAt: Math.min(request.expiresAt, Date.now() + 170_000) };
         if (isDesktopTabAction(request.action)) return this.handleTabToolRequest(request, capability.platform);
         if (isDesktopPluginAction(request.action)) return this.handlePluginToolRequest(request);
+        if (request.pinnedTabId) {
+            this.loadConversationTabs();
+            const pinnedTab = visualTabsFor(this.conversationTabs, request.conversationId).find(item => item.id === request.pinnedTabId);
+            if (!pinnedTab?.windowRef || pinnedTab.status === 'disconnected') {
+                return { requestId: request.id, ok: false, error: 'The app window in this tab is no longer open.' };
+            }
+            const reqPid = Number(request.input?.pid);
+            const reqWin = Number(request.input?.windowId);
+            const ownedChild = (pinnedTab.windows || []).find(w => w.alive !== false && w.pid === reqPid && w.windowId === reqWin);
+            const targetRef = ownedChild || pinnedTab.windowRef;
+            request = { ...request, input: { ...(request.input || {}), pid: targetRef.pid, windowId: targetRef.windowId } };
+        }
         const result = await bridge.performComputerAction(request);
         try { this.reflectComputerActivityInTabs(request, result); } catch { /* tabs are presentation only */ }
         return result;
@@ -7603,6 +7749,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.councilModalModelPickerSlotId = '';
         this.councilModalRolePickerSlotId = '';
         this.councilConfigModalOpen = true;
+        this.ensureDetachedPickerCatalogs?.(true);
         this.update();
     }
 
@@ -8338,18 +8485,39 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         if (!context || typeof canvas.captureStream !== 'function') return undefined;
-        let track: MediaStreamTrack | undefined;
+        const decodeShot = async (): Promise<ImageBitmap | undefined> => {
+            const shot = await snapshot(conversationId, pid, windowId, 1600).catch(() => undefined);
+            if (!shot?.ok || !shot.data) return undefined;
+            const bytes = Uint8Array.from(atob(shot.data), character => character.charCodeAt(0));
+            return await createImageBitmap(new Blob([bytes], { type: shot.mimeType || 'image/jpeg' })).catch(() => undefined);
+        };
+        // First capture and validate the initial bitmap, size canvas, create captureStream(0), THEN draw & requestFrame
+        // so detached off-DOM <canvas> capture never stalls after Frame #1 in Blink.
+        const firstBitmap = await decodeShot();
+        if (!firstBitmap) return undefined;
+        canvas.width = firstBitmap.width;
+        canvas.height = firstBitmap.height;
+        const stream = canvas.captureStream(0);
+        const track = stream.getVideoTracks()[0];
+        if (!track) {
+            firstBitmap.close();
+            return undefined;
+        }
+        context.drawImage(firstBitmap, 0, 0);
+        firstBitmap.close();
+        (track as unknown as { requestFrame?: () => void })?.requestFrame?.();
+
         let drawing = false;
         const draw = async (): Promise<boolean> => {
             if (drawing) return true;
             drawing = true;
             try {
-                const shot = await snapshot(conversationId, pid, windowId, 1600).catch(() => undefined);
-                if (!shot?.ok || !shot.data) return false;
-                const bytes = Uint8Array.from(atob(shot.data), character => character.charCodeAt(0));
-                const bitmap = await createImageBitmap(new Blob([bytes], { type: shot.mimeType || 'image/jpeg' })).catch(() => undefined);
+                const bitmap = await decodeShot();
                 if (!bitmap) return false;
-                if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) { canvas.width = bitmap.width; canvas.height = bitmap.height; }
+                if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
+                    canvas.width = bitmap.width;
+                    canvas.height = bitmap.height;
+                }
                 context.drawImage(bitmap, 0, 0);
                 bitmap.close();
                 (track as unknown as { requestFrame?: () => void })?.requestFrame?.();
@@ -8358,16 +8526,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 drawing = false;
             }
         };
-        // The first picture decides: a window that cannot be captured at all is reported as before.
-        if (!await draw()) return undefined;
-        const stream = canvas.captureStream(8);
-        track = stream.getVideoTracks()[0];
-        if (!track) return undefined;
         const streamKey = `${conversationId}:${pid}:${windowId}`;
         let failures = 0;
         let nudgeFastTimer: number | undefined;
         let nudgeFollowTimer: number | undefined;
-        const ended = (): boolean => track!.readyState === 'ended';
+        const ended = (): boolean => track.readyState === 'ended';
         const cleanupNudger = (): void => {
             if (nudgeFastTimer !== undefined) { window.clearTimeout(nudgeFastTimer); nudgeFastTimer = undefined; }
             if (nudgeFollowTimer !== undefined) { window.clearTimeout(nudgeFollowTimer); nudgeFollowTimer = undefined; }
@@ -8380,7 +8543,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 nudgeFastTimer = window.setTimeout(() => {
                     nudgeFastTimer = undefined;
                     if (!ended()) void draw();
-                }, 45);
+                }, 40);
                 return;
             }
             if (nudgeFastTimer !== undefined) window.clearTimeout(nudgeFastTimer);
@@ -8396,14 +8559,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
         };
         this.snapshotStreamNudgers.set(streamKey, nudger);
         track.addEventListener?.('ended', cleanupNudger, { once: true });
+        const nextDelayMs = (): number => this.computerWindowVisibility.get(streamKey) === false ? 500 : 100;
         const tick = async (): Promise<void> => {
             if (ended()) { cleanupNudger(); return; }
             failures = await draw() ? 0 : failures + 1;
-            // About five seconds without a picture: the window is gone or no longer this conversation's.
-            if (failures >= 25) { cleanupNudger(); track!.stop(); track!.dispatchEvent(new Event('ended')); return; }
-            if (!ended()) window.setTimeout(() => void tick(), 170);
+            if (failures >= 25) { cleanupNudger(); track.stop(); track.dispatchEvent(new Event('ended')); return; }
+            if (!ended()) window.setTimeout(() => void tick(), nextDelayMs());
         };
-        window.setTimeout(() => void tick(), 170);
+        (stream as MediaStream & { snapshotStream?: boolean }).snapshotStream = true;
+        window.setTimeout(() => void tick(), nextDelayMs());
         return stream;
     }
     protected conversationWindowControls(conversationId: string, tab: ConversationVisualTab): ConversationWindowControls | undefined {
@@ -8453,7 +8617,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 get canPoint() { return widget.computerViewCapability?.pointer === true && Boolean(bridge.computerWindowPointer); },
                 get canMute() { return widget.computerViewCapability?.sound === true && Boolean(bridge.setComputerWindowSound); },
                 get canLock() { return widget.computerViewCapability?.lock !== false; },
-                start: () => {
+                start: (options?: { readonly preferSnapshot?: boolean }) => {
                     const run = widget.computerViewArmQueue.then(async () => {
                         const armed = await bridge.startComputerWindowView!(conversationId, ref.pid, ref.windowId);
                         if (!armed?.ok) {
@@ -8484,16 +8648,28 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             return { placement: state.placement, sound: state.sound };
                         }
                         changed({ placement: armed.placement, sound: widget.computerWindowSoundPreferences.get(key) ?? armed.sound });
-                        // Main answers this request with exactly the armed window (setDisplayMediaRequestHandler). When the
-                        // system capture is missing or fails for this window (some GPUs, protected or layered windows, or
-                        // DWM-cloaked windows on another Windows virtual desktop), the tab still shows it live from snapshots.
+                        // Main answers this request with the armed window (setDisplayMediaRequestHandler) on macOS and WGC-capable
+                        // Windows 11; when preferSnapshot, armed.snapshotOnly, or getDisplayMedia fails / returns no live video track,
+                        // fall back seamlessly to the snapshot stream.
                         let stream: MediaStream | undefined;
-                        const isWinParked = armed.placement === 'tab' && navigator.userAgent.includes('Windows');
-                        if (!isWinParked && typeof navigator.mediaDevices?.getDisplayMedia === 'function') {
-                            try { stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 24, max: 30 } }, audio: false }); }
-                            catch { stream = undefined; }
+                        let snapshotStream = false;
+                        if (!options?.preferSnapshot && !armed.snapshotOnly && typeof navigator.mediaDevices?.getDisplayMedia === 'function') {
+                            try {
+                                const candidate = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 24, max: 30 } }, audio: false });
+                                const vTrack = candidate?.getVideoTracks?.()[0];
+                                if (vTrack && vTrack.readyState !== 'ended') {
+                                    stream = candidate;
+                                } else {
+                                    candidate?.getTracks?.().forEach(t => t.stop());
+                                }
+                            } catch {
+                                stream = undefined;
+                            }
                         }
-                        stream ??= await widget.snapshotWindowStream(conversationId, ref.pid, ref.windowId);
+                        if (!stream) {
+                            stream = await widget.snapshotWindowStream(conversationId, ref.pid, ref.windowId);
+                            snapshotStream = Boolean(stream);
+                        }
                         // Adopt the switches as the app side has them (the AI may have changed them while the tab was hidden), then
                         // register the window's 键鼠 switch there.
                         const current = await bridge.computerWindowState?.(conversationId, ref.pid, ref.windowId).catch(() => undefined);
@@ -8501,7 +8677,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             ...(typeof current?.parkReason === 'string' ? { parkReason: current.parkReason } : {}) });
                         void bridge.setComputerWindowUserInput?.(conversationId, ref.pid, ref.windowId, state.userInput).catch(() => undefined);
                         await widget.setConversationWindowVisible(conversationId, ref.pid, ref.windowId, widget.computerWindowVisibility.get(key) !== false);
-                        return { ...(stream ? { stream } : {}), placement: armed.placement, sound: state.sound };
+                        return { ...(stream ? { stream, ...(snapshotStream ? { snapshotStream: true } : {}) } : {}), placement: armed.placement, sound: state.sound };
                     });
                     widget.computerViewArmQueue = run.catch(() => undefined);
                     return run;
@@ -8551,11 +8727,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 place: async placement => {
                     widget.loadConversationTabs();
                     const currentTab = visualTabsFor(widget.conversationTabs, conversationId).find(item => item.id === tab.id) || tab;
+                    const activeRef = currentTab.windowRef || ref;
                     const targets = tabWindows(currentTab);
-                    const list = targets.some(w => w.pid === ref.pid && w.windowId === ref.windowId) ? targets : [{ pid: ref.pid, windowId: ref.windowId, title: tab.target }];
+                    const list = targets.some(w => w.pid === activeRef.pid && w.windowId === activeRef.windowId)
+                        ? targets
+                        : [{ pid: activeRef.pid, windowId: activeRef.windowId, title: currentTab.target }];
                     let result: { ok?: boolean; placement?: ConversationWindowPlacement } | undefined;
                     for (const w of list) {
-                        const isActive = w.pid === ref.pid && w.windowId === ref.windowId;
+                        const isActive = w.pid === activeRef.pid && w.windowId === activeRef.windowId;
                         const r = await bridge.placeComputerWindow!(conversationId, w.pid, w.windowId, placement, placement === 'desktop' && isActive);
                         if (isActive || !result?.ok) result = r;
                         if (r?.ok) widget.computerWindowStateSync.get(`${conversationId}:${w.pid}:${w.windowId}`)?.({ placement: r.placement });
@@ -8568,10 +8747,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 terminateProcess: async () => {
                     widget.loadConversationTabs();
                     const currentTab = visualTabsFor(widget.conversationTabs, conversationId).find(item => item.id === tab.id) || tab;
+                    const activeRef = currentTab.windowRef || ref;
                     widget.tabInteractedIds.add(`${conversationId}\n${currentTab.id}`);
                     widget.tabInteractedIds.add(`${conversationId}\n${tab.id}`);
                     const targets = tabWindows(currentTab);
-                    const list = targets.some(w => w.pid === ref.pid && w.windowId === ref.windowId) ? targets : [{ pid: ref.pid, windowId: ref.windowId, title: tab.target }];
+                    const list = targets.some(w => w.pid === activeRef.pid && w.windowId === activeRef.windowId)
+                        ? targets
+                        : [{ pid: activeRef.pid, windowId: activeRef.windowId, title: currentTab.target }];
                     let ok = false;
                     for (const w of list) {
                         widget.computerWindowControls.delete(`${conversationId}:${w.pid}:${w.windowId}`);
@@ -8733,11 +8915,28 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             const closingStart = (request: typeof this.appPluginQueuedGoal): boolean => Boolean(request
                 && request.conversationId === conversationId && tabs.some(tab => tab.id === request.tabId));
-            if (closingStart(this.appPluginStart)) {
-                this.appPluginStart?.resolve?.({ ok: false, error: 'user_cancelled' });
-                this.appPluginStart = undefined;
+            const starts = (this as unknown as { appPluginStartsByTab?: Map<string, NonNullable<NextMuxDesktopWidget['appPluginStart']>> }).appPluginStartsByTab;
+            const queuedGoals = (this as unknown as { appPluginQueuedGoalsByTab?: Map<string, NonNullable<NextMuxDesktopWidget['appPluginQueuedGoal']>> }).appPluginQueuedGoalsByTab;
+            const launchOverrides = (this as unknown as { appPluginTabLaunchOverrides?: Map<string, unknown> }).appPluginTabLaunchOverrides;
+            let cancelledCurrent = false;
+            for (const tab of tabs) {
+                const tabKey = `${conversationId}\n${tab.id}`;
+                const pending = starts?.get(tabKey);
+                if (pending) {
+                    if (pending === this.appPluginStart) cancelledCurrent = true;
+                    starts!.delete(tabKey);
+                    pending.resolve?.({ ok: false, error: 'user_cancelled' });
+                }
+                queuedGoals?.delete(tabKey);
+                launchOverrides?.delete(tabKey);
             }
-            if (closingStart(this.appPluginQueuedGoal)) this.appPluginQueuedGoal = undefined;
+            if (closingStart(this.appPluginStart)) {
+                if (!cancelledCurrent) this.appPluginStart?.resolve?.({ ok: false, error: 'user_cancelled' });
+                this.appPluginStart = starts ? [...starts.values()].at(-1) : undefined;
+            }
+            if (closingStart(this.appPluginQueuedGoal)) {
+                this.appPluginQueuedGoal = queuedGoals ? [...queuedGoals.values()].at(-1) : undefined;
+            }
             for (const tab of tabs) if (this.detachedComputerTabs.delete(`${conversationId}\n${tab.id}`)) void window.nextmuxDesktop?.closeComputerTabWindow?.(conversationId, tab.id).catch(() => undefined);
         }
         const forget = window.nextmuxDesktop?.forgetComputerWindow;
@@ -8775,12 +8974,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const conversationId = request.conversationId;
         if (this.desktopControlEscapedConversations?.has(conversationId)) return failed(COMPUTER_USER_ESC_OBSERVATION);
         this.loadConversationTabs();
-        const currentTab = findConversationTabByTarget(visualTabsFor(this.conversationTabs, conversationId), tabId);
+        const pinnedTabId = typeof request.pinnedTabId === 'string' ? request.pinnedTabId.trim() : '';
+        const tabs = visualTabsFor(this.conversationTabs, conversationId);
+        const currentTab = pinnedTabId
+            ? tabs.find(item => item.id === pinnedTabId)
+            : findConversationTabByTarget(tabs, tabId);
+        if (pinnedTabId && !currentTab) return failed(`Tab "${pinnedTabId}" is no longer open.`);
         // A stale target is not permission to reopen an app or use a sibling
         // window with a similar name. The next tool call must identify its target.
-        if (currentTab?.status === 'disconnected') return failed(`App window ${tabId} is disconnected. Use tabs.list, then explicitly open or select the intended window before taking a new screenshot.`);
+        if (currentTab?.status === 'disconnected') return failed(`App window ${pinnedTabId || tabId} is disconnected. Use tabs.list, then explicitly open or select the intended window before taking a new screenshot.`);
         const ref = currentTab?.windowRef;
-        if (!ref || !currentTab) return failed(`No app window in tab ${tabId}; use tabs.list.`);
+        if (!ref || !currentTab) return failed(`No app window in tab ${pinnedTabId || tabId}; use tabs.list.`);
         const canonicalTabId = currentTab.id;
         const key = `${conversationId}\n${canonicalTabId}`;
         const input = request.input || {};
@@ -8845,6 +9049,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.desktopControlEscapedConversations?.add(conversationId);
                 return failed(COMPUTER_USER_ESC_OBSERVATION);
             }
+            if (result?.ok) this.nudgeSnapshotStream?.(conversationId, ref.pid, ref.windowId, false);
             return result?.ok ? done({ tabId: canonicalTabId, sent: true, delivery: result.delivery, next: TAB_INPUT_NEXT }) : failed(`tab_keys_failed (${result?.error || 'unavailable'})`);
         }
         const size = this.tabShotSizes.get(key);
@@ -8856,25 +9061,54 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 || !(size.width > 0 && size.height > 0) || x < 0 || x > size.width || y < 0 || y > size.height) return undefined;
             return { x: x / size.width, y: y / size.height };
         };
+        const validModifiers = (raw: unknown): ('cmd' | 'ctrl' | 'alt' | 'shift')[] | undefined => {
+            if (!Array.isArray(raw)) return undefined;
+            const allowed = new Set(['cmd', 'ctrl', 'alt', 'shift']);
+            const filtered = raw.map(v => String(v).toLowerCase()).filter((v): v is 'cmd' | 'ctrl' | 'alt' | 'shift' => allowed.has(v));
+            return filtered.length > 0 ? [...new Set(filtered)] : undefined;
+        };
         if (request.action === 'tabDrag') {
             const from = point(input.from), to = point(input.to);
             if (!from || !to) return failed(`from and to must lie inside the ${size.width}×${size.height} screenshot.`);
             const durationMs = input.durationMs === undefined ? 300 : input.durationMs;
             if (typeof durationMs !== 'number' || !Number.isInteger(durationMs) || durationMs < 50 || durationMs > 2000) return failed('tab_drag_invalid_duration');
-            const result = await bridge?.computerWindowPointer?.(conversationId, { pid: ref.pid, windowId: ref.windowId, kind: 'drag', from, to, durationMs, restore: true, delivery, source: 'agent' });
+            if (input.button !== undefined && input.button !== 'left' && input.button !== 'right' && input.button !== 'middle') return failed('tab_pointer_invalid_button');
+            const dragButton = input.button === 'left' || input.button === 'right' || input.button === 'middle' ? input.button : undefined;
+            const dragModifiers = validModifiers(input.modifiers);
+            const result = await bridge?.computerWindowPointer?.(conversationId, {
+                pid: ref.pid, windowId: ref.windowId, kind: 'drag', from, to, durationMs,
+                ...(dragButton ? { button: dragButton } : {}),
+                ...(dragModifiers ? { modifiers: dragModifiers } : {}),
+                restore: true, delivery, source: 'agent'
+            });
             if (result?.error === 'interrupted_by_user_esc' || result?.error === 'user_escape' || this.desktopControlEscapedConversations?.has(conversationId)) {
                 this.desktopControlEscapedConversations?.add(conversationId);
                 return failed(COMPUTER_USER_ESC_OBSERVATION);
             }
+            if (result?.ok) this.nudgeSnapshotStream?.(conversationId, ref.pid, ref.windowId, false);
             return result?.ok ? done({ tabId: canonicalTabId, sent: true, delivery: result.delivery, next: 'Take tabs.screenshot to see the result.' }) : failed(`tab_pointer_failed (${result?.error || 'unavailable'})`);
         }
         const position = point(input);
         if (!position) return failed(`x and y must lie inside the ${size.width}×${size.height} screenshot.`);
         const { x, y } = position;
-        if (input.button !== undefined && input.button !== 'left' && input.button !== 'right') return failed('tab_pointer_invalid_button');
-        const button = input.button === 'right' ? 'right' as const : 'left' as const;
+        if (request.action === 'tabMove') {
+            const moveDelivery = input.delivery === 'auto' ? 'auto' as const : 'background' as const;
+            const result = await bridge?.computerWindowPointer?.(conversationId, {
+                pid: ref.pid, windowId: ref.windowId, kind: 'move', x, y, restore: false, delivery: moveDelivery, source: 'agent'
+            });
+            if (result?.error === 'interrupted_by_user_esc' || result?.error === 'user_escape' || this.desktopControlEscapedConversations?.has(conversationId)) {
+                this.desktopControlEscapedConversations?.add(conversationId);
+                return failed(COMPUTER_USER_ESC_OBSERVATION);
+            }
+            if (result?.ok) this.nudgeSnapshotStream?.(conversationId, ref.pid, ref.windowId, true);
+            return result?.ok ? done({ tabId: canonicalTabId, sent: true, delivery: result.delivery, next: TAB_INPUT_NEXT }) : failed(`tab_pointer_failed (${result?.error || 'unavailable'})`);
+        }
+        if (input.button !== undefined && input.button !== 'left' && input.button !== 'right' && input.button !== 'middle') return failed('tab_pointer_invalid_button');
+        const button = input.button === 'right' ? 'right' as const : input.button === 'middle' ? 'middle' as const : 'left' as const;
+        const clickModifiers = validModifiers(input.modifiers);
         const doubleClick = request.action === 'tabClick' && input.double === true;
         const result = await bridge?.computerWindowPointer?.(conversationId, { pid: ref.pid, windowId: ref.windowId, x, y, restore: true, delivery, source: 'agent',
+            ...(clickModifiers ? { modifiers: clickModifiers } : {}),
             ...(request.action === 'tabScroll'
                 ? { kind: 'scroll' as const, direction: (['up', 'down', 'left', 'right'].includes(String(input.direction)) ? String(input.direction) : 'down') as 'up' | 'down' | 'left' | 'right', amount: Number(input.amount) || 3 }
                 : { kind: (doubleClick ? 'doubleClick' : 'click') as 'click' | 'doubleClick', ...(doubleClick ? { whole: true } : {}), button }) });
@@ -8882,6 +9116,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.desktopControlEscapedConversations?.add(conversationId);
             return failed(COMPUTER_USER_ESC_OBSERVATION);
         }
+        if (result?.ok) this.nudgeSnapshotStream?.(conversationId, ref.pid, ref.windowId, false);
         return result?.ok ? done({ tabId: canonicalTabId, sent: true, delivery: result.delivery, next: TAB_INPUT_NEXT }) : failed(`tab_pointer_failed (${result?.error || 'unavailable'})`);
     }
 
@@ -8896,9 +9131,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const bridge = window.nextmuxDesktop;
         if (!bridge?.startAppPlugin) return failed('Skill plugins are not available in this version of NextMux.');
         const input = request.input || {};
+        const pinnedTabId = typeof request.pinnedTabId === 'string' ? request.pinnedTabId.trim() : '';
         const runOf = (): AppPluginRunSnapshot | undefined => {
-            const run = typeof input.runId === 'string' ? this.appPluginRuns.get(input.runId) : undefined;
-            return run && run.conversationId === conversationId ? run : undefined;
+            const run = typeof input.runId === 'string'
+                ? this.appPluginRuns.get(input.runId)
+                : (pinnedTabId ? this.activeAppPluginRun(conversationId, pinnedTabId) : undefined);
+            return run && run.conversationId === conversationId && (!pinnedTabId || run.tabId === pinnedTabId) ? run : undefined;
         };
         const describeRun = (run: AppPluginRunSnapshot) => ({ runId: run.runId, tabId: run.tabId, plugin: run.pluginId, name: run.name, goal: run.goal,
             ...(run.params && Object.keys(run.params).length ? { params: run.params } : {}),
@@ -8908,39 +9146,95 @@ export class NextMuxDesktopWidget extends ReactWidget {
             readings: run.signals, events: run.events.slice(-8).map(event => ({ id: event.id, message: event.modelMessage || `Plugin event: ${event.id}`, paused: event.pause, stopped: event.stop })), ...(run.error ? { lastError: run.error } : {}) });
         if (request.action === 'pluginList') {
             await this.loadAppPlugins(true);
+            if (pinnedTabId && !visualTabsFor(this.conversationTabs, conversationId).some(item => item.id === pinnedTabId)) {
+                return failed(`Tab "${pinnedTabId}" is no longer open.`);
+            }
             return done({ plugins: this.appPlugins.filter(plugin => plugin.ok && plugin.summary).map(plugin => ({ id: plugin.id, name: (plugin.modelSummary || plugin.summary)!.name, description: plugin.modelSummary?.description || '',
                 apps: plugin.summary!.apps.map(app => app.platform === 'macos' ? app.bundleId : app.program), goalExamples: plugin.modelSummary?.goals.examples || [],
                 ...(plugin.modelSummary?.params?.length ? { params: plugin.modelSummary.params, paramValues: plugin.params } : {}),
                 enabled: plugin.enabled, ready: Boolean(plugin.ready),
                 ...(plugin.ready ? {} : { notReady: plugin.enabled ? 'No decision model chosen yet: the user chooses one in Settings → Skill plugins.' : 'The user turned this plugin off.' }) })),
-                runs: [...this.appPluginRuns.values()].filter(run => run.conversationId === conversationId).map(describeRun) });
+                runs: [...this.appPluginRuns.values()].filter(run => run.conversationId === conversationId && (!pinnedTabId || run.tabId === pinnedTabId)).map(describeRun) });
+        }
+        if ((request.action as string) === 'pluginConfigure') {
+            await this.loadAppPlugins(true);
+            const tabs = visualTabsFor(this.conversationTabs, conversationId);
+            const tab = pinnedTabId
+                ? tabs.find(item => item.id === pinnedTabId)
+                : findConversationTabByTarget(tabs, typeof input.tabId === 'string' ? input.tabId : undefined);
+            if (pinnedTabId && !tab) return failed(`Tab "${pinnedTabId}" is no longer open.`);
+            if (!tab) return failed(`No app window in tab ${String(input.tabId || '')}; use tabs.list.`);
+            const plugin = this.appPlugins.find(item => item.id === input.plugin || item.summary?.name === input.plugin);
+            if (!plugin?.ok || !plugin.summary) return failed(`No installed plugin "${String(input.plugin)}"; use plugins.list.`);
+            const scopedParams = input.params && typeof input.params === 'object' && !Array.isArray(input.params)
+                ? (input.params as Record<string, unknown>) : undefined;
+            const scopedModel = input.model && typeof input.model === 'object' && !Array.isArray(input.model)
+                ? (input.model as AppPluginModel) : undefined;
+            const activeRun = this.activeAppPluginRun(conversationId, tab.id);
+            if (activeRun && activeRun.pluginId === plugin.id) {
+                const updated = await bridge.commandAppPlugin?.(activeRun.runId, {
+                    ...(scopedParams ? { params: scopedParams } : {}),
+                    ...(scopedModel ? { model: scopedModel } : {})
+                });
+                if (!updated?.ok) return failed(`The plugin did not take the configuration (${updated?.error || 'unavailable'}).`);
+                const merged = { ...activeRun, ...updated, ...(scopedModel ? { model: scopedModel } : {}) } as AppPluginRunSnapshot;
+                this.rememberAppPluginRun(merged);
+                return done(describeRun(merged));
+            }
+            const overrides = (this.appPluginTabLaunchOverrides ??= new Map());
+            const launchKey = `${conversationId}\n${tab.id}`;
+            const prior = overrides.get(launchKey);
+            overrides.set(launchKey, {
+                pluginId: plugin.id,
+                params: { ...(prior?.pluginId === plugin.id ? prior.params : {}), ...(scopedParams || {}) },
+                ...(scopedModel ? { model: scopedModel } : prior?.pluginId === plugin.id && prior.model ? { model: prior.model } : {})
+            });
+            return done({ tabId: tab.id, plugin: plugin.id, configured: true, scope: 'tab' });
         }
         if (request.action === 'pluginStart') {
             await this.loadAppPlugins(true);
-            const tab = findConversationTabByTarget(visualTabsFor(this.conversationTabs, conversationId), typeof input.tabId === 'string' ? input.tabId : undefined);
-            if (!tab?.windowRef) return failed(`No app window in tab ${String(input.tabId)}; use tabs.list.`);
+            const tabs = visualTabsFor(this.conversationTabs, conversationId);
+            const tab = pinnedTabId
+                ? tabs.find(item => item.id === pinnedTabId)
+                : findConversationTabByTarget(tabs, typeof input.tabId === 'string' ? input.tabId : undefined);
+            if (pinnedTabId && !tab) return failed(`Tab "${pinnedTabId}" is no longer open.`);
+            if (!tab?.windowRef) return failed(`No app window in tab ${pinnedTabId || String(input.tabId)}; use tabs.list.`);
             const plugin = this.appPlugins.find(item => item.id === input.plugin || item.summary?.name === input.plugin);
             if (!plugin?.ok || !plugin.summary) return failed(`No installed plugin "${String(input.plugin)}"; use plugins.list.`);
-            if (!pluginsForApp([plugin], appTabIdentity(tab), navigator.platform, tab.title, tab.windows?.find(item => item.windowId === tab.windowRef?.windowId && item.pid === tab.windowRef?.pid)?.title || tab.target).length && plugin.enabled) return failed(`"${plugin.summary.name}" is made for ${plugin.summary.apps.map(app => app.bundleId || app.program).join(', ')}, not for the app in this tab.`);
-            if (!plugin.ready) {
+            if (!pluginsForApp([plugin], appTabIdentity(tab), navigator.platform, tab.title, tab.windows?.find(item => item.alive !== false && item.windowId === tab.windowRef?.windowId && item.pid === tab.windowRef?.pid)?.title || tab.target).length && plugin.enabled) return failed(`"${plugin.summary.name}" is made for ${plugin.summary.apps.map(app => app.bundleId || app.program).join(', ')}, not for the app in this tab.`);
+            const launchKey = `${conversationId}\n${tab.id}`;
+            const priorOverride = this.appPluginTabLaunchOverrides?.get(launchKey);
+            const baseTabParams = priorOverride?.pluginId === plugin.id && priorOverride.params && Object.keys(priorOverride.params).length
+                ? priorOverride.params : undefined;
+            const scopedParams = input.params && typeof input.params === 'object' && !Array.isArray(input.params)
+                ? { ...(baseTabParams || {}), ...(input.params as Record<string, unknown>) }
+                : baseTabParams;
+            const scopedModel = input.model && typeof input.model === 'object' && !Array.isArray(input.model)
+                ? (input.model as AppPluginModel)
+                : (priorOverride?.pluginId === plugin.id ? priorOverride.model : undefined);
+            if (!plugin.ready && !scopedModel) {
                 void this.openAppPluginModel(plugin.id);
                 return failed(plugin.enabled ? 'The plugin has no decision model yet. NextMux opened the model chooser for the user; ask them to choose one, then try again.' : 'The user turned this plugin off in Settings → Skill plugins.');
             }
             if (this.activeAppPluginRun(conversationId, tab.id)) return failed('A plugin already runs on this tab; use plugins.status or plugins.stop.');
-            if (input.params && typeof input.params === 'object') {
-                await this.configureAppPlugin(plugin.id, { params: input.params as Record<string, unknown>, scope: 'defaults' });
+            if (!pinnedTabId) {
+                this.setConversationTabs(selectTab(this.conversationTabs, conversationId, tab.id));
             }
-            this.setConversationTabs(selectTab(this.conversationTabs, conversationId, tab.id));
             const result = await this.requestAppPluginStart({ pluginId: plugin.id, conversationId, tabId: tab.id, pid: tab.windowRef.pid, windowId: tab.windowRef.windowId,
                 title: tab.target || tab.title, byAi: true, goal: typeof input.goal === 'string' ? input.goal : '',
-                minutes: typeof input.maxMinutes === 'number' ? input.maxMinutes : undefined, cost: typeof input.maxCostUsd === 'number' ? input.maxCostUsd : undefined });
+                minutes: typeof input.maxMinutes === 'number' ? input.maxMinutes : undefined, cost: typeof input.maxCostUsd === 'number' ? input.maxCostUsd : undefined,
+                ...(scopedParams ? { params: scopedParams } : {}),
+                ...(scopedModel ? { model: scopedModel } : {}) });
             if (!result.ok) return failed(result.error === 'user_cancelled' ? 'The user did not start the plugin.' : `The plugin did not start (${result.error}).`);
             const run = result.runId ? this.appPluginRuns.get(result.runId) : undefined;
             return done({ runId: result.runId, tabId: tab.id, dryRun: result.dryRun === true, ...(run ? { state: describeRun(run) } : {}),
                 next: 'Follow it with plugins.status (waitMs to wait for its next event). Do not act on this tab yourself while it runs.' });
         }
+        if (pinnedTabId && !visualTabsFor(this.conversationTabs, conversationId).some(item => item.id === pinnedTabId)) {
+            return failed(`Tab "${pinnedTabId}" is no longer open.`);
+        }
         const run = runOf();
-        if (!run) return failed(`No plugin run ${String(input.runId)} in this conversation; use plugins.list.`);
+        if (!run) return failed(`No plugin run ${String(input.runId || pinnedTabId)} in this conversation; use plugins.list.`);
         if (request.action === 'pluginStatus') {
             const waitMs = Math.min(60_000, Math.max(0, Number(input.waitMs) || 0));
             const events = run.events.length;
@@ -8956,14 +9250,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
             return done(describeRun(latest));
         }
         if (request.action === 'pluginCommand') {
+            const scopedModel = input.model && typeof input.model === 'object' && !Array.isArray(input.model)
+                ? (input.model as AppPluginModel) : undefined;
             const result = await bridge.commandAppPlugin?.(run.runId, {
                 ...(typeof input.goal === 'string' ? { goal: input.goal } : {}),
                 ...(input.params && typeof input.params === 'object' ? { params: input.params as Record<string, unknown> } : {}),
+                ...(scopedModel ? { model: scopedModel } : {}),
                 ...(input.resume === true ? { resume: true } : {}),
                 ...(input.pause === true ? { pause: true } : {})
             });
             if (!result?.ok) return failed(`The plugin did not take the command (${result?.error || 'unavailable'}).`);
-            return done(describeRun({ ...run, ...result } as AppPluginRunSnapshot));
+            const updatedRun = { ...run, ...result, ...(scopedModel ? { model: scopedModel } : {}) } as AppPluginRunSnapshot;
+            this.rememberAppPluginRun(updatedRun);
+            return done(describeRun(updatedRun));
         }
         const stopped = await bridge.stopAppPlugin?.(run.runId);
         if (!stopped?.ok) return failed(`The plugin did not stop (${stopped?.error || 'unavailable'}).`);
@@ -9082,21 +9381,30 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 ...switchState
             };
         };
-        if (request.action === 'tabList') {
-            return done({ tabs: await Promise.all(tabsNow().map(describe)), showing: activeTabFor(this.conversationTabs, conversationId) });
+        const pinnedTabId = typeof request.pinnedTabId === 'string' ? request.pinnedTabId.trim() : '';
+        const pinnedTab = pinnedTabId ? tabsNow().find(item => item.id === pinnedTabId) : undefined;
+        if (pinnedTabId && !pinnedTab) {
+            return failed(`Tab "${pinnedTabId}" is no longer open.`);
         }
-        const tabId = typeof request.input?.tabId === 'string' ? request.input.tabId : '';
+        if (request.action === 'tabList') {
+            const listedTabs = pinnedTab ? [pinnedTab] : tabsNow();
+            return done({ tabs: await Promise.all(listedTabs.map(describe)), showing: activeTabFor(this.conversationTabs, conversationId) });
+        }
+        const tabId = pinnedTabId || (typeof request.input?.tabId === 'string' ? request.input.tabId : '');
         if (request.action === 'tabShow') {
-            const matchedTab = tabId === CONVERSATION_TAB_ID ? undefined : findConversationTabByTarget(tabsNow(), tabId);
+            const matchedTab = pinnedTabId ? pinnedTab : (tabId === CONVERSATION_TAB_ID ? undefined : findConversationTabByTarget(tabsNow(), tabId));
             if (tabId !== CONVERSATION_TAB_ID && !matchedTab) return noTab(tabId);
             const targetId = matchedTab ? matchedTab.id : CONVERSATION_TAB_ID;
+            if (pinnedTabId && activeTabFor(this.conversationTabs, conversationId) !== targetId) {
+                return done({ showing: activeTabFor(this.conversationTabs, conversationId), pinnedTabId: targetId });
+            }
             // A tab torn off into its own window is shown by bringing that window forward.
             if (detached(targetId)) { await bridge?.focusComputerTabWindow?.(conversationId, targetId); return done({ showing: targetId, ownWindow: true }); }
             this.setConversationTabs(selectTab(this.conversationTabs, conversationId, targetId));
             return done({ showing: targetId });
         }
         if (request.action === 'tabClose') {
-            const matchedTab = findConversationTabByTarget(tabsNow(), tabId);
+            const matchedTab = pinnedTabId ? pinnedTab : findConversationTabByTarget(tabsNow(), tabId);
             const closing = matchedTab ? [matchedTab] : [];
             if (!closing.length) return noTab(tabId);
             this.forgetConversationWindows(conversationId, closing);
@@ -9104,7 +9412,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             return done({ closed: matchedTab!.id });
         }
         if (request.action === 'tabSet') {
-            const tab = findConversationTabByTarget(tabsNow(), tabId);
+            const tab = pinnedTabId ? pinnedTab : findConversationTabByTarget(tabsNow(), tabId);
             if (!tab) return noTab(tabId);
             if (!tab.windowRef || tab.status === 'disconnected') return failed('This tab\'s app is no longer running. Open it again with tabs.open_app first.');
             const controls = this.conversationWindowControls(conversationId, tab);
@@ -9148,7 +9456,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 aiInputOff: 'keyboard & mouse off', aiToTab: 'window only in the tab', aiToDesktop: 'window also on the desktop' } as Record<string, string>)[key]),
                 tell: 'Tell the user in their language what you changed.' });
         }
-        if (['tabScreenshot', 'tabClick', 'tabDrag', 'tabScroll', 'tabKey', 'tabType'].includes(request.action)) return this.handleTabControlRequest(request, tabId, done, failed);
+        if (['tabScreenshot', 'tabMove', 'tabClick', 'tabDrag', 'tabScroll', 'tabKey', 'tabType'].includes(request.action)) return this.handleTabControlRequest(request, tabId, done, failed);
         if (request.action !== 'tabOpenApp') return failed('Unknown tab action.');
         const app = typeof request.input?.app === 'string' ? request.input.app.trim() : '';
         if (!bridge?.openAppInTab || !app) return failed('Apps cannot be opened in tabs on this computer.');
@@ -9161,7 +9469,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             return undefined;
         };
-        const isReconnect = request.id.startsWith('reconnect-');
+        const isReconnect = request.id.startsWith('reconnect-') || Boolean(pinnedTabId);
         const alreadyOpen = (tab: ConversationVisualTab): DesktopComputerToolResult => {
             if (!isReconnect || activeTabFor(this.conversationTabs, conversationId) === tab.id) {
                 if (detached(tab.id)) void bridge.focusComputerTabWindow?.(conversationId, tab.id);
@@ -10428,8 +10736,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (sessions.some(session => !session)) return;
         }
         this.flushComposerDraft();
-        await this.flushConversationHistory();
         await this.publishConversationWindowChanges();
+        void this.flushConversationHistory();
         if (!await window.nextmuxDesktop?.openConversationWindows(ids, origin)) {
             this.addNotification('error', '无法打开对话窗口', '请重试', notificationSessionId);
         }
@@ -11604,6 +11912,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.noteMediaViewerOpener?.();
         this.adoptMediaGallery?.();
         // One viewer at a time: a step from a clip to a picture puts the clip away.
+        if (this.mediaViewerElement) {
+            releaseMediaElement(this.mediaViewerElement);
+            this.mediaViewerElement = undefined;
+        }
         if (this.mediaViewer) this.mediaViewer = undefined;
         this.attachmentLightboxPath = '';
         this.attachmentLightbox = updateImageLightbox(this.attachmentLightbox, {
@@ -25681,7 +25993,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 return;
             }
         }
-        if (event.key === 'Escape' && this.mediaViewer && this.node.isConnected) {
+        // Escape in a clip's full screen only leaves full screen; the viewer stays open.
+        if (event.key === 'Escape' && this.mediaViewer && this.node.isConnected && !this.node.ownerDocument?.fullscreenElement) {
             event.preventDefault();
             event.stopImmediatePropagation();
             this.closeMediaViewer();
@@ -25693,7 +26006,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.closeAttachmentLightbox('escape');
             return;
         }
-        if (event.key === 'Escape' && !event.isComposing && this.comicChatUi?.()?.viewer && this.node.isConnected) {
+        if (event.key === 'Escape' && !event.isComposing && this.comicChatUi?.()?.viewer && this.node.isConnected && !this.node.ownerDocument?.fullscreenElement) {
             event.preventDefault();
             event.stopImmediatePropagation();
             this.closeComicChatViewer();
@@ -31020,8 +31333,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
             || element.closest<HTMLElement>('.nmx-task-turn[data-turn-id]')?.dataset.turnId;
         decorateConversationMedia(element, target => {
             return this.resolveConversationTarget(target);
-        }, target => this.classifyLocalFileCandidate(target, turnId));
+        }, target => this.classifyLocalFileCandidate(target, turnId), {
+            locale: this.desktopLocale,
+            // A picture on a file server loads by itself only inside a root this conversation already uses.
+            allowNetworkFile: resolved => this.conversationNetworkFileAllowed?.(resolved.url) === true
+        });
     };
+
+    /**
+     * A file on a file server (`file://server/share/…`) opens or loads only inside a root this conversation already
+     * uses (as openConversationFileLink decides): a path in model output never makes the system contact a server.
+     */
+    protected conversationNetworkFileAllowed(url: string): boolean {
+        let uri: URI;
+        try { uri = new URI(url); } catch { return false; }
+        if (!uri.authority) return true;
+        const session = this.activeCodingSession();
+        const roots = [...this.codingSessionStoredWorkspaceRoots(session), this.codingSessionWorkspaceRoot(session), this.activeWorkspaceRoot,
+            ...(this.activeSection === 'comic' ? [this.activeComicWorkspaceRoot, this.comicChatUi?.()?.target] : [])];
+        return roots.some(root => Boolean(root) && this.fileActivityRootContains(root as string, uri));
+    }
 
     protected classifyLocalFileCandidate(target: string, turnId?: string): 'image' | 'file' | undefined {
         if (!isValidLocalFileLinkCandidate(target)) return undefined;
@@ -31060,21 +31391,36 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return resolveConversationFileTarget(target, root);
     }
 
-    protected mediaViewer: { readonly kind: 'video' | 'audio'; readonly src: string; readonly name: string; readonly path: string; readonly failed?: boolean } | undefined;
+    protected mediaViewer: { readonly kind: 'video' | 'audio'; readonly src: string; readonly name: string; readonly path: string; readonly failed?: boolean; readonly poster?: string } | undefined;
     protected attachmentLightboxPath = '';
 
     protected openConversationMedia(target: string, kind: 'image' | 'video' | 'audio', fallbackName = ''): boolean {
-        const resolved = isLocalConversationTarget(target) ? this.resolveConversationTarget(target)
+        const local = isLocalConversationTarget(target);
+        const resolved = local ? this.resolveConversationTarget(target)
             : /^(?:https?:|data:|blob:)/i.test(target) ? { path: target.startsWith('data:') ? '' : target, url: target } : undefined;
         if (!resolved) return false;
+        // A file on a file server opens only inside a root this conversation already uses, as a path chip's click does.
+        if (local && this.conversationNetworkFileAllowed?.(resolved.url) === false) {
+            this.addNotification('warning', linkOpeningText(this.desktopLocale, 'blockedTitle'), linkOpeningText(this.desktopLocale, 'blockedBody'), this.activeCodingSessionId);
+            return true;
+        }
         const name = fallbackName || resolved.path.split(/[\\/]/).pop() || resolved.path;
         const initialUrl = (kind === 'video' && resolved.path ? this.playbackFileUrlByPath?.get(resolved.path) : undefined) || resolved.url;
+        // The still a card already read shows until the first frame plays, so the viewer never opens on black; nothing
+        // else in the window keeps playing aloud under the clip or sound opened large.
+        const poster = kind === 'video' ? cachedVideoStill(resolved.url)?.poster : undefined;
+        if (kind !== 'image') pauseAudibleMedia(this.node?.ownerDocument);
         this.noteMediaViewerOpener?.();
         if (this.activeSection === 'comic' && this.comicChatUi?.()?.surface === 'chat') {
             // A 漫剧对话 shows its own viewer; the coding viewers are not on screen there and stay closed.
+            if (this.comicViewerElement) {
+                releaseMediaElement(this.comicViewerElement);
+                this.comicViewerElement = undefined;
+            }
             this.comicChatViewerBackdropDown = false;
             this.comicChatViewerMediaState = kind === 'video'
-                ? { key: `${resolved.path || initialUrl}::${name}`, restoredUrl: '', currentTime: 0, volume: this.comicChatViewerSound?.volume ?? 1, muted: this.comicChatViewerSound?.muted ?? false }
+                ? { key: `${resolved.path || initialUrl}::${name}`, restoredUrl: '', currentTime: 0, volume: this.comicChatViewerSound?.volume ?? 1, muted: this.comicChatViewerSound?.muted ?? false,
+                    ...(poster ? { poster } : {}), ...(local ? { path: resolved.path } : {}) }
                 : undefined;
             this.comicChatUi().viewer = { url: initialUrl, name, kind };
             this.adoptMediaGallery?.();
@@ -31082,9 +31428,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.openAttachmentLightbox(name, initialUrl);
             this.attachmentLightboxPath = resolved.path;
         } else {
+            if (this.mediaViewerElement) {
+                releaseMediaElement(this.mediaViewerElement);
+                this.mediaViewerElement = undefined;
+            }
             this.adoptMediaGallery?.();
             this.setAsideAttachmentLightbox?.();
-            this.mediaViewer = { kind, src: initialUrl, name, path: resolved.path };
+            this.mediaViewer = { kind, src: initialUrl, name, path: resolved.path, ...(poster ? { poster } : {}) };
         }
         if (kind === 'video' && resolved.path && /\.(?:mp4|m4v|mov)$/i.test(resolved.path) && !this.playbackFileUrlByPath?.has(resolved.path)) {
             void this.preparePlaybackFileMap?.([resolved.path]).then(() => {
@@ -31114,10 +31464,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
             try { fileKey = new URI(url).path.fsPath(); } catch { fileKey = ''; }
         }
         const initialUrl = (kind === 'video' && fileKey ? this.playbackFileUrlByPath?.get(fileKey) : undefined) || url;
+        // As openConversationMedia: the card's still until the clip plays, and nothing else plays aloud under it.
+        const poster = kind === 'video' ? cachedVideoStill(url)?.poster : undefined;
+        if (this.comicViewerElement) {
+            releaseMediaElement(this.comicViewerElement);
+            this.comicViewerElement = undefined;
+        }
+        if (kind !== 'image') pauseAudibleMedia(this.node?.ownerDocument);
         this.noteMediaViewerOpener?.();
         this.comicChatViewerBackdropDown = false;
         this.comicChatViewerMediaState = kind === 'video'
-            ? { key: `${fileKey || initialUrl}::${name}`, restoredUrl: '', currentTime: 0, volume: this.comicChatViewerSound?.volume ?? 1, muted: this.comicChatViewerSound?.muted ?? false }
+            ? { key: `${fileKey || initialUrl}::${name}`, restoredUrl: '', currentTime: 0, volume: this.comicChatViewerSound?.volume ?? 1, muted: this.comicChatViewerSound?.muted ?? false,
+                ...(poster ? { poster } : {}), ...(fileKey ? { path: fileKey } : {}) }
             : undefined;
         ui.viewer = { url: initialUrl, name, kind };
         this.adoptMediaGallery?.();
@@ -31141,10 +31499,38 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected closeMediaViewer(): void {
         if (!this.mediaViewer) return;
+        if (this.mediaViewerElement) {
+            releaseMediaElement(this.mediaViewerElement);
+            this.mediaViewerElement = undefined;
+        }
         this.mediaViewer = undefined;
         this.mediaGallery = undefined;
         this.update();
         this.restoreMediaViewerOpener?.();
+    }
+
+    /** The coding viewer's clip or sound: stopped and let go (decoder, file) as the viewer closes or moves on. */
+    protected mediaViewerElement?: HTMLMediaElement;
+    protected readonly bindMediaViewerElement = (media: HTMLMediaElement | null): void => {
+        if (media) { this.mediaViewerElement = media; return; }
+        releaseMediaElement(this.mediaViewerElement);
+        this.mediaViewerElement = undefined;
+    };
+
+    /** The 漫剧 viewer's clip or sound, let go the same way. */
+    protected comicViewerElement?: HTMLMediaElement;
+    protected readonly bindComicViewerElement = (media: HTMLMediaElement | null): void => {
+        if (media) { this.comicViewerElement = media; return; }
+        releaseMediaElement(this.comicViewerElement);
+        this.comicViewerElement = undefined;
+    };
+
+    /** 在 Finder 中显示 / 在文件夹中显示 beside a viewer's close button, for a clip or sound that is a file on this computer. */
+    protected renderViewerRevealButton(path: string | undefined): React.ReactNode {
+        if (!path || !/^(?:[a-z]:[\\/]|\/|\\\\)/i.test(path)) return undefined;
+        const label = fileTabMenuText(this.desktopLocale, OS.type() === OS.Type.OSX ? 'revealMac' : 'revealWindows');
+        return <button type='button' className='nmx-lightbox-reveal' aria-label={label} title={label}
+            onClick={() => void this.platformService.revealInFileManager(path).catch(() => false)}><i className='codicon codicon-folder-opened' aria-hidden='true'></i></button>;
     }
 
     /** The gallery of the viewer on screen: ‹ › and ← → step through it (PhotoSwipe's gallery, wrapping at both ends). */
@@ -31258,9 +31644,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const seen = new Map<string, number>();
             const occurrence = (id: string): number => { const count = seen.get(id) || 0; seen.set(id, count + 1); return count; };
             const pictures = (text: string): void => {
-                for (const image of this.conversationMarkdownImages(text)) {
-                    items.push({ key: `md:${turn.id}:${occurrence(`md:${image.source}`)}:${image.source}`,
-                        open: () => { this.openConversationMedia(image.source, 'image', image.alt); } });
+                for (const media of this.conversationMarkdownMedia(text)) {
+                    if (media.kind === 'video') {
+                        const resolvedUrl = (isLocalConversationTarget(media.source) ? this.resolveConversationTarget(media.source)?.url : media.source) || media.source;
+                        items.push({
+                            key: `mdv:${turn.id}:${occurrence(`mdv:${resolvedUrl}`)}:${resolvedUrl}`,
+                            open: () => { this.openConversationMedia(media.source, 'video', media.alt); }
+                        });
+                    } else {
+                        items.push({
+                            key: `md:${turn.id}:${occurrence(`md:${media.source}`)}:${media.source}`,
+                            open: () => { this.openConversationMedia(media.source, 'image', media.alt); }
+                        });
+                    }
                 }
             };
             const output = assistantOutputPresentation(turn.response || '', turn.outputParts);
@@ -31280,15 +31676,86 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected codingGalleryKey(element: HTMLElement): string | undefined {
         const marked = element.getAttribute('data-nmx-gallery-key');
         if (marked) return marked;
-        // A picture in a reply's text: its source, and how many pictures before it in the reply show the same one.
         const reply = element.closest<HTMLElement>('[data-nmx-reply]');
         const turnId = reply?.getAttribute('data-nmx-reply');
+        if (!reply || !turnId) return undefined;
+        if (element.classList.contains('nmx-video-card')) {
+            const videoSrc = element.getAttribute('data-nmx-video-src') || '';
+            if (!videoSrc) return undefined;
+            const sameClips = Array.from(reply.querySelectorAll<HTMLElement>('.nmx-assistant-markdown .nmx-video-card[data-nmx-video-src]'))
+                .filter(card => card.getAttribute('data-nmx-video-src') === videoSrc);
+            const clipOccurrence = sameClips.indexOf(element);
+            return clipOccurrence < 0 ? undefined : `mdv:${turnId}:${clipOccurrence}:${videoSrc}`;
+        }
+        // A picture in a reply's text: its source, and how many pictures before it in the reply show the same one.
         const source = element.getAttribute('data-nmx-local-src') || element.getAttribute('src') || '';
-        if (!reply || !turnId || element.tagName !== 'IMG' || !source) return undefined;
+        if (element.tagName !== 'IMG' || !source) return undefined;
         const same = Array.from(reply.querySelectorAll<HTMLElement>('.nmx-assistant-markdown img')).filter(image =>
             lightboxGalleryKind(image) === 'image' && (image.getAttribute('data-nmx-local-src') || image.getAttribute('src')) === source);
         const occurrence = same.indexOf(element);
         return occurrence < 0 ? undefined : `md:${turnId}:${occurrence}:${source}`;
+    }
+
+    protected readonly conversationMarkdownMediaCache = new Map<string, readonly { readonly kind: 'image' | 'video'; readonly source: string; readonly alt: string }[]>();
+
+    /** Pictures and video clips a reply's markdown shows, in reading order (matching decorateConversationMedia). */
+    protected conversationMarkdownMedia(text: string): readonly { readonly kind: 'image' | 'video'; readonly source: string; readonly alt: string }[] {
+        if (!/!\[|\[[^\]]*\]\(|<(?:img|video)\b|\.(?:mp4|m4v|webm|mov|ogv|mkv)\b/i.test(text)) return [];
+        const cached = this.conversationMarkdownMediaCache.get(text);
+        if (cached) return cached;
+        const found: { readonly kind: 'image' | 'video'; readonly source: string; readonly alt: string }[] = [];
+        try {
+            const page = new DOMParser().parseFromString(renderConversationMarkdownHtml(normalizeConversationMarkdown(text), this.desktopLocale, conversationCodeTokenizer), 'text/html');
+            const shownVideos = new Set<string>();
+            for (const placeholder of Array.from(page.querySelectorAll('span.nmx-md-video[data-nmx-video], video[data-nmx-video-tag]'))) {
+                const src = (placeholder.getAttribute('data-nmx-video') || placeholder.getAttribute('src') || placeholder.querySelector('source[src]')?.getAttribute('src') || '').trim();
+                if (src) shownVideos.add(src);
+            }
+            let previews = 0;
+            const emitBlockPreviews = (block: Element): void => {
+                if (previews >= 4) return;
+                for (const link of Array.from(block.querySelectorAll('.nmx-file-path-pill[data-href], a[href], a[data-href]'))) {
+                    if (previews >= 4) break;
+                    if (link.closest('p, li') !== block) continue;
+                    if (link.querySelector('img') || link.closest('pre, code, td, th, h1, h2, h3, h4, h5, h6, .nmx-md-think')) continue;
+                    const rawHref = (link.getAttribute('data-href') || link.getAttribute('href') || '').trim();
+                    if (!rawHref || rawHref === '#' || shownVideos.has(rawHref)) continue;
+                    if (conversationMediaKind(rawHref) !== 'video' && !/^data:video\//i.test(rawHref)) continue;
+                    shownVideos.add(rawHref);
+                    previews++;
+                    const labelNode = link.querySelector('.nmx-file-path-name');
+                    found.push({ kind: 'video', source: rawHref, alt: (labelNode?.textContent || link.textContent || '').trim() });
+                }
+            };
+            const walk = (el: Element): void => {
+                if (el.tagName === 'IMG') {
+                    const source = el.getAttribute('data-nmx-local-src') || el.getAttribute('src') || '';
+                    if (!source) return;
+                    const alt = el.getAttribute('alt') || '';
+                    if (conversationMediaKind(source) === 'video' || /^data:video\//i.test(source)) {
+                        found.push({ kind: 'video', source, alt });
+                    } else if (lightboxGalleryKind(el) === 'image') {
+                        found.push({ kind: 'image', source, alt });
+                    }
+                    return;
+                }
+                if ((el.tagName === 'SPAN' && el.classList.contains('nmx-md-video') && el.hasAttribute('data-nmx-video'))
+                    || (el.tagName === 'VIDEO' && el.hasAttribute('data-nmx-video-tag'))) {
+                    const source = (el.getAttribute('data-nmx-video') || el.getAttribute('src') || el.querySelector('source[src]')?.getAttribute('src') || '').trim();
+                    if (source) {
+                        const alt = (el.getAttribute('data-nmx-video-label') || el.getAttribute('title') || el.getAttribute('aria-label') || '').trim();
+                        found.push({ kind: 'video', source, alt });
+                    }
+                    return;
+                }
+                for (const child of Array.from(el.children)) walk(child);
+                if (el.tagName === 'P' || el.tagName === 'LI') emitBlockPreviews(el);
+            };
+            if (page.body) walk(page.body);
+        } catch { /* a reply that cannot be rendered offers no media to step to */ }
+        if (this.conversationMarkdownMediaCache.size >= 256) this.conversationMarkdownMediaCache.delete(this.conversationMarkdownMediaCache.keys().next().value as string);
+        this.conversationMarkdownMediaCache.set(text, found);
+        return found;
     }
 
     /** The pictures a reply's markdown shows, in order: rendered by the thread's own renderer (cached there too). */
@@ -31360,6 +31827,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 standalone: kind !== 'html' || /^(?:<!--[\s\S]*?-->\s*)*(?:<!doctype\s+html[^>]*>\s*)?<html[\s>]|^<!doctype\s+html/i.test(code) });
             return;
         }
+        // A clip's card in rendered Markdown: it plays large in the conversation's viewer.
+        const clip = element?.closest<HTMLElement>('.nmx-video-card[data-nmx-video-src]');
+        if (clip && event.currentTarget.contains(clip)) {
+            event.preventDefault();
+            event.stopPropagation();
+            const clipTarget = clip.dataset.nmxPath ? conversationFileUri(clip.dataset.nmxPath).toString() : (clip.dataset.nmxVideoSrc || '');
+            this.openConversationMedia?.(clipTarget, 'video', clip.dataset.nmxLabel || '');
+            return;
+        }
         const image = element?.closest<HTMLImageElement>('.nmx-assistant-markdown img, .nmx-user-markdown img');
         if (image && event.currentTarget.contains(image) && !image.closest('a, button, .nmx-site-icon')) {
             const source = image.dataset.nmxLocalSrc || image.getAttribute('src') || '';
@@ -31387,6 +31863,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // dataset holds a native filename. Encode it as a file URI so literal %, # and ? survive destination parsing.
             const resolvedTarget = target.dataset.nmxPath ? `${conversationFileUri(target.dataset.nmxPath).toString()}${lineSuffix}` : href;
             void this.openConversationFileLink(resolvedTarget, turnId, href);
+            return;
+        }
+        // A clip carried in the reply has nowhere to open but the viewer; no browser can be handed it.
+        if (/^data:video\//i.test(href)) {
+            this.openConversationMedia?.(href, 'video', target.textContent?.trim() || '');
             return;
         }
         this.requestConversationLinkOpen(href);
@@ -31474,11 +31955,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
             : childRoot ? resolveConversationFileTarget(target, childRoot) : this.resolveConversationTarget(target);
         if (!resolved) return;
         const line = /#L(\d+)(?:-L?(\d+))?$/i.exec(target);
-        const image = conversationMediaKind(resolved.path) === 'image';
+        const kind = conversationMediaKind(resolved.path);
+        // Pictures, clips and sounds open in a media viewer; the file drawer would only call them unreadable text.
+        const viewed = kind === 'image' || kind === 'video' || kind === 'audio';
         let node: WorkContextFileNode = { uri: resolved.url, path: resolved.path, name: conversationFileUri(resolved.path).path.base, directory: false };
         const token = ++this.contextFilePreviewRequestToken;
-        // An image opens in the media viewer: it ends an earlier file spinner instead of starting its own.
-        if (image) { if (this.contextFilePreviewLoading) this.finishContextFileOpen(); }
+        // Media opens in a viewer: it ends an earlier file spinner instead of starting its own.
+        if (viewed) { if (this.contextFilePreviewLoading) this.finishContextFileOpen(); }
         else if (!this.beginContextFileOpen(node)) return;
         const current = (): boolean => sessionId === this.activeCodingSessionId && token === this.contextFilePreviewRequestToken;
         // Render the loading drawer before stat/read/decoding a potentially large file.
@@ -31499,18 +31982,24 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // so a link in model output can never make the system contact an arbitrary file server.
             if (uri.authority && ![...this.codingSessionStoredWorkspaceRoots(session), workspaceRoot]
                 .some(root => root && this.fileActivityRootContains(root, uri))) {
-                if (!image) this.finishContextFileOpen();
+                if (!viewed) this.finishContextFileOpen();
                 this.addNotification('warning', linkOpeningText(this.desktopLocale, 'blockedTitle'), linkOpeningText(this.desktopLocale, 'blockedBody'), sessionId);
                 return;
             }
             const stat = await this.fileService.resolve(uri);
             if (!current()) return;
             if (stat.isDirectory) {
-                if (!image) this.finishContextFileOpen();
+                if (!viewed) this.finishContextFileOpen();
                 await this.revealContextFileInTree({ ...node, directory: true });
                 return;
             }
-            if (image) {
+            if (kind === 'video' || kind === 'audio') {
+                // A clip or a sound plays large; the tree follows the selection, as for a picture.
+                this.openConversationMedia?.(node.uri, kind, node.name);
+                void this.revealContextFileInTree(node);
+                return;
+            }
+            if (viewed) {
                 // Pixels stay in the media viewer; the tree (or an open file drawer) follows the selection.
                 this.openAttachmentLightbox(node.name, node.uri);
                 this.attachmentLightboxPath = node.path;
@@ -31535,7 +32024,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 || /ENOENT|not found|does not exist/i.test(String(error));
             const message = filePreviewErrorText(this.desktopLocale, missing ? 'missing' : 'unavailable');
             this.addNotification('error', message, '', sessionId);
-            if (!image) this.finishContextFileOpen();
+            if (!viewed) this.finishContextFileOpen();
         }
     }
 
@@ -34959,6 +35448,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.activeScheduledTaskId = this.scheduledTasks.some(task => task.id === snapshot.scheduledTaskId)
             ? snapshot.scheduledTaskId : '';
         this.settingsPanel = targetSettingsPanel;
+        if (this.activeSection === 'settings' && this.settingsPanel === 'system') void this.loadMicrophones?.(false);
         this.billingTab = snapshot.billingTab;
         this.modelCenterView = snapshot.modelCenterView;
         this.modelCapabilityFilter = snapshot.modelCapabilityFilter;
@@ -35665,6 +36155,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (popover === 'routes' && this.modelPickerRelayOpen) {
                 this.modelPickerRelayOpen = false;
                 this.closeModelEffortPickerImmediately();
+                this.ensureDetachedPickerCatalogs?.(false);
                 this.update();
                 this.focusModelPickerFirstOption();
                 return;
@@ -35675,6 +36166,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (popover !== 'routes') this.rememberNavigation();
         this.clearNavigationSurfaces();
         this.codingPopover = popover;
+        if (popover === 'routes') this.ensureDetachedPickerCatalogs?.(false);
         this.update();
         if (popover === 'routes') {
             this.focusModelPickerFirstOption();
@@ -35710,6 +36202,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // The plain list opens at once from what this window already read, refreshed behind it when old.
             this.revalidatePublicMerchantPage?.();
             if (this.relaySourceTab === 'merchant' && (!this.publicMerchantPage || this.publicMerchantPageError) && !this.publicMerchantPageLoading) void this.loadPublicMerchantPage();
+            this.ensureDetachedPickerCatalogs?.(true);
         }
         if (this.codingPopover === 'routes') {
             if (this.modelPickerRelayOpen) {
@@ -37534,6 +38027,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected async loadMicrophones(requestPermission = true): Promise<MicrophoneCapability> {
+        this.microphoneDevicesProbed = true;
+        this.ensureMicrophoneDeviceListener?.();
         const mediaDevices = navigator.mediaDevices;
         // Unlocking labels itself emits devicechange. Passive refresh must not cancel the request.
         if (!requestPermission && this.microphoneProbeController && this.microphoneRequestIsExplicit) {
@@ -37587,6 +38082,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.microphoneRequestIsExplicit = false;
             }
         }
+    }
+
+    protected microphoneDeviceListenerAttached = false;
+    protected microphoneDevicesProbed = false;
+
+    protected ensureMicrophoneDeviceListener(): void {
+        if (this.microphoneDeviceListenerAttached || this.isDisposed || !navigator.mediaDevices?.addEventListener) return;
+        this.microphoneDeviceListenerAttached = true;
+        const refreshMicrophones = (): void => { void this.loadMicrophones(false); };
+        navigator.mediaDevices.addEventListener('devicechange', refreshMicrophones);
+        this.toDispose.push({ dispose: () => { this.microphoneDeviceListenerAttached = false; navigator.mediaDevices.removeEventListener('devicechange', refreshMicrophones); } });
     }
 
     protected microphoneToast: { readonly title: string; readonly detail?: string; readonly timestamp: number } | undefined;
@@ -37732,6 +38238,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.activeSection === 'comic') { await this.openComicVoiceInput(); return; }
         if (this.nativeDictation?.active) { this.nativeDictation.finish(); return; }
         this.stopVoiceInput(false);
+        if (!this.microphoneDevicesProbed) void this.loadMicrophones?.(false);
         if ((this.microphonePermission === 'denied' || this.microphonePermission === 'system-blocked') && await this.microphoneStillRefused?.()) return;
         this.systemDictationTarget = focusSystemDictationDraft(this.node);
         if (this.systemDictationTarget === 'unavailable') { this.update(); return; }
@@ -37768,6 +38275,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected async openComicVoiceInput(): Promise<void> {
         if (this.nativeDictation?.active) { this.nativeDictation.finish(); return; }
         this.stopVoiceInput(false);
+        if (!this.microphoneDevicesProbed) void this.loadMicrophones?.(false);
         if ((this.microphonePermission === 'denied' || this.microphonePermission === 'system-blocked') && await this.microphoneStillRefused?.()) return;
         const input = this.node.querySelector<HTMLTextAreaElement>('.nmx-comic-agent-bar textarea');
         const workspaceRoot = this.activeComicWorkspaceRoot;
@@ -38759,10 +39267,22 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected async loadCatalog(forceRegistry = false, sources: readonly ('catalog' | 'registry' | 'global')[] = ['catalog', 'registry', 'global']): Promise<boolean> {
-        void this.loadModelCenterMerchantCount();
+        if (!this.detachedConversationId) void this.loadModelCenterMerchantCount();
         const results = await Promise.all(sources.map(source => this.loadCatalogSource(source, () => source === 'catalog'
             ? this.loadPlatformCatalog() : source === 'registry' ? this.loadRegistryModels(forceRegistry) : this.loadGlobalModels(forceRegistry))));
         return results.every(Boolean);
+    }
+
+    protected ensureDetachedPickerCatalogs(relayPickerOpen = false): void {
+        if (!this.detachedConversationId) return;
+        const missing: ('registry' | 'global')[] = [];
+        if (!this.registryModels.length && !this.registryModelsLoading) missing.push('registry');
+        if (!this.globalModels.length && !this.globalModelsLoading) missing.push('global');
+        if (missing.length > 0) void this.loadCatalog(false, missing);
+        if (relayPickerOpen && this.relaySourceTab === 'merchant'
+            && (!this.publicMerchantPage || this.publicMerchantPageError) && !this.publicMerchantPageLoading) {
+            void this.loadPublicMerchantPage();
+        }
     }
 
     protected lastDeviceSessionCheckAt = 0;
@@ -42224,6 +42744,89 @@ export class NextMuxDesktopWidget extends ReactWidget {
         };
     }
 
+    protected describeV1GatewayFailure(
+        value: unknown,
+        source: 'own_api' | 'relay' | 'local' = 'own_api'
+    ): ReturnType<typeof formatV1GatewayFailure> {
+        return formatV1GatewayFailure(this.desktopLocale, value, source);
+    }
+
+    /**
+     * When a `/v1` provider import (`nextmux://v1/import` or `nextmux://import-api`) omits `&model=...`,
+     * ensures `/models` discovery has run, selects the first non-embedding/non-moderation chat/coding model,
+     * and persists it as the connection's default `model`.
+     */
+    protected async resolveImportedOfficialDefaultModel(
+        result: SaveOfficialModelConnectionResult,
+        apiKey?: string
+    ): Promise<SaveOfficialModelConnectionResult> {
+        let connection = result.connection;
+        if (!connection || connection.model.trim()
+            || connection.providerId === 'custom_media'
+            || isOfficialMediaProtocol(connection.protocol)
+            || connection.protocol === 'async_media_template') {
+            return result;
+        }
+        if (!(connection.discoveredModels?.length)
+            && !connection.modelDiscoveryError
+            && typeof this.platformService?.refreshOfficialModelDiscovery === 'function') {
+            const refreshed = await this.platformService.refreshOfficialModelDiscovery(connection.id).catch(() => undefined);
+            if (refreshed) connection = refreshed;
+        }
+        const defaultModel = pickDefaultImportedChatModel(connection.discoveredModels || [], this.globalModels);
+        if (!defaultModel) {
+            return connection === result.connection ? result : { ...result, connection };
+        }
+        if (typeof this.platformService?.saveOfficialModelConnection === 'function') {
+            const updated = await this.platformService.saveOfficialModelConnection({
+                connectionId: connection.id,
+                providerId: connection.providerId,
+                label: connection.label,
+                model: defaultModel,
+                baseUrl: connection.baseUrl,
+                ...(apiKey?.trim() ? { apiKey } : {}),
+                ...(connection.providerSettings ? { providerSettings: connection.providerSettings } : {}),
+                ...(connection.nativeWebResearch !== undefined ? { nativeWebResearch: connection.nativeWebResearch } : {}),
+                validate: false
+            }).catch(() => undefined);
+            if (updated?.connection) {
+                return {
+                    ...updated,
+                    ...(result.validation && !updated.validation ? { validation: result.validation } : {})
+                };
+            }
+        }
+        return { ...result, connection: { ...connection, model: defaultModel } };
+    }
+
+    /** Selects the imported connection's default chat/coding model route immediately in the active workbench. */
+    protected activateImportedOfficialModelRoute(connection: OfficialModelConnection): void {
+        if (!connection || connection.providerId === 'custom_media'
+            || isOfficialMediaProtocol(connection.protocol)
+            || connection.protocol === 'async_media_template') {
+            return;
+        }
+        const chosenModel = connection.model.trim() || pickDefaultImportedChatModel(connection.discoveredModels || [], this.globalModels);
+        if (!chosenModel) return;
+        const relayKey = officialConnectionRelayKey(connection.id);
+        const relayOption = this.relayOptions?.('coding')?.find(option => option.key === relayKey);
+        if (relayOption && typeof this.applyRelaySelection === 'function') {
+            this.applyRelaySelection(relayOption, true);
+        } else {
+            this.activeRelayKey = relayKey;
+        }
+        const routes = this.routesForRelay?.(relayKey, 'coding', true) || [];
+        const matched = routes.find(route =>
+            this.modelKeyForRoute?.(route) === chosenModel
+            || (route.kind === 'official_connection' && route.connection.model === chosenModel)
+        ) || routes[0];
+        if (matched && typeof this.selectModelRoute === 'function') {
+            this.selectModelRoute(matched.id);
+        } else if (chosenModel) {
+            this.selectedModelIds = { ...this.selectedModelIds, coding: chosenModel };
+        }
+    }
+
     /**
      * One-click `nextmux://import-api` from NextMux User Center: automatically saves/updates the
      * connection in 自有 API (`OfficialModelConnection`), discovers models via `${baseUrl}/models`,
@@ -42249,14 +42852,22 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const currentState = this.officialModelsLoadedOnce
                 ? this.officialModels
                 : await this.platformService?.getOfficialModelConnections?.().catch(() => this.officialModels) ?? this.officialModels;
-            const existing = findMatchingConnection(currentState?.connections || []);
+            let existing = findMatchingConnection(currentState?.connections || []);
             if (existing && (existing.status === 'verified' || ownModelListModels(existing).length > 0 || Boolean((existing as { hasStoredSecret?: boolean }).hasStoredSecret))) {
+                if (!existing.model.trim() && this.resolveImportedOfficialDefaultModel) {
+                    const resolved = (await this.resolveImportedOfficialDefaultModel({ connection: existing })).connection;
+                    if (resolved !== existing) {
+                        existing = resolved;
+                        await this.refreshOfficialModelsAfterMutation?.();
+                    }
+                }
                 this.officialConnectionEditorOpen = false;
                 this.officialImportSource = undefined;
                 this.myApisReturn = true;
                 this.closeNavigationSurface();
                 this.selectModelCenterView('official');
                 this.myApisHighlight = existing.id;
+                this.activateImportedOfficialModelRoute?.(existing);
                 this.update();
                 return;
             }
@@ -42274,6 +42885,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.officialConnectionStage = 'saving';
         this.officialConnectionMessage = '';
         this.officialConnectionError = '';
+        this.officialConnectionErrorDetail = '';
         this.selectModelCenterView('official');
         this.update();
         try {
@@ -42282,7 +42894,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 : await this.platformService.getOfficialModelConnections().catch(() => this.officialModels);
             const currentConnections = currentState.connections || [];
             const existing = findMatchingConnection(currentConnections);
-            const result = await this.platformService.saveOfficialModelConnection({
+            const initialResult = await this.platformService.saveOfficialModelConnection({
                 ...(existing ? { connectionId: existing.id } : {}),
                 providerId: 'custom_openai',
                 label: request.name,
@@ -42292,6 +42904,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 nativeWebResearch: 'automatic',
                 validate: false
             });
+            const result = !request.model && this.resolveImportedOfficialDefaultModel
+                ? await this.resolveImportedOfficialDefaultModel(initialResult, cleanApiKey)
+                : initialResult;
             await this.refreshOfficialModelsAfterMutation();
             if (!this.officialConnectionRequestIsCurrent(requestToken)) return;
             this.officialConnectionStage = 'idle';
@@ -42301,21 +42916,32 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.closeNavigationSurface();
             this.selectModelCenterView('official');
             this.myApisHighlight = result.connection.id;
-            this.officialConnectionMessage = this.ownApiSaveMessage?.(result, false, startedAt) ?? localizeDesktopSurface(this.desktopLocale, '已保存模型');
-            const modelCount = ownModelListModels(result.connection).length;
-            const toastBody = modelCount > 0
-                ? (this.desktopLocale === 'en'
-                    ? `Imported ${result.connection.label} (${modelCount} online models available)`
-                    : `已成功导入 ${result.connection.label}（共 ${modelCount} 个在线可用模型）`)
-                : (this.desktopLocale === 'en'
-                    ? `Imported ${result.connection.label}`
-                    : `已成功导入 ${result.connection.label}`);
-            this.addNotification('success', result.connection.label, toastBody);
+            this.activateImportedOfficialModelRoute?.(result.connection);
+            const discoveryFailure = result.connection.modelDiscoveryError
+                ? this.describeV1GatewayFailure?.(result.connection.modelDiscoveryError, 'own_api')
+                : undefined;
+            if (discoveryFailure) {
+                this.officialConnectionError = discoveryFailure.text;
+                this.officialConnectionErrorDetail = discoveryFailure.detail;
+                this.addNotification(discoveryFailure.isBalance402 ? 'warning' : 'error', result.connection.label, discoveryFailure.text);
+            } else {
+                this.officialConnectionMessage = this.ownApiSaveMessage?.(result, false, startedAt) ?? localizeDesktopSurface(this.desktopLocale, '已保存模型');
+                const modelCount = ownModelListModels(result.connection).length;
+                const toastBody = modelCount > 0
+                    ? (this.desktopLocale === 'en'
+                        ? `Imported ${result.connection.label} (${modelCount} online models available)`
+                        : `已成功导入 ${result.connection.label}（共 ${modelCount} 个在线可用模型）`)
+                    : (this.desktopLocale === 'en'
+                        ? `Imported ${result.connection.label}`
+                        : `已成功导入 ${result.connection.label}`);
+                this.addNotification('success', result.connection.label, toastBody);
+            }
         } catch (error) {
             if (!this.officialConnectionRequestIsCurrent(requestToken)) return;
             this.officialConnectionStage = 'idle';
             const errorText = modelFailureText(this.desktopLocale, error, { source: 'own_api' });
-            const errorDetail = modelFailure(this.desktopLocale, error).detail;
+            const v1Failure = this.describeV1GatewayFailure?.(error, 'own_api');
+            const errorDetail = v1Failure?.detail || modelFailure(this.desktopLocale, error).detail;
             this.openProviderImport({
                 app: request.protocol === 'anthropic' ? 'claude' : 'codex',
                 name: request.name,
@@ -42324,8 +42950,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 models: request.model ? [request.model] : []
             });
             this.officialConnectionError = errorText;
+            if (v1Failure) this.officialConnectionError = v1Failure.text;
             this.officialConnectionErrorDetail = errorDetail;
-            this.addNotification('error', request.name || 'API', errorText);
+            this.addNotification(v1Failure?.isBalance402 ? 'warning' : 'error', request.name || 'API', this.officialConnectionError);
         } finally {
             if (this.officialConnectionRequestIsCurrent(requestToken)) {
                 this.officialConnectionStage = 'idle';
@@ -42388,16 +43015,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
             return;
         }
         const draft = this.officialDraft;
+        const wasProviderImport = Boolean(this.officialImportSource);
         const requestToken = ++this.officialConnectionRequestToken;
         const startedAt = Date.now();
         this.officialConnectionStage = validate ? 'testing' : 'saving';
         this.officialConnectionMessage = '';
         this.officialConnectionError = '';
+        this.officialConnectionErrorDetail = '';
         this.update();
         // Own APIs live in 我的 API: a saved compatible/local API (or one edited from the list) is shown there.
         let savedToList = '';
         try {
-            const result = await this.platformService.saveOfficialModelConnection({
+            let result = await this.platformService.saveOfficialModelConnection({
                 ...(draft.connectionId ? { connectionId: draft.connectionId } : {}),
                 providerId: provider.id,
                 ...(draft.label.trim() ? { label: draft.label.trim() } : {}),
@@ -42409,14 +43038,27 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     ? { nativeWebResearch: draft.nativeWebResearch === undefined ? 'automatic' : draft.nativeWebResearch } : {}),
                 validate
             });
+            if (wasProviderImport && !draft.model.trim() && this.resolveImportedOfficialDefaultModel) {
+                result = await this.resolveImportedOfficialDefaultModel(result, draft.apiKey);
+            }
             await this.refreshOfficialModelsAfterMutation();
             if (!this.officialConnectionRequestIsCurrent(requestToken)) return;
+            if (wasProviderImport) {
+                this.activateImportedOfficialModelRoute?.(result.connection);
+            }
             // A generation API has no tool calls: its test is its key/status check, or none at all (audit A03-04).
             const generationApi = isOfficialMediaProtocol(result.connection.protocol) || result.connection.protocol === 'async_media_template';
             const mediaChecked = Boolean(result.validation) || (validate && result.connection.protocol === 'async_media_template' && result.connection.status === 'verified');
             this.officialConnectionMessage = result.connection.ollamaStatus ? officialDiscoverySummary(this.desktopLocale, result.connection)
                 : generationApi && validate ? connectionCheckText(this.desktopLocale, mediaChecked ? 'mediaReachable' : 'notChecked', result.connection.label)
                 : this.ownApiSaveMessage?.(result, validate, startedAt) ?? localizeDesktopSurface(this.desktopLocale, '已保存模型');
+            const v1DiscoveryFailure = result.connection.modelDiscoveryError
+                ? this.describeV1GatewayFailure?.(result.connection.modelDiscoveryError, provider.id === 'ollama' ? 'local' : 'own_api')
+                : undefined;
+            if (v1DiscoveryFailure) {
+                this.officialConnectionError = v1DiscoveryFailure.text;
+                this.officialConnectionErrorDetail = v1DiscoveryFailure.detail;
+            }
             savedToList = result.connection.id;
             this.officialConnectionEditorOpen = false;
             this.officialImportSource = undefined;
@@ -42430,18 +43072,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
             };
         } catch (error) {
             if (!this.officialConnectionRequestIsCurrent(requestToken)) return;
-            this.officialConnectionError = modelFailureText(this.desktopLocale, error, { source: provider.id === 'ollama' ? 'local' : 'own_api' });
-            this.officialConnectionErrorDetail = modelFailure(this.desktopLocale, error).detail;
+            const source = provider.id === 'ollama' ? 'local' : 'own_api';
+            const v1Failure = this.describeV1GatewayFailure?.(error, source);
+            this.officialConnectionError = v1Failure?.text || modelFailureText(this.desktopLocale, error, { source });
+            this.officialConnectionErrorDetail = v1Failure?.detail || modelFailure(this.desktopLocale, error).detail;
             if (!this.officialDraft.apiKey && draft.apiKey) this.officialDraft = { ...this.officialDraft, apiKey: draft.apiKey };
         } finally {
             if (this.officialConnectionRequestIsCurrent(requestToken)) this.officialConnectionStage = 'idle';
         }
         if (savedToList && this.officialProviderSheet === provider) {
             const message = this.officialConnectionMessage;
+            const errorText = this.officialConnectionError;
+            const errorDetail = this.officialConnectionErrorDetail;
             this.myApisReturn = true;
             this.closeNavigationSurface();
             this.myApisHighlight = savedToList;
             this.officialConnectionMessage = message;
+            if (errorText) {
+                this.officialConnectionError = errorText;
+                this.officialConnectionErrorDetail = errorDetail;
+            }
         }
         this.update();
     }
@@ -42503,8 +43153,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     : result.validation?.toolCalling ? 'toolsPassed' : 'toolsFailed', connection.label);
         } catch (error) {
             if (!this.officialConnectionRequestIsCurrent(requestToken)) return;
-            this.officialConnectionError = modelFailureText(this.desktopLocale, error, { source: connection.providerId === 'ollama' ? 'local' : 'own_api' });
-            this.officialConnectionErrorDetail = modelFailure(this.desktopLocale, error).detail;
+            const source = connection.providerId === 'ollama' ? 'local' : 'own_api';
+            const v1Failure = this.describeV1GatewayFailure?.(error, source);
+            this.officialConnectionError = v1Failure?.text || modelFailureText(this.desktopLocale, error, { source });
+            this.officialConnectionErrorDetail = v1Failure?.detail || modelFailure(this.desktopLocale, error).detail;
             this.addNotification('error', '直连测速失败', this.officialConnectionError);
         } finally {
             if (this.officialConnectionRequestIsCurrent(requestToken)) {
@@ -42530,15 +43182,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
             await this.refreshOfficialModelsAfterMutation();
             if (!this.officialConnectionRequestIsCurrent(requestToken)) return;
             if (updated?.modelDiscoveryError) {
-                this.officialConnectionError = officialDiscoverySummary(this.desktopLocale, updated);
-                this.officialConnectionErrorDetail = modelFailure(this.desktopLocale, updated.modelDiscoveryError).detail;
+                const v1Failure = this.describeV1GatewayFailure?.(updated.modelDiscoveryError, connection.providerId === 'ollama' ? 'local' : 'own_api');
+                this.officialConnectionError = v1Failure?.text || officialDiscoverySummary(this.desktopLocale, updated);
+                this.officialConnectionErrorDetail = v1Failure?.detail || modelFailure(this.desktopLocale, updated.modelDiscoveryError).detail;
             } else {
                 this.officialConnectionMessage = officialDiscoverySummary(this.desktopLocale, updated);
             }
         } catch (error) {
             if (!this.officialConnectionRequestIsCurrent(requestToken)) return;
-            this.officialConnectionError = modelFailureText(this.desktopLocale, error, { source: connection.providerId === 'ollama' ? 'local' : 'own_api' });
-            this.officialConnectionErrorDetail = modelFailure(this.desktopLocale, error).detail;
+            const source = connection.providerId === 'ollama' ? 'local' : 'own_api';
+            const v1Failure = this.describeV1GatewayFailure?.(error, source);
+            this.officialConnectionError = v1Failure?.text || modelFailureText(this.desktopLocale, error, { source });
+            this.officialConnectionErrorDetail = v1Failure?.detail || modelFailure(this.desktopLocale, error).detail;
         } finally {
             if (this.officialConnectionRequestIsCurrent(requestToken)) {
                 this.officialConnectionStage = 'idle';
@@ -44893,6 +45548,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.attachmentErrorAction = { text: this.attachmentError, kind: hasRelay ? 'model' : 'relay' };
                 this.modelPickerRelayOpen = !hasRelay;
                 this.codingPopover = 'routes';
+                this.ensureDetachedPickerCatalogs?.(this.modelPickerRelayOpen);
                 this.update();
                 return false;
             }
@@ -45302,6 +45958,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.attachmentErrorAction = { text: run.agentError, kind: hasRelay ? 'model' : 'relay' };
                 this.modelPickerRelayOpen = !hasRelay;
                 this.codingPopover = 'routes';
+                this.ensureDetachedPickerCatalogs?.(this.modelPickerRelayOpen);
             }
             this.update();
             return false;
@@ -46051,8 +46708,22 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (balanceInsufficient) {
                 terminalFailure = normalizeDesktopFailure(this.desktopLocale, terminalFailure || error);
             }
+            const v1Failure = route?.kind === 'official_connection'
+                ? this.describeV1GatewayFailure?.(error || terminalFailure, 'own_api')
+                : undefined;
+            if (v1Failure && terminalFailure) {
+                terminalFailure = {
+                    ...terminalFailure,
+                    message: v1Failure.text,
+                    ...(v1Failure.isBalance402
+                        ? { code: terminalFailure.code || 'wallet_balance_insufficient', httpStatus: terminalFailure.httpStatus ?? 402, kind: 'failed' as const }
+                        : v1Failure.isAuth401
+                            ? { code: terminalFailure.code || 'api_key_invalid', httpStatus: terminalFailure.httpStatus ?? 401, kind: 'model_auth' as const }
+                            : {})
+                };
+            }
             run.agentStage = 'error';
-            run.agentError = desktopFailureMessage(this.desktopLocale, terminalFailure || error);
+            run.agentError = v1Failure?.text || desktopFailureMessage(this.desktopLocale, terminalFailure || error);
             this.syncUnlinkedSessionFromFailure(terminalFailure || error);
             // The run already stopped; say why in the composer's corner (the thread keeps the full failure).
             if (typeof isMerchantApiDeletedFailure === 'function' && (isMerchantApiDeletedFailure(terminalFailure) || isMerchantApiDeletedFailure(error))) {
@@ -48005,6 +48676,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.modelPickerRelayOpen = false;
         this.codingPopover = 'routes';
         this.modelPickerQuery = '';
+        this.ensureDetachedPickerCatalogs?.(false);
         this.update();
         this.focusModelPickerFirstOption();
     }
@@ -48060,7 +48732,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const reference = !apiPrice && model ? matchCatalogModel(model, discovered?.label, this.globalModels)?.referencePrice : undefined;
             const price = apiPrice || reference;
             const estimateUsd = !local && price && inputTokens !== undefined && outputTokens !== undefined
-                ? (inputTokens * price.input + outputTokens * price.output) / 1_000_000 : undefined;
+                ? (inputTokens * price.input + outputTokens * (price.output ?? 0)) / 1_000_000 : undefined;
             records.push({
                 id: `${session.id}:${turn.id}`,
                 conversationTitle: session.title,
@@ -48088,7 +48760,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const reference = !apiPrice && entry.model ? matchCatalogModel(entry.model, discovered?.label, this.globalModels)?.referencePrice : undefined;
             const price = apiPrice || reference;
             const estimateUsd = !local && price && entry.inputTokens !== undefined && entry.outputTokens !== undefined
-                ? (entry.inputTokens * price.input + entry.outputTokens * price.output) / 1_000_000 : undefined;
+                ? (entry.inputTokens * price.input + entry.outputTokens * (price.output ?? 0)) / 1_000_000 : undefined;
             const matchedSessionTitle = entry.source.kind === 'coding'
                 ? sessionTitleByRunId.get(baseOwnApiRunId(entry.id))
                 : undefined;
@@ -48439,6 +49111,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected appPluginInstallBusy = false;
     protected appPluginInstallError = '';
     protected appPluginModelFor = '';
+    protected appPluginModelRunId = '';
     protected appPluginChoices: AppPluginModelChoices | undefined;
     protected appPluginChoicesLoading = false;
     protected appPluginModelBusy = false;
@@ -48447,10 +49120,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected appPluginUninstallBusy = false;
     /** The start dialog: opened by the user from a tab, or by the AI's plugins.start (then `resolve` answers it). */
     protected appPluginStart: { pluginId: string; conversationId: string; tabId: string; pid: number; windowId: number; title: string; byAi: boolean;
-        goal: string; minutes?: number; cost?: number; resolve?: (result: { ok: boolean; runId?: string; error?: string; dryRun?: boolean }) => void } | undefined;
+        goal: string; minutes?: number; cost?: number; params?: Readonly<Record<string, unknown>>; model?: AppPluginModel;
+        resolve?: (result: { ok: boolean; runId?: string; error?: string; dryRun?: boolean }) => void } | undefined;
+    protected appPluginStartsByTab = new Map<string, NonNullable<NextMuxDesktopWidget['appPluginStart']>>();
     protected appPluginStartBusy = false;
+    protected appPluginStartBusyTabs = new Set<string>();
     protected appPluginStartError = '';
     protected appPluginQueuedGoal: Omit<NonNullable<NextMuxDesktopWidget['appPluginStart']>, 'resolve'> | undefined;
+    protected appPluginQueuedGoalsByTab = new Map<string, Omit<NonNullable<NextMuxDesktopWidget['appPluginStart']>, 'resolve'>>();
+    protected appPluginTabLaunchOverrides = new Map<string, { pluginId?: string; params?: Record<string, unknown>; model?: AppPluginModel }>();
     protected readonly appPluginGoalRequests = new Map<string, object>();
     protected readonly appPluginRuns = new Map<string, AppPluginRunSnapshot>();
 
@@ -48774,21 +49452,33 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected async configureAppPlugin(id: string, settings: { enabled?: boolean; model?: AppPluginModel | null; vision?: AppPluginVisionModel | null; params?: Readonly<Record<string, unknown>>;
         scope?: 'defaults'; runId?: string; conversationId?: string; tabId?: string }): Promise<boolean> {
         const { scope, runId, conversationId, tabId, ...hostSettings } = settings;
-        if (runId && hostSettings.params) {
+        const hasLivePatch = Boolean(hostSettings.params || hostSettings.model !== undefined || hostSettings.vision !== undefined);
+        if (runId && hasLivePatch) {
             const run = this.appPluginRuns.get(runId);
             if (run && (run.pluginId !== id || (conversationId && run.conversationId !== conversationId) || (tabId && run.tabId !== tabId))) return false;
             if (run && !run.ended) {
-                const updated = await window.nextmuxDesktop?.commandAppPlugin?.(runId, { params: hostSettings.params });
+                const updated = await window.nextmuxDesktop?.commandAppPlugin?.(runId, {
+                    ...(hostSettings.params ? { params: hostSettings.params } : {}),
+                    ...(hostSettings.model !== undefined ? { model: hostSettings.model } : {}),
+                    ...(hostSettings.vision !== undefined ? { vision: hostSettings.vision } : {})
+                });
                 if (!updated?.ok) { this.appPluginsError = appPluginError(this.desktopLocale, updated?.error || 'plugin_invalid'); this.update(); return false; }
                 const current = this.appPluginRuns.get(runId);
-                if (current) this.rememberAppPluginRun({ ...current, ...updated } as AppPluginRunSnapshot);
+                if (current) {
+                    this.rememberAppPluginRun({
+                        ...current,
+                        ...updated,
+                        ...(hostSettings.model !== undefined ? { model: hostSettings.model } : {}),
+                        ...(hostSettings.vision !== undefined ? { vision: hostSettings.vision } : {})
+                    } as AppPluginRunSnapshot);
+                }
                 this.update();
                 return true;
             }
         }
         // The host needs the scope: without it every live run would take the change. A panel whose run
-        // has ended edits the saved defaults its next start uses.
-        const hostScope = scope ?? (runId && hostSettings.params ? 'defaults' : undefined);
+        // has ended or a global settings update edits only the saved defaults its next start uses.
+        const hostScope = scope ?? ((runId && hasLivePatch) || hostSettings.model !== undefined || hostSettings.vision !== undefined ? 'defaults' : undefined);
         const result = await window.nextmuxDesktop?.configureAppPlugin?.(id, hostScope ? { ...hostSettings, scope: hostScope } : hostSettings);
         if (!result?.ok) { this.appPluginsError = appPluginError(this.desktopLocale, result?.error || 'plugin_invalid'); this.update(); return false; }
         await this.loadAppPlugins(true);
@@ -48827,18 +49517,29 @@ export class NextMuxDesktopWidget extends ReactWidget {
         finally { this.update(); }
     }
 
-    protected async openAppPluginModel(id: string): Promise<void> {
+    protected async openAppPluginModel(id: string, runId?: string): Promise<void> {
         this.appPluginModelFor = id;
+        this.appPluginModelRunId = runId || '';
         this.appPluginModelError = '';
         await this.loadAppPluginChoices();
     }
 
-    protected async saveInlineAppPluginModel(id: string, model: AppPluginModel, vision: AppPluginVisionModel | null): Promise<void> {
+    protected async saveInlineAppPluginModel(id: string, model: AppPluginModel, vision: AppPluginVisionModel | null, runId?: string): Promise<void> {
         if (this.appPluginModelBusy) return;
         this.appPluginModelBusy = true;
         this.appPluginsError = '';
         this.update();
-        try { await this.configureAppPlugin(id, { model, vision }); }
+        try {
+            const liveRun = runId ? this.appPluginRuns?.get?.(runId) : undefined;
+            if (liveRun && !liveRun.ended && liveRun.pluginId === id) {
+                const updated = await window.nextmuxDesktop?.commandAppPlugin?.(liveRun.runId, { model, vision } as Parameters<NonNullable<NextMuxDesktopBridge['commandAppPlugin']>>[1]);
+                if (!updated?.ok) { this.appPluginsError = appPluginError(this.desktopLocale, updated?.error || 'model_invalid'); return; }
+                const current = this.appPluginRuns.get(liveRun.runId);
+                if (current) this.rememberAppPluginRun({ ...current, ...updated, model, vision } as AppPluginRunSnapshot);
+            } else {
+                await this.configureAppPlugin(id, { model, vision });
+            }
+        }
         catch { this.appPluginsError = appPluginError(this.desktopLocale, 'model_invalid'); }
         finally { this.appPluginModelBusy = false; this.update(); }
     }
@@ -48853,15 +49554,27 @@ export class NextMuxDesktopWidget extends ReactWidget {
         finally { this.appPluginChoicesLoading = false; this.update(); }
     }
 
-    protected async saveAppPluginModel(model: AppPluginModel, vision: AppPluginVisionModel | null): Promise<void> {
+    protected async saveAppPluginModel(model: AppPluginModel, vision: AppPluginVisionModel | null, runId?: string): Promise<void> {
         const id = this.appPluginModelFor;
         if (!id) return;
+        const targetRunId = runId ?? this.appPluginModelRunId;
+        const liveRun = targetRunId ? this.appPluginRuns?.get?.(targetRunId) : undefined;
         this.appPluginModelBusy = true;
         this.update();
         try {
-            const result = await window.nextmuxDesktop?.configureAppPlugin?.(id, { model, vision });
+            if (liveRun && !liveRun.ended && liveRun.pluginId === id) {
+                const updated = await window.nextmuxDesktop?.commandAppPlugin?.(liveRun.runId, { model, vision } as Parameters<NonNullable<NextMuxDesktopBridge['commandAppPlugin']>>[1]);
+                if (!updated?.ok) { this.appPluginModelError = appPluginError(this.desktopLocale, updated?.error || 'model_invalid'); return; }
+                const current = this.appPluginRuns.get(liveRun.runId);
+                if (current) this.rememberAppPluginRun({ ...current, ...updated, model, vision } as AppPluginRunSnapshot);
+                this.appPluginModelFor = '';
+                this.appPluginModelRunId = '';
+                return;
+            }
+            const result = await window.nextmuxDesktop?.configureAppPlugin?.(id, { model, vision, scope: 'defaults' });
             if (!result?.ok) { this.appPluginModelError = appPluginError(this.desktopLocale, result?.error || 'model_invalid'); return; }
             this.appPluginModelFor = '';
+            this.appPluginModelRunId = '';
             await this.loadAppPlugins(true);
         } finally { this.appPluginModelBusy = false; this.update(); }
     }
@@ -48892,20 +49605,38 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     /** Opens the start dialog; resolves when the user starts or cancels (the AI's plugins.start waits on it). */
     protected requestAppPluginStart(request: Omit<NonNullable<NextMuxDesktopWidget['appPluginStart']>, 'resolve'>): Promise<{ ok: boolean; runId?: string; error?: string; dryRun?: boolean }> {
-        this.appPluginQueuedGoal = undefined;
-        this.appPluginStart?.resolve?.({ ok: false, error: 'superseded' });
+        const tabKey = `${request.conversationId}\n${request.tabId}`;
+        const startsByTab = (this.appPluginStartsByTab ??= new Map());
+        const queuedByTab = (this.appPluginQueuedGoalsByTab ??= new Map());
+        queuedByTab.delete(tabKey);
+        if (this.appPluginQueuedGoal && `${this.appPluginQueuedGoal.conversationId}\n${this.appPluginQueuedGoal.tabId}` === tabKey) {
+            this.appPluginQueuedGoal = [...queuedByTab.values()].at(-1);
+        }
+        const priorOnTab = startsByTab.get(tabKey);
+        priorOnTab?.resolve?.({ ok: false, error: 'superseded' });
+        if (!priorOnTab && this.appPluginStart && `${this.appPluginStart.conversationId}\n${this.appPluginStart.tabId}` === tabKey) {
+            this.appPluginStart.resolve?.({ ok: false, error: 'superseded' });
+        }
         return new Promise(resolve => {
-            this.appPluginStart = { ...request, resolve };
+            const entry = { ...request, resolve };
+            startsByTab.set(tabKey, entry);
+            this.appPluginStart = entry;
             this.appPluginStartError = '';
-            this.appPluginHub = undefined;
+            if (!this.appPluginHub || this.appPluginHub.key === tabKey) this.appPluginHub = undefined;
             this.update();
         });
     }
 
-    protected closeAppPluginStart(): void {
-        if (this.appPluginStartBusy) return;
-        this.appPluginStart?.resolve?.({ ok: false, error: 'user_cancelled' });
-        this.appPluginStart = undefined;
+    protected closeAppPluginStart(targetTabKey?: string): void {
+        const startsByTab = (this.appPluginStartsByTab ??= new Map());
+        const busyTabs = (this.appPluginStartBusyTabs ??= new Set());
+        const pending = (targetTabKey ? startsByTab.get(targetTabKey) : undefined) || this.appPluginStart;
+        if (!pending) return;
+        const tabKey = `${pending.conversationId}\n${pending.tabId}`;
+        if (busyTabs.has(tabKey) || (!targetTabKey && this.appPluginStartBusy && startsByTab.size <= 1)) return;
+        pending.resolve?.({ ok: false, error: 'user_cancelled' });
+        if (startsByTab.get(tabKey) === pending) startsByTab.delete(tabKey);
+        if (this.appPluginStart === pending) this.appPluginStart = [...startsByTab.values()].at(-1);
         this.update();
     }
 
@@ -48913,11 +49644,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected async startAppPluginGoal(request: Omit<NonNullable<NextMuxDesktopWidget['appPluginStart']>, 'resolve'>): Promise<void> {
         const plugin = this.appPlugins.find(item => item.id === request.pluginId);
         if (!plugin?.summary || !request.goal.trim()) return;
-        if (this.appPluginStartBusy) {
-            // Keep the latest click while a stop/start IPC is outstanding. The old confirmation must not start later.
+        const tabKey = `${request.conversationId}\n${request.tabId}`;
+        const startsByTab = (this.appPluginStartsByTab ??= new Map());
+        const busyTabs = (this.appPluginStartBusyTabs ??= new Set());
+        const queuedByTab = (this.appPluginQueuedGoalsByTab ??= new Map());
+        if (busyTabs.has(tabKey) || (this.appPluginStartBusy && busyTabs.size === 0)) {
+            // Keep the latest click for this tab while its stop/start IPC is outstanding.
+            queuedByTab.set(tabKey, request);
             this.appPluginQueuedGoal = request;
-            this.appPluginStart?.resolve?.({ ok: false, error: 'superseded' });
-            this.appPluginStart = undefined;
+            const priorOnTab = startsByTab.get(tabKey);
+            priorOnTab?.resolve?.({ ok: false, error: 'superseded' });
+            startsByTab.delete(tabKey);
+            if (this.appPluginStart && `${this.appPluginStart.conversationId}\n${this.appPluginStart.tabId}` === tabKey) {
+                if (!priorOnTab) this.appPluginStart.resolve?.({ ok: false, error: 'superseded' });
+                this.appPluginStart = [...startsByTab.values()].at(-1);
+            }
             return;
         }
         const active = this.activeAppPluginRun(request.conversationId, request.tabId);
@@ -48925,10 +49666,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
             await this.sendAppPluginGoal(active.runId, request.goal);
             return;
         }
-        // Confirmation stops conflicting runs after its gates pass, with the busy guard held across every await.
+        // Confirmation stops conflicting runs after its gates pass, with the per-tab busy guard held across every await.
         void this.requestAppPluginStart(request);
         await this.confirmAppPluginStart({ goal: request.goal.trim(), maxMinutes: Math.min(30, plugin.summary.maxRunMinutes || 30),
-            maxCostUsd: plugin.budgetEnforceable === false ? 0 : 1, dryRun: false, handOff: true });
+            maxCostUsd: plugin.budgetEnforceable === false ? 0 : 1, dryRun: false, handOff: true }, tabKey);
     }
 
     protected async sendAppPluginGoal(runId: string, goal: string): Promise<void> {
@@ -48972,15 +49713,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.update();
     }
 
-    protected async confirmAppPluginStart(options: AppPluginStartOptions): Promise<void> {
-        const pending = this.appPluginStart;
+    protected async confirmAppPluginStart(options: AppPluginStartOptions, targetTabKey?: string): Promise<void> {
+        const startsByTab = (this.appPluginStartsByTab ??= new Map());
+        const busyTabs = (this.appPluginStartBusyTabs ??= new Set());
+        const queuedByTab = (this.appPluginQueuedGoalsByTab ??= new Map());
+        const pending = (targetTabKey ? startsByTab.get(targetTabKey) : undefined) || this.appPluginStart;
         const bridge = window.nextmuxDesktop;
-        if (!pending || !bridge?.startAppPlugin || this.appPluginStartBusy) return;
-        const current = (): boolean => this.appPluginStart === pending && !this.isDisposed;
+        if (!pending || !bridge?.startAppPlugin) return;
+        const tabKey = `${pending.conversationId}\n${pending.tabId}`;
+        if (busyTabs.has(tabKey) || (!targetTabKey && this.appPluginStartBusy && busyTabs.size === 0)) return;
+        const current = (): boolean => (startsByTab.get(tabKey) === pending || (!startsByTab.has(tabKey) && this.appPluginStart === pending)) && !this.isDisposed;
+        busyTabs.add(tabKey);
         this.appPluginStartBusy = true;
         this.update();
         try {
-            const model = this.appPlugins.find(plugin => plugin.id === pending.pluginId)?.model;
+            const rawTabOverride = this.appPluginTabLaunchOverrides?.get?.(tabKey);
+            const tabOverride = rawTabOverride && (!rawTabOverride.pluginId || rawTabOverride.pluginId === pending.pluginId) ? rawTabOverride : undefined;
+            const launchParams = pending.params || tabOverride?.params;
+            const launchModel = pending.model || tabOverride?.model;
+            const model = launchModel || this.appPlugins.find(plugin => plugin.id === pending.pluginId)?.model;
             if (model?.source === 'connection') {
                 // Recheck the existing connection; saved selections do not prove its current API protocol.
                 const choices = await this.platformService.appPluginModelChoices({ connectionId: model.connectionId }).catch(() => undefined);
@@ -49005,7 +49756,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             const result = await bridge.startAppPlugin({ conversationId: pending.conversationId, tabId: pending.tabId, pid: pending.pid, windowId: pending.windowId,
                 title: pending.title, pluginId: pending.pluginId, goal: options.goal, maxMinutes: options.maxMinutes, maxCostUsd: options.maxCostUsd,
-                dryRun: options.dryRun, overlay: options.dryRun, handOff: options.handOff, locale: this.desktopLocale, ...(license.gate ? { gate: license.gate } : {}) });
+                dryRun: options.dryRun, overlay: options.dryRun, handOff: options.handOff, locale: this.desktopLocale,
+                ...(launchParams ? { params: launchParams } : {}),
+                ...(license.gate ? { gate: license.gate } : {}) } as Parameters<NonNullable<typeof bridge.startAppPlugin>>[0]);
             if (!current()) {
                 // An IPC start cannot be retracted once sent; retire its run before honoring the latest selection.
                 if (result.ok && result.runId) await this.stopAppPluginRun(result.runId);
@@ -49016,17 +49769,30 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 if (result.error === 'plugin_app_mismatch' && result.app) this.appPluginStartError += `（${result.app}）`;
                 return;
             }
+            if (launchModel && result.runId) {
+                await bridge.commandAppPlugin?.(result.runId, { model: launchModel } as Parameters<NonNullable<NextMuxDesktopBridge['commandAppPlugin']>>[1]);
+                const createdRun = this.appPluginRuns.get(result.runId);
+                if (createdRun) this.rememberAppPluginRun({ ...createdRun, model: launchModel });
+            }
+            this.appPluginTabLaunchOverrides?.delete?.(tabKey);
             if (options.dryRun) this.appPluginOverlays.add(result.runId!);
             pending.resolve?.({ ok: true, runId: result.runId, dryRun: options.dryRun });
-            this.appPluginStart = undefined;
+            if (startsByTab.get(tabKey) === pending) startsByTab.delete(tabKey);
+            if (this.appPluginStart === pending) this.appPluginStart = [...startsByTab.values()].at(-1);
             this.startAppPluginClock();
         } catch {
             if (current()) this.appPluginStartError = appPluginError(this.desktopLocale, 'plugin_invalid');
             else this.appPluginsError = appPluginError(this.desktopLocale, 'plugin_invalid');
         } finally {
-            this.appPluginStartBusy = false;
-            const queued = this.appPluginQueuedGoal;
-            this.appPluginQueuedGoal = undefined;
+            busyTabs.delete(tabKey);
+            this.appPluginStartBusy = busyTabs.size > 0;
+            const queued = queuedByTab.get(tabKey) ?? (this.appPluginQueuedGoal && `${this.appPluginQueuedGoal.conversationId}\n${this.appPluginQueuedGoal.tabId}` === tabKey
+                ? this.appPluginQueuedGoal
+                : undefined);
+            queuedByTab.delete(tabKey);
+            if (this.appPluginQueuedGoal && `${this.appPluginQueuedGoal.conversationId}\n${this.appPluginQueuedGoal.tabId}` === tabKey) {
+                this.appPluginQueuedGoal = [...queuedByTab.values()].at(-1);
+            }
             this.update();
             if (queued && !this.isDisposed) await this.startAppPluginGoal(queued);
         }
@@ -49346,14 +50112,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         if (message.type === 'decide') {
             // Keys and the platform credential stay in the backend; the answer goes straight back to the run.
-            const result = await this.platformService.decideAppPlugin({ requestId: message.requestId, deadlineAt: message.deadlineAt, model: message.model, state: message.state, questions: message.questions,
+            const runModel = message.model ?? (message.runId ? this.appPluginRuns?.get?.(message.runId)?.model : undefined) ?? undefined;
+            const result = await this.platformService.decideAppPlugin({ requestId: message.requestId, deadlineAt: message.deadlineAt, model: runModel as AppPluginModel, state: message.state, questions: message.questions,
                 ...(message.images.length ? { images: message.images } : {}) }).catch(error => ({ ok: false, error: 'decision_network', readableError: modelFailure(this.desktopLocale, error) }));
             if (!result.ok && !String(result.error).endsWith('_cancelled')) this.addNotification('error', appPluginText(this.desktopLocale, 'plugins'), appPluginError(this.desktopLocale, result.readableError || result.error));
             await bridge?.answerAppPlugin?.(message.requestId, result);
             return;
         }
         if (message.type === 'describe') {
-            const result = await this.platformService.describeAppPluginFrame({ requestId: message.requestId, deadlineAt: message.deadlineAt, vision: message.vision, image: message.image, hints: message.hints })
+            const runVision = message.vision ?? (message.runId ? this.appPluginRuns?.get?.(message.runId)?.vision : undefined) ?? undefined;
+            const result = await this.platformService.describeAppPluginFrame({ requestId: message.requestId, deadlineAt: message.deadlineAt, vision: runVision as AppPluginVisionModel, image: message.image, hints: message.hints })
                 .catch(error => ({ ok: false, error: 'vision_network', readableError: modelFailure(this.desktopLocale, error) }));
             if (!result.ok && !String(result.error).endsWith('_cancelled')) this.addNotification('error', appPluginText(this.desktopLocale, 'plugins'), appPluginError(this.desktopLocale, result.readableError || result.error));
             await bridge?.answerAppPlugin?.(message.requestId, result);
@@ -49361,7 +50129,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         if (message.type === 'status' || message.type === 'ended') {
             const { type: _type, ...snapshot } = message;
-            this.rememberAppPluginRun(snapshot);
+            const existingRun = this.appPluginRuns.get(snapshot.runId);
+            this.rememberAppPluginRun({
+                ...(existingRun?.model !== undefined && snapshot.model === undefined ? { model: existingRun.model } : {}),
+                ...(existingRun?.vision !== undefined && snapshot.vision === undefined ? { vision: existingRun.vision } : {}),
+                ...snapshot
+            });
             if (message.type === 'ended') {
                 this.appPluginOverlays.delete(snapshot.runId);
                 if (snapshot.reason !== 'stopped') this.handOffAppPluginEvent(snapshot.conversationId, snapshot.name, appPluginText('en', 'ended', { reason: appPluginReason('en', snapshot.reason) }), true);
@@ -49409,7 +50182,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected readonly appPluginChatAutoRouting = new Map<string, boolean>();
     protected appPluginChatPicker: { readonly tabKey: string; readonly kind: 'relay' | 'model'; readonly anchorSelector: string } | undefined;
     protected appPluginChatModelQuery = '';
-    protected readonly appPluginChatActiveRequests = new Map<string, { readonly tabKey: string; readonly requestId: string; readonly controller: AbortController }>();
+    protected readonly appPluginChatActiveRequests = new Map<string, { readonly tabKey: string; readonly parentConversationId?: string; readonly requestId: string; readonly controller: AbortController }>();
     protected readonly appPluginChatLoadingMerchants = new Set<string>();
     protected readonly appPluginChatCatalogPromises = new Map<string, Promise<void>>();
 
@@ -49636,6 +50409,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         this.appPluginChatModelQuery = '';
         this.appPluginChatPicker = { tabKey, kind, anchorSelector };
+        this.ensureDetachedPickerCatalogs?.(kind === 'relay');
         this.update();
     }
 
@@ -50055,6 +50829,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
         request: AppPluginChatRequest
     ): Promise<void> {
         const zh = this.desktopLocale.startsWith('zh');
+        const initialChatSessionUuid = typeof pluginChatConversationUuid === 'function'
+            ? pluginChatConversationUuid(conversationId, tab.id)
+            : PLUGIN_CHAT_DEFAULT_CONVERSATION_UUID;
+        this.desktopControlEscapedConversations?.delete?.(conversationId);
+        if (initialChatSessionUuid && initialChatSessionUuid !== conversationId) {
+            this.desktopControlEscapedConversations?.delete?.(initialChatSessionUuid);
+        }
+        const initialBridge = typeof window !== 'undefined' ? window.nextmuxDesktop : undefined;
+        void initialBridge?.clearComputerUserEsc?.(conversationId)?.catch?.(() => undefined);
+        if (initialChatSessionUuid && initialChatSessionUuid !== conversationId) {
+            void initialBridge?.clearComputerUserEsc?.(initialChatSessionUuid)?.catch?.(() => undefined);
+        }
         const priorMessages = this.appPluginChatMessages.get(key) || [];
         const history: { readonly role: 'user' | 'assistant'; readonly content: string }[] = [];
         const consumedAssistantIds = new Set<string>();
@@ -50115,7 +50901,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
         this.appPluginChatMessages.set(key, this.trimAppPluginChatMessages([...priorMessages, userMsg, assistantPlaceholder]));
         const controller = new AbortController();
-        this.appPluginChatActiveRequests.set(assistantMsgId, { tabKey: key, requestId, controller });
+        this.appPluginChatActiveRequests.set(assistantMsgId, { tabKey: key, parentConversationId: conversationId, requestId, controller });
+        this.computerToolPoll?.wake?.();
         this.update();
 
         try {
@@ -50147,52 +50934,51 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
 
             const bridge = typeof window !== 'undefined' ? window.nextmuxDesktop : undefined;
-            const run = this.appPluginRunFor?.(conversationId, tab.id);
+            const currentTab = (typeof visualTabsFor === 'function' && this.conversationTabs
+                ? visualTabsFor(this.conversationTabs, conversationId).find(item => item.id === tab.id)
+                : undefined) || tab;
+            const run = this.appPluginRunFor?.(conversationId, currentTab.id);
             const plugin = (request.pluginId && this.appPlugins?.find(p => p.id === request.pluginId))
                 || (run && this.appPlugins?.find(p => p.id === run.pluginId))
-                || (this.appPlugins ? pluginsForApp(this.appPlugins, appTabIdentity(tab), typeof navigator !== 'undefined' ? navigator.platform : 'MacIntel', tab.title, tab.target)[0] : undefined);
-            const fallbackModel = request.model || this.appPluginChatModels.get(key) || plugin?.model
+                || (this.appPlugins ? pluginsForApp(this.appPlugins, appTabIdentity(currentTab), typeof navigator !== 'undefined' ? navigator.platform : 'MacIntel', currentTab.title, currentTab.target)[0] : undefined);
+            const fallbackModel = request.model || this.appPluginChatModels.get(key) || run?.model || plugin?.model
                 || { source: 'nextmux' as const, model: '~typesafe/jev-latest', label: 'Platform AI', images: true };
+
+            const chatSessionUuid = initialChatSessionUuid;
 
             let frameDataUrl = '';
             let frameBase64 = '';
             let frameMime: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' = 'image/jpeg';
-            if (request.includeScreenshot !== false && tab.windowRef && typeof bridge?.computerWindowSnapshot === 'function') {
-                const snap = await bridge.computerWindowSnapshot(conversationId, tab.windowRef.pid, tab.windowRef.windowId, 1280, { source: 'user' }).catch(() => undefined);
+            let snapWidth = 0;
+            let snapHeight = 0;
+            if (request.includeScreenshot !== false && currentTab.windowRef && typeof bridge?.computerWindowSnapshot === 'function') {
+                const snap = await bridge.computerWindowSnapshot(conversationId, currentTab.windowRef.pid, currentTab.windowRef.windowId, 1280, { source: 'user' }).catch(() => undefined);
                 if (snap?.ok && snap.data) {
                     const mime = (snap.mimeType || 'image/jpeg').toLowerCase();
                     frameMime = mime === 'image/png' || mime === 'image/webp' || mime === 'image/gif' ? mime : 'image/jpeg';
                     frameBase64 = snap.data;
                     frameDataUrl = `data:${frameMime};base64,${snap.data}`;
+                    if (typeof snap.width === 'number' && snap.width > 0 && typeof snap.height === 'number' && snap.height > 0) {
+                        snapWidth = snap.width;
+                        snapHeight = snap.height;
+                        this.tabShotSizes?.set?.(`${conversationId}\n${currentTab.id}`, { width: snap.width, height: snap.height });
+                        if ((this.tabShotSizes?.size ?? 0) > 64) {
+                            const oldest = this.tabShotSizes?.keys?.().next?.().value;
+                            if (oldest !== undefined) this.tabShotSizes?.delete?.(oldest);
+                        }
+                    }
+                }
+            }
+            if (!snapWidth || !snapHeight) {
+                const existingShot = this.tabShotSizes?.get?.(`${conversationId}\n${currentTab.id}`);
+                if (existingShot) {
+                    snapWidth = existingShot.width;
+                    snapHeight = existingShot.height;
                 }
             }
             if (controller.signal.aborted) return;
 
-            const toolCalls: { readonly name: string; readonly status?: string; readonly output?: string }[] = [];
-            const mcpContextSnippets: string[] = [];
-            if (request.includeContext !== false) {
-                if (frameDataUrl) toolCalls.push({ name: 'tabs.screenshot', status: 'ok', output: `${tab.title || tab.target}` });
-                if (run?.signals && Object.keys(run.signals).length > 0) {
-                    toolCalls.push({ name: 'plugins.signals', status: 'ok', output: `${Object.keys(run.signals).length} signals` });
-                }
-                // Passive/read-only MCP declaration metadata ONLY — never blindly execute `mcp.tools[0]` or overwrite `run.goal`.
-                for (const mcp of plugin?.summary?.mcp || []) {
-                    const declaredTools = mcp.tools?.filter(Boolean) || [];
-                    const mcpLabel = mcp.name || mcp.id;
-                    const summaryText = declaredTools.length > 0 ? declaredTools.join(', ') : 'declared';
-                    mcpContextSnippets.push(`Declared MCP server [${mcpLabel}]: tools=[${summaryText}]`);
-                    toolCalls.push({ name: `mcp:${mcpLabel}`, status: 'ok', output: summaryText.slice(0, 120) });
-                }
-            }
-            if (controller.signal.aborted) return;
-
-            if (toolCalls.length > 0) {
-                this.patchAppPluginChatAssistant(key, assistantMsgId, msg => !msg.streaming ? msg : ({
-                    ...msg,
-                    toolCalls: [...toolCalls]
-                }));
-                this.update();
-            }
+            let realToolCalls: { readonly name: string; readonly status?: string; readonly output?: string }[] = [];
 
             let agentRoute: DesktopAgentRunRequest['route'] | undefined;
             let managedRouteForPolicy: ManagedGatewayRoute | undefined;
@@ -50203,7 +50989,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     agentRoute = {
                         kind: 'managed_gateway',
                         route: managed,
-                        conversationId: `plugin-chat-${conversationId}-${tab.id}`
+                        conversationId: chatSessionUuid
                     };
                 }
             } else if (activeRoute?.kind === 'official_connection') {
@@ -50257,15 +51043,107 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     }
                 }
 
+                const liveWinState = this.conversationWindowControls?.(conversationId, currentTab)?.state;
+                const livePlacement: 'tab' | 'desktop' = liveWinState?.placement === 'desktop' ? 'desktop' : 'tab';
+                const placementLabel = livePlacement === 'desktop' ? '也在桌面显示 (desktop)' : '只在标签内 (tab)';
+                const kmState = liveWinState?.userInput === true ? 'on' : 'off';
+                const soundState = liveWinState?.sound === true ? 'on' : 'off';
+                const childWinList = (currentTab.windows || []).filter(w => w.alive !== false).map(w => ({ pid: w.pid, windowId: w.windowId, title: w.title || '' }));
+                const activeJevRunning = Boolean(run && !run.ended && !run.paused);
+                const pluginSummary = plugin?.modelSummary || plugin?.summary;
+
+                const envSection = [
+                    '## 1. Environment & Tab Identity',
+                    `- Host: NextMux App Control Tab (isolated per-tab AI Console session)`,
+                    `- Title: "${currentTab.title || currentTab.target || 'App'}"`,
+                    `- Window / Target: "${currentTab.target || currentTab.title || ''}"`,
+                    `- App ID: ${currentTab.appId || 'unknown'} | Tab ID: ${currentTab.id}`,
+                    `- Primary Window Ref: pid=${currentTab.windowRef?.pid ?? 0}, windowId=${currentTab.windowRef?.windowId ?? 0}`,
+                    childWinList.length > 0 ? `- Child / Owned Windows (${childWinList.length}): ${JSON.stringify(childWinList)}` : `- Child / Owned Windows: primary window only`,
+                    `- Live Placement: ${placementLabel}`,
+                    `- Live Switches: keyboardMouse=${kmState}, sound=${soundState}`,
+                    snapWidth > 0 && snapHeight > 0
+                        ? `- Attached Live Screenshot Resolution: ${snapWidth}x${snapHeight} px (pixel coordinate space x in [0..${snapWidth}], y in [0..${snapHeight}])`
+                        : `- Attached Live Screenshot: not captured yet (call \`tabs.screenshot\` first to observe live frame and pixel dimensions)`
+                ].join('\n');
+
+                const toolsSection = [
+                    '## 2. Full Window Observation & Input Control Capabilities (Hard-Pinned to This Tab)',
+                    `All window and plugin tools in this AI Console are strictly pinned to tabId="${currentTab.id}" (pid=${currentTab.windowRef?.pid ?? 0}, windowId=${currentTab.windowRef?.windowId ?? 0}):`,
+                    `- Live Observation: \`tabs.screenshot\` captures a fresh live frame of this window and updates pixel dimensions; \`computer.observe_window\` inspects the accessibility / UI element tree when structural detail is needed.`,
+                    `- Pointer Hover & Clicks: \`tabs.move\` ({ x, y, delivery?: "auto"|"background" }) hovers at (x, y) to reveal menus/tooltips; \`tabs.click\` ({ x, y, button?: "left"|"right"|"middle", double?: boolean, modifiers?: ("cmd"|"ctrl"|"alt"|"shift")[] }) clicks in screenshot pixel coordinates.`,
+                    `- Drag & 4-Way Scroll: \`tabs.drag\` ({ from: {x,y}, to: {x,y}, durationMs?: 50..2000, button?: "left"|"right"|"middle", modifiers?: ("cmd"|"ctrl"|"alt"|"shift")[] }); \`tabs.scroll\` ({ x, y, direction: "up"|"down"|"left"|"right", amount?: 1..20 }).`,
+                    `- Keyboard & Unicode Text: \`tabs.key\` ({ key?: string, keys?: string[] /* 1..4 simultaneous chord */, modifiers?: ("cmd"|"ctrl"|"alt"|"shift")[], holdMs?: 0..3000 }); \`tabs.type\` ({ text }) types text directly.`,
+                    `- Tab Switches: \`tabs.set\` ({ placement?: "tab"|"desktop", keyboardMouse?: boolean, sound?: boolean }).`,
+                    activeJevRunning
+                        ? `- JEV Skill Plugin Coordination (ACTIVE RUN): Skill plugin run "${run!.runId}" is actively running right now! Coordinate via \`plugins.status\`, \`plugins.command\` (update goal / pause / resume), or \`plugins.stop\` rather than fighting its reflex inputs, unless the user explicitly asks you to click or type directly.`
+                        : `- JEV Skill Plugin Coordination: Whenever a JEV skill plugin is actively running (not paused/ended), coordinate via \`plugins.status\` / \`plugins.command\` / \`plugins.stop\` rather than competing with its reflex inputs unless the user explicitly asks for direct input.`
+                ].join('\n');
+
+                const pluginLines: string[] = ['## 3. Plugin Connection Status & Manifest Capabilities'];
+                if (run && !run.ended) {
+                    pluginLines.push(
+                        `- Connection Status: connected & ${run.paused ? 'paused' : 'running'}`,
+                        `- Active Run: runId="${run.runId}", plugin="${run.pluginId}" (${run.name}), goal=${JSON.stringify(run.goal || '')}, paused=${Boolean(run.paused)}, dryRun=${Boolean(run.dryRun)}, actions=${run.actions}, decisions=${run.decisions}`,
+                        run.lastDecision ? `- Last Decision: choice=${JSON.stringify(run.lastDecision.choice)}, confidence=${Math.round(run.lastDecision.confidence * 100) / 100}` : '',
+                        request.includeContext !== false && run.signals && Object.keys(run.signals).length > 0
+                            ? `- Live Signals JSON: ${JSON.stringify(run.signals)}`
+                            : '- Live Signals: {}'
+                    );
+                } else if (plugin && pluginSummary) {
+                    const jevModelDesc = plugin.model
+                        ? `${plugin.model.label || plugin.model.model} (source=${plugin.model.source}${plugin.model.merchant ? `, merchant=${plugin.model.merchant}` : ''})`
+                        : 'none';
+                    pluginLines.push(
+                        `- Connection Status: installed & compatible (not currently running)`,
+                        `- Compatible Plugin: id="${plugin.id}", name="${pluginSummary.name}", version="${pluginSummary.version}", enabled=${Boolean(plugin.enabled)}, ready=${Boolean(plugin.ready)}, selectedJevModel=${jevModelDesc}`
+                    );
+                } else {
+                    pluginLines.push(
+                        `- Connection Status: not installed (no skill/JEV plugin installed for this app; direct window observation and control via \`tabs.*\` and \`computer.*\` remain fully available)`
+                    );
+                }
+                if (pluginSummary) {
+                    const currentParams = run?.params || plugin?.params || {};
+                    if (pluginSummary.panel?.systemPrompt) {
+                        pluginLines.push(`- Plugin System Prompt: ${pluginSummary.panel.systemPrompt}`);
+                    }
+                    if (pluginSummary.actions?.length) {
+                        pluginLines.push(`- Declared Actions: ${JSON.stringify(pluginSummary.actions)}`);
+                    }
+                    if (pluginSummary.decisions?.length) {
+                        pluginLines.push(`- Declared Decisions: ${JSON.stringify(pluginSummary.decisions)}`);
+                    }
+                    if (pluginSummary.params?.length) {
+                        pluginLines.push(`- Params Schema: ${JSON.stringify(pluginSummary.params)}`);
+                        pluginLines.push(`- Current Param Values: ${JSON.stringify(currentParams)}`);
+                    }
+                    if (pluginSummary.goals) {
+                        pluginLines.push(`- Goals: ${JSON.stringify(pluginSummary.goals)}`);
+                    }
+                    const presets = plugin?.presets?.length ? plugin.presets : pluginSummary.presets;
+                    if (presets?.length) {
+                        pluginLines.push(`- Presets: ${JSON.stringify(presets)}`);
+                    }
+                    if (pluginSummary.reflexes?.length) {
+                        pluginLines.push(`- Reflexes: ${JSON.stringify(pluginSummary.reflexes)}`);
+                    }
+                    if (pluginSummary.events?.length) {
+                        pluginLines.push(`- Events: ${JSON.stringify(pluginSummary.events)}`);
+                    }
+                    if (pluginSummary.mcp?.length) {
+                        pluginLines.push(`- Declared MCP Servers & Tools: ${JSON.stringify(pluginSummary.mcp.map(m => ({ id: m.id, name: m.name, transport: m.transport, tools: m.tools || [] })))}`);
+                    }
+                }
+                const pluginSection = pluginLines.filter(Boolean).join('\n');
+
                 const instructionLines = [
-                    `You are the interactive AI assistant inside the controlled desktop application tab "${tab.title || tab.target || 'App'}" in NextMux.`,
-                    plugin?.summary ? `Active app skill plugin: "${plugin.summary.name}" (${plugin.id}).` : '',
-                    request.includeContext !== false && run?.signals && Object.keys(run.signals).length > 0
-                        ? `Live window signals JSON:\n${JSON.stringify(run.signals, null, 2)}`
-                        : '',
-                    mcpContextSnippets.length > 0 ? `Live MCP tool context:\n${mcpContextSnippets.join('\n')}` : '',
-                    zh ? '请使用清晰、专业的中文直接回答（除非用户使用其他语言提问），支持使用 Markdown 与代码块。' : 'Respond clearly and concisely using Markdown where helpful.'
-                ].filter(Boolean);
+                    `You are the interactive AI Console assistant inside the controlled desktop application tab "${tab.title || tab.target || 'App'}" in NextMux.`,
+                    envSection,
+                    toolsSection,
+                    pluginSection,
+                    zh ? '请使用清晰、专业的中文直接回答或执行操作（除非用户使用其他语言提问），支持使用 Markdown 与代码块。' : 'Respond clearly and concisely (executing window tools directly when asked), using Markdown where helpful.'
+                ];
 
                 let streamDone = false;
                 const pollStream = async (): Promise<void> => {
@@ -50275,12 +51153,20 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         const snap = await this.platformService.pollPluginChatStream(requestId, seq, 1200).catch(() => undefined);
                         if (!snap || controller.signal.aborted || streamDone) break;
                         seq = snap.seq;
-                        if (snap.text || snap.thinking) {
+                        if (snap.text || snap.thinking || (snap.toolCalls && snap.toolCalls.length > 0)) {
+                            if (snap.toolCalls && snap.toolCalls.length > 0) {
+                                realToolCalls = snap.toolCalls.map(tc => ({
+                                    name: tc.name,
+                                    ...(tc.status ? { status: tc.status } : {}),
+                                    ...(tc.output ? { output: tc.output } : {})
+                                }));
+                            }
                             this.patchAppPluginChatAssistant(key, assistantMsgId, msg => !msg.streaming ? msg : ({
                                 ...msg,
                                 ...(snap.text ? { text: snap.text } : {}),
                                 ...(snap.thinking ? { thinking: snap.thinking } : {}),
-                                pending: !snap.text && !snap.thinking
+                                ...(realToolCalls.length > 0 ? { toolCalls: [...realToolCalls] } : {}),
+                                pending: !snap.text && !snap.thinking && realToolCalls.length === 0
                             }));
                             this.update();
                         }
@@ -50303,23 +51189,59 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     workbench: 'coding',
                     toolScope: 'plugin-chat',
                     pluginChatRequestId: requestId,
+                    ...(currentTab.windowRef ? {
+                        pluginChatTarget: {
+                            parentConversationId: conversationId,
+                            tabId: currentTab.id,
+                            pid: currentTab.windowRef.pid,
+                            windowId: currentTab.windowRef.windowId
+                        }
+                    } : {}),
                     pluginChatInstructions: instructionLines.join('\n\n'),
                     prompt: request.text || (zh ? '请结合当前应用画面与状态进行分析。' : 'Analyze the current application window and state.'),
                     history,
                     ...(agentAttachments.length ? { attachments: agentAttachments } : {}),
-                    workspaceRoot: this.activeWorkspaceRoot || '',
-                    conversationId: `plugin-chat-${conversationId}-${tab.id}`,
-                    permissionMode: 'read_only'
+                    workspaceRoot: '',
+                    conversationId: chatSessionUuid,
+                    permissionMode: 'full_access'
                 });
                 streamDone = true;
                 await streamPromise.catch(() => undefined);
 
                 if (controller.signal.aborted) return;
 
+                if (Array.isArray(result.events) && result.events.length > 0) {
+                    const tracked = new Map<string, { name: string; status?: string; output?: string }>();
+                    for (const ev of result.events) {
+                        if (ev.type === 'tool_started') {
+                            tracked.set(ev.callId, {
+                                name: ev.toolName,
+                                status: 'running',
+                                ...(ev.summary?.title && ev.summary.title !== ev.toolName ? { output: ev.summary.title.slice(0, 80) } : {})
+                            });
+                        } else if (ev.type === 'tool_completed') {
+                            const prev = tracked.get(ev.callId);
+                            const status = ev.status === 'succeeded' ? 'ok' : 'error';
+                            const detail = ev.status !== 'succeeded' && ev.failure?.message
+                                ? ev.failure.message.slice(0, 80)
+                                : (ev.summary?.title && ev.summary.title !== ev.toolName ? ev.summary.title.slice(0, 80) : prev?.output);
+                            tracked.set(ev.callId, {
+                                name: ev.toolName,
+                                status,
+                                ...(detail ? { output: detail } : {})
+                            });
+                        }
+                    }
+                    if (tracked.size > 0) {
+                        realToolCalls = [...tracked.values()].slice(0, 32);
+                    }
+                }
+
                 if (result.status === 'cancelled') {
                     this.patchAppPluginChatAssistant(key, assistantMsgId, msg => ({
                         ...msg,
                         text: msg.text || result.finalText || (zh ? '已停止生成' : 'Stopped'),
+                        ...(realToolCalls.length ? { toolCalls: realToolCalls } : {}),
                         streaming: false,
                         pending: false
                     }));
@@ -50439,13 +51361,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 modality: wantModality,
                 streaming: false,
                 pending: false,
-                ...(toolCalls.length ? { toolCalls } : {}),
+                ...(realToolCalls.length ? { toolCalls: realToolCalls } : {}),
                 ...(generatedAttachments.length ? { attachments: generatedAttachments } : {})
             }));
         } catch (error) {
             this.syncUnlinkedSessionFromFailure(error);
             if (!controller.signal.aborted) {
-                const errText = (typeof desktopFailureMessage === 'function' ? desktopFailureMessage(this.desktopLocale, error) : '')
+                const v1Err = this.describeV1GatewayFailure?.(error, activeRoute?.kind === 'official_connection' ? 'own_api' : 'relay');
+                const errText = v1Err?.text
+                    || (typeof desktopFailureMessage === 'function' ? desktopFailureMessage(this.desktopLocale, error) : '')
                     || (typeof modelFailureText === 'function' ? modelFailureText(this.desktopLocale, error) : '')
                     || (error instanceof Error ? error.message : String(error));
                 this.patchAppPluginChatAssistant(key, assistantMsgId, msg => ({
@@ -50462,18 +51386,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected applyPluginChatToApp(conversationId: string, tab: ConversationVisualTab, text: string): void {
-        if (!tab.windowRef || !text.trim()) return;
+        const currentTab = (typeof visualTabsFor === 'function' && this.conversationTabs
+            ? visualTabsFor(this.conversationTabs, conversationId).find(item => item.id === tab.id)
+            : undefined) || tab;
+        if (!currentTab.windowRef || !text.trim()) return;
         const bridge = window.nextmuxDesktop;
-        void bridge?.computerWindowKeys?.(conversationId, { pid: tab.windowRef.pid, windowId: tab.windowRef.windowId, text, source: 'user' });
-        this.announceTab?.(conversationId, tab.id, this.desktopLocale.startsWith('zh') ? '已发送到当前应用窗口' : 'Sent to app window');
+        const { pid, windowId } = currentTab.windowRef;
+        void bridge?.computerWindowKeys?.(conversationId, { pid, windowId, text, source: 'user' })
+            ?.finally?.(() => this.nudgeSnapshotStream?.(conversationId, pid, windowId, false));
+        this.announceTab?.(conversationId, currentTab.id, this.desktopLocale.startsWith('zh') ? '已发送到当前应用窗口' : 'Sent to app window');
     }
 
     /** The tab header's plugin button, its menu, the run bar and the readings overlay for one tab. */
     protected appPluginTabParts(conversationId: string, tab: ConversationVisualTab): ConversationTabPluginParts | undefined {
         const bridge = window.nextmuxDesktop;
-        if (!bridge?.startAppPlugin || !tab.windowRef) return undefined;
-        const key = `${conversationId}\n${tab.id}`;
-        const run = this.appPluginRunFor(conversationId, tab.id);
+        const currentTab = (typeof visualTabsFor === 'function' && this.conversationTabs
+            ? visualTabsFor(this.conversationTabs, conversationId).find(item => item.id === tab.id)
+            : undefined) || tab;
+        if (!bridge?.startAppPlugin || !currentTab.windowRef) return undefined;
+        const key = `${conversationId}\n${currentTab.id}`;
+        const run = this.appPluginRunFor(conversationId, currentTab.id);
         const active = run && !run.ended ? run : undefined;
         const chatOpen = this.appPluginChatOpen.has(key);
         const chatMessages = this.appPluginChatMessages.get(key) || [];
@@ -50489,55 +51421,66 @@ export class NextMuxDesktopWidget extends ReactWidget {
             </button>
             <button type='button' className={`nmx-visual-tab-action nmx-plugin-tab-market ${this.appPluginHub?.key === key ? 'is-active' : ''}`} aria-haspopup='dialog'
                 title={appPluginText(this.desktopLocale, 'tabMarket')}
-                onClick={() => void this.openAppPluginHub({ key, conversationId, tabId: tab.id, appId: tab.appId || '', programs: appTabIdentity(tab), appName: tab.target || tab.title,
-                    pid: tab.windowRef!.pid, windowId: tab.windowRef!.windowId, title: tab.title,
-                    windowTitle: tab.windows?.find(item => item.windowId === tab.windowRef!.windowId && item.pid === tab.windowRef!.pid)?.title || tab.target })}>
+                onClick={() => void this.openAppPluginHub({ key, conversationId, tabId: currentTab.id, appId: currentTab.appId || '', programs: appTabIdentity(currentTab), appName: currentTab.target || currentTab.title,
+                    pid: currentTab.windowRef!.pid, windowId: currentTab.windowRef!.windowId, title: currentTab.title,
+                    windowTitle: currentTab.windows?.find(item => item.alive !== false && item.windowId === currentTab.windowRef!.windowId && item.pid === currentTab.windowRef!.pid)?.title || currentTab.target })}>
                 <i className='codicon codicon-extensions' aria-hidden='true'></i>{appPluginText(this.desktopLocale, 'tabMarket')}</button>
         </>;
+        const baseRunPlugin = run ? this.appPlugins.find(plugin => plugin.id === run.pluginId) : undefined;
+        const runPlugin = baseRunPlugin && active && (active.model !== undefined || active.vision !== undefined)
+            ? {
+                ...baseRunPlugin,
+                ...(active.model !== undefined ? { model: active.model } : {}),
+                ...(active.vision !== undefined ? { vision: active.vision } : {})
+            }
+            : baseRunPlugin;
+        const activePlugin = runPlugin
+            || pluginsForApp(this.appPlugins, appTabIdentity(currentTab), navigator.platform, currentTab.title, currentTab.target)[0];
         const bar = run ? <AppPluginRunBar locale={this.desktopLocale} run={run} now={Date.now()} overlay={this.appPluginOverlays.has(run.runId)}
-            plugin={this.appPlugins.find(plugin => plugin.id === run.pluginId)} appName={tab.target || tab.title}
+            plugin={runPlugin} appName={currentTab.target || currentTab.title}
             choices={this.appPluginChoices} extraModels={extraModels} modelBusy={this.appPluginModelBusy} error={this.appPluginsError}
             chatOpen={chatOpen} chatMessages={chatMessages} chatBusy={false} chatModel={chatModel}
             chatComposerModelControls={this.renderAppPluginChatModelControls(key, 'bar')}
             chatRenderMarkdown={this.renderAppPluginChatMarkdown}
             onToggleChat={() => this.toggleAppPluginChat(key)}
-            onChatSend={req => void this.sendAppPluginChatMessage(key, conversationId, tab, req)}
+            onChatSend={req => void this.sendAppPluginChatMessage(key, conversationId, currentTab, req)}
             onChatStopMessage={msgId => void this.stopAppPluginChatMessage(key, msgId)}
             onChatClear={() => this.clearAppPluginChatMessages(key)}
             onChatSelectModel={model => { this.appPluginChatModels.set(key, model); this.update(); }}
-            onApplyChatToApp={text => this.applyPluginChatToApp(conversationId, tab, text)}
-            onSaveModel={(id, model, vision) => void this.saveInlineAppPluginModel(id, model, vision)}
-            onChooseModel={id => void this.openAppPluginModel(id)}
+            onApplyChatToApp={text => this.applyPluginChatToApp(conversationId, currentTab, text)}
+            onSaveModel={(id, model, vision, targetRunId) => void this.saveInlineAppPluginModel(id, model, vision, targetRunId ?? (active?.pluginId === id ? active.runId : undefined))}
+            onChooseModel={id => void this.openAppPluginModel(id, active?.pluginId === id ? active.runId : undefined)}
             onConfigureParams={(id, params) => void this.configureAppPlugin(id, run ? { params, runId: run.runId, conversationId: run.conversationId, tabId: run.tabId } : { params, scope: 'defaults' })}
             onPickParamFile={(id, paramId, label) => void this.pickAppPluginParamFile(id, paramId, label, run)}
             onCommand={command => void this.sendAppPluginGoal(command.runId, command.goal)}
-            onStart={(id, goal) => void this.startAppPluginGoal({ pluginId: id, conversationId, tabId: tab.id, pid: tab.windowRef!.pid,
-                windowId: tab.windowRef!.windowId, title: tab.target || tab.title, byAi: false, goal: goal || '' })}
+            onStart={(id, goal) => void this.startAppPluginGoal({ pluginId: id, conversationId, tabId: currentTab.id, pid: currentTab.windowRef!.pid,
+                windowId: currentTab.windowRef!.windowId, title: currentTab.target || currentTab.title, byAi: false, goal: goal || '' })}
             onStop={() => void bridge.stopAppPlugin?.(run.runId)} onPause={() => void bridge.commandAppPlugin?.(run.runId, { pause: true })} onResume={() => void bridge.commandAppPlugin?.(run.runId, { resume: true })}
             onToggleOverlay={() => {
                 const on = !this.appPluginOverlays.has(run.runId);
                 if (on) this.appPluginOverlays.add(run.runId); else this.appPluginOverlays.delete(run.runId);
                 void bridge.commandAppPlugin?.(run.runId, { overlay: on });
                 this.update();
-            }} /> : chatOpen ? <AppPluginChatPanel locale={this.desktopLocale} appName={tab.target || tab.title}
-                plugin={pluginsForApp(this.appPlugins, appTabIdentity(tab), navigator.platform, tab.title, tab.target)[0]}
-                choices={this.appPluginChoices} extraModels={extraModels} selectedModel={chatModel} messages={chatMessages}
-                busy={false} error={this.appPluginsError}
-                composerModelControls={this.renderAppPluginChatModelControls(key, 'panel')}
-                renderMarkdown={this.renderAppPluginChatMarkdown}
-                onSelectModel={model => { this.appPluginChatModels.set(key, model); this.update(); }}
-                onSend={req => void this.sendAppPluginChatMessage(key, conversationId, tab, req)}
-                onStopMessage={msgId => void this.stopAppPluginChatMessage(key, msgId)}
-                onClear={() => this.clearAppPluginChatMessages(key)}
-                onApplyToApp={text => this.applyPluginChatToApp(conversationId, tab, text)}
-                onClose={() => this.toggleAppPluginChat(key)} /> : undefined;
+            }} /> : undefined;
+        const floatingChat = chatOpen ? <AppPluginChatPanel locale={this.desktopLocale} appName={currentTab.target || currentTab.title}
+            plugin={activePlugin} run={run}
+            choices={this.appPluginChoices} extraModels={extraModels} selectedModel={chatModel} messages={chatMessages}
+            busy={false} error={this.appPluginsError}
+            composerModelControls={this.renderAppPluginChatModelControls(key, 'panel')}
+            renderMarkdown={this.renderAppPluginChatMarkdown}
+            onSelectModel={model => { this.appPluginChatModels.set(key, model); this.update(); }}
+            onSend={req => void this.sendAppPluginChatMessage(key, conversationId, currentTab, req)}
+            onStopMessage={msgId => void this.stopAppPluginChatMessage(key, msgId)}
+            onClear={() => this.clearAppPluginChatMessages(key)}
+            onApplyToApp={text => this.applyPluginChatToApp(conversationId, currentTab, text)}
+            onClose={() => this.toggleAppPluginChat(key)} /> : undefined;
         const overlay = active && this.appPluginOverlays.has(active.runId) && active.overlay ? <AppPluginOverlay items={active.overlay} /> : undefined;
         const studio = this.appPluginStudio === key ? { onClose: () => { this.appPluginStudio = ''; this.update(); },
             labels: { studio: appPluginText(this.desktopLocale, 'studio'), studioHint: appPluginText(this.desktopLocale, 'studioHint'), copy: appPluginText(this.desktopLocale, 'copy'),
                 copied: appPluginText(this.desktopLocale, 'copied'), close: appPluginText(this.desktopLocale, 'close'), studioArea: appPluginText(this.desktopLocale, 'studioArea'),
                 studioPoint: appPluginText(this.desktopLocale, 'studioPoint') } } : undefined;
         const canStopOnEsc = Boolean(active && typeof bridge.stopAppPlugin === 'function');
-        return { headerExtra, bar, overlay, studio, running: canStopOnEsc, ...(canStopOnEsc ? { onStop: () => void this.stopAppPluginFromHub(active!.runId) } : {}) };
+        return { headerExtra, bar, floatingChat, overlay, studio, running: canStopOnEsc, ...(canStopOnEsc ? { onStop: () => void this.stopAppPluginFromHub(active!.runId) } : {}) };
     }
 
     /** Opens a tab's 插件市场: installed plugins for its app and the marketplace's, fetched for this app only. */
@@ -50567,7 +51510,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** The plugin dialogs (tab 插件市场, install, model, uninstall, start), drawn over everything. */
     protected renderAppPluginDialogs(): React.ReactNode {
         const bin = comicProjectText(this.desktopLocale, navigator.userAgent.includes('Windows') ? 'binWin' : 'binMac');
-        const modelPlugin = this.appPlugins.find(plugin => plugin.id === this.appPluginModelFor);
+        const baseModelPlugin = this.appPlugins.find(plugin => plugin.id === this.appPluginModelFor);
+        const modelTargetRun = this.appPluginModelRunId ? this.appPluginRuns.get(this.appPluginModelRunId) : undefined;
+        const modelPlugin = baseModelPlugin && modelTargetRun && !modelTargetRun.ended && modelTargetRun.pluginId === baseModelPlugin.id
+            && (modelTargetRun.model !== undefined || modelTargetRun.vision !== undefined)
+            ? {
+                ...baseModelPlugin,
+                ...(modelTargetRun.model !== undefined ? { model: modelTargetRun.model } : {}),
+                ...(modelTargetRun.vision !== undefined ? { vision: modelTargetRun.vision } : {})
+            }
+            : baseModelPlugin;
         const uninstallPlugin = this.appPlugins.find(plugin => plugin.id === this.appPluginUninstall);
         const startPlugin = this.appPluginStart && this.appPlugins.find(plugin => plugin.id === this.appPluginStart!.pluginId);
         const shortcut = /mac/i.test(navigator.platform) ? '⌃⌥⌘.' : 'Ctrl+Alt+Shift+.';
@@ -50588,7 +51540,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onChatClear={() => this.clearAppPluginChatMessages(hub.key)}
                 onChatSelectModel={model => { this.appPluginChatModels.set(hub.key, model); this.update(); }}
                 onApplyChatToApp={text => { if (hubTab) this.applyPluginChatToApp(hub.conversationId, hubTab, text); }}
-                onSaveModel={(id, model, vision) => void this.saveInlineAppPluginModel(id, model, vision)}
+                onSaveModel={(id, model, vision, targetRunId) => void this.saveInlineAppPluginModel(id, model, vision, targetRunId ?? (hubRun && !hubRun.ended && hubRun.pluginId === id ? hubRun.runId : undefined))}
                 onConfigureParams={(id, params) => {
                     const targetRun = hubRun && !hubRun.ended && hubRun.pluginId === id ? hubRun : undefined;
                     void this.configureAppPlugin(id, targetRun ? { params, runId: targetRun.runId, conversationId: targetRun.conversationId, tabId: targetRun.tabId } : { params, scope: 'defaults' });
@@ -50605,7 +51557,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     if (goal?.trim()) void this.startAppPluginGoal(request);
                     else void this.requestAppPluginStart(request);
                 }}
-                onChooseModel={id => void this.openAppPluginModel(id)} onGet={plugin => void this.getAppPluginFromMarket(plugin)}
+                onChooseModel={id => void this.openAppPluginModel(id, hubRun && !hubRun.ended && hubRun.pluginId === id ? hubRun.runId : undefined)} onGet={plugin => void this.getAppPluginFromMarket(plugin)}
                 onStudio={() => { this.appPluginHub = undefined; this.appPluginStudio = hub.key; this.update(); }}
                 onManage={() => { this.appPluginHub = undefined; this.openSettingsPanel('plugins'); }}
                 onBrowseAll={() => { this.appPluginHub = undefined; this.appPluginsTab = 'market'; if (!this.appPluginMarket.loaded) void this.loadAppPluginMarket(''); this.openSettingsPanel('plugins'); }} />}
@@ -50631,15 +51583,24 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onCancel={() => { if (!this.appPluginInstallBusy) { this.appPluginInstall = undefined; this.appPluginInstallError = ''; this.update(); } }} onInstall={() => void this.confirmAppPluginInstall()} />}
             {modelPlugin && <AppPluginModelDialog locale={this.desktopLocale} plugin={modelPlugin} choices={this.appPluginChoices} loading={this.appPluginChoicesLoading}
                 busy={this.appPluginModelBusy} error={this.appPluginModelError} onProbe={endpoint => this.platformService.probeAppPluginServer(endpoint)} onRescan={() => void this.loadAppPluginChoices()}
-                onSave={(model, vision) => void this.saveAppPluginModel(model, vision)} onCancel={() => { if (!this.appPluginModelBusy) { this.appPluginModelFor = ''; this.update(); } }} />}
+                onSave={(model, vision) => void this.saveAppPluginModel(model, vision)} onCancel={() => { if (!this.appPluginModelBusy) { this.appPluginModelFor = ''; this.appPluginModelRunId = ''; this.update(); } }} />}
             {uninstallPlugin && <AppPluginUninstallDialog locale={this.desktopLocale} plugin={uninstallPlugin} busy={this.appPluginUninstallBusy} bin={bin}
                 onCancel={() => { if (!this.appPluginUninstallBusy) { this.appPluginUninstall = ''; this.update(); } }} onConfirm={() => void this.confirmAppPluginUninstall()} />}
             {this.appPluginStart && startPlugin?.summary && <AppPluginStartDialog key={`${this.appPluginStart.pluginId}:${this.appPluginStart.tabId}`} locale={this.desktopLocale}
                 plugin={startPlugin} tabTitle={this.appPluginStart.title} byAi={this.appPluginStart.byAi} initialGoal={this.appPluginStart.goal}
                 initialMinutes={this.appPluginStart.minutes} initialCost={this.appPluginStart.cost} busy={this.appPluginStartBusy} error={this.appPluginStartError} shortcut={shortcut}
-                onConfigureParams={(id, params) => void this.configureAppPlugin(id, { params, scope: 'defaults' })}
+                onConfigureParams={(id, params) => {
+                    if (this.appPluginStart && this.appPluginStart.pluginId === id) {
+                        const tabKey = `${this.appPluginStart.conversationId}\n${this.appPluginStart.tabId}`;
+                        const merged = { ...(this.appPluginStart.params || {}), ...params };
+                        this.appPluginStart = { ...this.appPluginStart, params: merged };
+                        this.appPluginStartsByTab?.set(tabKey, this.appPluginStart);
+                    }
+                    void this.configureAppPlugin(id, { params, scope: 'defaults' });
+                }}
                 onPickParamFile={(id, paramId, label) => void this.pickAppPluginParamFile(id, paramId, label)}
-                onStart={options => void this.confirmAppPluginStart(options)} onCancel={() => this.closeAppPluginStart()} />}
+                onStart={options => void this.confirmAppPluginStart(options, this.appPluginStart ? `${this.appPluginStart.conversationId}\n${this.appPluginStart.tabId}` : undefined)}
+                onCancel={() => this.closeAppPluginStart(this.appPluginStart ? `${this.appPluginStart.conversationId}\n${this.appPluginStart.tabId}` : undefined)} />}
         </>;
     }
 
@@ -52451,6 +53412,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         // Re-open the picker the notice asks for (it may have been closed since).
                                         this.modelPickerRelayOpen = this.attachmentErrorAction?.kind === 'relay';
                                         this.codingPopover = 'routes';
+                                        this.ensureDetachedPickerCatalogs?.(this.modelPickerRelayOpen);
                                         this.update();
                                     }}>
                                     {runningTaskText(this.desktopLocale, this.attachmentErrorAction.kind === 'relay' ? 'selectRelayAction'
@@ -52483,14 +53445,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     {viewerGallery.nav}
                 </section>
             </div>}
-            {this.mediaViewer && <div className={`nmx-attachment-lightbox nmx-media-viewer is-${this.mediaViewer.kind}${viewerGallery.nav ? ' has-gallery' : ''}`} role='dialog' aria-modal='true' aria-label={this.mediaViewer.name} onMouseDown={() => this.closeMediaViewer()}>
+            {this.mediaViewer && <div className={`nmx-attachment-lightbox nmx-media-viewer is-${this.mediaViewer.kind}${viewerGallery.nav ? ' has-gallery' : ''}`} role='dialog' aria-modal='true' aria-label={this.mediaViewer.name} onMouseDown={() => this.closeMediaViewer()} onKeyDown={event => {
+                if (event.key === 'Escape' && !event.currentTarget.ownerDocument.fullscreenElement) { event.preventDefault(); event.stopPropagation(); this.closeMediaViewer(); }
+                else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.ctrlKey && !event.altKey && !event.metaKey && !(event.target instanceof HTMLVideoElement || event.target instanceof HTMLAudioElement)) {
+                    if (this.stepMediaGallery(event.key === 'ArrowLeft' ? -1 : 1)) { event.preventDefault(); event.stopPropagation(); }
+                }
+            }}>
                 <section onMouseDown={event => event.stopPropagation()} onKeyDown={event => this.trapDialogFocus(event)}>
-                    <header><span className='nmx-lightbox-title'><strong title={this.mediaViewer.path || this.mediaViewer.name}>{this.mediaViewer.name}</strong>{this.mediaViewer.path && <small title={this.mediaViewer.path} data-nmx-literal>{this.mediaViewer.path}</small>}</span>{viewerGallery.counter}<button autoFocus aria-label={imageLightboxText(this.desktopLocale, 'close')} onClick={() => this.closeMediaViewer()}><i className='codicon codicon-close'></i></button></header>
+                    <header><span className='nmx-lightbox-title'><strong title={this.mediaViewer.path || this.mediaViewer.name}>{this.mediaViewer.name}</strong>{this.mediaViewer.path && <small title={this.mediaViewer.path} data-nmx-literal>{this.mediaViewer.path}</small>}</span>{viewerGallery.counter}<span className='nmx-lightbox-actions'>{this.renderViewerRevealButton(this.mediaViewer.path)}<button autoFocus aria-label={imageLightboxText(this.desktopLocale, 'close')} onClick={() => this.closeMediaViewer()}><i className='codicon codicon-close'></i></button></span></header>
                     <div className='nmx-attachment-lightbox-stage'>{this.mediaViewer.failed
                         ? <div className='nmx-media-viewer-error' role='alert'><i className='codicon codicon-warning' aria-hidden='true'></i><span>{localizeDesktopSurface(this.desktopLocale, '媒体文件暂不可用')}</span></div>
                         : this.mediaViewer.kind === 'video'
-                        ? <video key={this.mediaViewer.src} src={this.mediaViewer.src} controls autoPlay playsInline preload='metadata' title={this.mediaViewer.path} onError={() => this.markMediaViewerFailed()}></video>
-                        : <audio key={this.mediaViewer.src} src={this.mediaViewer.src} controls autoPlay preload='metadata' title={this.mediaViewer.path} onError={() => this.markMediaViewerFailed()}></audio>}</div>
+                        ? <video key={this.mediaViewer.src} ref={this.bindMediaViewerElement} src={this.mediaViewer.src} poster={this.mediaViewer.poster} controls autoPlay playsInline preload='metadata' title={this.mediaViewer.path} onError={() => this.markMediaViewerFailed()}></video>
+                        : <audio key={this.mediaViewer.src} ref={this.bindMediaViewerElement} src={this.mediaViewer.src} controls autoPlay preload='metadata' title={this.mediaViewer.path} onError={() => this.markMediaViewerFailed()}></audio>}</div>
                     {viewerGallery.nav}
                 </section>
             </div>}
@@ -54927,6 +55894,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected async openComicChatVoiceInput(): Promise<void> {
         if (this.nativeDictation?.active) { this.nativeDictation.finish(); return; }
         this.stopVoiceInput(false);
+        if (!this.microphoneDevicesProbed) void this.loadMicrophones?.(false);
         if ((this.microphonePermission === 'denied' || this.microphonePermission === 'system-blocked') && await this.microphoneStillRefused?.()) return;
         const ui = this.comicChatUi();
         const input = this.node.querySelector<HTMLTextAreaElement>('.nmx-comic-chat-dock textarea');
@@ -55087,11 +56055,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
         volume: number;
         muted: boolean;
         aspectRatio?: number;
+        /** The card's still, shown until the clip plays (kept when the playback copy replaces the URL). */
+        poster?: string;
+        /** The clip's file on this computer, for 在 Finder 中显示 (never the playback copy's). */
+        path?: string;
     };
 
     protected closeComicChatViewer(): void {
         const ui = this.comicChatUi();
         if (!ui.viewer && !this.comicChatViewerZoom) return;
+        if (this.comicViewerElement) {
+            releaseMediaElement(this.comicViewerElement);
+            this.comicViewerElement = undefined;
+        }
         ui.viewer = undefined;
         this.comicChatViewerZoom = undefined;
         this.comicChatViewerPan = undefined;
@@ -55121,19 +56097,28 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.comicChatViewerBackdropDown = false;
                 if (shouldClose) close();
             }}
-            onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } else this.trapDialogFocus(event); }}>
+            onKeyDown={event => {
+                // Escape in a clip's full screen only leaves full screen; the viewer stays open.
+                if (event.key === 'Escape') { if (event.currentTarget.ownerDocument.fullscreenElement) return; event.preventDefault(); event.stopPropagation(); close(); }
+                else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.ctrlKey && !event.altKey && !event.metaKey && !(event.target instanceof HTMLVideoElement || event.target instanceof HTMLAudioElement)) {
+                    if (this.stepMediaGallery(event.key === 'ArrowLeft' ? -1 : 1)) { event.preventDefault(); event.stopPropagation(); }
+                }
+                else this.trapDialogFocus(event); }}>
             <section>
                 <header><span className='nmx-lightbox-title'><strong data-nmx-literal>{viewer.name}</strong></span>{gallery.counter}
-                    <button type='button' className='nmx-lightbox-close' autoFocus aria-label={this.comicChatT('close')} title={this.comicChatT('close')} onClick={close}><i className='codicon codicon-close' aria-hidden='true'></i></button></header>
+                    <span className='nmx-lightbox-actions'>{this.renderViewerRevealButton(viewer.kind === 'video' ? this.comicChatViewerMediaState?.path : undefined)}
+                    <button type='button' className='nmx-lightbox-close' autoFocus aria-label={this.comicChatT('close')} title={this.comicChatT('close')} onClick={close}><i className='codicon codicon-close' aria-hidden='true'></i></button></span></header>
                 <div className={`nmx-attachment-lightbox-stage${zoomState && zoomState.zoomPercent > 100 ? ' is-zoomed' : ''}${this.comicChatViewerPan ? ' is-panning' : ''}`}
                     ref={isImage ? this.bindComicChatViewerWheel : undefined} onWheel={isImage ? event => this.onComicChatViewerWheel(event) : undefined}>{viewer.kind === 'video'
                     ? <video
+                        ref={this.bindComicViewerElement}
                         src={viewer.url}
+                        poster={this.comicChatViewerMediaState?.poster}
                         style={videoAr ? ({ '--nmx-viewer-video-ar': String(Number(videoAr.toFixed(6))) } as React.CSSProperties) : undefined}
                         controls
                         autoPlay
                         playsInline
-                        controlsList='nofullscreen noremoteplayback'
+                        controlsList='noremoteplayback'
                         disablePictureInPicture
                         onMouseUp={() => { this.comicChatViewerBackdropDown = false; }}
                         onLoadedMetadata={event => {
@@ -55172,7 +56157,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 this.comicChatViewerMediaState.muted = el.muted;
                             }
                         }} />
-                    : viewer.kind === 'audio' ? <audio src={viewer.url} controls autoPlay onMouseUp={() => { this.comicChatViewerBackdropDown = false; }} />
+                    : viewer.kind === 'audio' ? <audio ref={this.bindComicViewerElement} src={viewer.url} controls autoPlay onMouseUp={() => { this.comicChatViewerBackdropDown = false; }} />
                     : <img style={zoomState ? this.imagePreviewStyle(zoomState) : undefined} src={viewer.url} alt='' draggable={false} onMouseUp={() => { this.comicChatViewerBackdropDown = false; }}
                         onPointerDown={event => this.startComicChatViewerPan(event)} onPointerMove={event => this.panComicChatViewer(event)}
                         onPointerUp={event => this.endComicChatViewerPan(event)} onPointerCancel={event => this.endComicChatViewerPan(event)}
@@ -55454,7 +56439,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         feedbackSubmitting={Object.fromEntries(this.comicRelayFeedbackSubmitting)}
                         feedbackByTurnId={{ ...Object.fromEntries(turns.filter(view => view.turn.feedback).map(view => [view.turn.id, view.turn.feedback])), ...this.comicFeedbackByTurnId } as Record<string, 'up' | 'down' | null | undefined>}
                         onMenu={(media, event) => { ui.menu = { x: event.clientX, y: event.clientY, target: this.comicChatMediaTarget(media), origin: event.currentTarget as HTMLElement }; this.update(); }}
-                        onOpen={media => { if (media.url) this.openComicViewerMedia(media.url, chat?.title || t('image'), media.kind === 'video' ? 'video' : media.kind === 'image' ? 'image' : 'audio'); }}
+                        onOpen={media => {
+                            if (!media.url) return;
+                            const matchedAsset = media.assetId ? allViews.find(item => item.assetId === media.assetId) : undefined;
+                            const mediaKind = media.kind === 'video' ? 'video' : media.kind === 'image' ? 'image' : 'audio';
+                            const fallbackName = matchedAsset?.title || chat?.title || t(mediaKind === 'video' ? 'video' : mediaKind === 'image' ? 'image' : 'music');
+                            this.openComicViewerMedia(media.url, fallbackName, mediaKind, matchedAsset?.path);
+                        }}
                         onRetry={jobId => void this.platformService.retryMediaJob(root, jobId).then(() => this.loadMediaState(true), error => { ui.error = modelFailureText(this.desktopLocale, error); this.update(); })}
                         onCancel={jobId => void this.platformService.cancelMediaJob(root, jobId).then(() => this.loadMediaState(true), error => { ui.error = modelFailureText(this.desktopLocale, error); this.update(); })}
                         onGenerate={(turnId, ids) => { if (chat) void this.generateComicChatProposals(chat.id, turnId, ids); }}

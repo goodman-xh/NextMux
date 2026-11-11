@@ -60,14 +60,14 @@
 }
 
 .nmx-shell .nmx-settings-page :is(
-    .nmx-settings-actions button,
-    .nmx-profile-card > button,
-    .nmx-local-data-list > article > button,
-    .nmx-community-skill-card button,
+    .nmx-settings-actions button:not(.is-danger),
+    .nmx-profile-card > button:not(.is-danger),
+    .nmx-local-data-list > article > button:not(.is-confirm):not(.is-danger),
+    .nmx-community-skill-card button:not(.is-danger),
     .nmx-community-skills-toolbar > button,
     .nmx-skill-install-link > button,
-    .nmx-conversation-archive button,
-    .nmx-mcp-access button:not(.nmx-mcp-server-toggle),
+    .nmx-conversation-archive button:not(.is-danger),
+    .nmx-mcp-access button:not(.nmx-mcp-server-toggle):not(.is-danger),
     .nmx-settings-inline-error > button,
     .nmx-terminal-profile-controls > button,
     .nmx-terminal-runtime-note > button,
@@ -111,11 +111,18 @@
     background: color-mix(in srgb, var(--nmx-danger, #c2464f) 12%, transparent);
 }
 
-.nmx-shell .nmx-settings-page button:active:not(:disabled):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
+.nmx-shell .nmx-settings-page :is(.nmx-local-data-list > article > button.is-confirm, button.is-danger):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)):hover:not(:disabled):not(.is-blocked):not([aria-disabled='true']) {
+    border-color: color-mix(in srgb, var(--nmx-danger, #c2464f) 76%, transparent);
+    color: var(--nmx-danger, #ffa198);
+    background: color-mix(in srgb, var(--nmx-danger, #c2464f) 20%, transparent);
+    filter: none;
+}
+
+.nmx-shell .nmx-settings-page button:active:not(:disabled):not(.is-blocked):not([aria-disabled='true']):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     transform: scale(.97);
 }
 
-.nmx-shell .nmx-settings-page button:disabled:not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
+.nmx-shell .nmx-settings-page button:is(:disabled, .is-blocked, [aria-disabled='true']):not(:where(.nmx-plugin-modal-backdrop *, .nmx-plugin-dialog, .nmx-plugin-dialog *)) {
     cursor: default;
     opacity: .46;
 }
