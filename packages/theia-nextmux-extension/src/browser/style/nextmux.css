@@ -21657,6 +21657,51 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     cursor: not-allowed;
 }
 .nmx-model-picker-relay-view .nmx-relay-option-row.is-unknown .nmx-relay-option-select:hover { background: transparent; }
+.nmx-model-picker-relay-view .nmx-relay-option-row.is-full { cursor: not-allowed; }
+.nmx-model-picker-relay-view .nmx-relay-option-row.is-full > .nmx-relay-option-select {
+    height: auto;
+    min-height: 32px;
+    padding-block: 4px 5px;
+}
+.nmx-model-picker-relay-view .nmx-relay-option-row.is-full > .nmx-relay-option-select:disabled {
+    pointer-events: none;
+    color: var(--nmx-muted);
+    opacity: 1;
+}
+.nmx-model-picker-relay-view .nmx-relay-option-row.is-full .nmx-relay-option-name,
+.nmx-model-picker-relay-view .nmx-relay-option-row.is-full .nmx-relay-option-metrics,
+.nmx-model-picker-relay-view .nmx-relay-option-row.is-full .nmx-relay-option-metrics > * {
+    opacity: .72;
+}
+.nmx-model-picker-relay-view .nmx-relay-option-row.is-full > .nmx-relay-option-select:hover { background: transparent; }
+.nmx-model-picker-relay-view .nmx-relay-option-row.is-full > .nmx-relay-favorite { pointer-events: auto; }
+.nmx-model-picker-relay-view .nmx-relay-capacity-badge,
+.nmx-relay-capacity-badge {
+    grid-column: 1 / -1;
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 10.5px !important;
+    font-weight: 550;
+    line-height: 14px !important;
+    color: #fbbf24;
+    background: rgba(245, 158, 11, .14);
+    border: 1px solid rgba(245, 158, 11, .3);
+    white-space: nowrap;
+}
+.nmx-shell.nmx-theme-light .nmx-relay-capacity-badge,
+.nmx-theme-light .nmx-model-picker-relay-view .nmx-relay-capacity-badge,
+.nmx-theme-light .nmx-relay-capacity-badge {
+    color: #78350f;
+    background: rgba(245, 158, 11, .12);
+    border-color: rgba(217, 119, 6, .34) !important;
+}
 
 /* Shared, quiet picker chrome. These scoped rules intentionally replace the
    generic composer button styling without affecting the Model Center. */

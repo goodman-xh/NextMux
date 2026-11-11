@@ -85,7 +85,9 @@
 /* Some of the store's APIs are off sale, or every check of the last day failed (apiStatus.detailReason). The amber is
    mixed toward the text colour to read at 4.5:1 on its tint in both themes. */
 .nmx-mc-capabilities small.nmx-mc-api-alert { display: inline-flex; align-items: center; gap: 3px; color: color-mix(in oklab, var(--mc-warning) 80%, var(--mc-text)); background: color-mix(in srgb, var(--mc-warning) 12%, transparent); }
+.nmx-mc-capabilities small.nmx-mc-api-alert.is-capacity { color: color-mix(in oklab, var(--mc-warning) 86%, var(--mc-text)); background: color-mix(in srgb, var(--mc-warning) 16%, transparent); font-weight: 550; }
 .nmx-mc-capabilities .nmx-mc-api-alert .codicon { color: inherit; font-size: 10px; }
+.nmx-mc-merchant[data-relay-capacity='full'] { border-style: dashed; opacity: .88; }
 .nmx-mc-identity > span { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .nmx-mc-identity code, .nmx-mc-identity small { color: var(--mc-muted); font-size: 10px; }
 .nmx-mc-identity code { min-width: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }

@@ -1,4 +1,17 @@
 import { NextMuxOwnedBrowserView, type OwnedBrowserSurface } from './nextmux-owned-browser-view';
+import {
+    ComposerSlashCommandDrawerPortal,
+    buildComposerSlashCommands,
+    expandComposerSlashSubmission,
+    filterComposerSlashCommands,
+    isSlashDrawerSuppressedByCompetingSurface,
+    matchComposerSlashTrigger,
+    removeComposerSlashToken,
+    replaceComposerSlashToken,
+    type ComposerSlashCommandItem,
+    type ComposerSlashMatch,
+    type ComposerSlashSkillInfo
+} from './nextmux-slash-commands';
 import { ownedBrowserText } from './nextmux-owned-browser-text';
 import { NextMuxBrowserAddressInput } from './nextmux-browser-address-input';
 import { NextMuxDurableRetryDialog, durableRecoveryText } from './nextmux-durable-retry-dialog';
@@ -95,7 +108,7 @@ const MERCHANT_CONSOLE_LABELS: Readonly<Record<NextMuxDesktopLocale, string>> = 
     fr: 'Devenir marchand', de: 'Händler werden', 'pt-BR': 'Tornar-se comerciante', ru: 'Стать продавцом', ar: 'الانضمام كتاجر', hi: 'मर्चेंट बनें'
 };
 const MERCHANT_CONSOLE_HINTS: Readonly<Record<NextMuxDesktopLocale, string>> = {
-    'zh-CN': '只要您有api，就能入驻', 'zh-TW': '只要您有api，就能入駐',
+    'zh-CN': '只要您有API,就能入驻', 'zh-TW': '只要您有API,就能入駐',
     en: 'As long as you have an API, you can join as a merchant',
     ja: 'APIをお持ちであれば、出店できます',
     ko: 'API만 있으면 입점할 수 있습니다',
@@ -146,7 +159,7 @@ import { MonacoTextModelService } from '@theia/monaco/lib/browser/monaco-text-mo
 import { MonacoJSONCEditor } from '@theia/preferences/lib/browser/monaco-jsonc-editor';
 import type { McpCredentialChange, McpServerAccess, McpServerConfiguration } from '../common/nextmux-mcp-access';
 import { ModelUsagePanel, type PersonalApiUsageRecord } from './nextmux-model-usage-panel';
-import { MODEL_CENTER_CATEGORIES, ModelCenterMerchants, modelCenterFilterLabel } from './nextmux-model-center-merchants';
+import { MODEL_CENTER_CATEGORIES, ModelCenterHint, ModelCenterMerchants, modelCenterFilterLabel } from './nextmux-model-center-merchants';
 import { ModelTaxonomyTags } from './nextmux-model-taxonomy-tags';
 import { modelCenterText } from './nextmux-model-center-locale';
 import '../../src/browser/style/nextmux-model-center.css';
@@ -305,7 +318,7 @@ import { GitHubAccountSettings } from './nextmux-github-account-panel';
 import { ProviderImportBanner, providerImportText } from './nextmux-provider-import';
 import { MANAGED_PRICE_NOTICES_KEY, ManagedPriceNoticeStore, managedPriceNotificationId, managedPriceNoticeItem, normalizeOwnedManagedPriceNotice, ownedManagedPriceEvent, type OwnedManagedPriceNotice, type ManagedPriceNoticeItem } from './nextmux-managed-price-notice';
 import { managedPriceSummary, managedPriceText } from './nextmux-managed-price-text';
-import { parseProviderImportLink, type ProviderImportRequest } from '../common/nextmux-provider-import';
+import { parseDirectApiImportLink, parseProviderImportLink, sanitizeDirectApiImportKey, type DirectApiImportRequest, type ProviderImportRequest } from '../common/nextmux-provider-import';
 import { formatBalanceMicros, walletNetBalanceMicros } from './nextmux-money-format';
 import { walletBalanceText } from './nextmux-wallet-balance-text';
 import { shouldClearBalanceNotice } from './nextmux-balance-notice-recovery';
@@ -4253,9 +4266,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected relaySourceQuery = '';
     protected relayCapacitySnapshot: PublicMerchantCapacitySnapshot | undefined;
     protected readonly relayCapacityPoller = new RelayCapacityPoller((ids, scope) => this.platformService.getPublicMerchantCapacity(ids, scope));
-    protected relayOptionIsFull(option: RelayOption): boolean {
-        return option.kind === 'managed' && relayMerchantIsFull(this.relayCapacitySnapshot, option.merchantId,
-            this.activeSection === 'comic' ? 'comic' : 'coding');
+    protected relayOptionIsFull(option: RelayOption, scope: PublicMerchantCapacityScope = this.activeSection === 'comic' ? 'comic' : 'coding'): boolean {
+        return option.kind === 'managed' && relayMerchantIsFull(this.relayCapacitySnapshot, option.merchantId, scope);
     }
 
     /** Every API key of this merchant is at its concurrency limit right now (an observation, never a route check). */
@@ -5738,9 +5750,31 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.toDispose.push({ dispose: this.accountLinkCoordinator.attach(this.routeProviderImportLinks(desktopBridge)) });
         }
         this.toDispose.push({ dispose: () => this.accountLinkCoordinator?.dispose() });
+        if (!this.detachedConversationId) {
+            const checkLinkedDeviceSession = (): void => {
+                if (this.isDisposed || !this.platformSession.linked || document.visibilityState === 'hidden') return;
+                if (Date.now() - this.lastDeviceSessionCheckAt < 15_000) return;
+                void this.loadDeviceSession(true, true);
+            };
+            const onVisibilityChange = (): void => {
+                if (document.visibilityState === 'visible') checkLinkedDeviceSession();
+            };
+            window.addEventListener('focus', checkLinkedDeviceSession);
+            document.addEventListener('visibilitychange', onVisibilityChange);
+            this.toDispose.push({
+                dispose: () => {
+                    window.removeEventListener('focus', checkLinkedDeviceSession);
+                    document.removeEventListener('visibilitychange', onVisibilityChange);
+                }
+            });
+        }
         // Billing data is refreshed on page entry or by the explicit refresh
         // button; do not poll the account while the user is reading it.
         this.toDispose.push({ dispose: () => this.clearWalletTopupPoll() });
+        this.toDispose.push({ dispose: () => {
+            this.abortAppPluginChatForPrefix('', false);
+            this.relayCapacityPoller.stop();
+        } });
         this.toDispose.push({ dispose: () => {
             if (this.composerUiUpdateTimer !== undefined) window.clearTimeout(this.composerUiUpdateTimer);
             this.composerUiUpdateTimer = undefined;
@@ -7478,6 +7512,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected openCouncilConfigModal(): void {
+        this.dismissSlashCommandDrawer?.(false);
         if (this.councilConfigCloseTimer !== undefined) clearTimeout(this.councilConfigCloseTimer);
         this.councilConfigCloseTimer = undefined;
         this.councilConfigModalClosing = false;
@@ -7572,8 +7607,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected selectCouncilModalRelay(relayKey: string): void {
-        const option = this.relayPickerOptions().find(item => item.key === relayKey) || this.relayOption(relayKey);
-        if (option && this.relayOptionIsFull?.(option)) return;
+        const option = this.relayPickerOptions('coding').find(item => item.key === relayKey) || this.relayOption(relayKey);
+        if (option && this.relayOptionIsFull?.(option, 'coding')) return;
         this.councilModalRelayKey = relayKey;
         this.councilModalRouteError = false;
         this.councilModalRelayDrawerOpen = false;
@@ -7615,8 +7650,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 return;
             }
             if (!routesByRelay.has(slotRelayKey)) {
-                const slotRelayOption = this.relayPickerOptions().find(option => option.key === slotRelayKey) || this.relayOption(slotRelayKey);
-                if (slotRelayOption && this.relayOptionIsFull?.(slotRelayOption)) {
+                const slotRelayOption = this.relayPickerOptions('coding').find(option => option.key === slotRelayKey) || this.relayOption(slotRelayKey);
+                if (slotRelayOption && this.relayOptionIsFull?.(slotRelayOption, 'coding')) {
                     this.councilModalRouteError = true;
                     this.councilModalRelayFullError = true;
                     this.update();
@@ -7857,6 +7892,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected selectCouncilRoleSubConversation(childRunId: string): void {
+        this.resetSlashCommandState?.();
         this.activeSection = 'coding';
         this.codingPanel = 'thread';
         this.activeCouncilChildId = childRunId;
@@ -7873,6 +7909,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected leaveCouncilRoleSubConversationToConversation(): void {
+        this.resetSlashCommandState?.();
         const hadActive = Boolean(this.activeCouncilChildId);
         this.activeCouncilChildId = '';
         this.councilVisibilityController.leaveToConversation();
@@ -8127,6 +8164,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 relayLabel={relayOption?.label || relayKey}
                 renderRelayDrawer={() => this.renderRelayPopover({
                     selectedKey: relayKey,
+                    capacityScope: 'coding',
                     onSelect: key => this.selectCouncilModalRelay(key)
                 })}
                 onDismissDropdowns={() => {
@@ -8215,7 +8253,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 agentRunning={this.isCodingSessionRunning(this.activeCodingSessionId)}
                 configWarning={this.councilModalConfigWarning || (!this.platformSession?.linked && relayKey.startsWith('managed:') ? relayText(this.desktopLocale, 'signInNotice') : undefined)}
                 errorMessage={!this.councilModalRouteError ? undefined : this.councilModalRelayFullError
-                    ? relayOption && this.relayOptionIsFull(relayOption) ? relayText(this.desktopLocale, 'relayFull') : undefined
+                    ? relayOption && this.relayOptionIsFull(relayOption, 'coding') ? relayText(this.desktopLocale, 'relayFull') : undefined
                     : councilModeText(this.desktopLocale, 'routeUnavailable')}
             />}
             {this.councilCloseConfirmOpen && <CouncilCloseConfirmModal
@@ -8690,6 +8728,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** A closed tab (or a removed conversation) gives its windows back to the desktop. */
     protected forgetConversationWindows(conversationId: string, tabs: readonly ConversationVisualTab[], close = true): void {
         if (close) {
+            for (const tab of tabs) {
+                this.abortAppPluginChatForPrefix?.(`${conversationId}\n${tab.id}`, true);
+            }
             const closingStart = (request: typeof this.appPluginQueuedGoal): boolean => Boolean(request
                 && request.conversationId === conversationId && tabs.some(tab => tab.id === request.tabId));
             if (closingStart(this.appPluginStart)) {
@@ -13893,7 +13934,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const activeRelayKey = this.comicStudioRelayKeyFor(kind, capability);
 
         if (mode === 'relay') {
-            const rows = Math.max(2, this.relayPickerOptions().length);
+            const rows = Math.max(2, this.relayPickerOptions('comic').length);
             const directoryPage = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage;
             const loading = this.relaySourceTab !== 'my-api' && (this.publicMerchantPageLoading || !directoryPage || this.publicMerchantPageError);
             const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked), this.desktopLocale);
@@ -13930,6 +13971,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             <div className='nmx-model-picker-relay-view'>
                                 {this.renderRelayPopover({
                                     selectedKey: activeRelayKey,
+                                    capacityScope: 'comic',
                                     onSelect: key => {
                                         this.selectComicStepRelayForKind(kind, capability, key);
                                         this.closeComicStudioIsolatedPicker(true);
@@ -13943,20 +13985,23 @@ export class NextMuxDesktopWidget extends ReactWidget {
             );
         }
 
-        if (activeRelayKey.startsWith('managed:')) {
-            const merchantId = activeRelayKey.slice('managed:'.length);
-            if (!this.merchantPickerSnapshots.has(merchantId)) {
-                void this.loadComicChatRelayCatalog(merchantId);
+        const studioMerchantId = activeRelayKey.startsWith('managed:') ? activeRelayKey.slice('managed:'.length) : '';
+        if (studioMerchantId) {
+            if (!this.merchantPickerSnapshots.has(studioMerchantId)) {
+                void this.loadComicChatRelayCatalog(studioMerchantId);
             }
         }
         const prefs = this.comicStepPrefsFor(kind);
         const explicitRelay = prefs.relays?.[capability];
-        const allCandidates = [...this.comicStepCandidatesForKind(kind, capability)]
+        const allCandidates = [...this.comicStepCandidatesForKind(kind, capability, true)]
             .sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label));
         const relayMatched = activeRelayKey && activeRelayKey !== 'automatic'
             ? allCandidates.filter(item => item.source.key === activeRelayKey)
             : allCandidates;
-        const allOptions = explicitRelay ? relayMatched : (relayMatched.length > 0 ? relayMatched : allCandidates);
+        const selectedMerchantFull = Boolean(studioMerchantId && this.relayMerchantIdIsFull?.(studioMerchantId, 'comic'));
+        const allOptions = (explicitRelay || selectedMerchantFull)
+            ? relayMatched
+            : (relayMatched.length > 0 ? relayMatched : allCandidates);
         const query = this.comicStudioModelQuery.trim().toLowerCase();
         const filtered = query
             ? allOptions.filter(item =>
@@ -13975,8 +14020,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const placement = layout.picker;
         const detailGeometry = layout.detail;
         const relayLoading = Boolean(
-            activeRelayKey.startsWith('managed:')
-            && (this as unknown as { comicChatRelayLoading?: Set<string> }).comicChatRelayLoading?.has(activeRelayKey.slice('managed:'.length))
+            studioMerchantId
+            && (this as unknown as { comicChatRelayLoading?: Set<string> }).comicChatRelayLoading?.has(studioMerchantId)
         );
         const modalRefCount = this.comicStudioModalState.sourceFiles.length;
 
@@ -13993,6 +14038,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     }
                 }}
             >
+                {studioMerchantId && this.relayCapacityPoller && (
+                    <RelayCapacityRefresh
+                        poller={this.relayCapacityPoller}
+                        merchantIds={[studioMerchantId]}
+                        scope='comic'
+                        onSnapshot={snapshot => { this.relayCapacitySnapshot = snapshot; this.update(); }}
+                    />
+                )}
                 <div className={`nmx-model-picker-surface nmx-shell nmx-theme-${this.resolvedDesktopTheme()}`}>
                     <section
                         className='nmx-composer-popover nmx-route-popover nmx-model-picker-popover nmx-model-only-popover'
@@ -14181,26 +14234,33 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />
                                         <span>{relayText(this.desktopLocale, 'modelsLoading')}</span>
                                     </div>
-                                ) : (
-                                    <div className='nmx-route-empty'>
-                                        <span>
-                                            {this.comicStudioModelQuery.trim()
-                                                ? modelPickerListText(this.desktopLocale, 'noMatch')
-                                                : localizeDesktopSurface(this.desktopLocale, '当前渠道下暂无支持该功能的模型')}
-                                        </span>
-                                        {!this.comicStudioModelQuery.trim() && (
-                                            <button
-                                                type='button'
-                                                onClick={() => {
-                                                    const relayAnchor = `[data-studio-picker-anchor="${kind}:${capability}:relay"]`;
-                                                    this.toggleComicStudioIsolatedPicker(kind, capability, 'relay', relayAnchor);
-                                                }}
-                                            >
-                                                {relayText(this.desktopLocale, 'selectRelay')}
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
+                                ) : (() => {
+                                    const pickerRelayFull = !this.comicStudioModelQuery.trim()
+                                        && activeRelayKey.startsWith('managed:')
+                                        && Boolean(this.relayMerchantIdIsFull?.(activeRelayKey.slice('managed:'.length), 'comic'));
+                                    return (
+                                        <div className='nmx-route-empty' role={pickerRelayFull ? 'status' : undefined}>
+                                            <span>
+                                                {this.comicStudioModelQuery.trim()
+                                                    ? modelPickerListText(this.desktopLocale, 'noMatch')
+                                                    : pickerRelayFull
+                                                        ? relayText(this.desktopLocale, 'relayFull')
+                                                        : localizeDesktopSurface(this.desktopLocale, '当前渠道下暂无支持该功能的模型')}
+                                            </span>
+                                            {!this.comicStudioModelQuery.trim() && (
+                                                <button
+                                                    type='button'
+                                                    onClick={() => {
+                                                        const relayAnchor = `[data-studio-picker-anchor="${kind}:${capability}:relay"]`;
+                                                        this.toggleComicStudioIsolatedPicker(kind, capability, 'relay', relayAnchor);
+                                                    }}
+                                                >
+                                                    {relayText(this.desktopLocale, 'selectRelay')}
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         )}
                     </section>
@@ -16415,13 +16475,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     /** Language (text) models from every source, grouped as the user's own APIs and relays. */
-    protected comicTextRouteChoices(): readonly ComicTextRouteChoice[] {
+    protected comicTextRouteChoices(hideFull = false): readonly ComicTextRouteChoice[] {
         const run = (): readonly ComicTextRouteChoice[] => {
             const choices = new Map<string, ComicTextRouteChoice>();
             // Relays opened from the advanced model menu join once their models are loaded.
             const extra = this.comicStepExtraRelayKeys('text').flatMap(key => {
                 const routes = this.routesForRelay(key, 'coding');
-                return routes.length ? routes : this.comicCatalogTextRoutes(key.slice('managed:'.length));
+                return routes.length ? routes : this.comicCatalogTextRoutes(key.slice('managed:'.length), hideFull);
             });
             for (const route of [...this.allModelRoutes('coding'), ...extra]) {
                 if (route.kind === 'official_connection') {
@@ -16436,6 +16496,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     if (!this.isModelVisible(route.canonicalModel) || !route.offering.capabilities.includes('tools')
                         || !route.offering.capabilities.includes('reasoning') && route.offering.category !== 'reasoning'
                         || route.offering.output.some(kind => kind !== 'text')) continue;
+                    if (hideFull && !route.automatic && this.relayOfferingIsFull?.(route.offering, 'comic')) continue;
                     const id = route.automatic ? `auto:${route.registryModelId}` : `relay:${route.id}`;
                     if (!choices.has(id)) choices.set(id, {
                         id, group: 'relay', label: this.modelDisplayName(route.canonicalModel, route.offering.displayName || route.offering.providerModelCode),
@@ -16445,7 +16506,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             return [...choices.values()].sort((left, right) => left.group === right.group ? left.label.localeCompare(right.label) : left.group === 'own' ? -1 : 1);
         };
-        return this.cachedComicRoutes ? this.cachedComicRoutes('text-choices', 'text', run) : run();
+        return this.cachedComicRoutes ? this.cachedComicRoutes(hideFull ? 'text-choices:visible' : 'text-choices', 'text', run, hideFull) : run();
     }
 
     protected comicTextRouteChoiceById(id: string): ComicTextRouteChoice | undefined {
@@ -16555,11 +16616,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     /** A relay's media routes straight from the platform catalog, before its own catalog page is loaded. */
-    protected comicCatalogMediaRoutes(kind: ComicAgentKind, merchantId: string): readonly ComicMediaRoute[] {
+    protected comicCatalogMediaRoutes(kind: ComicAgentKind, merchantId: string, hideFull = false): readonly ComicMediaRoute[] {
         const category = kind === 'sound_effect' ? 'soundEffect' : kind;
         if (kind === 'sound_effect') return [];
         return this.platformCatalog.offerings
             .filter(offering => offering.status === 'active' && offering.available !== false && this.offeringMerchantId(offering) === merchantId
+                && (!hideFull || !this.relayOfferingIsFull?.(offering, 'comic'))
                 && this.registryModelSupportsWorkbench(offering as unknown as PlatformRegistryModel, 'comic') && this.comicMediaSupportsKind(offering, kind)
                 && (kind !== 'music' || offering.capabilities.includes('music_generation'))
                 && this.isModelVisible(offering.canonicalModel, category))
@@ -16569,9 +16631,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     /** A relay's text routes (tool calling, text only) from the platform catalog, before its page is loaded. */
-    protected comicCatalogTextRoutes(merchantId: string): readonly DesktopModelRoute[] {
+    protected comicCatalogTextRoutes(merchantId: string, hideFull = false): readonly DesktopModelRoute[] {
         return this.platformCatalog.offerings
             .filter(offering => offering.status === 'active' && offering.available !== false && this.offeringMerchantId(offering) === merchantId
+                && (!hideFull || !this.relayOfferingIsFull?.(offering, 'comic'))
                 && offering.workbenches.includes('coding') && offering.codingAvailability?.available !== false
                 && (offering.category === undefined || ['coding', 'text', 'reasoning'].includes(offering.category))
                 && offering.input.includes('text') && offering.output.includes('text') && !offering.output.includes('embedding')
@@ -16582,11 +16645,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     /** Every model that can do this step, from every source the app knows. */
-    protected comicStepCandidates(capability: ComicStepCapability, explicitKind?: ComicProjectKind): readonly ComicStepCandidate[] {
+    protected comicStepCandidates(capability: ComicStepCapability, explicitKind?: ComicProjectKind, hideFull = false): readonly ComicStepCandidate[] {
         const kind = explicitKind ?? this.comicModelKind?.() ?? 'novel';
         if ((kind === 'image' || kind === 'music') && capability === 'text') return [];
-        const candidates = this.cachedComicRoutes(`final:${capability}`, capability, () => dedupeComicPriceVariants(this.comicStepCandidatesByRoute(capability)));
-        const cacheKeyName = `${kind}:${capability}`;
+        const candidates = this.cachedComicRoutes(
+            hideFull ? `final:visible:${capability}` : `final:${capability}`,
+            capability,
+            () => dedupeComicPriceVariants(this.comicStepCandidatesByRoute(capability, hideFull)),
+            hideFull
+        );
+        const cacheKeyName = hideFull ? `${kind}:${capability}:visible` : `${kind}:${capability}`;
         const key = [candidates, this.comicProject?.(), Boolean(this.comicStudioModalState?.open), this.comicKindSheet, this.comicCreateSheetOpen, kind, this.videoProfiles];
         const cache = this.comicStepEligibilityCache ??= new Map<string, { readonly key: readonly unknown[]; readonly value: readonly ComicStepCandidate[] }>();
         const hit = cache.get(cacheKeyName);
@@ -16596,8 +16664,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return value;
     }
 
-    protected comicStepCandidatesForKind(kind: ComicProjectKind, capability: ComicStepCapability): readonly ComicStepCandidate[] {
-        return this.comicStepCandidates(capability, kind);
+    protected comicStepCandidatesForKind(kind: ComicProjectKind, capability: ComicStepCapability, hideFull = false): readonly ComicStepCandidate[] {
+        return this.comicStepCandidates(capability, kind, hideFull);
     }
 
     protected comicStepEligibilityCache: Map<string, { readonly key: readonly unknown[]; readonly value: readonly ComicStepCandidate[] }> | undefined;
@@ -16685,45 +16753,51 @@ export class NextMuxDesktopWidget extends ReactWidget {
             && comicRouteVideoSeconds(route, cast.length > 0, input.width >= 1080 && input.height >= 1080).includes(input.durationSeconds);
     }
 
-    protected comicStepCandidatesByRoute(capability: ComicStepCapability): readonly ComicStepCandidate[] {
+    protected comicStepCandidatesByRoute(capability: ComicStepCapability, hideFull = false): readonly ComicStepCandidate[] {
         if (capability === 'transcription') {
-            return this.comicTranscriptionRoutes().map(route => {
-                const source: ComicStepSource = route.kind === 'local' ? { key: 'local', kind: 'local', label: '' }
-                    : { key: managedRelayKey(this.offeringMerchantId(route.offering!)), kind: 'managed', label: route.providerName };
-                return { key: `${source.key}::${route.id}`, routeId: route.id, model: route.model, label: route.offering ? this.modelDisplayName(route.model, route.offering.displayName || route.offering.providerModelCode) : route.model, source,
-                    rank: route.kind === 'local' ? 0 : this.comicStepRank(route.model, route.offering),
-                    ...(route.offering ? { note: this.comicTranscriptionPrice(route), offering: route.offering } : {}) };
-            });
+            return this.comicTranscriptionRoutes(hideFull)
+                .filter(route => !hideFull || !route.offering || !this.relayOfferingIsFull?.(route.offering, 'comic'))
+                .map(route => {
+                    const source: ComicStepSource = route.kind === 'local' ? { key: 'local', kind: 'local', label: '' }
+                        : { key: managedRelayKey(this.offeringMerchantId(route.offering!)), kind: 'managed', label: route.providerName };
+                    return { key: `${source.key}::${route.id}`, routeId: route.id, model: route.model, label: route.offering ? this.modelDisplayName(route.model, route.offering.displayName || route.offering.providerModelCode) : route.model, source,
+                        rank: route.kind === 'local' ? 0 : this.comicStepRank(route.model, route.offering),
+                        ...(route.offering ? { note: this.comicTranscriptionPrice(route), offering: route.offering } : {}) };
+                });
         }
         if (capability === 'text') {
             const labels = new Map(this.relayOptions('coding').map(option => [option.key, option.label]));
             for (const relay of this.comicStepDirectory.get('text')?.relays || []) if (!labels.has(relay.key)) labels.set(relay.key, relay.label);
-            return this.comicTextRouteChoices().map(choice => {
-                const route = choice.route;
-                const source: ComicStepSource = route.kind === 'official_connection'
-                    ? { key: officialConnectionRelayKey(route.connection.id), kind: 'official', label: route.connection.label || route.connection.providerName }
-                    : route.automatic ? { key: 'auto', kind: 'automatic', label: '' }
-                        : (key => ({ key, kind: 'managed' as const, label: labels.get(key) || route.offering.providerName }))(managedRelayKey(this.offeringMerchantId(route.offering)));
-                const model = route.kind === 'official_connection' ? route.connection.model : route.canonicalModel;
-                return { key: `${source.key}::${choice.id}`, routeId: choice.id, model, label: choice.label, source,
-                    rank: this.comicStepRank(model, route.kind === 'managed_gateway' ? route.offering : undefined),
-                    ...(route.kind === 'managed_gateway' && !route.automatic ? { offering: route.offering } : {}) };
-            });
+            return this.comicTextRouteChoices(hideFull)
+                .filter(choice => !hideFull || choice.route.kind !== 'managed_gateway' || choice.route.automatic || !this.relayOfferingIsFull?.(choice.route.offering, 'comic'))
+                .map(choice => {
+                    const route = choice.route;
+                    const source: ComicStepSource = route.kind === 'official_connection'
+                        ? { key: officialConnectionRelayKey(route.connection.id), kind: 'official', label: route.connection.label || route.connection.providerName }
+                        : route.automatic ? { key: 'auto', kind: 'automatic', label: '' }
+                            : (key => ({ key, kind: 'managed' as const, label: labels.get(key) || route.offering.providerName }))(managedRelayKey(this.offeringMerchantId(route.offering)));
+                    const model = route.kind === 'official_connection' ? route.connection.model : route.canonicalModel;
+                    return { key: `${source.key}::${choice.id}`, routeId: choice.id, model, label: choice.label, source,
+                        rank: this.comicStepRank(model, route.kind === 'managed_gateway' ? route.offering : undefined),
+                        ...(route.kind === 'managed_gateway' && !route.automatic ? { offering: route.offering } : {}) };
+                });
         }
-        return this.cachedComicRoutes(`candidates:${capability}`, capability, () => {
-            const candidates: ComicStepCandidate[] = this.comicMediaRouteGroups(capability).flatMap(group => group.routes.map(route => {
-                const price = route.kind === 'managed' ? this.formatManagedMediaPrice(route, capability) : '';
-                return {
-                    key: `${group.option.key}::${route.id}`, routeId: route.id, model: route.model, label: this.modelDisplayName(route.model, route.offering?.displayName || route.offering?.providerModelCode),
-                    source: this.comicStepSource(group.option), rank: this.comicStepRank(route.model, route.offering), ...(price ? { note: price } : {}),
-                    ...(route.kind === 'managed' && route.offering ? { offering: route.offering } : {}),
-                    ...(capability === 'video' ? { withSound: this.comicVideoMakesSound(route) } : {})
-                };
-            }));
+        return this.cachedComicRoutes(hideFull ? `candidates:visible:${capability}` : `candidates:${capability}`, capability, () => {
+            const candidates: ComicStepCandidate[] = this.comicMediaRouteGroups(capability, hideFull).flatMap(group => group.routes
+                .filter(route => !hideFull || !route.offering || !this.relayOfferingIsFull?.(route.offering, 'comic'))
+                .map(route => {
+                    const price = route.kind === 'managed' ? this.formatManagedMediaPrice(route, capability) : '';
+                    return {
+                        key: `${group.option.key}::${route.id}`, routeId: route.id, model: route.model, label: this.modelDisplayName(route.model, route.offering?.displayName || route.offering?.providerModelCode),
+                        source: this.comicStepSource(group.option), rank: this.comicStepRank(route.model, route.offering), ...(price ? { note: price } : {}),
+                        ...(route.kind === 'managed' && route.offering ? { offering: route.offering } : {}),
+                        ...(capability === 'video' ? { withSound: this.comicVideoMakesSound(route) } : {})
+                    };
+                }));
             const local = this.comicMediaLocalRoute(capability);
             if (local) candidates.push({ key: `local::${local.id}`, routeId: local.id, model: local.model, label: local.model, source: { key: 'local', kind: 'local', label: local.providerName }, rank: 5_000_000 });
             return candidates;
-        });
+        }, hideFull);
     }
 
     /**
@@ -16732,7 +16806,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
      * comic tab lag (about 100 ms per render). They are recomputed only when one of their inputs changes.
      */
     protected comicRouteCache: Map<string, { readonly key: readonly unknown[]; readonly value: unknown }> | undefined;
-    protected comicRouteCacheKey(kind: ComicStepCapability): readonly unknown[] {
+    protected comicCapacityCacheSignature(): string {
+        const snap = this.relayCapacitySnapshot;
+        if (!snap || snap.scope !== 'comic') return '';
+        const now = Date.now();
+        return snap.merchants
+            .filter(item => item.expiresAt > now && (item.state === 'full' || item.fullOfferingIds?.length))
+            .map(item => `${item.merchantId}:${item.state}:${(item.fullOfferingIds || []).join(',')}`)
+            .join('|');
+    }
+    protected comicRouteCacheKey(kind: ComicStepCapability, includeCapacity = false): readonly unknown[] {
         const snapshots = [...this.merchantPickerSnapshots].map(([id, entry]) => `${id}:${entry.updatedAt ?? ''}:${entry.catalog?.offerings?.length ?? 0}`).join(',');
         // Only this step's relay directory: the others arriving must not recompute this step.
         const entry = this.comicStepDirectory.get(kind as ComicStepCapability);
@@ -16743,11 +16826,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.selectedPublicMerchant, this.activeRelayKey, this.favoriteMerchantLabels.size, snapshots, directory, `${comfy.available}:${comfy.workflowName || ''}`,
             (this as unknown as { comicChatState?: ComicChatUiState }).comicChatState?.relay || '', this.activeSection,
             // Sets changed in place: their sizes stand for them.
-            this.catalogRemovedMerchants?.size ?? 0, this.merchantDiscoveredModels?.size ?? 0];
+            this.catalogRemovedMerchants?.size ?? 0, this.merchantDiscoveredModels?.size ?? 0,
+            ...(includeCapacity ? [this.comicCapacityCacheSignature()] : [])];
     }
 
-    protected cachedComicRoutes<T>(name: string, kind: ComicStepCapability, compute: () => T): T {
-        const key = this.comicRouteCacheKey(kind);
+    protected cachedComicRoutes<T>(name: string, kind: ComicStepCapability, compute: () => T, includeCapacity = false): T {
+        const key = this.comicRouteCacheKey(kind, includeCapacity);
         const cache = this.comicRouteCache ??= new Map<string, { readonly key: readonly unknown[]; readonly value: unknown }>();
         const hit = cache.get(name);
         if (hit && hit.key.length === key.length && hit.key.every((value, index) => Object.is(value, key[index]))) return hit.value as T;
@@ -17026,8 +17110,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected selectComicStepRelayForKind(kind: ComicProjectKind, capability: ComicStepCapability, relayKey: string): void {
         if ((kind === 'image' || kind === 'music') && capability === 'text') return;
-        const option = this.relayPickerOptions?.().find(item => item.key === relayKey);
-        if (option && this.relayOptionIsFull?.(option)) return;
+        const option = this.relayPickerOptions?.('comic').find(item => item.key === relayKey) || this.relayOption?.(relayKey, 'comic');
+        if (option && this.relayOptionIsFull?.(option, 'comic')) return;
         const prefs = this.comicStepPrefsFor(kind);
         const candidates = this.comicStepCandidatesForKind(kind, capability)
             .filter(item => item.source.key === relayKey)
@@ -21194,11 +21278,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
      * Media routes for one kind from every source, grouped by source: NextMux automatic routing
      * and relays carry platform routes, each own API its own models (never mixed into another).
      */
-    protected comicMediaRouteGroups(kind: ComicAgentKind): readonly { readonly option: RelayOption; readonly routes: readonly ComicMediaRoute[] }[] {
-        return this.cachedComicRoutes(`groups:${kind}`, kind, () => this.computeComicMediaRouteGroups(kind));
+    protected comicMediaRouteGroups(kind: ComicAgentKind, hideFull = false): readonly { readonly option: RelayOption; readonly routes: readonly ComicMediaRoute[] }[] {
+        return this.cachedComicRoutes(
+            hideFull ? `groups:visible:${kind}` : `groups:${kind}`,
+            kind,
+            () => this.computeComicMediaRouteGroups(kind, hideFull),
+            hideFull
+        );
     }
 
-    protected computeComicMediaRouteGroups(kind: ComicAgentKind): readonly { readonly option: RelayOption; readonly routes: readonly ComicMediaRoute[] }[] {
+    protected computeComicMediaRouteGroups(kind: ComicAgentKind, hideFull = false): readonly { readonly option: RelayOption; readonly routes: readonly ComicMediaRoute[] }[] {
         const saved = this.activeRelayKey;
         const options = [...this.relayOptions('comic')];
         const labels = new Map((this.comicStepDirectory.get(kind)?.relays || []).map(relay => [relay.key, relay.label]));
@@ -21208,12 +21297,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         try {
             return options.map(option => {
                 this.activeRelayKey = option.key;
-                const routes = this.mediaCompatibleConnections(kind).filter(route => this.isModelVisible(route.model, kind === 'sound_effect' ? 'soundEffect' : kind) && (route.kind === 'official'
+                const routes = this.mediaCompatibleConnections(kind, hideFull).filter(route => this.isModelVisible(route.model, kind === 'sound_effect' ? 'soundEffect' : kind) && (route.kind === 'official'
                     ? option.kind === 'official'
                     : route.kind === 'managed' && option.kind !== 'official'));
                 // A relay whose own catalog page is not loaded still offers what the platform catalog lists for it.
                 const merchantId = option.kind === 'managed' ? option.merchantId || option.key.slice('managed:'.length) : '';
-                return { option, routes: routes.length || !merchantId || this.merchantPickerSnapshots.has(merchantId) ? routes : this.comicCatalogMediaRoutes(kind, merchantId) };
+                return { option, routes: routes.length || !merchantId || this.merchantPickerSnapshots.has(merchantId) ? routes : this.comicCatalogMediaRoutes(kind, merchantId, hideFull) };
             }).filter(group => group.routes.length > 0);
         } finally {
             this.activeRelayKey = saved;
@@ -21812,13 +21901,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return false;
     }
 
-    protected mediaCompatibleConnections(kind: MediaJobKind = this.mediaDraft.kind): readonly ComicMediaRoute[] {
+    protected mediaCompatibleConnections(kind: MediaJobKind = this.mediaDraft.kind, hideFull = false): readonly ComicMediaRoute[] {
         if (kind !== 'image' && kind !== 'video' && kind !== 'speech' && kind !== 'music' && kind !== 'sound_effect') return [];
         const category = kind === 'sound_effect' ? 'soundEffect' : kind;
         const requiredCapability = kind === 'music' ? 'music_generation' : kind === 'sound_effect' ? 'sound_effect_generation' : undefined;
-        const managedOfferings = this.managedOfferings('comic', this.activeRelayKey.startsWith('managed:') ? this.activeRelayKey.slice('managed:'.length) : undefined)
+        const managedOfferings = this.managedOfferings('comic', this.activeRelayKey.startsWith('managed:') ? this.activeRelayKey.slice('managed:'.length) : undefined, hideFull)
             // Managed music is one track per request; sound effects still need the user's own API.
             .filter(offering => offering.status === 'active' && offering.available !== false && kind !== 'sound_effect' && !this.activeRelayKey.startsWith('official:') && this.comicMediaSupportsKind(offering, kind)
+                && (!hideFull || !this.relayOfferingIsFull?.(offering, 'comic'))
                 && this.isModelVisible(offering.canonicalModel, category)
                 && (!requiredCapability || offering.capabilities.includes(requiredCapability)));
         const bestByModel = new Map<string, PlatformOffering>();
@@ -22434,7 +22524,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected comicTranscriptionConfirmation = '';
 
-    protected comicTranscriptionRoutes(): readonly ComicMediaRoute[] {
+    protected comicTranscriptionRoutes(hideFull = false): readonly ComicMediaRoute[] {
         const offerings = new Map<string, PlatformOffering>();
         const catalogs = [this.platformCatalog, this.selectedMerchantCatalog, ...[...this.merchantPickerSnapshots.values()].map(value => value.catalog)];
         for (const catalog of catalogs) for (const offering of catalog?.offerings || []) {
@@ -22444,6 +22534,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const priced = Number.isSafeInteger(amountMicros) && amountMicros! >= 0
                 && (!rate || Number.isSafeInteger(rate.unitSize) && rate.unitSize > 0);
             if (offering.status !== 'active' || offering.available === false || this.catalogRemovedMerchants.has(this.offeringMerchantId(offering))
+                || (hideFull && this.relayOfferingIsFull?.(offering, 'comic'))
                 || offering.category !== undefined && offering.category !== 'audio'
                 || !offering.input.includes('audio')
                 || !this.isModelVisible(offering.canonicalModel, 'transcription') || !priced || !quoted
@@ -24853,9 +24944,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!session || !turn || !messages.length) return;
         let restored = session.followUpQueue || [];
         for (const [index, message] of messages.entries()) {
+            const displayPrompt = this.steeringDisplayPrompts?.get(message.id)
+                || turn.steeringMessages?.find(item => item.id === message.id)?.content
+                || message.content;
             this.recordSteeringMessage(sessionId, turnId, message, 'requeued');
             restored = restoreFollowUpTask(restored, {
-                id: message.id, sessionId, prompt: message.content, source: 'user', workbench: 'coding',
+                id: message.id, sessionId, prompt: displayPrompt, source: 'user', workbench: 'coding',
                 routeId: turn.routeId || session.routeId || '', relayKey: this.codingSessionRelayKey(session),
                 ...(turn.automaticRelaySource ? { automaticRelaySource: turn.automaticRelaySource } : {}),
                 ...(turn.keyPriceQuoteId ? { keyPriceQuoteId: turn.keyPriceQuoteId } : {}),
@@ -25089,8 +25183,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
     openConversationVisualTab(conversationId: string, tab: Omit<ConversationVisualTab, 'createdAt'> & { readonly createdAt?: number }, select = true): void {
         this.loadConversationTabs();
         if (!this.codingSessions.some(session => session.id === conversationId)) return;
+        const selectingActive = select && conversationId === this.activeCodingSessionId;
+        if (selectingActive) this.resetSlashCommandState?.();
         this.setConversationTabs(openVisualTab(this.conversationTabs, conversationId, { ...tab, createdAt: tab.createdAt ?? Date.now() },
-            select && conversationId === this.activeCodingSessionId));
+            selectingActive));
     }
 
     updateConversationVisualTab(conversationId: string, id: string, patch: Partial<Omit<ConversationVisualTab, 'id' | 'createdAt'>>): void {
@@ -25103,6 +25199,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
      * so opening or switching a past conversation cannot start computer control (or its on-screen frame).
      */
     protected selectConversationTab(id: string): void {
+        this.resetSlashCommandState?.();
         const sessionId = this.detachedConversationId || this.activeCodingSessionId;
         this.loadConversationTabs();
         this.setConversationTabs(selectTab(this.conversationTabs, sessionId, id));
@@ -25867,6 +25964,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected handleModelPickerOutsidePointerDown = (event: PointerEvent): void => {
         const target = event.target instanceof Element ? event.target : undefined;
         let changed = false;
+        if (this.slashCommandOpen && !target?.closest('.nmx-slash-command-portal, .nmx-composer textarea')) {
+            this.slashCommandOpen = false;
+            this.slashCommandMatch = undefined;
+            changed = true;
+        }
         if (this.conversationTabMenuAt && !target?.closest('.nmx-conversation-tab-menu')) {
             this.conversationTabMenuAt = undefined;
             changed = true;
@@ -25910,6 +26012,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.comicStudioModelQuery = '';
             this.relayMetricTooltip = undefined;
             this.closeComicModelHoverImmediately();
+            changed = true;
+        }
+        if (this.appPluginChatPicker && !target?.closest('.nmx-plugin-chat-picker-portal .nmx-model-picker-popover, .nmx-relay-metric-tooltip, .nmx-offering-price-pop, .nmx-model-price-overlay-drawer, [data-plugin-chat-picker-anchor]')) {
+            this.closeAppPluginChatPicker(false);
             changed = true;
         }
         if (changed) this.update();
@@ -28460,6 +28566,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected async openCodingSession(sessionId: string, targetTurnId?: string, adoptLatestRunState = true, targetMessageId?: string): Promise<void> {
+        this.resetSlashCommandState?.();
         const notificationSessionId = sessionId;
         const navigation = ++this.codingSessionNavigationGeneration;
         if (!this.detachedConversationId && this.tiledCodingSessionIds.has(sessionId)) {
@@ -30266,6 +30373,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.codingSessionDeletionBlocked(sessionId)) return;
         this.completeNavigationSurface();
         this.removedCodingSessionIds.add(sessionId);
+        this.abortAppPluginChatForPrefix?.(`${sessionId}\n`, true);
         this.codingSearchMatches = new Map([...this.codingSearchMatches].filter(([id]) => id !== sessionId));
         const terminals = this.terminalRecords.filter(record => record.sessionId === sessionId);
         void Promise.all(terminals.map(async terminal => ({
@@ -34686,6 +34794,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected clearNavigationSurfaces(): void {
+        this.dismissSlashCommandDrawer?.(false);
         if (this.goalDrawer) this.closeGoalDrawer(true);
         this.goalCloseConfirmation = undefined;
         if (!this.incognitoModeOperation) { this.pendingIncognitoMode = undefined; this.incognitoModeError = ''; }
@@ -34693,6 +34802,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.codingSearchTimer !== undefined) window.clearTimeout(this.codingSearchTimer);
         this.codingSearchTimer = undefined;
         this.codingSearchRequestToken += 1;
+        this.resetSlashCommandState?.();
         this.accountMenuOpen = false;
         this.codingPopover = '';
         this.modelPickerRelayOpen = false;
@@ -34967,15 +35077,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected hasDismissibleSurface(): boolean {
-        return Boolean(this.goalDrawer || this.goalCloseConfirmation || this.pendingDurableRetry || this.pendingRestoreConfirmation || this.pendingIncognitoMode || this.conversationWindowMenuOpen || (this.activeSection === 'coding' && this.codingPanel === 'thread' && this.workContextOpen) || this.accountMenuOpen || this.codingPopover || this.codingSearchOpen || this.codingSessionMenuId || this.conversationTabMenuAt || this.walletTopupSheetOpen || this.selectedOffering
+        return Boolean(this.slashCommandDrawerVisible?.() || this.goalDrawer || this.goalCloseConfirmation || this.pendingDurableRetry || this.pendingRestoreConfirmation || this.pendingIncognitoMode || this.conversationWindowMenuOpen || (this.activeSection === 'coding' && this.codingPanel === 'thread' && this.workContextOpen) || this.accountMenuOpen || this.codingPopover || this.codingSearchOpen || this.codingSessionMenuId || this.conversationTabMenuAt || this.walletTopupSheetOpen || this.selectedOffering
             || this.activeCheckpointDiff
             || this.officialProviderSheet || this.officialModelListOpenId || this.myApisOpen || this.scheduleDialogOpen || this.fullAccessConfirmationOpen
             || this.pendingRelaySwitch
+            || this.appPluginChatPicker || this.appPluginStart || this.appPluginUninstall || this.appPluginModelFor || this.appPluginInstall || this.appPluginBuy || this.appPluginLoadOpen || this.appPluginUpload || this.appPluginHub
             || this.comicStudioIsolatedPicker || this.comicCreateSheetOpen || this.comicKindSheet || this.comicModelsSheetOpen || this.comicCharacterSheetOpen || this.comicExportSheetOpen || this.mediaSheetOpen || this.comicChatUi?.().materials
             || this.codingSessionRenameId || this.codingSessionDeleteId || this.projectMenuPath || this.projectDeletePath || this.pendingTurnEdit || this.turnCopyMenuId);
     }
 
     protected dismissTopSurface(): boolean {
+        if (this.slashCommandDrawerVisible?.()) { this.dismissSlashCommandDrawer?.(true); return true; }
+        if (this.appPluginChatPicker) { this.closeAppPluginChatPicker(false); return true; }
         if (this.goalDrawer) { this.closeGoalDrawer(); return true; }
         if (this.goalCloseConfirmation) { this.closeGoalConfirmation(); return true; }
         if (this.pendingDurableRetry) { this.settleDurableRetryConfirmation(false); return true; }
@@ -35025,6 +35138,39 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.fullAccessConfirmationTarget = 'current';
         }
         else if (this.pendingRelaySwitch) this.pendingRelaySwitch = undefined;
+        else if (this.appPluginStart) {
+            if (this.appPluginStartBusy) return false;
+            this.closeAppPluginStart();
+            return true;
+        }
+        else if (this.appPluginUninstall) {
+            if (this.appPluginUninstallBusy) return false;
+            this.appPluginUninstall = '';
+        }
+        else if (this.appPluginModelFor) {
+            if (this.appPluginModelBusy) return false;
+            this.appPluginModelFor = '';
+        }
+        else if (this.appPluginInstall) {
+            if (this.appPluginInstallBusy) return false;
+            this.appPluginInstall = undefined;
+            this.appPluginInstallError = '';
+        }
+        else if (this.appPluginBuy) {
+            if (this.appPluginBuy.busy) return false;
+            this.appPluginBuy = undefined;
+        }
+        else if (this.appPluginLoadOpen) {
+            if (this.appPluginsBusy) return false;
+            this.appPluginLoadOpen = false;
+        }
+        else if (this.appPluginUpload) {
+            if (this.appPluginUpload.busy) return false;
+            this.appPluginUpload = undefined;
+        }
+        else if (this.appPluginHub) {
+            this.appPluginHub = undefined;
+        }
         else if (this.comicStudioIsolatedPicker) {
             this.closeComicStudioIsolatedPicker(false);
         }
@@ -35052,8 +35198,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     /** Popovers, menus and dialogs. The side drawer and pages are not transient layers. */
     protected hasTransientNavigationSurface(): boolean {
-        return Boolean(this.goalDrawer || this.goalCloseConfirmation || this.pendingDurableRetry || this.pendingRestoreConfirmation || this.pendingIncognitoMode || this.conversationWindowMenuOpen || this.accountMenuOpen || this.codingPopover || this.codingSearchOpen || this.codingSessionMenuId || this.conversationTabMenuAt
+        return Boolean(this.slashCommandDrawerVisible?.() || this.goalDrawer || this.goalCloseConfirmation || this.pendingDurableRetry || this.pendingRestoreConfirmation || this.pendingIncognitoMode || this.conversationWindowMenuOpen || this.accountMenuOpen || this.codingPopover || this.codingSearchOpen || this.codingSessionMenuId || this.conversationTabMenuAt
             || this.walletTopupSheetOpen || this.selectedOffering || this.activeCheckpointDiff || this.officialProviderSheet || this.officialModelListOpenId || this.myApisOpen || this.scheduleDialogOpen
+            || this.appPluginChatPicker || this.appPluginStart || this.appPluginUninstall || this.appPluginModelFor || this.appPluginInstall || this.appPluginBuy || this.appPluginLoadOpen || this.appPluginUpload || this.appPluginHub
             || this.fullAccessConfirmationOpen || this.pendingRelaySwitch || this.comicStudioIsolatedPicker || this.comicCreateSheetOpen || this.comicKindSheet || this.comicModelsSheetOpen || this.comicCharacterSheetOpen
             || this.comicExportSheetOpen || this.mediaSheetOpen || this.comicChatUi?.().materials || this.codingSessionRenameId || this.codingSessionDeleteId
             || this.projectMenuPath || this.projectDeletePath || this.pendingTurnEdit || this.turnCopyMenuId);
@@ -35083,7 +35230,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const transient = this.hasTransientNavigationSurface();
         const target = event.target instanceof Element ? event.target : undefined;
         // Trigger focus is outside the portal. Keep other active layers' Escape
-        // behavior unless this key belongs to the visible Comic picker.
+        // behavior unless this key belongs to the visible Comic or Plugin Chat picker.
+        if (this.slashCommandDrawerVisible?.()) {
+            event.preventDefault();
+            event.stopImmediatePropagation?.();
+            this.dismissSlashCommandDrawer?.(true);
+            return;
+        }
+        if (this.appPluginChatPicker) {
+            event.preventDefault();
+            event.stopImmediatePropagation?.();
+            this.closeAppPluginChatPicker(true);
+            return;
+        }
         if (this.comicStudioIsolatedPicker) {
             event.preventDefault();
             event.stopImmediatePropagation?.();
@@ -35258,6 +35417,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             return;
         }
         this.rememberNavigation();
+        this.resetSlashCommandState?.();
         this.activeSection = section;
         this.accountMenuOpen = false;
         this.codingPopover = '';
@@ -35313,6 +35473,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected openSettingsPanel(panel: SettingsPanel): void {
+        this.dismissSlashCommandDrawer?.(false);
         this.stopVoiceInput(false);
         if (panel === 'plugins') void this.loadAppPlugins?.(true);
         // Optional call: widget harnesses built from single methods may not carry it.
@@ -35397,10 +35558,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.rememberNavigation();
         this.clearNavigationSurfaces();
         this.accountMenuOpen = true;
+        if (this.platformSession.linked && Date.now() - this.lastDeviceSessionCheckAt >= 5_000) {
+            void this.loadDeviceSession(true, true);
+        }
         this.update();
     }
 
     protected startNewCodingTask(): void {
+        this.resetSlashCommandState?.();
         this.codingSessionNavigationGeneration += 1;
         if (!this.detachContextEditorRecovery()) return;
         if (this.activeSection === 'settings' && this.settingsPanel === 'system' || this.microphoneTestSession?.active) {
@@ -35474,6 +35639,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.stopMicrophoneCapture?.(false);
         }
         this.rememberNavigation();
+        this.resetSlashCommandState?.();
         this.activeSection = 'coding';
         this.codingPanel = panel;
         this.codingPopover = '';
@@ -35485,6 +35651,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected toggleCodingPopover(popover: CodingPopover): void {
+        this.dismissSlashCommandDrawer?.(false);
         if (popover === 'routes' && this.hasActiveOrPendingCouncilMode(this.activeCodingSessionId)) {
             this.councilBelowNotice = councilModeText(this.desktopLocale, 'disabledComposerNotice');
             this.update();
@@ -35518,6 +35685,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected toggleComposerRelayPicker(): void {
+        this.dismissSlashCommandDrawer?.(false);
         if (this.hasActiveOrPendingCouncilMode?.(this.activeCodingSessionId)) {
             this.councilBelowNotice = councilModeText(this.desktopLocale, 'disabledComposerNotice');
             this.update();
@@ -36755,8 +36923,454 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
     }
 
+    protected slashCommandOpen = false;
+    protected slashCommandActiveIndex = 0;
+    protected slashCommandDismissedToken = '';
+    protected slashCommandMatch: ComposerSlashMatch | undefined;
+    protected readonly steeringDisplayPrompts = new Map<string, string>();
+
+    protected competingSlashSurfaces() {
+        return {
+            codingPopover: this.codingPopover,
+            appControlPickerOpen: this.appControlPickerOpen,
+            accountMenuOpen: this.accountMenuOpen,
+            goalDrawer: Boolean(this.goalDrawer),
+            goalCloseConfirmation: Boolean(this.goalCloseConfirmation),
+            walletTopupSheetOpen: this.walletTopupSheetOpen,
+            officialProviderSheet: Boolean(this.officialProviderSheet),
+            officialModelListOpenId: this.officialModelListOpenId,
+            myApisOpen: this.myApisOpen,
+            councilConfigModalOpen: this.councilConfigModalOpen,
+            scheduleDialogOpen: this.scheduleDialogOpen,
+            fullAccessConfirmationOpen: this.fullAccessConfirmationOpen,
+            pendingDurableRetry: Boolean(this.pendingDurableRetry),
+            pendingRestoreConfirmation: Boolean(this.pendingRestoreConfirmation),
+            pendingIncognitoMode: Boolean(this.pendingIncognitoMode),
+            pendingRelaySwitch: Boolean(this.pendingRelaySwitch),
+            selectedOffering: Boolean(this.selectedOffering),
+            activeCheckpointDiff: Boolean(this.activeCheckpointDiff),
+            appPluginChatPicker: Boolean(this.appPluginChatPicker),
+            appPluginStart: Boolean(this.appPluginStart),
+            appPluginHub: Boolean(this.appPluginHub),
+            codingSearchOpen: this.codingSearchOpen,
+            pendingTurnEdit: Boolean(this.pendingTurnEdit)
+        };
+    }
+
+    protected availableSlashSkills(sessionId = this.activeCodingSessionId): readonly ComposerSlashSkillInfo[] {
+        const session = sessionId ? this.codingSessions?.find(item => item.id === sessionId) : undefined;
+        const root = session
+            ? ((!session.incognito && session.workspacePath) || this.activeWorkspaceRoot)
+            : (this.globalCodingDraft ? this.draftWorkspaceRoot : this.activeWorkspaceRoot);
+        if (!this.skills?.length && this.skillService?.getSkills) {
+            try { this.skills = this.skillService.getSkills(); } catch { /* scan still initializing */ }
+        }
+        return (this.workspaceSkills?.(root) || this.skills || []).map(skill => ({
+            name: skill.name,
+            description: skill.description,
+            location: skill.location
+        }));
+    }
+
+    protected currentSlashCommands(): readonly ComposerSlashCommandItem[] {
+        const session = this.activeCodingSession?.();
+        const completedTurnCount = (session?.turns || []).filter(
+            turn => !(turn as { excludedFromContext?: boolean }).excludedFromContext
+                && Boolean(turn.prompt)
+                && (turn.stage === 'complete' || Boolean(turn.response?.trim()))
+        ).length;
+        const agentRunning = Boolean(
+            (session && this.conversationHasActiveRun?.(session.id))
+            || this.agentStage === 'running'
+            || Boolean(this.activeAgentRunId)
+            || session?.turns.some(turn => turn.stage === 'running')
+        );
+        const hasRestorableTurn = Boolean((session?.turns || []).some(turn =>
+            Boolean(turn.changes?.length) && turn.changes!.some(change => !this.isCheckpointRestored?.(change.checkpointId))
+        ));
+        const councilActiveOrPending = Boolean(this.hasActiveOrPendingCouncilMode?.(this.activeCodingSessionId));
+        const allCommands = buildComposerSlashCommands({
+            locale: this.desktopLocale,
+            hasActiveSession: Boolean(session),
+            completedTurnCount,
+            isCompacting: Boolean(session && this.compactingSessionIds?.has(session.id)),
+            agentRunning,
+            hasRestorableTurn,
+            appControlAvailable: Boolean(this.appControlAvailable?.()),
+            composerAppPicking: this.composerAppPicking,
+            councilActiveOrPending,
+            councilDisabledNotice: councilActiveOrPending && typeof councilModeText === 'function'
+                ? councilModeText(this.desktopLocale, 'disabledComposerNotice')
+                : undefined,
+            skills: this.availableSlashSkills(session?.id || this.activeCodingSessionId)
+        });
+        const query = this.slashCommandMatch?.query || '';
+        return filterComposerSlashCommands(allCommands, query);
+    }
+
+    protected resetSlashCommandState(): void {
+        this.slashCommandOpen = false;
+        this.slashCommandMatch = undefined;
+        this.slashCommandDismissedToken = '';
+        this.slashCommandActiveIndex = 0;
+    }
+
+    protected slashCommandDrawerVisible(): boolean {
+        if (!this.slashCommandOpen || !this.slashCommandMatch) return false;
+        if (this.activeSection !== 'coding' || this.codingPanel !== 'thread' || this.composerComposing) return false;
+        if (!this.detachedConversationId && this.tiledCodingSessionIds?.has(this.activeCodingSessionId)) return false;
+        const activeSession = this.activeCodingSession?.();
+        if (this.activeVisualTab?.()) return false;
+        if (this.activeCouncilRoleChild?.(activeSession)) return false;
+        if (this.goalComposerActive && this.goalComposerSessionId === (activeSession?.id || this.activeCodingSessionId)) return false;
+        if (isSlashDrawerSuppressedByCompetingSurface(this.competingSlashSurfaces())) return false;
+        return this.currentSlashCommands().length > 0;
+    }
+
+    protected dismissSlashCommandDrawer(restoreFocus = false): void {
+        const wasOpen = this.slashCommandOpen;
+        if (restoreFocus && this.slashCommandMatch) {
+            this.slashCommandDismissedToken = `${this.slashCommandMatch.slashIndex}:${this.slashCommandMatch.token}`;
+        }
+        this.slashCommandOpen = false;
+        if (!restoreFocus) this.slashCommandMatch = undefined;
+        if (wasOpen) this.update();
+        if (restoreFocus) {
+            requestAnimationFrame(() => {
+                const textarea = this.composerTextareaRef?.current;
+                if (textarea?.isConnected && document.activeElement !== textarea) {
+                    textarea.focus({ preventScroll: true });
+                }
+            });
+        }
+    }
+
+    protected syncComposerSlashMenu(textarea: HTMLTextAreaElement | null | undefined): void {
+        if (!textarea || this.composerComposing) {
+            if (this.slashCommandOpen) {
+                this.slashCommandOpen = false;
+                this.slashCommandMatch = undefined;
+                this.update();
+            }
+            return;
+        }
+        const match = matchComposerSlashTrigger(
+            textarea.value,
+            textarea.selectionStart,
+            textarea.selectionEnd,
+            this.composerComposing
+        );
+        if (!match) {
+            this.slashCommandDismissedToken = '';
+            if (this.slashCommandOpen || this.slashCommandMatch) {
+                this.slashCommandOpen = false;
+                this.slashCommandMatch = undefined;
+                this.update();
+            }
+            return;
+        }
+        const dismissKey = `${match.slashIndex}:${match.token}`;
+        if (this.slashCommandDismissedToken && this.slashCommandDismissedToken === dismissKey) {
+            return;
+        }
+        this.slashCommandDismissedToken = '';
+        const prevQuery = this.slashCommandMatch?.query;
+        const wasOpen = this.slashCommandOpen;
+        this.slashCommandMatch = match;
+        const filtered = this.currentSlashCommands();
+        if (!filtered.length) {
+            if (wasOpen) {
+                this.slashCommandOpen = false;
+                this.update();
+            }
+            return;
+        }
+        // Mutual exclusion: opening the Slash Command Drawer closes competing composer popovers.
+        if (this.codingPopover) {
+            this.codingPopover = '';
+            this.modelPickerRelayOpen = false;
+            this.closeModelEffortPickerImmediately?.();
+        }
+        this.appControlPickerOpen = false;
+        this.accountMenuOpen = false;
+        this.slashCommandOpen = true;
+        if (!wasOpen || prevQuery !== match.query || this.slashCommandActiveIndex >= filtered.length || Boolean(filtered[this.slashCommandActiveIndex]?.disabled)) {
+            const firstEnabled = filtered.findIndex(item => !item.disabled);
+            this.slashCommandActiveIndex = firstEnabled >= 0 ? firstEnabled : 0;
+        }
+        this.update();
+    }
+
+    protected applySlashTextReplacement(nextValue: string, nextCaret: number): void {
+        const textarea = this.composerTextareaRef?.current
+            || this.node?.querySelector?.<HTMLTextAreaElement>('.nmx-composer textarea');
+        this.shiftComposerAnchors?.(this.prompt, nextValue);
+        this.prompt = nextValue;
+        this.pastedTextReferences = pastedTextReferencesInDocument(this.prompt, this.pastedTextReferences);
+        this.syncComposerMarkdownOverlay?.();
+        if (textarea && this.ownsComposerInput(textarea)) {
+            textarea.value = nextValue;
+            textarea.focus({ preventScroll: true });
+            const clampedCaret = Math.max(0, Math.min(nextValue.length, nextCaret));
+            textarea.setSelectionRange(clampedCaret, clampedCaret);
+        }
+        this.scheduleComposerDraftPersist?.();
+        this.syncComposerDomControls?.();
+    }
+
+    protected autocompleteSlashCommand(command: ComposerSlashCommandItem): void {
+        const textarea = this.composerTextareaRef?.current;
+        const currentText = textarea?.value ?? this.prompt;
+        const match = this.slashCommandMatch
+            || matchComposerSlashTrigger(currentText, textarea?.selectionStart ?? currentText.length, textarea?.selectionEnd ?? currentText.length, false);
+        this.slashCommandOpen = false;
+        this.slashCommandMatch = undefined;
+        this.slashCommandDismissedToken = '';
+        if (!match) {
+            this.update();
+            return;
+        }
+        const replaced = replaceComposerSlashToken(currentText, match, command.slug, true);
+        this.applySlashTextReplacement(replaced.value, replaced.caret);
+        this.update();
+    }
+
+    protected compactActiveCodingSession(): void {
+        const session = this.activeCodingSession?.();
+        const zh = this.desktopLocale.startsWith('zh');
+        if (!session) {
+            this.addNotification?.('info', zh ? '请先在对话中完成至少 2 轮问答后再压缩上下文' : 'Complete at least 2 turns before compacting context', '');
+            return;
+        }
+        const eligibleTurns = session.turns.filter(
+            turn => !(turn as { excludedFromContext?: boolean }).excludedFromContext
+                && Boolean(turn.prompt)
+                && (turn.stage === 'complete' || Boolean(turn.response?.trim()))
+        ).length;
+        if (eligibleTurns < 2) {
+            this.addNotification?.('info', zh ? '至少完成 2 轮对话后可压缩上下文' : 'Requires at least 2 completed turns to compact context', '', session.id);
+            return;
+        }
+        if (this.compactingSessionIds?.has(session.id)) return;
+        const beforeHistory = this.codingConversationHistory?.(session);
+        const beforeTokens = (beforeHistory || []).reduce((sum, message) => sum + estimateTextTokens(message.content), 0);
+        if (!this.compactingSessionIds) {
+            this.completeComposerContextCompaction(session.id, eligibleTurns);
+        } else {
+            this.compactingSessionIds.add(session.id);
+            const previousTimer = this.compactingTimers?.get(session.id);
+            if (previousTimer) clearTimeout(previousTimer);
+            this.compactingTimers?.set(session.id, setTimeout(() => {
+                this.completeComposerContextCompaction(session.id, eligibleTurns);
+                const afterSession = this.codingSessions.find(item => item.id === session.id) || session;
+                const afterHistory = this.codingConversationHistory?.(afterSession);
+                const afterTokens = (afterHistory || []).reduce((sum, message) => sum + estimateTextTokens(message.content), 0);
+                const saved = Math.max(0, beforeTokens - afterTokens);
+                const title = zh
+                    ? (saved > 0
+                        ? `已压缩前序上下文（精简 ${eligibleTurns} 轮，约释放 ${new Intl.NumberFormat(this.desktopLocale).format(saved)} tokens）`
+                        : `已压缩当前对话上下文（保留核心目标、改动与最近轮次）`)
+                    : (saved > 0
+                        ? `Context compacted (${eligibleTurns} turns summarized, ~${new Intl.NumberFormat(this.desktopLocale).format(saved)} tokens freed)`
+                        : 'Conversation context compacted');
+                this.addNotification?.('success', title, '', session.id);
+                this.update();
+            }, 350));
+            this.update();
+        }
+    }
+
+    protected undoLastCodingTurnChanges(): void {
+        const session = this.activeCodingSession?.();
+        const zh = this.desktopLocale.startsWith('zh');
+        if (!session) return;
+        const restorableTurn = [...session.turns].reverse().find(turn =>
+            Boolean(turn.changes?.length) && turn.changes!.some(change => !this.isCheckpointRestored?.(change.checkpointId))
+        );
+        if (!restorableTurn?.changes?.length) {
+            this.addNotification?.('info', zh ? '当前对话暂无可撤回的文件改动' : 'No restorable file changes in this conversation', '', session.id);
+            this.update();
+            return;
+        }
+        this.requestRestoreAllChanges(restorableTurn.changes);
+    }
+
+    protected executeSlashCommand(command: ComposerSlashCommandItem): void {
+        if (command.disabled) {
+            if (command.disabledReason) {
+                this.addNotification?.('info', command.disabledReason, '', this.activeCodingSessionId || undefined);
+                this.update();
+            }
+            return;
+        }
+        const textarea = this.composerTextareaRef?.current;
+        const currentText = textarea?.value ?? this.prompt;
+        const match = this.slashCommandMatch
+            || matchComposerSlashTrigger(currentText, textarea?.selectionStart ?? currentText.length, textarea?.selectionEnd ?? currentText.length, false);
+
+        this.slashCommandOpen = false;
+        this.slashCommandMatch = undefined;
+        this.slashCommandDismissedToken = '';
+
+        // Workflow & skill commands keep or expand `/<slug>` in the composer:
+        if (command.kind === 'review' || command.kind === 'init' || command.kind === 'commit' || command.kind === 'plan' || command.kind === 'skill') {
+            const textBeforeSlash = match ? currentText.slice(0, match.slashIndex).trim() : '';
+            const stripped = match ? removeComposerSlashToken(currentText, match).value.trim() : '';
+            if (command.requiresTaskInput && !stripped) {
+                if (match) {
+                    const replaced = replaceComposerSlashToken(currentText, match, command.slug, true);
+                    this.applySlashTextReplacement(replaced.value, replaced.caret);
+                } else {
+                    const nextVal = `/${command.slug} `;
+                    this.applySlashTextReplacement(nextVal, nextVal.length);
+                }
+                this.update();
+                return;
+            }
+            if (command.requiresTaskInput && textBeforeSlash) {
+                const nextPrompt = `/${command.slug} ${stripped}`;
+                this.applySlashTextReplacement(nextPrompt, nextPrompt.length);
+                this.update();
+                return;
+            }
+            const nextPrompt = stripped ? `/${command.slug} ${stripped}` : `/${command.slug}`;
+            this.applySlashTextReplacement(nextPrompt, nextPrompt.length);
+            this.update();
+            void this.submitPrompt('coding');
+            return;
+        }
+
+        // Direct native UI / session actions remove the `/command` token first:
+        if (match) {
+            const cleaned = removeComposerSlashToken(currentText, match);
+            this.applySlashTextReplacement(cleaned.value, cleaned.caret);
+        }
+
+        switch (command.kind) {
+            case 'compact':
+                this.compactActiveCodingSession();
+                return;
+            case 'new':
+                this.startNewCodingTask();
+                requestAnimationFrame(() => this.composerTextareaRef?.current?.focus({ preventScroll: true }));
+                return;
+            case 'undo':
+                this.undoLastCodingTurnChanges();
+                return;
+            case 'goal':
+                this.openGoalComposer();
+                return;
+            case 'council':
+                this.openCouncilConfigModal();
+                return;
+            case 'app':
+                if (this.appControlAvailable?.()) void this.pickComposerApp();
+                return;
+            case 'model':
+                if (this.hasActiveOrPendingCouncilMode?.(this.activeCodingSessionId)) {
+                    this.councilBelowNotice = councilModeText(this.desktopLocale, 'disabledComposerNotice');
+                    this.update();
+                    return;
+                }
+                if (this.activeRelayKey?.startsWith('managed:')) {
+                    void this.loadSelectedMerchantCatalog?.(this.activeRelayKey.slice('managed:'.length));
+                }
+                this.clearNavigationSurfaces();
+                this.modelPickerRelayOpen = false;
+                this.codingPopover = 'routes';
+                this.update();
+                this.focusModelPickerFirstOption?.();
+                return;
+            case 'relay':
+                this.toggleComposerRelayPicker();
+                return;
+            case 'permissions':
+                this.toggleCodingPopover('permission');
+                return;
+            case 'mcp':
+                this.openSettingsPanel('mcp');
+                return;
+        }
+    }
+
+    protected handleSlashCommandKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): boolean {
+        if (this.composerComposing || event.nativeEvent.isComposing || event.keyCode === 229) return false;
+        if (!this.slashCommandDrawerVisible()) return false;
+        const commands = this.currentSlashCommands();
+        if (!commands.length) return false;
+
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            const delta = event.key === 'ArrowDown' ? 1 : -1;
+            const total = commands.length;
+            let nextIdx = (this.slashCommandActiveIndex + delta + total) % total;
+            for (let step = 0; step < total; step++) {
+                if (!commands[nextIdx]?.disabled) break;
+                nextIdx = (nextIdx + delta + total) % total;
+            }
+            this.slashCommandActiveIndex = nextIdx;
+            this.update();
+            return true;
+        }
+
+        if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+            event.preventDefault();
+            const selected = commands[Math.max(0, Math.min(this.slashCommandActiveIndex, commands.length - 1))];
+            if (!selected) return true;
+            if (selected.acceptsArgs) {
+                this.autocompleteSlashCommand(selected);
+            } else {
+                this.executeSlashCommand(selected);
+            }
+            return true;
+        }
+
+        if (event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+            event.preventDefault();
+            const selected = commands[Math.max(0, Math.min(this.slashCommandActiveIndex, commands.length - 1))];
+            if (selected) this.executeSlashCommand(selected);
+            return true;
+        }
+
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            event.nativeEvent.stopImmediatePropagation?.();
+            this.dismissSlashCommandDrawer(true);
+            return true;
+        }
+
+        return false;
+    }
+
+    protected renderSlashCommandDrawerPortal(): React.ReactNode {
+        if (!this.slashCommandDrawerVisible()) return undefined;
+        const commands = this.currentSlashCommands();
+        if (!commands.length) return undefined;
+        const anchor = this.composerTextareaRef?.current?.closest<HTMLElement>('.nmx-composer')
+            || this.node?.querySelector<HTMLElement>('.nmx-composer');
+        return (
+            <ComposerSlashCommandDrawerPortal
+                locale={this.desktopLocale}
+                theme={this.resolvedDesktopTheme()}
+                commands={commands}
+                activeIndex={this.slashCommandActiveIndex}
+                anchorElement={anchor}
+                onHoverIndex={idx => {
+                    if (this.slashCommandActiveIndex !== idx) {
+                        this.slashCommandActiveIndex = idx;
+                        this.update();
+                    }
+                }}
+                onSelectCommand={cmd => this.executeSlashCommand(cmd)}
+                onDismiss={() => this.dismissSlashCommandDrawer(true)}
+            />
+        );
+    }
+
     protected handleComposerKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {
         if (!this.ownsComposerInput(event.currentTarget)) return;
+        if (this.handleSlashCommandKeyDown?.(event)) return;
         if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.currentTarget.value.trim()) {
             const session = this.activeCodingSession();
             const suggestion = this.agentStage === 'running' ? '' : this.composerFollowUpSuggestion(session);
@@ -36840,6 +37454,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
      * calls this method; it is handled by the textarea's `input` event below.
      */
     protected setComposerPrompt(value: string): void {
+        if (value !== this.prompt || !value) {
+            this.resetSlashCommandState?.();
+        }
         this.prompt = value;
         this.syncComposerMarkdownOverlay?.();
         // Keep this helper safe for restore/close paths that can run before
@@ -38148,11 +38765,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return results.every(Boolean);
     }
 
-    protected async loadDeviceSession(silent = false): Promise<void> {
+    protected lastDeviceSessionCheckAt = 0;
+
+    protected async loadDeviceSession(silent = false, sessionCheckOnly = false): Promise<void> {
+        this.lastDeviceSessionCheckAt = Date.now();
         if (!silent) this.deviceLinkError = '';
         try {
             const walletObservedAt = Date.now();
-            this.applyPlatformSession(await this.platformService.getDeviceSession(), walletObservedAt);
+            this.applyPlatformSession(await this.platformService.getDeviceSession(), walletObservedAt, sessionCheckOnly);
             // Startup reads the directory and this session together; a newly known account wipes the first read.
             this.reloadRelayDirectoryAfterSessionChange();
         } catch (error) {
@@ -38162,7 +38782,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     /** `walletObservedAt`: when the request that returned this session started (its wallets show what was spent before then). */
-    protected applyPlatformSession(session: PlatformDeviceSession, walletObservedAt?: number): void {
+    protected applyPlatformSession(session: PlatformDeviceSession, walletObservedAt?: number, sessionCheckOnly = false, localOnly = false): void {
         const previousUserId = this.platformSession.user?.id;
         const ownerChanged = previousUserId !== session.user?.id || this.platformSession.linked !== session.linked;
         this.platformSession = session;
@@ -38209,8 +38829,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.merchantDiscoveredModels.clear();
             this.merchantCatalogStatus = 'idle';
             if (keepPublicDirectory) { /* kept: the page shown, or the read on its way, is the list */ }
-            else if ((this.relayDirectoryOnScreen?.() ?? this.modelPickerRelayOpen) && this.relaySourceTab !== 'my-api') void this.loadPublicMerchantPage();
-            else this.prewarmPublicMerchantPage?.();
+            else if (!localOnly && (this.relayDirectoryOnScreen?.() ?? this.modelPickerRelayOpen) && this.relaySourceTab !== 'my-api') void this.loadPublicMerchantPage();
+            else if (!localOnly) this.prewarmPublicMerchantPage?.();
         }
         if (previousUserId !== session.user?.id) {
             this.modelSwitchSettings = new ModelSwitchSettings(session.user?.id ? window.localStorage.getItem(this.modelSwitchStorageKey()) : null);
@@ -38224,13 +38844,50 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.deviceLinkExpiryTimer = 0;
             }
             this.accountLinkCoordinator?.cancel();
-            void this.loadAccountOverview(true);
+            if (!localOnly && (!sessionCheckOnly || ownerChanged)) {
+                void this.loadAccountOverview(true);
+            }
         } else {
             this.accountOverview = EMPTY_ACCOUNT_OVERVIEW;
+            this.accountSignOutArmed = false;
+            this.resetWalletTopupSurface?.();
         }
         this.syncModelRoute();
         if (ownerChanged) this.fallBackToOwnSourceWhenSignedOut?.();
-        if (ownerChanged) void this.checkModelCatalogVersion();
+        if (ownerChanged && !localOnly) void this.checkModelCatalogVersion();
+    }
+
+    /** Immediately transitions UI to unlinked state with 0 extra network requests when a foreground request reports a revoked/unlinked device token. */
+    protected syncUnlinkedSessionFromFailure(failure: unknown): boolean {
+        if (!failure || typeof failure !== 'object') return false;
+        const rec = failure as Record<string, unknown>;
+        const nestedDetails = rec.details && typeof rec.details === 'object' ? rec.details as Record<string, unknown> : undefined;
+        const nestedReadable = rec.readableError && typeof rec.readableError === 'object' ? rec.readableError as Record<string, unknown> : undefined;
+        const nestedInfo = rec.errorInfo && typeof rec.errorInfo === 'object' ? rec.errorInfo as Record<string, unknown> : undefined;
+        const rawCode = [rec.code, nestedDetails?.code, nestedReadable?.code, nestedInfo?.code]
+            .find((val): val is string => typeof val === 'string' && val.trim().length > 0);
+        const code = rawCode ? rawCode.trim().toLowerCase() : '';
+        const status = Number(rec.statusCode ?? rec.status ?? nestedDetails?.status ?? nestedReadable?.status ?? nestedInfo?.status ?? 0);
+        if (status !== 401 && ![
+            'device_token_revoked',
+            'device_revoked',
+            'device_unlinked',
+            'invalid_device_token',
+            'device_suspended',
+            'account_suspended',
+            'device_link_required',
+            'unauthorized',
+            'authentication_required'
+        ].includes(code)) {
+            return false;
+        }
+        if (this.platformSession?.linked) {
+            this.applyPlatformSession({ linked: false, wallets: [] }, undefined, true, true);
+            this.update();
+        } else {
+            this.resetWalletTopupSurface?.();
+        }
+        return true;
     }
 
     protected async loadAccountOverview(silent = false): Promise<void> {
@@ -38267,6 +38924,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }
             }
         } catch (error) {
+            const code = typeof (error as { code?: unknown })?.code === 'string' ? String((error as { code?: string }).code).toLowerCase() : '';
+            const status = Number((error as { statusCode?: unknown; status?: unknown })?.statusCode ?? (error as { status?: unknown })?.status ?? 0);
+            if (status === 401 || ['device_token_revoked', 'device_revoked', 'device_suspended', 'account_suspended', 'invalid_device_token', 'device_unlinked', 'device_link_required', 'unauthorized', 'authentication_required'].includes(code)) {
+                this.applyPlatformSession?.({ linked: false, wallets: [] }, undefined, true, true);
+                this.update();
+                return;
+            }
             if (isCurrent() && !silent) this.accountOverviewError = desktopFailureMessage(this.desktopLocale, error);
         } finally {
             if (isCurrent()) {
@@ -38415,7 +39079,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected scheduleWalletTopupPoll(): void {
         this.clearWalletTopupPoll();
         const order = this.walletTopupOrder;
-        if (this.isDisposed || !this.walletTopupSheetOpen || !order || !new Set(['payment_pending', 'paid']).has(order.topup.status)) return;
+        const expiresAt = Number(order?.topup?.expiresAt);
+        if (this.isDisposed || !this.platformSession?.linked || !this.walletTopupSheetOpen || !order || !new Set(['payment_pending', 'paid']).has(order.topup.status) || (expiresAt > 0 && Date.now() > expiresAt + 90_000)) return;
         // The buyer is paying in the browser: poll briskly at first, then settle to a lighter cadence.
         const delay = Date.now() - this.walletTopupPollStartedAt < 3 * 60_000 ? 2_500 : 6_000;
         this.walletTopupPollTimer = window.setTimeout(() => void this.refreshWalletTopupStatus(order.topup.id), delay);
@@ -38447,6 +39112,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.scheduleWalletTopupPoll();
             }
         } catch (error) {
+            if (this.syncUnlinkedSessionFromFailure(error)) {
+                this.update();
+                return;
+            }
             this.walletTopupStage = 'error';
             this.walletTopupError = walletTopupErrorText(this.desktopLocale, error, 'create', this.walletTopupOptions);
         }
@@ -38455,7 +39124,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected async refreshWalletTopupStatus(expectedOrderId?: string): Promise<void> {
         const orderId = expectedOrderId || this.walletTopupOrder?.topup.id;
-        if (!orderId || !this.walletTopupSheetOpen) return;
+        if (!orderId || !this.walletTopupSheetOpen || !this.platformSession?.linked) {
+            if (!this.platformSession?.linked) this.clearWalletTopupPoll();
+            return;
+        }
         try {
             const order = await this.platformService.getWalletTopupStatus(orderId);
             if (!this.walletTopupSheetOpen || this.walletTopupOrder?.topup.id !== orderId) return;
@@ -38478,6 +39150,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.scheduleWalletTopupPoll();
             }
         } catch (error) {
+            if (this.syncUnlinkedSessionFromFailure(error)) {
+                this.update();
+                return;
+            }
             this.walletTopupError = walletTopupErrorText(this.desktopLocale, error, 'check', this.walletTopupOptions);
             this.scheduleWalletTopupPoll();
         }
@@ -40210,7 +40886,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     /** A source drawer (or the council setup's source list) is on screen, reading the shared directory state. */
     protected relayDirectoryOnScreen(): boolean {
-        return Boolean(this.modelPickerRelayOpen || this.comicRelayPickerOpen || this.comicStudioIsolatedPicker?.mode === 'relay' || this.councilConfigModalOpen);
+        return Boolean(this.modelPickerRelayOpen || this.comicRelayPickerOpen || this.comicStudioIsolatedPicker?.mode === 'relay' || this.councilConfigModalOpen || this.appPluginChatPicker?.kind === 'relay');
     }
 
     protected loadNextPublicMerchantPage(): void {
@@ -40225,8 +40901,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (element.scrollHeight - element.scrollTop - element.clientHeight <= 72) this.loadNextPublicMerchantPage();
     }
 
-    protected relayPickerOptions(): readonly RelayOption[] {
-        if (this.activeSection === 'comic') return this.comicRelayPickerOptions();
+    protected relayPickerOptions(scope: PublicMerchantCapacityScope = this.activeSection === 'comic' ? 'comic' : 'coding'): readonly RelayOption[] {
+        if (scope === 'comic') return this.comicRelayPickerOptions();
         const options = this.relayOptions();
         if (this.relaySourceTab === 'my-api') return filterRelayPickerSources(options, 'my-api', this.relaySourceQuery);
         if (this.relaySourceTab === 'favorite') return filterRelayPickerSources(
@@ -40588,7 +41264,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected selectRelay(key: string, suppliedOption?: RelayOption): boolean {
         const workbench = this.activeSection === 'comic' ? 'comic' : 'coding';
         const option = suppliedOption?.key === key ? suppliedOption : this.relayOptions(workbench).find(candidate => candidate.key === key);
-        if (!option || this.relayOptionIsFull(option)) return false;
+        if (!option || this.relayOptionIsFull(option, workbench)) return false;
         if (option.key === this.activeRelayKey) {
             this.automaticRelaySource = relaySourceSelected(this.automaticRelaySource, option.key);
             this.persistActiveRouteSelection();
@@ -40625,7 +41301,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const pending = this.pendingRelaySwitch;
         this.pendingRelaySwitch = undefined;
         const option = this.relayOptions().find(candidate => candidate.key === pending.option.key);
-        if (!option || this.relayOptionIsFull(option) || pending.conversationId !== this.activeCodingSessionId) { this.update(); return; }
+        if (!option || this.relayOptionIsFull(option, 'coding') || pending.conversationId !== this.activeCodingSessionId) { this.update(); return; }
         this.applyRelaySelection(option);
     }
 
@@ -41480,7 +42156,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
             return;
         }
         if (target) {
-            this.setOfficialDraft({ ...(known.model ? { model: known.model } : field === 'model' ? { model: value } : {}), ...(apiKey ? { apiKey } : {}) });
+            this.setOfficialDraft({
+                ...(field === 'baseUrl' ? { baseUrl: known.baseUrl } : {}),
+                ...(known.model ? { model: known.model } : field === 'model' ? { model: value } : {}),
+                ...(apiKey ? { apiKey } : {})
+            });
             return;
         }
         // Any other address that carried the key: the key moves to its own field.
@@ -41517,7 +42197,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected routeProviderImportLinks<T extends { takePendingDeepLinks(): Promise<readonly string[]>; onDeepLink(callback: (url: string) => void): () => void }>(bridge: T): T {
+        let lastDirectImportUrl = '';
+        let lastDirectImportAt = 0;
         const importLink = (url: string): boolean => {
+            const directRequest = parseDirectApiImportLink(url);
+            if (directRequest) {
+                if (this.detachedConversationId) return true;
+                const now = Date.now();
+                if (url === lastDirectImportUrl && now - lastDirectImportAt < 2_000) return true;
+                lastDirectImportUrl = url;
+                lastDirectImportAt = now;
+                void this.importDirectApiConnection(directRequest);
+                return true;
+            }
             const request = parseProviderImportLink(url);
             if (!request) return false;
             // Only the main window shows it; a detached conversation window never imports on its own.
@@ -41530,6 +42222,116 @@ export class NextMuxDesktopWidget extends ReactWidget {
             takePendingDeepLinks: async () => (await bridge.takePendingDeepLinks()).filter(url => !importLink(url)),
             onDeepLink: (callback: (url: string) => void) => bridge.onDeepLink(url => { if (!importLink(url)) callback(url); })
         };
+    }
+
+    /**
+     * One-click `nextmux://import-api` from NextMux User Center: automatically saves/updates the
+     * connection in 自有 API (`OfficialModelConnection`), discovers models via `${baseUrl}/models`,
+     * focuses Model Center -> 自有 API with the connection highlighted, and displays a toast.
+     */
+    protected async importDirectApiConnection(request: DirectApiImportRequest): Promise<void> {
+        const cleanApiKey = sanitizeDirectApiImportKey(request.apiKey);
+        const normalizedBase = request.baseUrl.replace(/\/+$/, '').toLowerCase();
+        const isNextMuxHost = (() => {
+            try { return /(?:^|\.)nextmux\.app$/i.test(new URL(request.baseUrl).hostname); } catch { return false; }
+        })();
+        const findMatchingConnection = (connections: readonly OfficialModelConnection[]): OfficialModelConnection | undefined =>
+            connections.find(item =>
+                item.providerId === 'custom_openai'
+                && item.baseUrl.replace(/\/+$/, '').toLowerCase() === normalizedBase
+                && item.label.trim() === request.name.trim()
+            ) || connections.find(item =>
+                item.providerId === 'custom_openai'
+                && item.baseUrl.replace(/\/+$/, '').toLowerCase() === normalizedBase
+                && isNextMuxHost
+            );
+        if (!cleanApiKey) {
+            const currentState = this.officialModelsLoadedOnce
+                ? this.officialModels
+                : await this.platformService?.getOfficialModelConnections?.().catch(() => this.officialModels) ?? this.officialModels;
+            const existing = findMatchingConnection(currentState?.connections || []);
+            if (existing && (existing.status === 'verified' || ownModelListModels(existing).length > 0 || Boolean((existing as { hasStoredSecret?: boolean }).hasStoredSecret))) {
+                this.officialConnectionEditorOpen = false;
+                this.officialImportSource = undefined;
+                this.myApisReturn = true;
+                this.closeNavigationSurface();
+                this.selectModelCenterView('official');
+                this.myApisHighlight = existing.id;
+                this.update();
+                return;
+            }
+            this.openProviderImport({
+                app: request.protocol === 'anthropic' ? 'claude' : 'codex',
+                name: request.name,
+                endpoints: [request.baseUrl],
+                apiKey: '',
+                models: request.model ? [request.model] : []
+            });
+            return;
+        }
+        const startedAt = Date.now();
+        const requestToken = ++this.officialConnectionRequestToken;
+        this.officialConnectionStage = 'saving';
+        this.officialConnectionMessage = '';
+        this.officialConnectionError = '';
+        this.selectModelCenterView('official');
+        this.update();
+        try {
+            const currentState = this.officialModelsLoadedOnce
+                ? this.officialModels
+                : await this.platformService.getOfficialModelConnections().catch(() => this.officialModels);
+            const currentConnections = currentState.connections || [];
+            const existing = findMatchingConnection(currentConnections);
+            const result = await this.platformService.saveOfficialModelConnection({
+                ...(existing ? { connectionId: existing.id } : {}),
+                providerId: 'custom_openai',
+                label: request.name,
+                model: request.model || existing?.model || '',
+                baseUrl: request.baseUrl,
+                apiKey: cleanApiKey,
+                nativeWebResearch: 'automatic',
+                validate: false
+            });
+            await this.refreshOfficialModelsAfterMutation();
+            if (!this.officialConnectionRequestIsCurrent(requestToken)) return;
+            this.officialConnectionStage = 'idle';
+            this.officialConnectionEditorOpen = false;
+            this.officialImportSource = undefined;
+            this.myApisReturn = true;
+            this.closeNavigationSurface();
+            this.selectModelCenterView('official');
+            this.myApisHighlight = result.connection.id;
+            this.officialConnectionMessage = this.ownApiSaveMessage?.(result, false, startedAt) ?? localizeDesktopSurface(this.desktopLocale, '已保存模型');
+            const modelCount = ownModelListModels(result.connection).length;
+            const toastBody = modelCount > 0
+                ? (this.desktopLocale === 'en'
+                    ? `Imported ${result.connection.label} (${modelCount} online models available)`
+                    : `已成功导入 ${result.connection.label}（共 ${modelCount} 个在线可用模型）`)
+                : (this.desktopLocale === 'en'
+                    ? `Imported ${result.connection.label}`
+                    : `已成功导入 ${result.connection.label}`);
+            this.addNotification('success', result.connection.label, toastBody);
+        } catch (error) {
+            if (!this.officialConnectionRequestIsCurrent(requestToken)) return;
+            this.officialConnectionStage = 'idle';
+            const errorText = modelFailureText(this.desktopLocale, error, { source: 'own_api' });
+            const errorDetail = modelFailure(this.desktopLocale, error).detail;
+            this.openProviderImport({
+                app: request.protocol === 'anthropic' ? 'claude' : 'codex',
+                name: request.name,
+                endpoints: [request.baseUrl],
+                apiKey: cleanApiKey,
+                models: request.model ? [request.model] : []
+            });
+            this.officialConnectionError = errorText;
+            this.officialConnectionErrorDetail = errorDetail;
+            this.addNotification('error', request.name || 'API', errorText);
+        } finally {
+            if (this.officialConnectionRequestIsCurrent(requestToken)) {
+                this.officialConnectionStage = 'idle';
+            }
+            this.update();
+        }
     }
 
     /**
@@ -41935,7 +42737,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
         void open(this.openerService, new URI(url));
     }
 
-    protected async prepareAgentSkills(workspaceRoot = this.activeWorkspaceRoot): Promise<readonly DesktopAgentSkill[]> {
+    protected async prepareAgentSkills(
+        workspaceRoot = this.activeWorkspaceRoot,
+        prioritizedSkillNames: readonly string[] = [],
+        prioritizedSkillLocations: readonly string[] = []
+    ): Promise<readonly DesktopAgentSkill[]> {
         const readiness = await Promise.race([
             this.skillService.ready.then(() => 'ready' as const, () => 'error' as const),
             new Promise<'timeout'>(resolve => window.setTimeout(() => resolve('timeout'), 5_000))
@@ -41945,7 +42751,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const prepared: DesktopAgentSkill[] = [];
         let totalCharacters = 0;
         const settledCandidates: Array<DesktopAgentSkill | undefined> = [];
-        const reads = this.workspaceSkills(workspaceRoot).slice(0, SKILL_LIMITS.perTask).map(async (skill, index) => {
+        const locationSet = new Set(prioritizedSkillLocations.map(loc => loc.trim()).filter(Boolean));
+        const prioritySet = new Set(prioritizedSkillNames.map(name => name.trim().toLowerCase()).filter(Boolean));
+        const isPrioritized = (skill: { readonly name: string; readonly location: string }): boolean =>
+            (Boolean(skill.location) && locationSet.has(skill.location.trim()))
+            || (locationSet.size === 0 && prioritySet.has(skill.name.trim().toLowerCase()));
+        const allWorkspaceSkills = this.workspaceSkills(workspaceRoot);
+        const orderedWorkspaceSkills = (locationSet.size > 0 || prioritySet.size > 0)
+            ? [
+                ...allWorkspaceSkills.filter(isPrioritized),
+                ...allWorkspaceSkills.filter(skill => !isPrioritized(skill))
+            ]
+            : allWorkspaceSkills;
+        const reads = orderedWorkspaceSkills.slice(0, SKILL_LIMITS.perTask).map(async (skill, index) => {
             let timeout: ReturnType<typeof setTimeout> | undefined;
             try {
                 const file = await Promise.race([
@@ -42123,6 +42941,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     /** Start a new goal in the normal composer instead of opening a modal. */
     protected openGoalComposer(): void {
+        this.dismissSlashCommandDrawer?.(false);
         // A goal can be created before the first prompt is sent. The empty
         // composer has no active session yet, so materialize the normal local
         // draft session instead of silently ignoring the click.
@@ -42983,12 +43802,77 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.followUpTaskMenuId = '';
         this.update();
         try {
-            const result = await this.platformService.sendAgentRunMessage(runId, task.prompt);
+            if (this.skillService) {
+                try {
+                    const service = this.skillService as SkillService & Partial<Pick<NextMuxSkillService, 'state' | 'refresh'>>;
+                    if (service.state === 'error') await service.refresh?.();
+                    await service.ready;
+                    if (typeof service.getSkills === 'function') this.skills = service.getSkills();
+                } catch { /* fall back to currently loaded skills */ }
+            }
+            const slashSkills = this.availableSlashSkills?.(session.id) || [];
+            const expanded = expandComposerSlashSubmission(task.prompt, slashSkills, {
+                hasAttachments: Boolean(task.attachments?.length)
+            });
+            if (expanded.needsTaskInput) {
+                if (this.activeCodingSessionId === session.id && typeof this.editQueuedFollowUpTask === 'function') {
+                    this.editQueuedFollowUpTask(session.id, task.id);
+                    const trimmedNow = this.prompt.trim();
+                    if (/^\/plan$/iu.test(trimmedNow)) {
+                        this.applySlashTextReplacement?.('/plan ', '/plan '.length);
+                    }
+                } else {
+                    const zh = Boolean(this.desktopLocale?.startsWith('zh'));
+                    this.setQueuedFollowUpTaskError(
+                        session.id,
+                        task,
+                        zh ? '请补充 /plan 后的任务描述后再发送' : 'Add a task description after /plan before sending'
+                    );
+                }
+                return;
+            }
+            let steeredPrompt = expanded.matchedCommand ? expanded.modelPrompt : task.prompt;
+            const displayPrompt = expanded.matchedCommand ? expanded.displayPrompt : task.prompt;
+            if (expanded.prioritizedSkillNames.length > 0 && typeof this.prepareAgentSkills === 'function') {
+                try {
+                    const skillRoot = (!session.incognito && session.workspacePath) || this.activeWorkspaceRoot;
+                    const preparedSkills = await this.prepareAgentSkills(
+                        skillRoot,
+                        expanded.prioritizedSkillNames,
+                        expanded.prioritizedSkillLocations
+                    );
+                    const locSet = new Set(expanded.prioritizedSkillLocations.map(loc => loc.trim()).filter(Boolean));
+                    const nameSet = new Set(expanded.prioritizedSkillNames.map(name => name.trim().toLowerCase()).filter(Boolean));
+                    const matchedSkills = preparedSkills.filter(skill =>
+                        (locSet.size > 0 && Boolean(skill.sourcePath) && locSet.has(skill.sourcePath.trim()))
+                        || (locSet.size === 0 && nameSet.has(skill.name.trim().toLowerCase()))
+                    );
+                    for (const skill of matchedSkills) {
+                        const safeName = skill.name.replace(/"/g, '&quot;');
+                        const safePath = (skill.sourcePath || '').replace(/"/g, '&quot;');
+                        const header = `\n\n<skill-instructions name="${safeName}"${safePath ? ` path="${safePath}"` : ''}>\n`;
+                        const footer = '\n</skill-instructions>';
+                        const budget = 18_000 - steeredPrompt.length - header.length - footer.length;
+                        if (budget > 64 && skill.instructions?.trim()) {
+                            steeredPrompt += `${header}${skill.instructions.trim().slice(0, budget)}${footer}`;
+                        }
+                    }
+                } catch { /* directive header is already present in steeredPrompt */ }
+            }
+            steeredPrompt = steeredPrompt.replace(/\0/g, '').slice(0, 19_500);
+            const result = await this.platformService.sendAgentRunMessage(runId, steeredPrompt);
             if (!result.accepted) {
                 this.setQueuedFollowUpTaskError(session.id, task, runningTaskText(this.desktopLocale, 'sendFailed'));
                 return;
             }
-            this.recordSteeringMessage(session.id, turnId, result.message, 'accepted');
+            if (displayPrompt !== steeredPrompt) {
+                if (this.steeringDisplayPrompts && this.steeringDisplayPrompts.size > 256) {
+                    const oldest = this.steeringDisplayPrompts.keys().next().value;
+                    if (oldest !== undefined) this.steeringDisplayPrompts.delete(oldest);
+                }
+                this.steeringDisplayPrompts?.set(result.message.id, displayPrompt);
+            }
+            this.recordSteeringMessage(session.id, turnId, { ...result.message, content: displayPrompt }, 'accepted');
             this.removeQueuedFollowUpTask(session.id, task.id);
         } catch (error) {
             this.setQueuedFollowUpTaskError(session.id, task, modelFailureText(this.desktopLocale, error));
@@ -43095,9 +43979,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 if (turn.id !== turnId) return turn;
                 const current = turn.steeringMessages || [];
                 const existing = current.find(item => item.id === message.id);
-                if (existing?.status === status && existing.appliedAt === appliedAt && existing.content === message.content) return turn;
+                const looksExpandedSlash = (text: string): boolean =>
+                    text.includes('<explicit-skill-directive>')
+                    || text.includes('<skill-instructions ')
+                    || text.includes('PLAN-FIRST MODE (STRICT READ-ONLY PHASE):')
+                    || text.includes('Perform a thorough, read-only code review of the uncommitted changes')
+                    || text.includes("Inspect this repository's directory layout")
+                    || text.includes('Inspect `git status` and `git diff` in the current workspace.');
+                const mappedDisplay = this.steeringDisplayPrompts?.get(message.id)
+                    || (existing?.content && !looksExpandedSlash(existing.content) && looksExpandedSlash(message.content)
+                        ? existing.content
+                        : message.content);
+                const resolvedMessage = mappedDisplay === message.content ? message : { ...message, content: mappedDisplay };
+                if (existing?.status === status && existing.appliedAt === appliedAt && existing.content === resolvedMessage.content) return turn;
                 const next: CodingSteeringMessageRecord = existing?.status === 'applied' && status === 'accepted'
-                    ? existing : { ...message, status, ...(appliedAt ? { appliedAt } : {}) };
+                    ? existing : { ...resolvedMessage, status, ...(appliedAt ? { appliedAt } : {}) };
                 changed = true;
                 return { ...turn, steeringMessages: existing
                     ? current.map(item => item.id === message.id ? next : item)
@@ -43134,6 +44030,27 @@ export class NextMuxDesktopWidget extends ReactWidget {
             ? this.composerAppItems(appOwner)
             : composerAppList(this.composerApp(appOwner));
         const pickedApp = pickedApps.length > 1 ? pickedApps : pickedApps[0];
+        if (workbench === 'coding' && !this.attachments.length && !references.length) {
+            if (!pickedApps.length) {
+                const bareUiMatch = /^\/(compact|new|undo|goal|council|app|model|relay|permissions|mcp)$/iu.exec(rawValue);
+                if (bareUiMatch) {
+                    const slugLower = bareUiMatch[1].toLowerCase();
+                    this.slashCommandMatch = undefined;
+                    const uiCmd = this.currentSlashCommands?.().find(item => item.slug.toLowerCase() === slugLower);
+                    if (uiCmd) {
+                        this.applySlashTextReplacement?.('', 0);
+                        this.executeSlashCommand?.(uiCmd);
+                        return false;
+                    }
+                }
+            }
+            if (/^\/plan$/iu.test(rawValue)) {
+                this.applySlashTextReplacement?.('/plan ', '/plan '.length);
+                this.dismissSlashCommandDrawer?.(false);
+                this.update();
+                return false;
+            }
+        }
         if ((!rawValue && !this.attachments.length && !pickedApps.length) || run.runningMessageSubmitting) return false;
         const targetSessionId = this.activeCodingSessionId || run.activeAgentSessionId;
         if (!targetSessionId) return false;
@@ -43998,6 +44915,28 @@ export class NextMuxDesktopWidget extends ReactWidget {
             await this.saveGoal();
             return true;
         }
+        if (workbench === 'coding' && !queuedExecution && !resumedExecution && !historicalExecution && !this.attachments.length && !this.pastedTextReferences?.length) {
+            const trimmedDraft = this.prompt.trim();
+            if (!this.composerApp?.()) {
+                const bareUiMatch = /^\/(compact|new|undo|goal|council|app|model|relay|permissions|mcp)$/iu.exec(trimmedDraft);
+                if (bareUiMatch) {
+                    const slugLower = bareUiMatch[1].toLowerCase();
+                    this.slashCommandMatch = undefined;
+                    const uiCmd = this.currentSlashCommands?.().find(item => item.slug.toLowerCase() === slugLower);
+                    if (uiCmd) {
+                        this.applySlashTextReplacement?.('', 0);
+                        this.executeSlashCommand?.(uiCmd);
+                        return false;
+                    }
+                }
+            }
+            if (/^\/plan$/iu.test(trimmedDraft)) {
+                this.applySlashTextReplacement?.('/plan ', '/plan '.length);
+                this.dismissSlashCommandDrawer?.(false);
+                this.update();
+                return false;
+            }
+        }
         if (workbench === 'coding' && !this.conversationHistoryReady()) return false;
         const targetSessionId = historicalExecution?.sessionId || queuedExecution?.session.id || resumedExecution?.session.id || this.activeCodingSessionId;
         const scheduledRun = workbench === 'coding' ? this.scheduledAgentRuns.get(targetSessionId) : undefined;
@@ -44199,7 +45138,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 taskAttachments = taskAttachments.map(item => anchoredById.get(item.id) || item);
             }
         }
-        // 应用操控: the picked app goes in front of the message, as the line the agent reads (nextmuxTabInstructions).
+        // 应用操控: resolve pickedApp before readiness & slash expansion so early empty/UI checks are exact.
         const pickedAppOwner = submission?.sessionId || this.activeCodingSessionId || '';
         const pickedApp = directComposerSubmission && workbench === 'coding'
             ? (submission ? submission.pickedApp : (() => {
@@ -44209,11 +45148,30 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 return items.length > 1 ? items : items[0];
             })())
             : undefined;
-        if (pickedApp) {
-            value = withAppControlMarker(pickedApp, value);
-            displayValue = withAppControlMarker(pickedApp, displayValue);
+        const suppressSlashForGoalInput = directComposerSubmission
+            && this.goalComposerActive
+            && this.goalComposerSessionId === this.activeCodingSessionId;
+        if (workbench === 'coding' && !resumedExecution && !suppressSlashForGoalInput) {
+            if (directComposerSubmission && !submission && !taskAttachments.length && !pickedApp) {
+                const bareUiMatch = /^\/(compact|new|undo|goal|council|app|model|relay|permissions|mcp)$/iu.exec(rawValue);
+                if (bareUiMatch) {
+                    const slugLower = bareUiMatch[1].toLowerCase();
+                    const uiCmd = this.currentSlashCommands?.().find(item => item.slug.toLowerCase() === slugLower);
+                    if (uiCmd) {
+                        this.applySlashTextReplacement?.('', 0);
+                        this.executeSlashCommand?.(uiCmd);
+                        return false;
+                    }
+                }
+            }
+            if (directComposerSubmission && !taskAttachments.length && /^\/plan$/iu.test(value.trim())) {
+                this.applySlashTextReplacement?.('/plan ', '/plan '.length);
+                this.dismissSlashCommandDrawer?.(false);
+                this.update();
+                return false;
+            }
         }
-        if (!value && !taskAttachments.length) return false;
+        if (!value && !pickedApp && !taskAttachments.length) return false;
         if (taskAttachments.length > MAX_TOTAL_ATTACHMENTS_PER_TASK) {
             this.attachmentError = composerAttachmentText(this.desktopLocale, 'maxAttachments');
             this.update();
@@ -44225,6 +45183,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const service = this.skillService as SkillService & Partial<Pick<NextMuxSkillService, 'state' | 'refresh'>>;
             if (service.state === 'error') await service.refresh?.();
             await service.ready;
+            if (typeof service.getSkills === 'function') this.skills = service.getSkills();
         } catch {
             if (composerStillMatches()) {
                 run.agentError = skillReadinessText(this.desktopLocale, 'failed');
@@ -44234,6 +45193,36 @@ export class NextMuxDesktopWidget extends ReactWidget {
             return false;
         }
         if (!composerStillMatches() || anotherRunStarted()) return false;
+        // Slash command workflow expansion (`/review`, `/init`, `/commit`, `/plan`, `/<skill>`), running AFTER skillService.ready:
+        let prioritizedSlashSkillNames: readonly string[] = [];
+        let prioritizedSlashSkillLocations: readonly string[] = [];
+        if (workbench === 'coding' && !resumedExecution && !suppressSlashForGoalInput) {
+            const slashSkills = this.availableSlashSkills?.(councilTargetSession) || [];
+            const hasAnyAttachments = taskAttachments.length > 0;
+            const expandedSlash = expandComposerSlashSubmission(value, slashSkills, { hasAttachments: hasAnyAttachments });
+            if (expandedSlash.needsTaskInput) {
+                if (directComposerSubmission) {
+                    this.applySlashTextReplacement?.('/plan ', '/plan '.length);
+                    this.dismissSlashCommandDrawer?.(false);
+                    this.update();
+                }
+                return false;
+            }
+            if (expandedSlash.matchedCommand) {
+                value = expandedSlash.modelPrompt;
+                const expandedDisplay = expandComposerSlashSubmission(displayValue, slashSkills, { hasAttachments: hasAnyAttachments });
+                if (expandedDisplay.matchedCommand) {
+                    displayValue = expandedDisplay.displayPrompt;
+                }
+            }
+            prioritizedSlashSkillNames = expandedSlash.prioritizedSkillNames;
+            prioritizedSlashSkillLocations = expandedSlash.prioritizedSkillLocations;
+        }
+        if (pickedApp) {
+            value = withAppControlMarker(pickedApp, value);
+            displayValue = withAppControlMarker(pickedApp, displayValue);
+        }
+        if (!value && !taskAttachments.length) return false;
         run.submittedPrompt = displayValue;
         run.agentWorkbench = workbench;
         run.agentResult = undefined;
@@ -44566,7 +45555,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
             return true;
         };
         try {
-            const skills = await this.prepareAgentSkills(effectiveWorkspaceRoot);
+            const skills = await this.prepareAgentSkills(
+                effectiveWorkspaceRoot,
+                prioritizedSlashSkillNames,
+                prioritizedSlashSkillLocations
+            );
             if (settleCancelledBeforeStart()) return true;
             const sharedTerminal = workbench === 'coding' && codingSession && runPermission === 'full_access'
                 ? await this.createTerminalForSession(codingSession, 'agent', false, false, true)
@@ -44845,8 +45838,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 let restored = owner?.followUpQueue || [];
                 let insertIndex = 0;
                 for (const message of snapshot.pendingMessages) {
+                    const updatedSession = this.codingSessions.find(session => session.id === codingSession.id);
+                    const updatedTurn = codingTurn ? updatedSession?.turns.find(item => item.id === codingTurn.id) : undefined;
+                    const displayPrompt = this.steeringDisplayPrompts?.get(message.id)
+                        || updatedTurn?.steeringMessages?.find(item => item.id === message.id)?.content
+                        || message.content;
                     restored = restoreFollowUpTask(restored, {
-                        id: message.id, sessionId: codingSession.id, prompt: message.content, source: 'user',
+                        id: message.id, sessionId: codingSession.id, prompt: displayPrompt, source: 'user',
                         workbench, routeId: route.id, relayKey: runRelayKey,
                         automaticRelaySource: submittedRelaySource,
                         keyPriceQuoteId: route.kind === 'managed_gateway' ? route.keyPriceQuoteId : undefined,
@@ -45055,6 +46053,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             run.agentStage = 'error';
             run.agentError = desktopFailureMessage(this.desktopLocale, terminalFailure || error);
+            this.syncUnlinkedSessionFromFailure(terminalFailure || error);
             // The run already stopped; say why in the composer's corner (the thread keeps the full failure).
             if (typeof isMerchantApiDeletedFailure === 'function' && (isMerchantApiDeletedFailure(terminalFailure) || isMerchantApiDeletedFailure(error))) {
                 this.addNotification?.('error', agentOutcomeText(this.desktopLocale, 'merchant_api_deleted'), '', codingSession?.id);
@@ -46007,17 +47006,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
         </nav>;
     }
 
-    protected renderRelayPopover(overrideSelection?: { readonly selectedKey: string; readonly onSelect: (key: string) => void }): React.ReactNode {
+    protected renderRelayPopover(overrideSelection?: { readonly selectedKey: string; readonly onSelect: (key: string) => void; readonly capacityScope?: PublicMerchantCapacityScope }): React.ReactNode {
         // The provider drawer chooses a concrete merchant. Automatic routing
         // remains available as a model policy, but is intentionally not a
         // provider row so the merchant grid stays focused and predictable.
-        const relayOptions = this.relayPickerOptions().filter(option => option.kind !== 'automatic');
+        const capacityScope: PublicMerchantCapacityScope = overrideSelection?.capacityScope ?? (this.activeSection === 'comic' ? 'comic' : 'coding');
+        const relayOptions = this.relayPickerOptions(capacityScope).filter(option => option.kind !== 'automatic');
         // Opened from the 漫剧 conversation: the same drawer, choosing the conversation's relay.
         const comicScope = !overrideSelection && this.activeSection === 'comic';
         const activeRelayKey = overrideSelection ? overrideSelection.selectedKey : comicScope ? this.comicChatRelayKey() : this.activeRelayKey;
         const directoryPage = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage;
         const directoryLoading = this.relaySourceTab !== 'my-api' && (this.publicMerchantPageLoading || !directoryPage) && !this.publicMerchantPageError;
-        const savedOfficialRelayUnavailable = !comicScope && this.relaySourceTab === 'my-api' && !this.relayOption() && activeRelayKey.startsWith('official:');
+        const savedOfficialRelayUnavailable = !overrideSelection && !comicScope && this.relaySourceTab === 'my-api' && !this.relayOption() && activeRelayKey.startsWith('official:');
         const sourceTabs: readonly RelaySourceTab[] = ['merchant', 'favorite', 'my-api'];
         const sourceTabText = (tab: RelaySourceTab): string => relayText(this.desktopLocale,
             tab === 'merchant' ? 'merchantSources' : tab === 'favorite' ? 'favoriteSources' : 'myApiSources');
@@ -46041,7 +47041,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // `seal`: the hint of a deposit-verified store's name, which leads with the gold seal (not a relay at capacity, which only says so).
         const showMetric = (key: string, text: string, anchor: HTMLElement, seal = false): void => {
             const option = relayOptions.find(item => item.key === key);
-            const full = Boolean(option && this.relayOptionIsFull(option));
+            const full = Boolean(option && this.relayOptionIsFull(option, capacityScope));
             if (full) text = relayText(this.desktopLocale, 'relayFull');
             if (this.relayMetricTooltip?.key === key && this.relayMetricTooltip?.text === text && this.relayMetricTooltip?.anchor === anchor) return;
             this.relayMetricTooltip = { key, text, anchor, ...(seal && !full ? { seal: true } : {}) }; this.update();
@@ -46067,7 +47067,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     </span>;
         const tooltip = this.relayMetricTooltip && (this.relayMetricTooltip.key.startsWith('sort:') || this.relayMetricTooltip.key.startsWith('head:') || relayOptions.some(option => option.key === this.relayMetricTooltip!.key)) ? this.relayMetricTooltip : undefined;
         const tooltipRect = tooltip?.anchor.getBoundingClientRect();
-        const tooltipWidth = Math.min(tooltip?.key.startsWith('head:') || tooltip?.key.startsWith('sort:') ? 260 : 204, window.innerWidth - 16);
+        const tooltipWidth = Math.min(tooltip?.key.startsWith('head:') || tooltip?.key.startsWith('sort:') || tooltip?.text === relayText(this.desktopLocale, 'relayFull') ? 260 : 204, window.innerWidth - 16);
         // Every language has its own explanations (nextmux-relay-locale.ts); quality is the smoothed approval rating.
         const relayColumnExplanation = (column: 'merchant' | 'quality' | 'authenticity' | 'latency' | 'price' | 'apiName' | 'favorite'): string => relayText(this.desktopLocale,
             column === 'merchant' ? 'columnMerchant' : column === 'quality' ? 'columnQuality' : column === 'authenticity' ? 'columnAuthenticity'
@@ -46078,7 +47078,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 merchantIds={relayOptions.filter(option => option.kind === 'managed' && option.merchantId).map(option => option.merchantId!)}
                 // The chosen merchant's models are on screen beside this list (the council dialog) or right after it.
                 pinnedMerchantIds={activeRelayKey.startsWith('managed:') ? [activeRelayKey.slice('managed:'.length)] : []}
-                scope={comicScope ? 'comic' : 'coding'}
+                scope={capacityScope}
                 onSnapshot={snapshot => { this.relayCapacitySnapshot = snapshot; if (this.relayMetricTooltip?.text === relayText(this.desktopLocale, 'relayFull')) this.relayMetricTooltip = undefined; this.update(); }} />
             <header><div><strong>{relayText(this.desktopLocale, 'relayTitle')}</strong><small>{relayText(this.desktopLocale, 'relaySubtitle')}</small></div></header>
             <div className='nmx-relay-source-tabs' role='tablist' aria-label={relayText(this.desktopLocale, 'sourceTabs')}>
@@ -46129,17 +47129,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 <span onPointerEnter={event => showMetric('head:own-api', relayColumnExplanation('apiName'), event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(relayText(this.desktopLocale, 'apiName'))}</span>
                 <span onPointerEnter={event => showMetric('head:own-authenticity', relayColumnExplanation('authenticity'), event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(relayText(this.desktopLocale, 'authenticity'))}</span>
                 <span onPointerEnter={event => showMetric('head:own-latency', relayColumnExplanation('latency'), event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(relayText(this.desktopLocale, 'latency'))}</span>
-            </div>}{relayOptions.map(option => <div data-relay-capacity={this.relayOptionIsFull(option) ? 'full' : undefined}
-                tabIndex={this.relayOptionIsFull(option) ? 0 : undefined}
-                onPointerEnter={event => { if (this.relayOptionIsFull(option)) showMetric(option.key, relayText(this.desktopLocale, 'relayFull'), event.currentTarget); else if (preloadable(option)) this.scheduleMerchantCatalogPreload?.(option.merchantId); }}
-                onFocus={event => { if (this.relayOptionIsFull(option)) showMetric(option.key, relayText(this.desktopLocale, 'relayFull'), event.currentTarget); else if (preloadable(option)) this.scheduleMerchantCatalogPreload?.(option.merchantId); }}
+            </div>}{relayOptions.map(option => {
+                const optionFull = this.relayOptionIsFull(option, capacityScope);
+                return <div data-relay-capacity={optionFull ? 'full' : undefined}
+                tabIndex={optionFull ? 0 : undefined}
+                onPointerEnter={event => { if (optionFull) showMetric(option.key, relayText(this.desktopLocale, 'relayFull'), event.currentTarget); else if (preloadable(option)) this.scheduleMerchantCatalogPreload?.(option.merchantId); }}
+                onFocus={event => { if (optionFull) showMetric(option.key, relayText(this.desktopLocale, 'relayFull'), event.currentTarget); else if (preloadable(option)) this.scheduleMerchantCatalogPreload?.(option.merchantId); }}
                 onPointerLeave={() => { hideMetric(); this.cancelMerchantCatalogPreload?.(option.merchantId); }}
                 onBlur={() => { hideMetric(); this.cancelMerchantCatalogPreload?.(option.merchantId); }}
-                className={`nmx-relay-option-row${option.directoryOnly ? option.directoryStatus === 'unknown' ? ' is-unknown' : ' is-unavailable' : ''}`} key={option.key}>
-                <button className={`nmx-relay-option-select${option.kind === 'automatic' ? ' is-automatic' : ''}${option.key === activeRelayKey ? ' is-selected' : ''}`} data-relay-key={option.key} aria-pressed={option.key === activeRelayKey} disabled={option.directoryOnly || this.relayOptionIsFull(option)}
-                    aria-label={[option.label, this.relayOptionIsFull(option) ? relayText(this.desktopLocale, 'relayFull') : '', option.directoryStatus === 'unknown' ? relayText(this.desktopLocale, 'directoryUnavailable') : option.directoryStatus === 'unavailable' ? relayDelistedText(this.desktopLocale, option.unavailableReason) : option.directoryOnly ? modelCenterText(this.desktopLocale, 'unavailable') : '', option.checksFailing ? relayText(this.desktopLocale, 'checksFailing') : '', ...metricsFor(option).map(metric => metric.label)].filter(Boolean).join(' · ')}
+                className={`nmx-relay-option-row${optionFull ? ' is-full' : ''}${option.directoryOnly ? option.directoryStatus === 'unknown' ? ' is-unknown' : ' is-unavailable' : ''}`} key={option.key}>
+                <button className={`nmx-relay-option-select${option.kind === 'automatic' ? ' is-automatic' : ''}${option.key === activeRelayKey ? ' is-selected' : ''}`} data-relay-key={option.key} aria-pressed={option.key === activeRelayKey} disabled={option.directoryOnly || optionFull}
+                    aria-label={[option.label, optionFull ? relayText(this.desktopLocale, 'relayFull') : '', option.directoryStatus === 'unknown' ? relayText(this.desktopLocale, 'directoryUnavailable') : option.directoryStatus === 'unavailable' ? relayDelistedText(this.desktopLocale, option.unavailableReason) : option.directoryOnly ? modelCenterText(this.desktopLocale, 'unavailable') : '', option.checksFailing ? relayText(this.desktopLocale, 'checksFailing') : '', ...metricsFor(option).map(metric => metric.label)].filter(Boolean).join(' · ')}
                     onFocus={event => { if (option.kind !== 'automatic') showMetric(option.key, metricsFor(option).map(metric => metric.label).join('\n'), event.currentTarget); }}
-                    onBlur={hideMetric} onPointerLeave={hideMetric} onClick={() => { if (option.directoryOnly || this.relayOptionIsFull(option)) return; hideMetric(); if (overrideSelection) overrideSelection.onSelect(option.key); else if (comicScope) this.selectComicChatRelay(option.key); else this.selectRelay(option.key); }}>
+                    onBlur={hideMetric} onPointerLeave={hideMetric} onClick={() => { if (option.directoryOnly || optionFull) return; hideMetric(); if (overrideSelection) overrideSelection.onSelect(option.key); else if (comicScope) this.selectComicChatRelay(option.key); else this.selectRelay(option.key); }}>
                 {/* The public merchant number tells same-named stores apart; the store intro follows it. */}
                 <strong className={`nmx-relay-option-name${option.checksFailing ? ' is-failing' : ''}${option.depositVerified ? ' is-deposit-verified' : ''}`} aria-label={(option.kind === 'managed'
                     ? [option.label, option.publicCode, (option.storeTagline || option.storeDescription || '').trim() || modelCenterText(this.desktopLocale, 'noStoreIntro'),
@@ -46159,6 +47161,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 {option.kind !== 'automatic' && option.kind !== 'official' && option.directoryStatus !== 'unavailable' && <span className='nmx-relay-option-metrics'>
                     {metricsFor(option).map(metric => dial(option, metric))}
                 </span>}
+                {optionFull && option.directoryStatus !== 'unavailable' && <small className='nmx-relay-capacity-badge' data-relay-capacity-badge='full'>{relayText(this.desktopLocale, 'relayFullBadge')}</small>}
                 </button>
                 {option.kind === 'managed' && option.merchantId && <button className={`nmx-relay-favorite${this.favoriteMerchantLabels.has(option.merchantId) ? ' is-favorite' : ''}`}
                     data-relay-favorite={option.merchantId} aria-pressed={this.favoriteMerchantLabels.has(option.merchantId)}
@@ -46166,7 +47169,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     onPointerEnter={event => showMetric(`favorite:${option.key}`, this.favoriteMerchantLabels.has(option.merchantId!) ? relayText(this.desktopLocale, 'removeFavorite') : relayText(this.desktopLocale, 'addFavorite'), event.currentTarget)}
                     onPointerLeave={hideMetric}
                     onClick={() => this.toggleFavoriteMerchant(option)}><FavoriteHeartIcon active={this.favoriteMerchantLabels.has(option.merchantId)} /></button>}
-            </div>)}{relayOptions.length === 0 && !(this.relaySourceTab !== 'my-api' && (!directoryPage || this.publicMerchantPageLoading || this.publicMerchantPageError)) && <div className='nmx-route-empty' role='status'><span>{relayText(this.desktopLocale, this.relaySourceQuery.trim() ? 'noMatchingSources' : this.relaySourceTab === 'favorite' ? 'noFavorites' : this.relaySourceTab === 'my-api' ? 'noMyApis' : 'noRelay')}</span></div>}</div>
+            </div>;
+            })}{relayOptions.length === 0 && !(this.relaySourceTab !== 'my-api' && (!directoryPage || this.publicMerchantPageLoading || this.publicMerchantPageError)) && <div className='nmx-route-empty' role='status'><span>{relayText(this.desktopLocale, this.relaySourceQuery.trim() ? 'noMatchingSources' : this.relaySourceTab === 'favorite' ? 'noFavorites' : this.relaySourceTab === 'my-api' ? 'noMyApis' : 'noRelay')}</span></div>}</div>
             {this.relaySourceTab !== 'my-api' && <footer className='nmx-relay-directory-page'>
                     {this.publicMerchantPageError ? <><span role='status'>{relayText(this.desktopLocale, 'directoryUnavailable')}</span><button onClick={() => void this.loadPublicMerchantPage()}>{this.tx('retry')}</button></>
                         : this.relaySourceTab === 'merchant' && this.publicMerchantPage?.nextCursor ? <button onClick={() => this.loadNextPublicMerchantPage()}>{modelUsageText(this.desktopLocale, 'loadMore')}<i className='codicon codicon-chevron-down' /></button> : undefined}
@@ -47015,15 +48019,38 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected personalApiUsageRecords(): readonly PersonalApiUsageRecord[] {
         const records: PersonalApiUsageRecord[] = [];
-        const loadedTurnRunKeys = new Set<string>();
+        const isPerCallCodingEntry = (id: string): boolean => /:call:\d+$/.test(id);
+        const baseOwnApiRunId = (id: string): string => id.replace(/:call:\d+$/, '');
+        const perCallLoggedRunIds = new Set(
+            this.ownApiUsageEntries
+                .filter(entry => entry.source.kind === 'coding' && isPerCallCodingEntry(entry.id))
+                .map(entry => baseOwnApiRunId(entry.id))
+        );
+        const sessionTitleByRunId = new Map<string, string>();
+        for (const session of this.codingSessions) {
+            for (const turn of session.turns) {
+                if (turn.agentHostRunId) sessionTitleByRunId.set(turn.agentHostRunId, session.title);
+                if (turn.agentRootRunId && !sessionTitleByRunId.has(turn.agentRootRunId)) {
+                    sessionTitleByRunId.set(turn.agentRootRunId, session.title);
+                }
+            }
+        }
+        const seenLegacyRunLevelExecutions = new Set<string>();
         for (const session of this.codingSessions) for (const turn of session.turns) {
             if (!turn.routeId?.startsWith('official:')) continue;
+            // When per-call JSONL entries (`:call:N`) exist for this turn's run, they are authoritative
+            // across Lead + specialist / multi-step calls and must not be double-counted with `turn.usageLabel`.
+            const hostRunId = turn.agentHostRunId || turn.agentRootRunId;
+            if (hostRunId && perCallLoggedRunIds.has(hostRunId)) continue;
             // The route names the connection and model (official:<connection>[:<model>]); the usage line was written as
             // "<input> 输入 · <output> 输出". Both are read back here so every record shows in the app language with an estimate.
             const [, connectionId = '', encodedModel] = turn.routeId.split(':');
             const connection = this.officialModels.connections.find(item => item.id === connectionId);
             const modelFromLabel = turn.routeLabel?.split(' · ')[0]?.trim();
             const model = encodedModel ? (() => { try { return decodeURIComponent(encodedModel); } catch { return encodedModel; } })() : (modelFromLabel || connection?.model);
+            if (hostRunId) {
+                seenLegacyRunLevelExecutions.add(`${hostRunId}\0${connectionId}\0${model || ''}`);
+            }
             const tokens = /^(\d+) 输入 · (\d+) 输出$/.exec(turn.usageLabel || '');
             const inputTokens = tokens ? Number(tokens[1]) : undefined, outputTokens = tokens ? Number(tokens[2]) : undefined;
             const local = connection ? connection.providerId === 'ollama' : turn.billingLabel === LOCAL_MODEL_BILLING_LABEL;
@@ -47034,12 +48061,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const price = apiPrice || reference;
             const estimateUsd = !local && price && inputTokens !== undefined && outputTokens !== undefined
                 ? (inputTokens * price.input + outputTokens * price.output) / 1_000_000 : undefined;
-            // The host ID identifies this execution. A continuation keeps its logical root,
-            // so never suppress both IDs. Old turns without any identity remain independent.
-            const hostRunId = turn.agentHostRunId || turn.agentRootRunId;
-            if (hostRunId && connectionId && model) {
-                loadedTurnRunKeys.add(JSON.stringify([hostRunId, connectionId, model]));
-            }
             records.push({
                 id: `${session.id}:${turn.id}`,
                 conversationTitle: session.title,
@@ -47055,7 +48076,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             });
         }
         for (const entry of this.ownApiUsageEntries) {
-            if (entry.source.kind === 'coding' && loadedTurnRunKeys.has(JSON.stringify([entry.id, entry.connectionId, entry.model]))) {
+            if (entry.source.kind === 'coding' && !isPerCallCodingEntry(entry.id)
+                && seenLegacyRunLevelExecutions.has(`${entry.id}\0${entry.connectionId}\0${entry.model || ''}`)) {
                 continue;
             }
             const connection = this.officialModels.connections.find(item => item.id === entry.connectionId);
@@ -47067,10 +48089,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const price = apiPrice || reference;
             const estimateUsd = !local && price && entry.inputTokens !== undefined && entry.outputTokens !== undefined
                 ? (entry.inputTokens * price.input + entry.outputTokens * price.output) / 1_000_000 : undefined;
+            const matchedSessionTitle = entry.source.kind === 'coding'
+                ? sessionTitleByRunId.get(baseOwnApiRunId(entry.id))
+                : undefined;
             records.push({
                 id: `own:${entry.id}`,
                 conversationTitle: entry.source.kind === 'comic_chat' ? localizeDesktopSurface(this.desktopLocale, '漫剧对话')
-                    : entry.source.title || desktopText(this.desktopLocale, entry.source.kind === 'coding' ? 'coding' : 'comic'),
+                    : matchedSessionTitle || entry.source.title || desktopText(this.desktopLocale, entry.source.kind === 'coding' ? 'coding' : 'comic'),
                 routeLabel: `${entry.model || discovered?.label || ''} · ${connection?.label || connection?.providerName || ''}`,
                 ...(entry.inputTokens !== undefined && entry.outputTokens !== undefined ? { inputTokens: entry.inputTokens, outputTokens: entry.outputTokens } : {}),
                 ...(entry.kind !== 'text' ? { amountLabel: localizeDesktopSurface(this.desktopLocale, this.mediaKindLabel(entry.kind)) } : {}),
@@ -47106,8 +48131,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 <div className='nmx-workspace-topbar-leading'><div className='nmx-model-center-heading'><span><strong>{this.tx('modelCenter')}</strong><small>{this.tx('modelCenterSubtitle')}</small></span></div></div>
                 <div className='nmx-model-center-topbar-actions'>
                     {/* A plain text link, as on the website's header: the page opens in the system browser. */}
-                    <a className='nmx-merchant-console-link' href={MERCHANT_CONSOLE_URL} title={MERCHANT_CONSOLE_HINTS[this.desktopLocale]} data-nmx-literal
-                        onClick={event => { event.preventDefault(); this.openExternalUrl(MERCHANT_CONSOLE_URL); }}>{MERCHANT_CONSOLE_LABELS[this.desktopLocale]}</a>
+                    <ModelCenterHint text={MERCHANT_CONSOLE_HINTS[this.desktopLocale]} locale={this.desktopLocale}><a className='nmx-merchant-console-link' href={MERCHANT_CONSOLE_URL} data-nmx-literal
+                        onClick={event => { event.preventDefault(); this.openExternalUrl(MERCHANT_CONSOLE_URL); }}>{MERCHANT_CONSOLE_LABELS[this.desktopLocale]}</a></ModelCenterHint>
                     <span className={`nmx-platform-state ${this.platformCatalog.online ? 'is-online' : ''}`} title={this.catalogLoading ? this.tx('connecting') : this.platformCatalog.online ? localizeDesktopSurface(this.desktopLocale, '服务在线') : this.tx('catalogOffline')} aria-label={this.catalogLoading ? this.tx('connecting') : this.platformCatalog.online ? localizeDesktopSurface(this.desktopLocale, '服务在线') : this.tx('catalogOffline')}>
                         <i className={`codicon codicon-${this.catalogLoading ? 'sync codicon-modifier-spin' : this.platformCatalog.online ? 'check' : 'warning'}`}></i>
                     </span>
@@ -47478,16 +48503,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!upload || upload.busy) return;
         upload.error = '';
         this.update();
+        // The marketplace takes package archives only (a plugin.json or a folder loads on this computer alone). Native
+        // pickers match the last extension, so 'gz' is what lets a .tar.gz be chosen.
         const selected = await this.fileDialogService.showOpenDialog({
             title: appPluginText(this.desktopLocale, 'upload'), openLabel: appPluginText(this.desktopLocale, 'upload'),
-            canSelectFiles: true, canSelectFolders: false, canSelectMany: false, filters: { 'NextMux plugin': ['zip', 'tar.gz', 'tgz', 'jevplugin', 'json', 'nmxplugin'] }
+            canSelectFiles: true, canSelectFolders: false, canSelectMany: false, filters: { 'NextMux plugin': ['nmxplugin', 'zip', 'jevplugin', 'tgz', 'gz'] }
         });
         const resource = Array.isArray(selected) ? selected[0] : selected;
         if (!resource || this.appPluginUpload !== upload) return;
         const path = resource.path.fsPath();
-        if (!isAppPluginImportFile(path)) {
+        if (!isAppPluginImportFile(path) || /\.json$/i.test(path)) {
             upload.path = ''; upload.fileName = '';
-            upload.error = appPluginOptionsText(this.desktopLocale, 'unsupportedFormat');
+            upload.error = appPluginText(this.desktopLocale, 'uploadArchiveOnly');
             this.update();
             return;
         }
@@ -47500,7 +48527,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected async submitAppPluginUpload(): Promise<void> {
         const upload = this.appPluginUpload;
         if (!upload?.path || upload.busy) return;
-        if (!isAppPluginImportFile(upload.path)) { upload.error = appPluginOptionsText(this.desktopLocale, 'unsupportedFormat'); this.update(); return; }
+        if (!isAppPluginImportFile(upload.path) || /\.json$/i.test(upload.path)) { upload.error = appPluginText(this.desktopLocale, 'uploadArchiveOnly'); this.update(); return; }
         upload.busy = true;
         upload.error = '';
         this.update();
@@ -48061,7 +49088,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const check = await this.platformService.appPluginLicense(pluginId).catch(() => undefined);
             if (check?.ok && check.paid && !check.license) return unpaid();
             // The plugin is free now: the old license no longer matters (audit A14-06).
-            if (check?.ok && !check.paid) { this.rememberAppPluginVerifiedFree?.(pluginId, plugin.fingerprint); return {}; }
+            if (check?.ok && !check.paid) { this.rememberAppPluginVerifiedFree?.(pluginId, plugin.fingerprint); return { gate: { paid: false } }; }
             if (check?.license && check.license.userId === account) return { gate: { paid: true, license: check.license } };
             // Offline (or no answer): the stored license must be this account's and still valid.
             return account && plugin.licenseUserId === account && (plugin.licenseExpiresAt || 0) > Date.now() ? {} : unpaid();
@@ -48076,7 +49103,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             return this.appPluginVerifiedFree(pluginId, plugin.fingerprint) ? {} : { error: 'license_unavailable' };
         }
         this.appPluginPaidChecks.set(pluginId, check);
-        if (!check.paid) { this.rememberAppPluginVerifiedFree(pluginId, plugin.fingerprint); return {}; }
+        if (!check.paid) { this.rememberAppPluginVerifiedFree(pluginId, plugin.fingerprint); return { gate: { paid: false } }; }
         if (!check.license || check.license.userId !== this.platformSession.user?.id) return unpaid();
         return { gate: { paid: true, license: check.license } };
     }
@@ -48377,6 +49404,160 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected readonly appPluginChatMessages = new Map<string, readonly AppPluginChatMessage[]>();
     protected readonly appPluginChatBusy = new Set<string>();
     protected readonly appPluginChatModels = new Map<string, AppPluginModel>();
+    protected readonly appPluginChatRelays = new Map<string, string>();
+    protected readonly appPluginChatRoutes = new Map<string, string>();
+    protected readonly appPluginChatAutoRouting = new Map<string, boolean>();
+    protected appPluginChatPicker: { readonly tabKey: string; readonly kind: 'relay' | 'model'; readonly anchorSelector: string } | undefined;
+    protected appPluginChatModelQuery = '';
+    protected readonly appPluginChatActiveRequests = new Map<string, { readonly tabKey: string; readonly requestId: string; readonly controller: AbortController }>();
+    protected readonly appPluginChatLoadingMerchants = new Set<string>();
+    protected readonly appPluginChatCatalogPromises = new Map<string, Promise<void>>();
+
+    /**
+     * Aborts active `plugin-chat` streams matching `prefix` (empty string = all tabs; `convId\n` or `convId::` = all tabs
+     * in a conversation; `convId\ntabId` = one exact tab) and optionally removes per-tab chat state Maps.
+     */
+    protected abortAppPluginChatForPrefix(prefix: string, clearHistory = true): void {
+        const matchesKey = (tabKey: string): boolean => {
+            if (!prefix) return true;
+            if (prefix.endsWith('\n') || prefix.endsWith('::')) {
+                const base = prefix.endsWith('::') ? prefix.slice(0, -2) : prefix.slice(0, -1);
+                return tabKey.startsWith(`${base}\n`) || tabKey.startsWith(`${base}::`);
+            }
+            if (prefix.includes('\n') || prefix.includes('::')) {
+                const asNewline = prefix.replace('::', '\n');
+                const asColons = prefix.replace('\n', '::');
+                return tabKey === prefix || tabKey === asNewline || tabKey === asColons;
+            }
+            return tabKey.startsWith(`${prefix}\n`) || tabKey.startsWith(`${prefix}::`);
+        };
+
+        for (const [assistantMsgId, active] of [...this.appPluginChatActiveRequests.entries()]) {
+            if (!matchesKey(active.tabKey)) continue;
+            active.controller.abort();
+            this.appPluginChatActiveRequests.delete(assistantMsgId);
+            void this.platformService?.cancelPluginChat?.(active.requestId).catch(() => undefined);
+        }
+
+        if (this.appPluginChatPicker && matchesKey(this.appPluginChatPicker.tabKey)) {
+            this.appPluginChatPicker = undefined;
+            this.appPluginChatModelQuery = '';
+            this.relayMetricTooltip = undefined;
+        }
+
+        if (!clearHistory) return;
+        for (const tabKey of [...this.appPluginChatOpen]) {
+            if (matchesKey(tabKey)) this.appPluginChatOpen.delete(tabKey);
+        }
+        for (const tabKey of [...this.appPluginChatBusy]) {
+            if (matchesKey(tabKey)) this.appPluginChatBusy.delete(tabKey);
+        }
+        for (const map of [
+            this.appPluginChatMessages,
+            this.appPluginChatModels,
+            this.appPluginChatRelays,
+            this.appPluginChatRoutes,
+            this.appPluginChatAutoRouting
+        ] as const) {
+            for (const tabKey of [...map.keys()]) {
+                if (matchesKey(tabKey)) map.delete(tabKey);
+            }
+        }
+    }
+
+    /**
+     * Loads a merchant's catalog pages directly into `merchantPickerSnapshots` for `AppPluginChatPanel`
+     * without mutating main chat's `selectedMerchantCatalog` or calling `syncModelRoute()`.
+     */
+    protected loadAppPluginChatRelayCatalog(merchantId: string, forceRefresh = false): Promise<void> {
+        if (!merchantId || this.isDisposed || this.catalogRemovedMerchants?.has(merchantId)
+            || typeof this.platformService?.getMerchantCatalog !== 'function') {
+            return Promise.resolve();
+        }
+        const existing = this.appPluginChatCatalogPromises.get(merchantId);
+        if (!forceRefresh && existing) return existing;
+        const known = this.merchantPickerSnapshots.get(merchantId);
+        if (!forceRefresh && known && !known.catalog.nextCursor && Date.now() - known.updatedAt < 30_000) {
+            return Promise.resolve();
+        }
+        const owner = this.platformSession?.user?.id;
+        const linked = this.platformSession?.linked;
+        const revision = this.catalogSnapshotRevision;
+        const isCurrent = (): boolean => !this.isDisposed
+            && owner === this.platformSession?.user?.id
+            && linked === this.platformSession?.linked
+            && revision === this.catalogSnapshotRevision
+            && !this.catalogRemovedMerchants?.has(merchantId);
+        this.appPluginChatLoadingMerchants.add(merchantId);
+        this.update();
+        let run: Promise<void> | undefined;
+        run = (async () => {
+            try {
+                let after: string | undefined;
+                const offerings = new Map<string, PlatformOffering>();
+                let lastPage: PlatformMerchantCatalogPage | undefined;
+                let passPending = false;
+                for (let count = 0; count < 20; count++) {
+                    const page = await this.platformService.getMerchantCatalog(merchantId, after, forceRefresh && count === 0);
+                    if (!isCurrent()) return;
+                    if (page.merchantId !== merchantId || page.online === false || !Array.isArray(page.offerings)
+                        || page.offerings.some(offering => this.offeringMerchantId(offering) !== merchantId)
+                        || (page.nextCursor && page.nextCursor <= (after || ''))) {
+                        break;
+                    }
+                    for (const offering of page.offerings) offerings.set(offering.id, offering);
+                    passPending = passPending || page.discoveryPending === true;
+                    lastPage = page;
+                    after = page.nextCursor;
+                    if (count === 0 || !after || count === 19) {
+                        const merged: PlatformMerchantCatalogPage = {
+                            ...page,
+                            offerings: [...offerings.values()],
+                            ...(passPending ? { discoveryPending: true } : {})
+                        };
+                        this.merchantPickerSnapshots.delete(merchantId);
+                        this.merchantPickerSnapshots.set(merchantId, { catalog: merged, updatedAt: Date.now() });
+                        const activeMerchantId = this.activeRelayKey?.startsWith('managed:') ? this.activeRelayKey.slice('managed:'.length) : '';
+                        for (const id of this.merchantPickerSnapshots.keys()) {
+                            if (this.merchantPickerSnapshots.size <= 16) break;
+                            if (id !== activeMerchantId && id !== merchantId) this.merchantPickerSnapshots.delete(id);
+                        }
+                        this.update();
+                    }
+                    if (!after) break;
+                }
+                if (isCurrent() && lastPage && typeof this.platformService.getMerchantDiscoveredModels === 'function'
+                    && (forceRefresh || !(this.merchantDiscoveryComplete?.(merchantId) ?? this.merchantDiscoveredModels.has(merchantId)))) {
+                    const discovered: PlatformMerchantDiscoveredModel[] = [];
+                    let discoveredAfter = '';
+                    let discoveryFinished = false;
+                    try {
+                        for (let pageIndex = 0; pageIndex < 12; pageIndex++) {
+                            const page = await this.platformService.getMerchantDiscoveredModels(merchantId, discoveredAfter, forceRefresh && pageIndex === 0);
+                            if (!isCurrent()) return;
+                            discovered.push(...page.models);
+                            if (!page.nextCursor) { discoveryFinished = true; break; }
+                            discoveredAfter = page.nextCursor;
+                        }
+                    } catch { /* supplementary discovery evidence */ }
+                    if (isCurrent() && (discovered.length > 0 || discoveryFinished)) {
+                        this.merchantDiscoveredModels.set(merchantId, discovered);
+                        if (discoveryFinished) this.merchantDiscoveryIncomplete?.delete(merchantId);
+                        else this.merchantDiscoveryIncomplete?.add(merchantId);
+                    }
+                }
+            } catch { /* surfaced via empty picker state */ }
+            finally {
+                this.appPluginChatLoadingMerchants.delete(merchantId);
+                if (this.appPluginChatCatalogPromises.get(merchantId) === run) {
+                    this.appPluginChatCatalogPromises.delete(merchantId);
+                }
+                if (!this.isDisposed) this.update();
+            }
+        })();
+        this.appPluginChatCatalogPromises.set(merchantId, run);
+        return run;
+    }
 
     protected appPluginExtraModels(): readonly AppPluginModel[] {
         const extras: AppPluginModel[] = [];
@@ -48392,182 +49573,834 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return extras;
     }
 
+    protected appPluginChatRelayKey(tabKey: string): string {
+        const saved = this.appPluginChatRelays.get(tabKey);
+        if (saved) return saved;
+        if (this.activeRelayKey) return this.activeRelayKey;
+        const firstOption = this.relayPickerOptions?.('coding')?.[0];
+        return firstOption?.key || '';
+    }
+
+    protected appPluginChatRouteFor(tabKey: string): DesktopModelRoute | undefined {
+        const relayKey = this.appPluginChatRelayKey(tabKey);
+        const candidates = this.councilRoutesForRelay?.(relayKey, false) || [];
+        const visibleCandidates = this.councilRoutesForRelay?.(relayKey, true) || [];
+        const savedRouteId = this.appPluginChatRoutes.get(tabKey);
+        if (savedRouteId) {
+            const matched = visibleCandidates.find(route => route.id === savedRouteId);
+            if (matched) return matched;
+            if (!relayKey) {
+                const anyRoute = this.allModelRoutes?.('coding')?.find(route => route.id === savedRouteId);
+                if (anyRoute) return anyRoute;
+            }
+        }
+        if (relayKey && relayKey === this.activeRelayKey) {
+            const mainRoute = this.activeModelRoute?.();
+            const belongsToRelay = Boolean(mainRoute && (
+                (relayKey.startsWith('managed:') && mainRoute.kind === 'managed_gateway' && !mainRoute.automatic
+                    && this.offeringMerchantId(mainRoute.offering) === relayKey.slice('managed:'.length)
+                    && !this.relayOfferingIsFull?.(mainRoute.offering, 'coding'))
+                || (relayKey.startsWith('official:') && mainRoute.kind === 'official_connection'
+                    && (mainRoute.connection.id === relayKey.slice('official:'.length) || mainRoute.connection.providerId === relayKey.slice('official:'.length)))
+                || (relayKey === 'auto' && mainRoute.kind === 'managed_gateway' && Boolean(mainRoute.automatic))
+            ));
+            if (mainRoute && (visibleCandidates.some(route => route.id === mainRoute.id) || (!candidates.length && belongsToRelay))) {
+                return mainRoute;
+            }
+        }
+        if (relayKey) {
+            return visibleCandidates[0];
+        }
+        return this.activeModelRoute?.();
+    }
+
+    protected toggleAppPluginChatPicker(tabKey: string, kind: 'relay' | 'model', anchorSelector: string): void {
+        if (this.appPluginChatPicker?.tabKey === tabKey
+            && this.appPluginChatPicker.kind === kind
+            && this.appPluginChatPicker.anchorSelector === anchorSelector) {
+            this.closeAppPluginChatPicker(true);
+            return;
+        }
+        const relayKey = this.appPluginChatRelayKey(tabKey);
+        if (kind === 'relay') {
+            this.relaySourceQuery = '';
+            this.relayMetricTooltip = undefined;
+            if (relayKey.startsWith('official:')) this.relaySourceTab = 'my-api';
+            else if (this.relaySourceTab === 'my-api' && !relayKey.startsWith('official:')) this.relaySourceTab = 'merchant';
+            if (this.relaySourceTab !== 'my-api') void this.loadPublicMerchantPage?.();
+        } else if (relayKey.startsWith('managed:')) {
+            const merchantId = relayKey.slice('managed:'.length);
+            if (!this.merchantPickerSnapshots?.has(merchantId)) {
+                void this.loadAppPluginChatRelayCatalog(merchantId, false);
+            }
+        }
+        this.appPluginChatModelQuery = '';
+        this.appPluginChatPicker = { tabKey, kind, anchorSelector };
+        this.update();
+    }
+
+    protected closeAppPluginChatPicker(restoreFocus: boolean): void {
+        const anchorSelector = this.appPluginChatPicker?.anchorSelector;
+        this.appPluginChatPicker = undefined;
+        this.appPluginChatModelQuery = '';
+        this.relayMetricTooltip = undefined;
+        this.update();
+        if (restoreFocus && anchorSelector && typeof document !== 'undefined') {
+            requestAnimationFrame(() => document.querySelector<HTMLElement>(anchorSelector)?.focus());
+        }
+    }
+
+    protected selectAppPluginChatRelay(tabKey: string, nextRelayKey: string): void {
+        const option = this.relayPickerOptions?.('coding')?.find(item => item.key === nextRelayKey)
+            || this.relayOption?.(nextRelayKey, 'coding');
+        if (option && this.relayOptionIsFull?.(option, 'coding')) return;
+        this.appPluginChatRelays.set(tabKey, nextRelayKey);
+        const applyFirstRoute = (): void => {
+            const routes = this.councilRoutesForRelay?.(nextRelayKey, true) || [];
+            if (routes[0]) this.appPluginChatRoutes.set(tabKey, routes[0].id);
+            else this.appPluginChatRoutes.delete(tabKey);
+        };
+        applyFirstRoute();
+        if (nextRelayKey.startsWith('managed:')) {
+            const merchantId = nextRelayKey.slice('managed:'.length);
+            void this.loadAppPluginChatRelayCatalog(merchantId, false).then(() => {
+                if (this.appPluginChatRelays.get(tabKey) === nextRelayKey && !this.appPluginChatRoutes.has(tabKey)) {
+                    applyFirstRoute();
+                    this.update();
+                }
+            });
+        }
+        this.closeAppPluginChatPicker(true);
+    }
+
+    protected selectAppPluginChatRoute(tabKey: string, routeId: string): void {
+        this.appPluginChatRoutes.set(tabKey, routeId);
+        this.closeAppPluginChatPicker(true);
+    }
+
+    protected renderAppPluginChatModelControls(tabKey: string, surface: 'bar' | 'panel' | 'hub'): React.ReactNode {
+        const relayKey = this.appPluginChatRelayKey(tabKey);
+        const relayOption = this.relayPickerOptions?.('coding').find(option => option.key === relayKey) || this.relayOption?.(relayKey, 'coding');
+        const relayUnavailable = Boolean(relayKey && !relayOption);
+        const relayGold = Boolean(relayOption?.depositVerified);
+        const relayHint = relayGold ? publicMerchantDepositText(this.desktopLocale) : '';
+        const relayDepositLabel = relayGold ? ` · ${relayHint}` : '';
+        const route = this.appPluginChatRouteFor(tabKey);
+        const routeLabel = route
+            ? (this.scheduleRouteModelLabel?.(route) || this.modelDisplayName(
+                route.kind === 'official_connection' ? route.connection.model : (route.offering.canonicalModel || route.offering.providerModelCode),
+                route.kind === 'official_connection' ? route.connection.modelFamily : (route.offering.displayName || route.offering.providerModelCode)
+            ))
+            : localizeDesktopSurface(this.desktopLocale, '选择模型');
+        const safeId = `${surface}:${encodeURIComponent(tabKey)}`;
+        const relayAnchorAttr = `${safeId}:relay`;
+        const modelAnchorAttr = `${safeId}:model`;
+        const relayAnchorSelector = `[data-plugin-chat-picker-anchor="${relayAnchorAttr}"]`;
+        const modelAnchorSelector = `[data-plugin-chat-picker-anchor="${modelAnchorAttr}"]`;
+        const relayPickerOpen = this.appPluginChatPicker?.tabKey === tabKey
+            && this.appPluginChatPicker.kind === 'relay'
+            && this.appPluginChatPicker.anchorSelector === relayAnchorSelector;
+        const modelPickerOpen = this.appPluginChatPicker?.tabKey === tabKey
+            && this.appPluginChatPicker.kind === 'model'
+            && this.appPluginChatPicker.anchorSelector === modelAnchorSelector;
+        const renderRelayBtn = (anchor?: DepositVerifiedHintAnchor): React.ReactElement => (
+            <button
+                type='button'
+                className={`nmx-composer-relay-button${relayPickerOpen ? ' is-active' : ''}${relayUnavailable ? ' is-unavailable' : ''}`}
+                data-relay-trigger='plugin-chat'
+                data-plugin-chat-picker-anchor={relayAnchorAttr}
+                {...anchor}
+                aria-label={localizeDesktopSurface(this.desktopLocale, '选择中转商或自有 API') + '：' + (relayOption?.label || localizeDesktopSurface(this.desktopLocale, '未选择')) + relayDepositLabel}
+                aria-expanded={relayPickerOpen}
+                title={relayHint ? undefined : relayOption?.label || relayText(this.desktopLocale, relayUnavailable ? 'savedRelayUnavailable' : 'selectRelay')}
+                onClick={() => this.toggleAppPluginChatPicker(tabKey, 'relay', relayAnchorSelector)}
+            >
+                <i className={`codicon codicon-${relayUnavailable ? 'warning' : relayOption?.kind === 'official' ? 'verified-filled' : relayOption?.kind === 'automatic' ? 'sparkle' : 'server-environment'}`} aria-hidden='true'></i>
+                <span className={relayGold ? 'is-deposit-verified' : undefined}>{relayOption?.label || relayText(this.desktopLocale, relayUnavailable ? 'savedRelayUnavailable' : 'selectRelay')}</span>
+                <i className='codicon codicon-chevron-down' aria-hidden='true'></i>
+            </button>
+        );
+        return <>
+            {relayHint ? <DepositVerifiedHint locale={this.desktopLocale} text={relayHint}>{renderRelayBtn}</DepositVerifiedHint> : renderRelayBtn()}
+            <button
+                type='button'
+                className={`nmx-route-button${modelPickerOpen ? ' is-active' : ''}`}
+                data-plugin-chat-picker-anchor={modelAnchorAttr}
+                data-route-id={route?.id || ''}
+                aria-expanded={modelPickerOpen}
+                onClick={() => this.toggleAppPluginChatPicker(tabKey, 'model', modelAnchorSelector)}
+            >
+                <i className='codicon codicon-zap' aria-hidden='true'></i>
+                <span data-nmx-literal>{routeLabel}</span>
+                <i className='codicon codicon-chevron-down' aria-hidden='true'></i>
+            </button>
+        </>;
+    }
+
+    protected renderAppPluginChatPickerPortal(): React.ReactNode {
+        const picker = this.appPluginChatPicker;
+        if (!picker || typeof document === 'undefined') return null;
+        const { tabKey, kind, anchorSelector } = picker;
+        const activeRelayKey = this.appPluginChatRelayKey(tabKey);
+        if (kind === 'relay') {
+            const placement = this.calculateModelPickerPlacement(420, 440, anchorSelector);
+            return ReactDOM.createPortal(
+                <div
+                    className='nmx-model-picker-portal nmx-desktop-widget nmx-plugin-chat-picker-portal'
+                    dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'}
+                    lang={this.desktopLocale}
+                    onKeyDown={event => {
+                        if (event.key === 'Escape' && !event.defaultPrevented && !event.nativeEvent.isComposing) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            this.closeAppPluginChatPicker(true);
+                        }
+                    }}
+                >
+                    <div className={`nmx-model-picker-surface nmx-shell nmx-theme-${this.resolvedDesktopTheme()}`}>
+                        <section
+                            className='nmx-composer-popover nmx-route-popover nmx-model-picker-popover nmx-relay-picker-popover'
+                            data-side={placement.side}
+                            aria-label={localizeDesktopSurface(this.desktopLocale, '选择中转商')}
+                            style={{
+                                '--nmx-model-picker-max-height': `${placement.maxHeight}px`,
+                                top: `${placement.top}px`,
+                                left: `${placement.left}px`,
+                                width: `${placement.width}px`,
+                                height: `${placement.height}px`,
+                                maxHeight: `${placement.maxHeight}px`,
+                                zIndex: 12020
+                            } as React.CSSProperties}
+                        >
+                            <div className='nmx-model-picker-relay-view'>
+                                {this.renderRelayPopover({
+                                    selectedKey: activeRelayKey,
+                                    capacityScope: 'coding',
+                                    onSelect: nextKey => this.selectAppPluginChatRelay(tabKey, nextKey)
+                                })}
+                            </div>
+                        </section>
+                    </div>
+                </div>,
+                document.body
+            );
+        }
+
+        const merchantId = activeRelayKey.startsWith('managed:') ? activeRelayKey.slice('managed:'.length) : '';
+        if (merchantId && !this.merchantPickerSnapshots?.has(merchantId) && !this.appPluginChatLoadingMerchants.has(merchantId)) {
+            void this.loadAppPluginChatRelayCatalog(merchantId, false);
+        }
+        const candidates = this.councilCandidateModelsForRelay?.(activeRelayKey) || [];
+        const query = this.appPluginChatModelQuery.trim().toLowerCase();
+        const filtered = query
+            ? candidates.filter(item =>
+                item.label.toLowerCase().includes(query)
+                || item.modelId.toLowerCase().includes(query)
+                || Boolean(item.detail?.toLowerCase().includes(query)))
+            : candidates;
+        const activeRoute = this.appPluginChatRouteFor(tabKey);
+        const activeRelayOption = this.relayPickerOptions?.('coding').find(option => option.key === activeRelayKey) || this.relayOption?.(activeRelayKey, 'coding');
+        const showAutoSwitch = activeRelayOption?.kind === 'managed' || activeRoute?.kind === 'managed_gateway';
+        const autoSwitchChecked = this.appPluginChatAutoRouting.get(tabKey) ?? this.automaticRouting;
+        const switchHint = relaySwitchCopy(this.desktopLocale, activeRoute?.kind === 'managed_gateway' ? activeRoute.offering.displayName : '').hint;
+        const desiredHeight = Math.max(220, 96 + (candidates.length > 5 ? 36 : 0) + Math.max(2, filtered.length) * 32);
+        const placement = this.calculateModelPickerPlacement(desiredHeight, 280, anchorSelector);
+        const pickerConnection = activeRelayKey.startsWith('official:')
+            ? this.officialModels?.connections?.find(conn => officialConnectionRelayKey(conn.id) === activeRelayKey)
+            : undefined;
+        const relayLoading = Boolean(merchantId && (this.appPluginChatLoadingMerchants.has(merchantId)
+            || (activeRelayKey === this.activeRelayKey && this.merchantCatalogStatus === 'loading')));
+
+        return ReactDOM.createPortal(
+            <div
+                className='nmx-model-picker-portal nmx-desktop-widget nmx-plugin-chat-picker-portal'
+                dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'}
+                lang={this.desktopLocale}
+                onKeyDown={event => {
+                    if (event.key === 'Escape' && !event.defaultPrevented && !event.nativeEvent.isComposing) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        this.closeAppPluginChatPicker(true);
+                    }
+                }}
+            >
+                {merchantId && this.relayCapacityPoller && <RelayCapacityRefresh
+                    poller={this.relayCapacityPoller}
+                    merchantIds={[merchantId]}
+                    scope='coding'
+                    onSnapshot={snapshot => { this.relayCapacitySnapshot = snapshot; this.update(); }}
+                />}
+                <div className={`nmx-model-picker-surface nmx-shell nmx-theme-${this.resolvedDesktopTheme()}`}>
+                    <section
+                        className='nmx-composer-popover nmx-route-popover nmx-model-picker-popover nmx-model-only-popover'
+                        data-side={placement.side}
+                        aria-label={localizeDesktopSurface(this.desktopLocale, '选择模型')}
+                        style={{
+                            '--nmx-model-picker-max-height': `${placement.maxHeight}px`,
+                            top: `${placement.top}px`,
+                            left: `${placement.left}px`,
+                            width: `${placement.width}px`,
+                            height: `${placement.height}px`,
+                            maxHeight: `${placement.maxHeight}px`,
+                            zIndex: 12020
+                        } as React.CSSProperties}
+                    >
+                        <header>
+                            <strong>{localizeDesktopSurface(this.desktopLocale, '选择模型')}</strong>
+                            {showAutoSwitch && <label className='nmx-model-picker-auto-switch' data-help={switchHint} title={switchHint}>
+                                <input
+                                    type='checkbox'
+                                    checked={autoSwitchChecked}
+                                    aria-label={automaticOptimalText(this.desktopLocale)}
+                                    onChange={event => {
+                                        this.appPluginChatAutoRouting.set(tabKey, event.currentTarget.checked);
+                                        this.update();
+                                    }}
+                                />
+                                <span className='nmx-checkbox-indicator' aria-hidden='true'></span>
+                                <span>{automaticOptimalText(this.desktopLocale)}</span>
+                            </label>}
+                            <button
+                                type='button'
+                                disabled={relayLoading || this.catalogLoading}
+                                aria-label={localizeDesktopSurface(this.desktopLocale, '刷新')}
+                                title={localizeDesktopSurface(this.desktopLocale, '刷新')}
+                                onClick={() => void (pickerConnection
+                                    ? this.refreshOfficialConnectionModels(pickerConnection)
+                                    : merchantId
+                                        ? this.loadAppPluginChatRelayCatalog(merchantId, true)
+                                        : this.loadCatalog())}
+                            >
+                                <i className='codicon codicon-refresh' aria-hidden='true'></i>
+                            </button>
+                        </header>
+                        {(candidates.length > 5 || Boolean(query)) && <div className='nmx-model-picker-search'>
+                            <i className='codicon codicon-search' aria-hidden='true'></i>
+                            <ImeInput
+                                value={this.appPluginChatModelQuery}
+                                placeholder={modelPickerListText(this.desktopLocale, 'search')}
+                                aria-label={modelPickerListText(this.desktopLocale, 'search')}
+                                onChange={event => {
+                                    this.appPluginChatModelQuery = event.currentTarget.value;
+                                    this.update();
+                                }}
+                            />
+                        </div>}
+                        {filtered.length > 0 ? (
+                            <div className='nmx-model-picker-list' role='listbox' aria-label={localizeDesktopSurface(this.desktopLocale, '选择模型')}>
+                                {filtered.map(candidate => {
+                                    const selected = activeRoute?.id === candidate.routeId;
+                                    return (
+                                        <div key={candidate.routeId} className={`nmx-model-option${selected ? ' is-selected' : ''}`} data-model-id={candidate.modelId}>
+                                            <button
+                                                type='button'
+                                                role='option'
+                                                aria-selected={selected}
+                                                onClick={() => this.selectAppPluginChatRoute(tabKey, candidate.routeId)}
+                                            >
+                                                <span>
+                                                    <strong data-nmx-literal>{candidate.label}</strong>
+                                                    {candidate.variantTag && <small className='nmx-model-price-variant' dir='ltr'>{candidate.variantTag}</small>}
+                                                    {candidate.authenticity !== undefined && <ModelAuthenticityTag locale={this.desktopLocale} value={candidate.authenticity.value} />}
+                                                </span>
+                                                {selected && <i className='codicon codicon-check' aria-hidden='true' />}
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className='nmx-model-picker-list nmx-model-picker-empty-list'>
+                                {relayLoading ? (
+                                    <div className='nmx-merchant-catalog-status is-centered' role='status'>
+                                        <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />
+                                        <span>{relayText(this.desktopLocale, 'modelsLoading')}</span>
+                                    </div>
+                                ) : (() => {
+                                    const pickerRelayFull = !query
+                                        && Boolean(merchantId)
+                                        && Boolean(this.relayMerchantIdIsFull?.(merchantId, 'coding'));
+                                    const relayAnchor = anchorSelector.replace(/:model"\]$/, ':relay"]');
+                                    return (
+                                        <div className='nmx-route-empty' role={pickerRelayFull ? 'status' : undefined}>
+                                            <span>
+                                                {query
+                                                    ? modelPickerListText(this.desktopLocale, 'noMatch')
+                                                    : pickerRelayFull
+                                                        ? relayText(this.desktopLocale, 'relayFull')
+                                                        : relayText(this.desktopLocale, activeRelayKey ? 'noSourceModels' : 'chooseSourceFirst')}
+                                            </span>
+                                            {!query && (
+                                                <button type='button' onClick={() => this.toggleAppPluginChatPicker(tabKey, 'relay', relayAnchor)}>
+                                                    {relayText(this.desktopLocale, 'selectRelay')}
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
+                    </section>
+                </div>
+            </div>,
+            document.body
+        );
+    }
+
+    protected renderAppPluginChatMarkdown = (markdown: string, _key: string): React.ReactNode => (
+        <ConversationMarkdown
+            markdown={normalizeConversationMarkdown(markdown)}
+            className='nmx-assistant-markdown'
+            locale={this.desktopLocale}
+            tokenizer={conversationCodeTokenizer}
+            onRender={this.decorateConversationContent}
+            onCopyCode={this.copyConversationCode}
+        />
+    );
+
     protected toggleAppPluginChat(key: string): void {
-        if (this.appPluginChatOpen.has(key)) this.appPluginChatOpen.delete(key);
-        else {
+        if (this.appPluginChatOpen.has(key)) {
+            this.appPluginChatOpen.delete(key);
+            if (this.appPluginChatPicker?.tabKey === key) this.closeAppPluginChatPicker(false);
+        } else {
             this.appPluginChatOpen.add(key);
             void this.loadAppPluginChoices?.();
         }
         this.update();
     }
 
+    /**
+     * Evicts oldest *completed* turn pairs when exceeding `maxMessages` (60), while strictly preserving
+     * any in-flight `streaming` / `pending` assistant placeholder and its paired `replyToId` user turn.
+     */
+    protected trimAppPluginChatMessages(list: readonly AppPluginChatMessage[], maxMessages = 60): readonly AppPluginChatMessage[] {
+        if (list.length <= maxMessages) return list;
+        const activeUserIds = new Set<string>();
+        for (const msg of list) {
+            if ((msg.streaming || msg.pending) && msg.replyToId) activeUserIds.add(msg.replyToId);
+        }
+        const next = [...list];
+        let idx = 0;
+        while (next.length > maxMessages && idx < next.length) {
+            const candidate = next[idx];
+            if (candidate.streaming || candidate.pending || activeUserIds.has(candidate.id)) {
+                idx++;
+                continue;
+            }
+            next.splice(idx, 1);
+            if (candidate.role === 'user') {
+                const replyIdx = next.findIndex(item => item.role === 'assistant' && item.replyToId === candidate.id && !item.streaming && !item.pending);
+                if (replyIdx >= 0) {
+                    if (replyIdx < idx) idx--;
+                    next.splice(replyIdx, 1);
+                }
+            }
+        }
+        return next;
+    }
+
+    /** Updates ONLY the target `assistantMsgId` bubble in place (`messages.map(m => m.id === assistantMsgId ? ... : m)`). */
+    protected patchAppPluginChatAssistant(
+        key: string,
+        assistantMsgId: string,
+        updater: (current: AppPluginChatMessage) => AppPluginChatMessage
+    ): void {
+        const list = this.appPluginChatMessages.get(key);
+        if (!list || !list.some(item => item.id === assistantMsgId)) return;
+        this.appPluginChatMessages.set(
+            key,
+            list.map(item => item.id === assistantMsgId ? updater(item) : item)
+        );
+    }
+
+    protected async stopAppPluginChatMessage(key: string, assistantMsgId: string): Promise<void> {
+        const active = this.appPluginChatActiveRequests.get(assistantMsgId);
+        if (active) {
+            active.controller.abort();
+            this.appPluginChatActiveRequests.delete(assistantMsgId);
+            await this.platformService?.cancelPluginChat?.(active.requestId).catch(() => undefined);
+        }
+        const stoppedNote = this.desktopLocale.startsWith('zh') ? '已停止生成' : 'Stopped';
+        this.patchAppPluginChatAssistant(key, assistantMsgId, msg => ({
+            ...msg,
+            text: msg.text || stoppedNote,
+            streaming: false,
+            pending: false
+        }));
+        this.update();
+    }
+
+    protected clearAppPluginChatMessages(key: string): void {
+        for (const [assistantMsgId, active] of [...this.appPluginChatActiveRequests.entries()]) {
+            if (active.tabKey !== key) continue;
+            active.controller.abort();
+            this.appPluginChatActiveRequests.delete(assistantMsgId);
+            void this.platformService?.cancelPluginChat?.(active.requestId).catch(() => undefined);
+        }
+        this.appPluginChatMessages.delete(key);
+        this.update();
+    }
+
+    /**
+     * Direct immediate concurrent LLM dispatch for in-tab `AppPluginChatPanel`:
+     * 1. Never queues or blocks behind other in-flight turns (unlike main conversation's `followUpQueue`).
+     * 2. Atomically pre-allocates `[userMsg, assistantPlaceholder]` synchronously BEFORE any `await` (LobeChat / Vercel AI SDK pattern).
+     * 3. Snapshots ONLY completed `(user, assistant)` pairs for upstream `history`, excluding any mid-stream / pending / errored turns.
+     * 4. Routes all streaming deltas, tool statuses, final output, and errors strictly by exact `assistantMsgId`.
+     */
     protected async sendAppPluginChatMessage(
         key: string,
         conversationId: string,
         tab: ConversationVisualTab,
         request: AppPluginChatRequest
     ): Promise<void> {
-        if (this.appPluginChatBusy.has(key)) return;
         const zh = this.desktopLocale.startsWith('zh');
+        const priorMessages = this.appPluginChatMessages.get(key) || [];
+        const history: { readonly role: 'user' | 'assistant'; readonly content: string }[] = [];
+        const consumedAssistantIds = new Set<string>();
+        for (let i = 0; i < priorMessages.length; i++) {
+            const msg = priorMessages[i];
+            if (msg.role !== 'user' || !msg.text.trim() || msg.streaming || msg.pending || msg.error) continue;
+            const pairedAssistant = priorMessages.find(candidate =>
+                candidate.role === 'assistant' && !consumedAssistantIds.has(candidate.id) && candidate.replyToId === msg.id
+            ) || (priorMessages[i + 1]?.role === 'assistant'
+                && !priorMessages[i + 1]?.replyToId
+                && !consumedAssistantIds.has(priorMessages[i + 1].id)
+                ? priorMessages[i + 1]
+                : undefined);
+            if (!pairedAssistant || pairedAssistant.streaming || pairedAssistant.pending || pairedAssistant.error || !pairedAssistant.text.trim()) {
+                continue;
+            }
+            consumedAssistantIds.add(pairedAssistant.id);
+            history.push({ role: 'user', content: msg.text });
+            history.push({ role: 'assistant', content: pairedAssistant.text });
+        }
+
+        if (request.model) this.appPluginChatModels.set(key, request.model);
+        if (request.relayKey) this.appPluginChatRelays.set(key, request.relayKey);
+        if (request.routeId) this.appPluginChatRoutes.set(key, request.routeId);
+
+        const chosenRelayKey = this.appPluginChatRelayKey?.(key) ?? (this.appPluginChatRelays?.get(key) || this.activeRelayKey || '');
+        let activeRoute = this.appPluginChatRouteFor?.(key);
+        let routeDisplayLabel = activeRoute
+            ? (this.scheduleRouteModelLabel?.(activeRoute) || (activeRoute.kind === 'official_connection' ? activeRoute.connection.model : activeRoute.offering.displayName))
+            : (request.model?.label || request.model?.model || '');
+
+        const now = Date.now();
+        const entropy = Math.random().toString(36).slice(2, 8);
+        const userMsgId = `u-${now}-${entropy}`;
+        const assistantMsgId = `a-${now}-${entropy}`;
+        const requestId = `plugin-chat-${now}-${entropy}`;
+
         const userMsg: AppPluginChatMessage = {
-            id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            id: userMsgId,
             role: 'user',
             text: request.text,
-            createdAt: Date.now(),
+            createdAt: now,
             modality: request.modality,
             ...(request.attachments?.length ? { attachments: request.attachments } : {})
         };
-        const current = this.appPluginChatMessages.get(key) || [];
-        this.appPluginChatMessages.set(key, [...current, userMsg].slice(-60));
-        if (request.model) this.appPluginChatModels.set(key, request.model);
-        this.appPluginChatBusy.add(key);
+        const assistantPlaceholder: AppPluginChatMessage = {
+            id: assistantMsgId,
+            role: 'assistant',
+            replyToId: userMsgId,
+            requestId,
+            text: '',
+            createdAt: now + 1,
+            ...(routeDisplayLabel ? { model: routeDisplayLabel, routeLabel: routeDisplayLabel } : {}),
+            modality: request.modality || 'auto',
+            streaming: true,
+            pending: true
+        };
+
+        this.appPluginChatMessages.set(key, this.trimAppPluginChatMessages([...priorMessages, userMsg, assistantPlaceholder]));
+        const controller = new AbortController();
+        this.appPluginChatActiveRequests.set(assistantMsgId, { tabKey: key, requestId, controller });
         this.update();
 
         try {
-            const bridge = window.nextmuxDesktop;
-            const run = this.appPluginRunFor(conversationId, tab.id);
-            const plugin = (request.pluginId && this.appPlugins.find(p => p.id === request.pluginId))
-                || (run && this.appPlugins.find(p => p.id === run.pluginId))
-                || pluginsForApp(this.appPlugins, appTabIdentity(tab), navigator.platform, tab.title, tab.target)[0];
-            const model = request.model || this.appPluginChatModels.get(key) || plugin?.model
+            if (!activeRoute && chosenRelayKey.startsWith('managed:')) {
+                const merchantId = chosenRelayKey.slice('managed:'.length);
+                await this.loadAppPluginChatRelayCatalog?.(merchantId, false);
+                if (controller.signal.aborted) return;
+                activeRoute = this.appPluginChatRouteFor?.(key);
+                if (activeRoute) {
+                    routeDisplayLabel = this.scheduleRouteModelLabel?.(activeRoute)
+                        || (activeRoute.kind === 'official_connection' ? activeRoute.connection.model : activeRoute.offering.displayName);
+                    if (routeDisplayLabel) {
+                        this.patchAppPluginChatAssistant(key, assistantMsgId, msg => !msg.streaming ? msg : ({
+                            ...msg,
+                            model: routeDisplayLabel,
+                            routeLabel: routeDisplayLabel
+                        }));
+                        this.update();
+                    }
+                }
+            }
+            if (!activeRoute && chosenRelayKey && !chosenRelayKey.startsWith('official:') && !request.model) {
+                const merchantId = chosenRelayKey.startsWith('managed:') ? chosenRelayKey.slice('managed:'.length) : '';
+                const isFull = Boolean(merchantId && this.relayMerchantIdIsFull?.(merchantId, 'coding'));
+                const msg = typeof relayText === 'function'
+                    ? relayText(this.desktopLocale, isFull ? 'relayFull' : 'noSourceModels')
+                    : (isFull ? 'Relay merchant is at capacity' : 'No models available for selected relay');
+                throw new Error(msg);
+            }
+
+            const bridge = typeof window !== 'undefined' ? window.nextmuxDesktop : undefined;
+            const run = this.appPluginRunFor?.(conversationId, tab.id);
+            const plugin = (request.pluginId && this.appPlugins?.find(p => p.id === request.pluginId))
+                || (run && this.appPlugins?.find(p => p.id === run.pluginId))
+                || (this.appPlugins ? pluginsForApp(this.appPlugins, appTabIdentity(tab), typeof navigator !== 'undefined' ? navigator.platform : 'MacIntel', tab.title, tab.target)[0] : undefined);
+            const fallbackModel = request.model || this.appPluginChatModels.get(key) || plugin?.model
                 || { source: 'nextmux' as const, model: '~typesafe/jev-latest', label: 'Platform AI', images: true };
 
             let frameDataUrl = '';
+            let frameBase64 = '';
+            let frameMime: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' = 'image/jpeg';
             if (request.includeScreenshot !== false && tab.windowRef && typeof bridge?.computerWindowSnapshot === 'function') {
                 const snap = await bridge.computerWindowSnapshot(conversationId, tab.windowRef.pid, tab.windowRef.windowId, 1280, { source: 'user' }).catch(() => undefined);
-                if (snap?.ok && snap.data) frameDataUrl = `data:${snap.mimeType || 'image/jpeg'};base64,${snap.data}`;
+                if (snap?.ok && snap.data) {
+                    const mime = (snap.mimeType || 'image/jpeg').toLowerCase();
+                    frameMime = mime === 'image/png' || mime === 'image/webp' || mime === 'image/gif' ? mime : 'image/jpeg';
+                    frameBase64 = snap.data;
+                    frameDataUrl = `data:${frameMime};base64,${snap.data}`;
+                }
             }
+            if (controller.signal.aborted) return;
 
             const toolCalls: { readonly name: string; readonly status?: string; readonly output?: string }[] = [];
+            const mcpContextSnippets: string[] = [];
             if (request.includeContext !== false) {
                 if (frameDataUrl) toolCalls.push({ name: 'tabs.screenshot', status: 'ok', output: `${tab.title || tab.target}` });
                 if (run?.signals && Object.keys(run.signals).length > 0) {
                     toolCalls.push({ name: 'plugins.signals', status: 'ok', output: `${Object.keys(run.signals).length} signals` });
                 }
+                // Passive/read-only MCP declaration metadata ONLY — never blindly execute `mcp.tools[0]` or overwrite `run.goal`.
                 for (const mcp of plugin?.summary?.mcp || []) {
-                    const toolName = mcp.tools?.[0] || 'status';
-                    let mcpOutput = mcp.tools?.join(', ') || 'ready';
-                    let mcpStatus = 'ok';
-                    if (typeof bridge?.callAppPluginMcp === 'function' && plugin) {
-                        const mcpRes = await bridge.callAppPluginMcp({
-                            pluginId: plugin.id,
-                            ...(run?.runId ? { runId: run.runId } : {}),
-                            serverId: mcp.id,
-                            tool: toolName,
-                            arguments: { prompt: request.text, app: tab.title || tab.target }
-                        }).catch(() => undefined);
-                        if (mcpRes?.ok && mcpRes.result !== undefined) {
-                            mcpOutput = typeof mcpRes.result === 'string' ? mcpRes.result.slice(0, 120) : JSON.stringify(mcpRes.result).slice(0, 120);
-                        } else if (mcpRes?.ok === false && mcpRes.error) {
-                            mcpOutput = mcp.tools?.join(', ') || mcpRes.error;
-                        }
-                    } else if (run && !run.ended && typeof bridge?.commandAppPlugin === 'function') {
-                        const cmdRes = await bridge.commandAppPlugin(run.runId, {
-                            mcp: { serverId: mcp.id, tool: toolName, arguments: { prompt: request.text } }
-                        }).catch(() => undefined);
-                        if (cmdRes?.ok && cmdRes.mcpResult !== undefined) {
-                            mcpStatus = 'ok';
-                        }
-                    }
-                    toolCalls.push({ name: `mcp:${mcp.name || mcp.id}`, status: mcpStatus, output: mcpOutput });
+                    const declaredTools = mcp.tools?.filter(Boolean) || [];
+                    const mcpLabel = mcp.name || mcp.id;
+                    const summaryText = declaredTools.length > 0 ? declaredTools.join(', ') : 'declared';
+                    mcpContextSnippets.push(`Declared MCP server [${mcpLabel}]: tools=[${summaryText}]`);
+                    toolCalls.push({ name: `mcp:${mcpLabel}`, status: 'ok', output: summaryText.slice(0, 120) });
                 }
             }
-            if (run && !run.ended && typeof bridge?.commandAppPlugin === 'function' && request.text.trim()) {
-                await bridge.commandAppPlugin(run.runId, { goal: request.text.trim() }).catch(() => undefined);
-                toolCalls.push({ name: 'plugins.command', status: 'ok', output: run.name });
+            if (controller.signal.aborted) return;
+
+            if (toolCalls.length > 0) {
+                this.patchAppPluginChatAssistant(key, assistantMsgId, msg => !msg.streaming ? msg : ({
+                    ...msg,
+                    toolCalls: [...toolCalls]
+                }));
+                this.update();
+            }
+
+            let agentRoute: DesktopAgentRunRequest['route'] | undefined;
+            let managedRouteForPolicy: ManagedGatewayRoute | undefined;
+            if (activeRoute?.kind === 'managed_gateway') {
+                const managed = this.managedModelRoute?.(activeRoute);
+                if (managed) {
+                    managedRouteForPolicy = managed;
+                    agentRoute = {
+                        kind: 'managed_gateway',
+                        route: managed,
+                        conversationId: `plugin-chat-${conversationId}-${tab.id}`
+                    };
+                }
+            } else if (activeRoute?.kind === 'official_connection') {
+                agentRoute = {
+                    kind: 'official_connection',
+                    connectionId: activeRoute.connection.id,
+                    model: activeRoute.connection.model
+                };
+            } else if (fallbackModel.source === 'connection' && fallbackModel.connectionId) {
+                agentRoute = {
+                    kind: 'official_connection',
+                    connectionId: fallbackModel.connectionId,
+                    model: fallbackModel.model
+                };
+            } else if (fallbackModel.source === 'local' && fallbackModel.endpoint) {
+                agentRoute = {
+                    kind: 'official_connection',
+                    connectionId: `local:${fallbackModel.protocol || 'openai'}:${fallbackModel.endpoint}`,
+                    model: fallbackModel.model
+                };
             }
 
             let replyText = '';
-            const reqId = `plugin-chat-${Date.now()}`;
-            if (frameDataUrl && (model.source === 'connection' || model.source === 'local') && this.platformService?.describeAppPluginFrame) {
-                const desc = await this.platformService.describeAppPluginFrame({
-                    requestId: reqId,
-                    deadlineAt: Date.now() + 25_000,
-                    vision: {
-                        source: model.source,
-                        model: model.model,
-                        ...(model.connectionId ? { connectionId: model.connectionId, connectionLabel: model.connectionLabel } : {}),
-                        ...(model.endpoint ? { endpoint: model.endpoint } : {}),
-                        ...(model.protocol === 'ollama' || model.protocol === 'openai' ? { protocol: model.protocol } : {})
-                    },
-                    image: frameDataUrl,
-                    hints: request.text.slice(0, 500)
-                }).catch(() => undefined);
-                if (desc?.ok && desc.text) replyText = desc.text;
-            }
+            let replyThinking = '';
+            let resolvedRouteLabel = routeDisplayLabel || fallbackModel.label || fallbackModel.model;
 
-            if (!replyText && this.platformService?.decideAppPlugin) {
-                const decision = await this.platformService.decideAppPlugin({
-                    requestId: reqId,
-                    deadlineAt: Date.now() + 20_000,
-                    model,
-                    state: JSON.stringify({
-                        app: tab.title || tab.target,
-                        goal: request.text,
-                        ...(request.includeContext !== false && run?.signals ? { signals: run.signals } : {})
-                    }),
-                    questions: {
-                        reply: {
-                            type: 'choice',
-                            question: request.text,
-                            options: ['continue', 'inspect', 'pause']
+            if (agentRoute && typeof this.platformService?.runAgent === 'function') {
+                const agentAttachments: AgentMessageAttachment[] = [];
+                if (frameBase64) {
+                    agentAttachments.push({
+                        kind: 'image',
+                        name: `${(tab.target || tab.title || 'window').replace(/\W+/g, '_')}.jpg`,
+                        mimeType: frameMime,
+                        dataBase64: frameBase64
+                    });
+                }
+                for (const att of request.attachments || []) {
+                    if (att.content) {
+                        agentAttachments.push({ kind: 'text', name: att.name, content: att.content });
+                    } else if (att.dataUrl) {
+                        const comma = att.dataUrl.indexOf(',');
+                        const meta = comma >= 0 ? att.dataUrl.slice(5, comma) : '';
+                        const rawB64 = comma >= 0 ? att.dataUrl.slice(comma + 1) : '';
+                        const mime = (meta.split(';')[0] || att.mimeType || 'application/octet-stream').toLowerCase();
+                        if (!rawB64) continue;
+                        if (mime === 'image/png' || mime === 'image/jpeg' || mime === 'image/webp' || mime === 'image/gif') {
+                            agentAttachments.push({ kind: 'image', name: att.name, mimeType: mime, dataBase64: rawB64 });
+                        } else {
+                            agentAttachments.push({ kind: 'file', name: att.name, mimeType: mime, dataBase64: rawB64 });
                         }
-                    },
-                    ...(frameDataUrl && model.images ? { images: [frameDataUrl] } : {})
-                }).catch(() => undefined);
-                const ans = (decision?.payload as { answers?: Record<string, { choice?: string; confidence?: number }> } | undefined)?.answers?.reply;
-                if (decision?.ok && ans) {
+                    }
+                }
+
+                const instructionLines = [
+                    `You are the interactive AI assistant inside the controlled desktop application tab "${tab.title || tab.target || 'App'}" in NextMux.`,
+                    plugin?.summary ? `Active app skill plugin: "${plugin.summary.name}" (${plugin.id}).` : '',
+                    request.includeContext !== false && run?.signals && Object.keys(run.signals).length > 0
+                        ? `Live window signals JSON:\n${JSON.stringify(run.signals, null, 2)}`
+                        : '',
+                    mcpContextSnippets.length > 0 ? `Live MCP tool context:\n${mcpContextSnippets.join('\n')}` : '',
+                    zh ? '请使用清晰、专业的中文直接回答（除非用户使用其他语言提问），支持使用 Markdown 与代码块。' : 'Respond clearly and concisely using Markdown where helpful.'
+                ].filter(Boolean);
+
+                let streamDone = false;
+                const pollStream = async (): Promise<void> => {
+                    if (typeof this.platformService?.pollPluginChatStream !== 'function') return;
+                    let seq = 0;
+                    while (!streamDone && !controller.signal.aborted) {
+                        const snap = await this.platformService.pollPluginChatStream(requestId, seq, 1200).catch(() => undefined);
+                        if (!snap || controller.signal.aborted || streamDone) break;
+                        seq = snap.seq;
+                        if (snap.text || snap.thinking) {
+                            this.patchAppPluginChatAssistant(key, assistantMsgId, msg => !msg.streaming ? msg : ({
+                                ...msg,
+                                ...(snap.text ? { text: snap.text } : {}),
+                                ...(snap.thinking ? { thinking: snap.thinking } : {}),
+                                pending: !snap.text && !snap.thinking
+                            }));
+                            this.update();
+                        }
+                        if (snap.done) break;
+                    }
+                };
+                const streamPromise = pollStream();
+
+                const autoSwitch = this.appPluginChatAutoRouting?.get(key) ?? Boolean(this.automaticRouting);
+                const pluginSwitchSource: AutomaticRelaySource = !autoSwitch ? 'off' : chosenRelayKey === 'auto' ? 'auto_best' : 'user';
+                const result = await this.platformService.runAgent({
+                    route: agentRoute,
+                    ...(managedRouteForPolicy && typeof sameModelRelayPolicy === 'function' ? {
+                        switchPolicy: sameModelRelayPolicy(
+                            managedRouteForPolicy,
+                            pluginSwitchSource,
+                            this.modelSwitchSettings?.get?.(managedRouteForPolicy)
+                        )
+                    } : {}),
+                    workbench: 'coding',
+                    toolScope: 'plugin-chat',
+                    pluginChatRequestId: requestId,
+                    pluginChatInstructions: instructionLines.join('\n\n'),
+                    prompt: request.text || (zh ? '请结合当前应用画面与状态进行分析。' : 'Analyze the current application window and state.'),
+                    history,
+                    ...(agentAttachments.length ? { attachments: agentAttachments } : {}),
+                    workspaceRoot: this.activeWorkspaceRoot || '',
+                    conversationId: `plugin-chat-${conversationId}-${tab.id}`,
+                    permissionMode: 'read_only'
+                });
+                streamDone = true;
+                await streamPromise.catch(() => undefined);
+
+                if (controller.signal.aborted) return;
+
+                if (result.status === 'cancelled') {
+                    this.patchAppPluginChatAssistant(key, assistantMsgId, msg => ({
+                        ...msg,
+                        text: msg.text || result.finalText || (zh ? '已停止生成' : 'Stopped'),
+                        streaming: false,
+                        pending: false
+                    }));
+                    return;
+                }
+
+                replyText = result.finalText || '';
+                const reasoningParts = (result.events || [])
+                    .filter((ev): ev is Extract<AgentRunEvent, { readonly type: 'provider_reasoning' }> => ev.type === 'provider_reasoning' && ev.visibility === 'visible' && Boolean(ev.content?.trim()))
+                    .map(ev => ev.content.trim());
+                if (reasoningParts.length > 0) replyThinking = reasoningParts.join('\n\n');
+                if (result.route) {
+                    resolvedRouteLabel = `${result.route.switchReceipt ? '⇄ ' : ''}${result.route.model || result.route.modelFamily}${result.route.providerName ? ` · ${result.route.providerName}` : ''}`;
+                }
+                if (result.billing?.kind === 'platform') void this.loadAccountOverview?.(true);
+            } else {
+                if (frameDataUrl && (fallbackModel.source === 'connection' || fallbackModel.source === 'local') && this.platformService?.describeAppPluginFrame) {
+                    const desc = await this.platformService.describeAppPluginFrame({
+                        requestId,
+                        deadlineAt: Date.now() + 25_000,
+                        vision: {
+                            source: fallbackModel.source,
+                            model: fallbackModel.model,
+                            ...(fallbackModel.connectionId ? { connectionId: fallbackModel.connectionId, connectionLabel: fallbackModel.connectionLabel } : {}),
+                            ...(fallbackModel.endpoint ? { endpoint: fallbackModel.endpoint } : {}),
+                            ...(fallbackModel.protocol === 'ollama' || fallbackModel.protocol === 'openai' ? { protocol: fallbackModel.protocol } : {})
+                        },
+                        image: frameDataUrl,
+                        hints: request.text.slice(0, 500)
+                    }).catch(() => undefined);
+                    if (desc?.ok && desc.text) replyText = desc.text;
+                }
+                if (!replyText && this.platformService?.decideAppPlugin) {
+                    const decision = await this.platformService.decideAppPlugin({
+                        requestId,
+                        deadlineAt: Date.now() + 20_000,
+                        model: fallbackModel,
+                        state: JSON.stringify({
+                            app: tab.title || tab.target,
+                            goal: request.text,
+                            ...(request.includeContext !== false && run?.signals ? { signals: run.signals } : {})
+                        }),
+                        questions: {
+                            reply: {
+                                type: 'choice',
+                                question: request.text,
+                                options: ['continue', 'inspect', 'pause']
+                            }
+                        },
+                        ...(frameDataUrl && fallbackModel.images ? { images: [frameDataUrl] } : {})
+                    }).catch(() => undefined);
+                    const ans = (decision?.payload as { answers?: Record<string, { choice?: string; confidence?: number }> } | undefined)?.answers?.reply;
+                    if (decision?.ok && ans) {
+                        replyText = zh
+                            ? `[${fallbackModel.label || fallbackModel.model}] 针对「${tab.title || tab.target}」已完成分析与决策：建议动作「${ans.choice || 'continue'}」（置信度 ${Math.round((ans.confidence ?? 0.9) * 100)}%）。\n指令内容：${request.text}`
+                            : `[${fallbackModel.label || fallbackModel.model}] Analyzed "${tab.title || tab.target}": recommended "${ans.choice || 'continue'}" (${Math.round((ans.confidence ?? 0.9) * 100)}% confidence).\nPrompt: ${request.text}`;
+                    }
+                }
+                if (!replyText) {
+                    const sigSummary = request.includeContext !== false && run?.signals && Object.keys(run.signals).length
+                        ? JSON.stringify(run.signals)
+                        : (zh ? '实时就绪' : 'Live & ready');
                     replyText = zh
-                        ? `[${model.label || model.model}] 针对「${tab.title || tab.target}」已完成分析与决策：建议动作「${ans.choice || 'continue'}」（置信度 ${Math.round((ans.confidence ?? 0.9) * 100)}%）。\n指令内容：${request.text}`
-                        : `[${model.label || model.model}] Analyzed "${tab.title || tab.target}": recommended "${ans.choice || 'continue'}" (${Math.round((ans.confidence ?? 0.9) * 100)}% confidence).\nPrompt: ${request.text}`;
+                        ? `[${fallbackModel.label || fallbackModel.model}] 已接收「${tab.title || tab.target}」的指令：「${request.text}」。\n• 窗口状态：${sigSummary}`
+                        : `[${fallbackModel.label || fallbackModel.model}] Processed command for "${tab.title || tab.target}": "${request.text}".\n• Window state: ${sigSummary}`;
                 }
             }
 
-            if (!replyText) {
-                const sigSummary = request.includeContext !== false && run?.signals && Object.keys(run.signals).length
-                    ? JSON.stringify(run.signals)
-                    : (zh ? '实时就绪' : 'Live & ready');
-                replyText = zh
-                    ? `[${model.label || model.model}] 已接收「${tab.title || tab.target}」的指令：「${request.text}」。\n• 窗口状态：${ sigSummary }\n• 已开放能力：实时画面读取、键鼠控制、MCP 工具协同及多模态文件输出。`
-                    : `[${model.label || model.model}] Processed command for "${tab.title || tab.target}": "${request.text}".\n• Window state: ${sigSummary}\n• Capabilities active: live screen, input control, MCP tools, and multimodal output.`;
-            }
+            if (controller.signal.aborted) return;
 
             const generatedAttachments: AppPluginChatAttachment[] = [];
             const wantModality = request.modality || 'auto';
-            const lowerPrompt = request.text.toLowerCase();
-            const wantImage = wantModality === 'image' || (wantModality === 'auto' && /图片|图像|截图|画面|image|picture|screenshot|png|svg/i.test(lowerPrompt));
-            const wantVideo = wantModality === 'video' || (wantModality === 'auto' && /视频|动画|录屏|分镜|video|clip|mp4|webm/i.test(lowerPrompt));
-            const wantAudio = wantModality === 'audio' || (wantModality === 'auto' && /音频|语音|朗读|声音|audio|voice|speech|wav|mp3/i.test(lowerPrompt));
-            const wantFile = wantModality === 'file' || (wantModality === 'auto' && /文件|脚本|配置|导出|代码|json|script|config|export|csv/i.test(lowerPrompt));
-
-            if (wantImage) {
-                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0f172a"/><stop offset="100%" stop-color="#1e3a8a"/></linearGradient></defs><rect width="640" height="360" rx="16" fill="url(#g)"/><text x="32" y="64" fill="#38bdf8" font-family="system-ui,sans-serif" font-size="22" font-weight="700">${(tab.title || 'App').replace(/[<>&"]/g, '')} · AI Visual Output</text><text x="32" y="112" fill="#e2e8f0" font-family="system-ui,sans-serif" font-size="16">${request.text.slice(0, 48).replace(/[<>&"]/g, '')}</text><rect x="32" y="144" width="576" height="176" rx="10" fill="rgba(255,255,255,0.06)" stroke="rgba(56,189,248,0.35)"/><text x="52" y="188" fill="#94a3b8" font-family="monospace" font-size="14">Model: ${(model.label || model.model).replace(/[<>&"]/g, '')}</text><text x="52" y="220" fill="#94a3b8" font-family="monospace" font-size="14">Window: PID ${tab.windowRef?.pid ?? 0} · WID ${tab.windowRef?.windowId ?? 0}</text></svg>`;
+            if (wantModality === 'image' && frameDataUrl) {
                 generatedAttachments.push({
                     id: `img-${Date.now()}`,
                     kind: 'image',
-                    name: `${(tab.target || tab.title || 'app').replace(/\W+/g, '_')}-visual.png`,
-                    mimeType: frameDataUrl ? 'image/png' : 'image/svg+xml',
-                    dataUrl: frameDataUrl || `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+                    name: `${(tab.target || tab.title || 'app').replace(/\W+/g, '_')}-frame.jpg`,
+                    mimeType: frameMime,
+                    dataUrl: frameDataUrl
                 });
-            }
-            if (wantVideo) {
-                const videoPayload = JSON.stringify({
-                    app: tab.title || tab.target,
-                    prompt: request.text,
-                    model: model.model,
-                    frames: frameDataUrl ? [frameDataUrl] : [],
-                    durationSec: 4,
-                    createdAt: new Date().toISOString()
-                }, null, 2);
-                generatedAttachments.push({
-                    id: `vid-${Date.now()}`,
-                    kind: 'video',
-                    name: `${(tab.target || tab.title || 'app').replace(/\W+/g, '_')}-preview.webm`,
-                    mimeType: 'video/webm',
-                    url: frameDataUrl || `data:application/json;charset=utf-8,${encodeURIComponent(videoPayload)}`
-                });
-            }
-            if (wantAudio) {
+            } else if (wantModality === 'audio' && replyText) {
                 const speech = await this.platformService?.synthesizeSpeech?.(replyText.slice(0, 240), this.desktopLocale).catch(() => undefined);
                 if (speech?.dataBase64) {
                     generatedAttachments.push({
@@ -48578,12 +50411,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         dataUrl: `data:${speech.mimeType};base64,${speech.dataBase64}`
                     });
                 }
-            }
-            if (wantFile) {
+            } else if (wantModality === 'file') {
                 const exportContent = JSON.stringify({
                     app: { title: tab.title, target: tab.target, appId: tab.appId, windowRef: tab.windowRef },
-                    plugin: plugin ? { id: plugin.id, name: plugin.summary?.name, permissions: plugin.summary?.permissions, mcp: plugin.summary?.mcp } : null,
-                    model: { source: model.source, model: model.model },
+                    plugin: plugin ? { id: plugin.id, name: plugin.summary?.name } : null,
+                    model: resolvedRouteLabel,
                     prompt: request.text,
                     signals: run?.signals || {},
                     reply: replyText,
@@ -48598,20 +50430,33 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 });
             }
 
-            const assistantMsg: AppPluginChatMessage = {
-                id: `a-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-                role: 'assistant',
-                text: replyText,
-                createdAt: Date.now(),
-                model: model.label || model.model,
+            this.patchAppPluginChatAssistant(key, assistantMsgId, msg => ({
+                ...msg,
+                text: replyText || msg.text,
+                ...(replyThinking ? { thinking: replyThinking } : {}),
+                model: resolvedRouteLabel,
+                routeLabel: resolvedRouteLabel,
                 modality: wantModality,
+                streaming: false,
+                pending: false,
                 ...(toolCalls.length ? { toolCalls } : {}),
                 ...(generatedAttachments.length ? { attachments: generatedAttachments } : {})
-            };
-            const after = this.appPluginChatMessages.get(key) || [];
-            this.appPluginChatMessages.set(key, [...after, assistantMsg].slice(-60));
+            }));
+        } catch (error) {
+            this.syncUnlinkedSessionFromFailure(error);
+            if (!controller.signal.aborted) {
+                const errText = (typeof desktopFailureMessage === 'function' ? desktopFailureMessage(this.desktopLocale, error) : '')
+                    || (typeof modelFailureText === 'function' ? modelFailureText(this.desktopLocale, error) : '')
+                    || (error instanceof Error ? error.message : String(error));
+                this.patchAppPluginChatAssistant(key, assistantMsgId, msg => ({
+                    ...msg,
+                    streaming: false,
+                    pending: false,
+                    error: errText
+                }));
+            }
         } finally {
-            this.appPluginChatBusy.delete(key);
+            this.appPluginChatActiveRequests.delete(assistantMsgId);
             this.update();
         }
     }
@@ -48632,7 +50477,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const active = run && !run.ended ? run : undefined;
         const chatOpen = this.appPluginChatOpen.has(key);
         const chatMessages = this.appPluginChatMessages.get(key) || [];
-        const chatBusy = this.appPluginChatBusy.has(key);
         const chatModel = this.appPluginChatModels.get(key) || null;
         const extraModels = this.appPluginExtraModels();
         const headerExtra = <>
@@ -48653,10 +50497,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const bar = run ? <AppPluginRunBar locale={this.desktopLocale} run={run} now={Date.now()} overlay={this.appPluginOverlays.has(run.runId)}
             plugin={this.appPlugins.find(plugin => plugin.id === run.pluginId)} appName={tab.target || tab.title}
             choices={this.appPluginChoices} extraModels={extraModels} modelBusy={this.appPluginModelBusy} error={this.appPluginsError}
-            chatOpen={chatOpen} chatMessages={chatMessages} chatBusy={chatBusy} chatModel={chatModel}
+            chatOpen={chatOpen} chatMessages={chatMessages} chatBusy={false} chatModel={chatModel}
+            chatComposerModelControls={this.renderAppPluginChatModelControls(key, 'bar')}
+            chatRenderMarkdown={this.renderAppPluginChatMarkdown}
             onToggleChat={() => this.toggleAppPluginChat(key)}
             onChatSend={req => void this.sendAppPluginChatMessage(key, conversationId, tab, req)}
-            onChatClear={() => { this.appPluginChatMessages.delete(key); this.update(); }}
+            onChatStopMessage={msgId => void this.stopAppPluginChatMessage(key, msgId)}
+            onChatClear={() => this.clearAppPluginChatMessages(key)}
             onChatSelectModel={model => { this.appPluginChatModels.set(key, model); this.update(); }}
             onApplyChatToApp={text => this.applyPluginChatToApp(conversationId, tab, text)}
             onSaveModel={(id, model, vision) => void this.saveInlineAppPluginModel(id, model, vision)}
@@ -48675,10 +50522,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }} /> : chatOpen ? <AppPluginChatPanel locale={this.desktopLocale} appName={tab.target || tab.title}
                 plugin={pluginsForApp(this.appPlugins, appTabIdentity(tab), navigator.platform, tab.title, tab.target)[0]}
                 choices={this.appPluginChoices} extraModels={extraModels} selectedModel={chatModel} messages={chatMessages}
-                busy={chatBusy} error={this.appPluginsError}
+                busy={false} error={this.appPluginsError}
+                composerModelControls={this.renderAppPluginChatModelControls(key, 'panel')}
+                renderMarkdown={this.renderAppPluginChatMarkdown}
                 onSelectModel={model => { this.appPluginChatModels.set(key, model); this.update(); }}
                 onSend={req => void this.sendAppPluginChatMessage(key, conversationId, tab, req)}
-                onClear={() => { this.appPluginChatMessages.delete(key); this.update(); }}
+                onStopMessage={msgId => void this.stopAppPluginChatMessage(key, msgId)}
+                onClear={() => this.clearAppPluginChatMessages(key)}
                 onApplyToApp={text => this.applyPluginChatToApp(conversationId, tab, text)}
                 onClose={() => this.toggleAppPluginChat(key)} /> : undefined;
         const overlay = active && this.appPluginOverlays.has(active.runId) && active.overlay ? <AppPluginOverlay items={active.overlay} /> : undefined;
@@ -48725,13 +50575,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const hubRun = hub && this.appPluginRunFor(hub.conversationId, hub.tabId);
         const hubTab = hub && visualTabsFor(this.conversationTabs, hub.conversationId).find(item => item.id === hub.tabId);
         return <>
+            {this.renderAppPluginChatPickerPortal()}
             {hub && <AppPluginHubDialog locale={this.desktopLocale} appName={hub.appName} plugins={this.appPlugins} compatible={pluginsForApp(this.appPlugins, hub.programs, navigator.platform, hub.title, hub.windowTitle)}
                 market={this.appPluginHubMarket} marketBusy={this.appPluginMarket.busy} running={Boolean(hubRun && !hubRun.ended)}
                 activeRun={hubRun && !hubRun.ended ? hubRun : undefined} choices={this.appPluginChoices} extraModels={this.appPluginExtraModels()} modelBusy={this.appPluginModelBusy} error={this.appPluginsError}
-                chatOpen={this.appPluginChatOpen.has(hub.key)} chatMessages={this.appPluginChatMessages.get(hub.key)} chatBusy={this.appPluginChatBusy.has(hub.key)} chatModel={this.appPluginChatModels.get(hub.key) || null}
+                chatOpen={this.appPluginChatOpen.has(hub.key)} chatMessages={this.appPluginChatMessages.get(hub.key)} chatBusy={false} chatModel={this.appPluginChatModels.get(hub.key) || null}
+                chatComposerModelControls={this.renderAppPluginChatModelControls(hub.key, 'hub')}
+                chatRenderMarkdown={this.renderAppPluginChatMarkdown}
                 onToggleChat={() => this.toggleAppPluginChat(hub.key)}
                 onChatSend={req => { if (hubTab) void this.sendAppPluginChatMessage(hub.key, hub.conversationId, hubTab, req); }}
-                onChatClear={() => { this.appPluginChatMessages.delete(hub.key); this.update(); }}
+                onChatStopMessage={msgId => void this.stopAppPluginChatMessage(hub.key, msgId)}
+                onChatClear={() => this.clearAppPluginChatMessages(hub.key)}
                 onChatSelectModel={model => { this.appPluginChatModels.set(hub.key, model); this.update(); }}
                 onApplyChatToApp={text => { if (hubTab) this.applyPluginChatToApp(hub.conversationId, hubTab, text); }}
                 onSaveModel={(id, model, vision) => void this.saveInlineAppPluginModel(id, model, vision)}
@@ -48745,7 +50599,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }}
                 onCommand={command => void this.sendAppPluginGoal(command.runId, command.goal)}
                 onStop={hubRun && !hubRun.ended ? () => void this.stopAppPluginFromHub(hubRun.runId) : undefined}
-                onClose={() => { this.appPluginHub = undefined; this.update(); }}
+                onClose={() => { if (this.appPluginChatPicker?.tabKey === hub.key) this.closeAppPluginChatPicker(false); this.appPluginHub = undefined; this.update(); }}
                 onStart={(id, goal) => {
                     const request = { pluginId: id, conversationId: hub.conversationId, tabId: hub.tabId, pid: hub.pid, windowId: hub.windowId, title: hub.windowTitle || hub.title, byAi: false, goal: goal || '' };
                     if (goal?.trim()) void this.startAppPluginGoal(request);
@@ -48855,6 +50709,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     /** Opens the sleek in-app application picker popover (or falls back to the native dialog when listApplications is unavailable). */
     protected async pickComposerApp(): Promise<void> {
+        this.dismissSlashCommandDrawer?.(false);
         const bridge = window.nextmuxDesktop;
         if (!bridge) return;
         if (typeof bridge.listApplications === 'function') {
@@ -50220,6 +52075,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         </article>; })}
                     </section>}
                     {this.renderAttachmentPopoverPortal()}
+                    {this.renderSlashCommandDrawerPortal?.()}
                     {this.appControlPickerOpen && <AppControlPickerPopover locale={this.desktopLocale} apps={this.appControlPickerApps}
                         selectedIds={this.composerSelectedAppIds()} pendingIds={this.composerPendingAppIds()} loading={this.appControlPickerLoading}
                         onToggleApp={app => void this.selectComposerApp(app)} onBrowse={() => void this.browseComposerApp()}
@@ -50445,6 +52301,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 this.shiftComposerAnchors?.(this.prompt, event.currentTarget.value);
                                 this.prompt = event.currentTarget.value;
                                 this.pastedTextReferences = pastedTextReferencesInDocument(this.prompt, this.pastedTextReferences);
+                                this.syncComposerSlashMenu?.(event.currentTarget);
                                 this.scheduleComposerDraftPersist();
                                 this.scheduleComposerUiUpdate();
                             }}
@@ -50458,8 +52315,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 this.prompt = event.currentTarget.value;
                                 this.recordConversationSyncDiagnostic?.('input');
                                 this.pastedTextReferences = pastedTextReferencesInDocument(this.prompt, this.pastedTextReferences);
+                                this.syncComposerSlashMenu?.(event.currentTarget);
                                 this.scheduleComposerDraftPersist();
                                 this.scheduleComposerUiUpdate();
+                            }}
+                            onClick={event => {
+                                if (!this.ownsComposerInput(event.currentTarget)) return;
+                                this.syncComposerSlashMenu?.(event.currentTarget);
+                            }}
+                            onKeyUp={event => {
+                                if (!this.ownsComposerInput(event.currentTarget)) return;
+                                if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
+                                    this.syncComposerSlashMenu?.(event.currentTarget);
+                                }
                             }}
                             onBlur={event => {
                                 if (!this.ownsComposerInput(event.currentTarget)) return;
@@ -51263,10 +53131,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     /** The models a function can use in a conversation: those that make their output from the prompt alone. */
-    protected comicChatCandidates(mode: ComicChatMode): readonly ComicStepCandidate[] {
-        if (mode === 'agent') return this.comicStepCandidatesByRoute('text');
+    protected comicChatCandidates(mode: ComicChatMode, hideFull = false): readonly ComicStepCandidate[] {
+        if (mode === 'agent') return this.comicStepCandidatesByRoute('text', hideFull);
         const references = this.comicChatUi().mode === mode ? this.comicChatUi().references.length : 0;
-        return dedupeComicPriceVariants(this.comicStepCandidatesByRoute(mode)).filter(candidate => {
+        return dedupeComicPriceVariants(this.comicStepCandidatesByRoute(mode, hideFull)).filter(candidate => {
             const route = this.comicMediaRoute(mode, candidate.routeId);
             if (!route || route.offering?.available === false) return false;
             if (mode === 'speech') return this.comicMediaVoices(route).length > 0;
@@ -51474,13 +53342,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected selectComicChatRelay(key: string): void {
-        const option = this.relayPickerOptions().find(candidate => candidate.key === key);
-        if (option && this.relayOptionIsFull(option)) return;
+        const option = this.relayPickerOptions('comic').find(candidate => candidate.key === key);
+        if (option && (this.relayOptionIsFull(option, 'comic') || this.relayOptionIsFull(option))) return;
         const ui = this.comicChatUi();
         // Another relay has its own models: every function starts again from what is picked there.
         if (ui.relay !== key) ui.modelsPinned.clear();
         ui.relay = key;
-        const label = this.relayPickerOptions().find(option => option.key === key)?.label;
+        const label = this.relayPickerOptions('comic').find(option => option.key === key)?.label;
         if (label) try { window.localStorage.setItem('nextmux.desktop.comicChatRelayLabel.v1', JSON.stringify({ key, label })); } catch { /* named from the directory later */ }
         this.comicRelayPickerOpen = false;
         this.comicModelPickerOpen = false;
@@ -51494,7 +53362,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected renderComicRelayPickerPortal(): React.ReactNode {
         if (!this.comicRelayPickerOpen || this.comicChatUi().recommended) return undefined;
-        const rows = Math.max(2, this.relayPickerOptions().length);
+        const rows = Math.max(2, this.relayPickerOptions('comic').length);
         const directoryPage = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage;
         const loading = this.relaySourceTab !== 'my-api' && (this.publicMerchantPageLoading || !directoryPage || this.publicMerchantPageError);
         const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked), this.desktopLocale);
@@ -51512,7 +53380,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             top: `${placement.top}px`, left: `${placement.left}px`, width: `${placement.width}px`,
                             height: `${placement.height}px`, maxHeight: `${placement.maxHeight}px`
                         } as React.CSSProperties}>
-                        <div className='nmx-model-picker-relay-view'>{this.renderRelayPopover()}</div>
+                        <div className='nmx-model-picker-relay-view'>{this.renderRelayPopover({ selectedKey: this.comicChatRelayKey(), onSelect: key => this.selectComicChatRelay(key), capacityScope: 'comic' })}</div>
                     </section>
                 </div>
             </div>,
@@ -51634,11 +53502,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const ui = this.comicChatUi();
         const activeTab: ComicChatMode = COMIC_CHAT_DRAWER_MODES.includes(ui.mode) ? ui.mode : 'image';
         const relayKey = this.comicChatRelayKey(activeTab);
-        if (relayKey.startsWith('managed:')) {
-            const merchantId = relayKey.slice('managed:'.length);
-            if (!this.merchantPickerSnapshots.has(merchantId)) void this.loadComicChatRelayCatalog(merchantId);
+        const chatMerchantId = relayKey.startsWith('managed:') ? relayKey.slice('managed:'.length) : '';
+        if (chatMerchantId) {
+            if (!this.merchantPickerSnapshots.has(chatMerchantId)) void this.loadComicChatRelayCatalog(chatMerchantId);
         }
-        const allOptions = this.comicChatCandidates(activeTab)
+        const allOptions = this.comicChatCandidates(activeTab, true)
             .filter(candidate => !relayKey || candidate.source.key === relayKey)
             .sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label));
         const query = this.comicModelPickerQuery.trim().toLowerCase();
@@ -51657,11 +53525,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const layout = placeModelPickerPanels(basePlacement, viewport);
         const placement = layout.picker;
         const detailGeometry = layout.detail;
-        const relayLoading = Boolean(relayKey.startsWith('managed:')
-            && (this as unknown as { comicChatRelayLoading?: Set<string> }).comicChatRelayLoading?.has(relayKey.slice('managed:'.length)));
+        const relayLoading = Boolean(chatMerchantId
+            && (this as unknown as { comicChatRelayLoading?: Set<string> }).comicChatRelayLoading?.has(chatMerchantId));
         return ReactDOM.createPortal(
             <div className='nmx-model-picker-portal nmx-desktop-widget nmx-comic-model-portal' dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'} lang={this.desktopLocale}
                 onKeyDown={event => { if (event.key === 'Escape' && !event.defaultPrevented && !event.nativeEvent.isComposing) { event.preventDefault(); this.dismissComicChatModelPicker(true); } }}>
+                {chatMerchantId && this.relayCapacityPoller && <RelayCapacityRefresh
+                    poller={this.relayCapacityPoller}
+                    merchantIds={[chatMerchantId]}
+                    scope='comic'
+                    onSnapshot={snapshot => { this.relayCapacitySnapshot = snapshot; this.update(); }}
+                />}
                 <div className={`nmx-model-picker-surface nmx-shell nmx-theme-${this.resolvedDesktopTheme()}`}>
                     <section className='nmx-composer-popover nmx-route-popover nmx-model-picker-popover nmx-model-only-popover' data-side={placement.side}
                         aria-label={localizeDesktopSurface(this.desktopLocale, '选择模型')}
@@ -51790,12 +53664,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />
                                         <span>{relayText(this.desktopLocale, 'modelsLoading')}</span>
                                     </div>
-                                ) : (
-                                    <div className='nmx-route-empty'>
-                                        <span>{this.comicModelPickerQuery.trim() ? modelPickerListText(this.desktopLocale, 'noMatch') : this.comicChatT('noModelHere', { kind: this.comicChatT(activeTab) })}</span>
-                                        {!this.comicModelPickerQuery.trim() && <button type='button' onClick={() => { this.dismissComicChatModelPicker(); this.openComicChatRelayPicker(); }}>{relayText(this.desktopLocale, 'selectRelay')}</button>}
-                                    </div>
-                                )}
+                                ) : (() => {
+                                    const pickerRelayFull = !this.comicModelPickerQuery.trim()
+                                        && relayKey.startsWith('managed:')
+                                        && Boolean(this.relayMerchantIdIsFull?.(relayKey.slice('managed:'.length), 'comic'));
+                                    return (
+                                        <div className='nmx-route-empty' role={pickerRelayFull ? 'status' : undefined}>
+                                            <span>{this.comicModelPickerQuery.trim() ? modelPickerListText(this.desktopLocale, 'noMatch') : pickerRelayFull ? relayText(this.desktopLocale, 'relayFull') : this.comicChatT('noModelHere', { kind: this.comicChatT(activeTab) })}</span>
+                                            {!this.comicModelPickerQuery.trim() && <button type='button' onClick={() => { this.dismissComicChatModelPicker(); this.openComicChatRelayPicker(); }}>{relayText(this.desktopLocale, 'selectRelay')}</button>}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         )}
                     </section>
@@ -52225,6 +54104,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 try {
                     await this.platformService.confirmMediaJob(root, job.id);
                 } catch (error) {
+                    this.syncUnlinkedSessionFromFailure(error);
                     // An unconfirmed job would wait forever: withdraw it, then report why.
                     await this.platformService.cancelMediaJob(root, job.id).catch(() => undefined);
                     throw error;
@@ -52267,6 +54147,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected async runComicChatAgent(root: string, chatId: string, turnId: string, candidate: ComicStepCandidate): Promise<void> {
         const ui = this.comicChatUi();
         const fail = (error: unknown): void => {
+            this.syncUnlinkedSessionFromFailure(error);
             const errorRequestIds = normalizeRelayFeedbackRequestIds((error as { readonly requestIds?: unknown } | undefined)?.requestIds);
             this.patchComicChatTurn(chatId, turnId, item => ({
                 ...item,

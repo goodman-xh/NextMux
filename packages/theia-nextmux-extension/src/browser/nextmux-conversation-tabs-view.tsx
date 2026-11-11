@@ -511,12 +511,75 @@ export function ConversationVisualTabView(props: { readonly locale: NextMuxDeskt
     return <LiveTabView key={owner} {...props} tab={effectiveTab} onSelectWindow={handleSelectWindow} />;
 }
 
+export function hasOpenOverlayOrModal(sectionEl?: HTMLElement | null, localOverlayOpen = false): boolean {
+    if (localOverlayOpen) return true;
+    if (typeof document === 'undefined') return false;
+    const overlaySelector = [
+        '[aria-modal="true"]',
+        '[role="dialog"]',
+        '[role="alertdialog"]',
+        '[role="menu"]',
+        '.nmx-modal-backdrop',
+        '.nmx-dialog-backdrop',
+        '.nmx-sheet-backdrop',
+        '.nmx-plugin-hub',
+        '.nmx-plugin-hub-backdrop',
+        '.nmx-plugin-modal-backdrop',
+        '.nmx-model-picker-portal',
+        '.nmx-composer-popover',
+        '.nmx-popover',
+        '.nmx-dropdown',
+        '.nmx-overlay',
+        '.lm-Menu',
+        '.p-Menu',
+        '.dialogOverlay',
+        '.monaco-menu-container',
+        '.quick-input-widget'
+    ].join(', ');
+    const isVisibleNode = (node: Element): boolean => {
+        const el = node as HTMLElement;
+        if (el.hidden || el.getAttribute?.('aria-hidden') === 'true') return false;
+        if (typeof el.closest === 'function' && el.closest('[hidden], [aria-hidden="true"]')) return false;
+        const style = el.style;
+        if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
+        if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+            try {
+                const computed = window.getComputedStyle(el);
+                if (computed.display === 'none' || computed.visibility === 'hidden') return false;
+            } catch { /* minimal test DOM */ }
+        }
+        return true;
+    };
+    const active = document.activeElement as HTMLElement | null;
+    if (active && typeof active.closest === 'function') {
+        const activeOverlay = active.closest(`${overlaySelector}, [role="listbox"]`);
+        if (activeOverlay && (!sectionEl || typeof sectionEl.contains !== 'function' || !sectionEl.contains(activeOverlay)
+            || activeOverlay.matches?.(overlaySelector) || activeOverlay.classList?.contains('nmx-visual-tab-window-menu'))) {
+            if (isVisibleNode(activeOverlay)) return true;
+        }
+    }
+    if (typeof document.querySelectorAll === 'function') {
+        const candidates = document.querySelectorAll(overlaySelector);
+        for (let i = 0; i < candidates.length; i += 1) {
+            if (isVisibleNode(candidates[i])) return true;
+        }
+        const listboxes = document.querySelectorAll('[role="listbox"]');
+        for (let i = 0; i < listboxes.length; i += 1) {
+            const lb = listboxes[i];
+            if (lb.classList?.contains('nmx-cast-rail-list') || lb.classList?.contains('nmx-comic-setup-sources')) continue;
+            if (isVisibleNode(lb)) return true;
+        }
+    }
+    return false;
+}
+
 function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly tab: ConversationVisualTab; readonly controls?: ConversationWindowControls;
     readonly plugin?: ConversationTabPluginParts; readonly announcement?: { readonly id: number; readonly text: string };
     readonly onSelectWindow?: (pid: number, windowId: number) => void;
     readonly onReopenApp?: (mode: 'check_or_open' | 'restart') => Promise<'opened' | 'running' | 'failed'> }): React.ReactElement {
     const { locale, tab, controls } = props;
     const kind = tab.kind === 'virtual-machine' ? 'virtualMachine' : tab.kind === 'local-desktop' ? 'localDesktop' : 'remoteDesktop';
+    const sectionRef = React.useRef<HTMLElement>(null);
     const video = React.useRef<HTMLVideoElement>(null);
     const latest = React.useRef(controls);
     latest.current = controls;
@@ -740,7 +803,11 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         void latest.current?.setUserInput?.(on);
         // Typing goes to the app right after the user turns the switch on. Only then (and on a click in the picture): a
         // restarted capture or the AI's tabs.set never takes the focus from the user's message box.
-        if (on) requestAnimationFrame(() => { if (latest.current?.keys) keyboard.current?.focus({ preventScroll: true }); });
+        if (on) requestAnimationFrame(() => {
+            if (latest.current?.keys && !hasOpenOverlayOrModal(sectionRef.current, Boolean(props.plugin?.studio))) {
+                keyboard.current?.focus({ preventScroll: true });
+            }
+        });
         if (!on) {
             resetHoverMove();
             inputQueue.current.cancel();
@@ -803,6 +870,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     };
     const onKeyboardDown = (event: React.KeyboardEvent<HTMLElement>): void => {
         if (event.defaultPrevented || event.nativeEvent?.isComposing || event.keyCode === 229) return;
+        if (hasOpenOverlayOrModal(sectionRef.current, windowMenuOpen || terminateModalOpen || reopenModalOpen || Boolean(props.plugin?.studio))) return;
         const chord = keyChord(event);
         if (!chord) return;
         event.preventDefault();
@@ -815,10 +883,12 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     };
     const onKeyboardInput = (event: React.FormEvent<HTMLTextAreaElement>): void => {
         if ((event.nativeEvent as InputEvent).isComposing) return;
+        if (hasOpenOverlayOrModal(sectionRef.current, windowMenuOpen || terminateModalOpen || reopenModalOpen || Boolean(props.plugin?.studio))) return;
         sendText(event.currentTarget.value);
         event.currentTarget.value = '';
     };
     const onKeyboardCompositionEnd = (event: React.CompositionEvent<HTMLTextAreaElement>): void => {
+        if (hasOpenOverlayOrModal(sectionRef.current, windowMenuOpen || terminateModalOpen || reopenModalOpen || Boolean(props.plugin?.studio))) return;
         sendText(event.currentTarget.value || event.data);
         event.currentTarget.value = '';
     };
@@ -1021,27 +1091,65 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     const pluginEscActive = Boolean(props.plugin?.running && typeof props.plugin.onStop === 'function');
     const pluginStopRef = React.useRef(props.plugin?.onStop);
     pluginStopRef.current = props.plugin?.onStop;
+    const localOverlayOpen = windowMenuOpen || terminateModalOpen || reopenModalOpen || Boolean(props.plugin?.studio);
     React.useEffect(() => {
-        if (!visible || mouse || !pluginEscActive || windowMenuOpen || terminateModalOpen || reopenModalOpen || props.plugin?.studio) return undefined;
+        if (!visible || mouse || !pluginEscActive || localOverlayOpen) return undefined;
         const onKeyDown = (event: KeyboardEvent): void => {
-            if (event.key !== 'Escape' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.defaultPrevented) return;
+            if (event.key !== 'Escape' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.defaultPrevented || event.isComposing) return;
+            if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen)) return;
             const targetNode = event.target as HTMLElement | null;
-            if (targetNode && (targetNode.tagName === 'INPUT' || targetNode.tagName === 'TEXTAREA' || targetNode.tagName === 'SELECT' || targetNode.isContentEditable)) return;
+            const isTextInput = targetNode?.tagName === 'INPUT' && !['checkbox', 'radio'].includes(((targetNode as HTMLInputElement).type || 'text').toLowerCase());
+            if (targetNode && (isTextInput || targetNode.tagName === 'TEXTAREA' || targetNode.tagName === 'SELECT' || targetNode.isContentEditable)) return;
             event.preventDefault();
             event.stopPropagation();
             pluginStopRef.current?.();
         };
         document.addEventListener('keydown', onKeyDown);
         return () => document.removeEventListener('keydown', onKeyDown);
-    }, [visible, mouse, pluginEscActive, windowMenuOpen, terminateModalOpen, reopenModalOpen, Boolean(props.plugin?.studio)]);
+    }, [visible, mouse, pluginEscActive, localOverlayOpen]);
+    React.useEffect(() => {
+        if (!visible || !live || !mouse || localOverlayOpen) return undefined;
+        const isTextEntryNode = (node: HTMLElement | null): boolean => {
+            if (!node) return false;
+            const tag = node.tagName;
+            if (tag === 'TEXTAREA' || tag === 'SELECT' || node.isContentEditable) return true;
+            if (tag === 'INPUT') {
+                const inputType = ((node as HTMLInputElement).type || 'text').toLowerCase();
+                return inputType !== 'checkbox' && inputType !== 'radio';
+            }
+            return false;
+        };
+        const active = typeof document !== 'undefined' ? document.activeElement as HTMLElement | null : null;
+        if (!hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen) && !isTextEntryNode(active) && latest.current?.keys) {
+            keyboard.current?.focus({ preventScroll: true });
+        }
+        const onKeyDown = (event: KeyboardEvent): void => {
+            if (event.key !== 'Escape' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.defaultPrevented || event.isComposing) return;
+            if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen)) return;
+            const targetNode = event.target as HTMLElement | null;
+            if (targetNode === keyboard.current || isTextEntryNode(targetNode)) return;
+            const target = latest.current;
+            if (!target?.keys) return;
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation?.();
+            keyboard.current?.focus({ preventScroll: true });
+            flushPendingText();
+            drainWheel();
+            void inputQueue.current.enqueue(() => target.keys!({ key: 'escape' }));
+        };
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, [visible, live, mouse, localOverlayOpen]);
     const onSectionKeyDownCapture = (event: React.KeyboardEvent<HTMLElement>): void => {
         if (!live || !mouse || !latest.current?.keys) return;
-        if (windowMenuOpen || terminateModalOpen || reopenModalOpen || props.plugin?.studio) return;
+        if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen)) return;
         const targetNode = event.target as HTMLElement | null;
         if (targetNode === keyboard.current) return;
         const tag = targetNode?.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || targetNode?.isContentEditable) return;
-        if (targetNode?.closest?.('.nmx-app-plugin-bar, .nmx-visual-tab-windows, .nmx-visual-tab-terminate-modal')) return;
+        const isTextInput = tag === 'INPUT' && !['checkbox', 'radio'].includes(((targetNode as HTMLInputElement).type || 'text').toLowerCase());
+        if (isTextInput || tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'BUTTON' && event.key !== 'Escape') || targetNode?.isContentEditable) return;
+        if (targetNode?.closest?.('.nmx-app-plugin-bar, .nmx-plugin-runbar, .nmx-plugin-chat-panel, .nmx-visual-tab-windows, .nmx-visual-tab-terminate-modal')) return;
         keyboard.current?.focus({ preventScroll: true });
         const chord = keyChord(event);
         if (chord) {
@@ -1054,7 +1162,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         }
     };
     const appDisplayName = tab.title || tab.target;
-    return <section className={`nmx-visual-tab is-${tab.status}${live ? ' is-live' : ''}${mouse ? ' is-pointer' : ''}`} aria-label={tab.title} onKeyDownCapture={onSectionKeyDownCapture}>
+    return <section ref={sectionRef} className={`nmx-visual-tab is-${tab.status}${live ? ' is-live' : ''}${mouse ? ' is-pointer' : ''}`} aria-label={tab.title} onKeyDownCapture={onSectionKeyDownCapture}>
         <header>
             <button type='button' className={`${live ? 'nmx-visual-tab-live' : `is-${tab.status}`}${canTerminate ? ' nmx-visual-tab-live is-interactive' : ''}`}
                 title={`${conversationTabsText(locale, kind)} · ${tab.target}${canTerminate ? ` · ${conversationWindowText(locale, 'terminateBubble')}` : ''}`}

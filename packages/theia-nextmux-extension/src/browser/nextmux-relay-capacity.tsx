@@ -108,7 +108,7 @@ export class RelayCapacityPoller {
         } finally {
             this.pending = false;
             if (this.running) {
-                const hasRestricted = !this.snapshot || this.snapshot.merchants.some(item => item.state === 'full' || Boolean(item.fullOfferingIds?.length));
+                const hasRestricted = Boolean(this.snapshot?.merchants.some(item => item.state === 'full' || Boolean(item.fullOfferingIds?.length)));
                 const nextIntervalMs = revision !== this.revision ? 0 : (hasRestricted ? 2000 : 10000);
                 this.timer = setTimeout(() => void this.refresh(), nextIntervalMs);
             }

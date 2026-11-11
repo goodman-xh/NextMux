@@ -52,24 +52,41 @@ export function ownModelKind(model: OwnModelFacts, catalog?: ModelTaskMetadata):
     const correction = knownModelTaskCorrection(model);
     if (correction) return correction;
     const reported = model.outputModalities || [];
-    if (!reported.length && catalog?.kind && OWN_MODEL_KINDS.includes(catalog.kind as OwnModelKind)) return (knownModelTaskCorrection(catalog) || catalog.kind) as OwnModelKind;
+    const capabilities = (Array.isArray(model.capabilities) ? model.capabilities : (!reported.length && Array.isArray(catalog?.capabilities) ? catalog.capabilities : []))
+        .map(value => String(value).toLowerCase().replace(/[\s-]+/g, '_'));
+    if (!reported.length && !(Array.isArray(model.capabilities) && model.capabilities.length) && catalog?.kind && OWN_MODEL_KINDS.includes(catalog.kind as OwnModelKind)) {
+        return (knownModelTaskCorrection(catalog) || catalog.kind) as OwnModelKind;
+    }
     const output = (reported.length ? reported : (Array.isArray(catalog?.output) ? catalog.output : [])).map(value => value.toLowerCase());
     const name = `${model.id} ${model.label || ''}`.toLowerCase();
     if (output.length) {
-        if (catalog?.kind === 'llm' && output.includes('text') && !output.some(value => ['decisions', 'decision', 'rerank', 'embedding', 'embeddings', 'moderation', 'transcription'].includes(value))) return 'llm';
+        if (catalog?.kind === 'llm' && output.includes('text')
+            && !output.some(value => ['decisions', 'decision', 'rerank', 'embedding', 'embeddings', 'moderation', 'transcription', 'music', 'sound_effect'].includes(value))
+            && !capabilities.some(cap => cap === 'music_generation' || cap === 'sound_effect_generation')) return 'llm';
         if (output.includes('decisions') || output.includes('decision')) return 'decision';
         if (output.includes('rerank')) return 'rerank';
         if (output.includes('moderation')) return 'moderation';
         if (output.includes('sound_effect')) return 'sound_effect';
+        if (output.includes('music')) return 'music';
         if (output.includes('video')) return 'video';
         if (output.includes('transcription')) return 'transcription';
         if (output.some(value => value === 'embeddings' || value === 'embedding')) return 'embedding';
         if (output.includes('speech')) return 'speech';
         if (output.includes('image')) return 'image';
         if (output.includes('3d')) return '3d';
-        if (output.includes('audio')) return MUSIC_NAME.test(name) ? 'music' : output.includes('text') ? 'llm' : 'speech';
+        if (output.includes('audio')) {
+            if (MUSIC_NAME.test(name) || capabilities.includes('music_generation')) return 'music';
+            if (MODEL_NAME_PATTERNS.sound_effect.test(name) || capabilities.includes('sound_effect_generation') || capabilities.includes('text_to_sound_effect')) return 'sound_effect';
+            return output.includes('text') ? 'llm' : 'speech';
+        }
         if (output.includes('text')) return /rerank/.test(name) ? 'rerank' : /moderation|guard/.test(name) ? 'moderation' : MODEL_NAME_PATTERNS['3d'].test(name) ? '3d' : 'llm';
     }
+    if (capabilities.includes('music_generation')) return 'music';
+    if (capabilities.includes('sound_effect_generation') || capabilities.includes('text_to_sound_effect')) return 'sound_effect';
+    if (capabilities.includes('video_generation') || capabilities.includes('text_to_video')) return 'video';
+    if (capabilities.includes('image_generation') || capabilities.includes('text_to_image')) return 'image';
+    if (capabilities.includes('speech_generation') || capabilities.includes('text_to_speech')) return 'speech';
+    if (capabilities.includes('decision')) return 'decision';
     if (/^deepgram\/nova(?:[-/]|$)/i.test(model.id)) return 'transcription';
     // Every spelling of the id (relays write "video_wan_3.0", "Wan 3.0" …), then the label.
     const names = [...modelNameForms(model.id), (model.label || '').toLowerCase()].filter(Boolean);
@@ -85,6 +102,7 @@ export function ownModelMediaFacts(model: OwnModelFacts, catalog?: ModelTaskMeta
     if (kind === 'video') return { output: ['video'], capabilities: ['video_generation', 'text_to_video', ...(input.includes('image') || !input.length ? ['image_to_video'] : [])] };
     if (kind === 'speech') return { output: ['speech'], capabilities: ['text_to_speech'] };
     if (kind === 'music') return { output: ['audio'], capabilities: ['music_generation'] };
+    if (kind === 'sound_effect') return { output: ['audio'], capabilities: ['sound_effect_generation', 'text_to_sound_effect'] };
     return undefined;
 }
 

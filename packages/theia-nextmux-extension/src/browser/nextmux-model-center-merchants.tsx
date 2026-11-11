@@ -19,6 +19,8 @@ import { modelCapabilityLabel, modelCategoryLabel } from './nextmux-model-taxono
 import { ModelTaxonomyTags } from './nextmux-model-taxonomy-tags';
 import { FavoriteHeartIcon } from './nextmux-favorite-icon';
 import { DepositVerifiedSeal, depositVerifiedHintText } from './nextmux-deposit-verified';
+import { RelayCapacityPoller } from './nextmux-relay-capacity';
+import { relayMerchantIsFull, type PublicMerchantCapacityScope, type PublicMerchantCapacitySnapshot } from '../common/nextmux-relay-capacity';
 
 export { DepositVerifiedSeal };
 
@@ -55,7 +57,8 @@ export function merchantModelLatency(locale: NextMuxDesktopLocale, model: Pick<P
         typeof at === 'number' && at > 0 && at < now - 86_400_000 ? relayMeasurementNote(locale, 'latencyStale', at) : ''].filter(Boolean);
     return { value: `${api !== undefined ? '≈' : ''}${relayLatencyText(locale, shown)}`, ...(notes.length ? { note: notes.join(' · ') } : {}) };
 }
-type Service = Pick<NextMuxPlatformService, 'getPublicMerchantDirectory' | 'getMerchantSupportCatalog'>;
+type Service = Pick<NextMuxPlatformService, 'getPublicMerchantDirectory' | 'getMerchantSupportCatalog'>
+    & Partial<Pick<NextMuxPlatformService, 'getPublicMerchantCapacity'>>;
 type Sort = 'quality' | 'authenticity' | 'latency' | 'multiplier';
 type Props = {
     service: Service; locale: NextMuxDesktopLocale; view: 'all' | 'favorites' | 'capability';
@@ -280,6 +283,38 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
     const [detailClosing, setDetailClosing] = React.useState(false);
     const [drawerLayer, setDrawerLayer] = React.useState<{ host: HTMLElement; top: number }>();
     const directoryRef = React.useRef<HTMLElement>(null);
+    const capacityScope: PublicMerchantCapacityScope = view === 'capability' && (capability === 'image' || capability === 'video' || capability === 'audio') ? 'comic' : 'coding';
+    const [capacitySnapshot, setCapacitySnapshot] = React.useState<PublicMerchantCapacitySnapshot>();
+    const merchantIdsKey = (page?.merchants || []).map(item => item.id).filter(id => /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(id)).join('\n');
+    React.useEffect(() => {
+        const readCapacity = service.getPublicMerchantCapacity;
+        const ids = merchantIdsKey ? merchantIdsKey.split('\n') : [];
+        if (typeof readCapacity !== 'function' || !ids.length) {
+            setCapacitySnapshot(undefined);
+            return;
+        }
+        const poller = new RelayCapacityPoller((batch, scope) => readCapacity.call(service, batch, scope));
+        const visibleIds = (): readonly string[] => {
+            const root = directoryRef.current;
+            const scroll = root?.closest<HTMLElement>('.nmx-workspace-scroll');
+            const bounds = scroll?.getBoundingClientRect();
+            if (!root || !bounds || (bounds.width === 0 && bounds.height === 0)) return ids.slice(0, 32);
+            const visible = [...root.querySelectorAll<HTMLElement>('[data-model-center-merchant]')]
+                .filter(node => {
+                    const rect = node.getBoundingClientRect();
+                    return rect.bottom > bounds.top && rect.top < bounds.bottom;
+                })
+                .map(node => node.dataset.modelCenterMerchant || '')
+                .filter(id => ids.includes(id))
+                .slice(0, 32);
+            return visible.length ? visible : ids.slice(0, 32);
+        };
+        const detach = poller.attach(ids, capacityScope, snapshot => setCapacitySnapshot(snapshot), visibleIds);
+        return () => {
+            detach();
+            poller.stop();
+        };
+    }, [service, merchantIdsKey, capacityScope]);
     const closeTimer = React.useRef<number>();
     const [copyFailed, setCopyFailed] = React.useState(false);
     const generation = React.useRef(0);
@@ -465,10 +500,11 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
                 // A store holding the security deposit: its name in the deposit rainbow and the gold seal after it. Its name's
                 // hint is the one every surface shows: seal and name, public number, introduction, the deposit line.
                 const deposit = merchant.depositVerified === true ? publicMerchantDepositText(locale) : '';
+                const isCapacityFull = relayMerchantIsFull(capacitySnapshot, merchant.id, capacityScope);
                 const nameHint = deposit
                     ? <ModelCenterHint text={depositVerifiedHintText(locale, merchant)} locale={locale} focusable depositVerified><strong className='is-deposit-verified'>{merchant.name}</strong></ModelCenterHint>
                     : hint(<strong>{merchant.name}</strong>, [merchant.name, storeIntroDisplay].join('\n'));
-                return <article className='nmx-mc-merchant' key={merchant.id} data-model-center-merchant={merchant.id} data-deposit-verified={deposit ? 'true' : undefined}>
+                return <article className={isCapacityFull ? 'nmx-mc-merchant is-capacity-full' : 'nmx-mc-merchant'} key={merchant.id} data-model-center-merchant={merchant.id} data-deposit-verified={deposit ? 'true' : undefined} data-relay-capacity={isCapacityFull ? 'full' : undefined}>
                     <div className='nmx-mc-identity'>{deposit ? <span className='nmx-mc-name-line'>{nameHint}{hint(<DepositVerifiedSeal />, deposit)}</span> : nameHint}
                         {hint(
                             <p className={`nmx-mc-tagline nmx-mc-merchant-bio${storeIntro ? '' : ' is-empty'}`} data-testid={`mc-store-tagline-${merchant.id}`} data-nmx-literal dir='auto'>
@@ -478,7 +514,8 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
                         )}<span>{hint(<code dir='ltr'>{publicCode || '—'}</code>, publicCode || market('copyNumber'))}
                         {hint(<button type='button' disabled={!publicCode} aria-label={market('copyNumber')} onClick={() => { if (!publicCode) return; setCopyFailed(false); void onCopy(publicCode).catch(() => setCopyFailed(true)); }}><i className={`codicon codicon-${publicCode && props.copiedNumber === publicCode ? 'check' : 'copy'}`} aria-hidden='true' /></button>, market('copyHint'), false)}
                         {hint(<i className={`codicon codicon-${apiState === 'ready' ? 'pass' : apiState === 'refreshing' ? 'sync' : apiState === 'degraded' || apiState === 'unavailable' ? 'warning' : 'circle-outline'}`} data-api-state={apiState || 'unknown'} aria-hidden='true' />, statusLabel)}
-                    </span>{(outputs.length > 0 || api.checksFailing) && <span className='nmx-mc-capabilities'>{outputs.map(value => <small key={value}>{market(value === 'text' ? 'language' : value as 'image' | 'video' | 'audio')}</small>)}
+                    </span>{(outputs.length > 0 || api.checksFailing || isCapacityFull) && <span className='nmx-mc-capabilities'>{outputs.map(value => <small key={value}>{market(value === 'text' ? 'language' : value as 'image' | 'video' | 'audio')}</small>)}
+                        {isCapacityFull && hint(<small className='nmx-mc-api-alert is-capacity' data-relay-capacity-badge='full'>{relayText(locale, 'relayFullBadge')}</small>, relayText(locale, 'relayFull'))}
                         {api.checksFailing && hint(<small className='nmx-mc-api-alert' data-api-detail='probe_failures'><i className='codicon codicon-warning' aria-hidden='true' />{modelCenterChecksFailing(locale, 'chip')}</small>, statusLabel)}</span>}</div>
                     <div className='nmx-mc-metrics'>
                         {hint(<><i className='codicon codicon-star-full' aria-hidden='true' /><strong data-unmeasured={rating.value === undefined || undefined}>{percent(rating.value === undefined ? undefined : rating.value / 100)}</strong></>, `${market('rating')} · ${quality}`)}

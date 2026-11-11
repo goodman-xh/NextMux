@@ -4,7 +4,7 @@ import { modelFailure } from './nextmux-model-errors';
 import * as React from '@theia/core/shared/react';
 import { createPortal } from '@theia/core/shared/react-dom';
 import type { NextMuxDesktopLocale } from './nextmux-locale';
-import { ImeInput } from './nextmux-ime-field';
+import { ImeInput, ImeTextarea } from './nextmux-ime-field';
 import { SurfaceTooltips } from './nextmux-surface-tooltips';
 import { appPluginError, appPluginReason, appPluginText, type AppPluginTextKey } from './nextmux-app-plugins-locale';
 import { appPluginPackageError, appPluginRuntimeText } from './nextmux-app-plugin-runtime-locale';
@@ -325,7 +325,7 @@ export function AppPluginMarketUploadDialog(props: {
                 : <button type='button' className='is-primary' onClick={props.onSignIn}>{t(locale, 'signIn')}</button>}
         </>}>
         {!props.signedIn && <p className='nmx-plugin-upload-login'><i className='codicon codicon-account' aria-hidden='true'></i>{t(locale, 'loginToUpload')}</p>}
-        <AppPluginFormats locale={locale} />
+        <AppPluginFormats locale={locale} packedOnly />
         <div className='nmx-plugin-upload-field'>
             <span>{t(locale, 'uploadFile')}</span>
             <button type='button' className={`nmx-plugin-upload-file ${props.fileName ? 'has-file' : ''}`} disabled={props.busy} onClick={props.onChooseFile} autoFocus={!props.fileName}>
@@ -500,9 +500,23 @@ export function AppPluginOptionsModal(props: AppPluginsSettingsProps & {
     const panel = React.useRef<HTMLElement>(null);
     const titleId = React.useId();
     React.useLayoutEffect(() => {
-        const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+        const trigger = typeof document !== 'undefined' && document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
         panel.current?.focus({ preventScroll: true });
-        return () => { if (trigger?.isConnected) trigger.focus({ preventScroll: true }); };
+        const onDocumentKeyDown = (event: KeyboardEvent): void => {
+            if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            props.onClose();
+        };
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+            document.addEventListener('keydown', onDocumentKeyDown);
+        }
+        return () => {
+            if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+                document.removeEventListener('keydown', onDocumentKeyDown);
+            }
+            if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+        };
     }, []);
     const tests = props.testResults[plugin.id];
     // A press on the backdrop closes the dialog; its default focus change is cancelled so the focus handed back to the
@@ -577,10 +591,10 @@ export function AppPluginOptionsModal(props: AppPluginsSettingsProps & {
     return props.portalHost ? createPortal(dialog, props.portalHost) : dialog;
 }
 
-function AppPluginFormats({ locale }: { locale: Locale }): React.ReactElement {
+function AppPluginFormats({ locale, packedOnly = false }: { locale: Locale; packedOnly?: boolean }): React.ReactElement {
     return <ul className='nmx-plugin-formats'>
-        <li><code>.nmxplugin</code></li><li><code>.zip</code></li><li><code>.tar.gz</code> / <code>.tgz</code></li><li><code>.jevplugin</code></li>
-        <li><code>plugin.json</code> / <code>manifest.json</code></li><li>{t(locale, 'loadFolderButton')}</li>
+        <li><code>.nmxplugin</code></li><li><code>.zip</code></li><li><code>.jevplugin</code></li><li><code>.tar.gz</code> / <code>.tgz</code></li>
+        {!packedOnly && <><li><code>plugin.json</code> / <code>manifest.json</code></li><li>{t(locale, 'loadFolderButton')}</li></>}
     </ul>;
 }
 
@@ -621,9 +635,51 @@ export function AppPluginLoadDialog(props: {
 /** Dialog frame shared by the plugin dialogs (the app's sheet style). */
 function Dialog(props: { readonly id: string; readonly title: string; readonly onClose: () => void; readonly busy?: boolean; readonly className?: string;
     readonly children: React.ReactNode; readonly footer: React.ReactNode; readonly closeLabel: string }): React.ReactElement {
+    const panel = React.useRef<HTMLElement>(null);
+    const onCloseRef = React.useRef(props.onClose);
+    const busyRef = React.useRef(props.busy);
+    onCloseRef.current = props.onClose;
+    busyRef.current = props.busy;
+    React.useLayoutEffect(() => {
+        const trigger = typeof document !== 'undefined' && document.activeElement instanceof HTMLElement ? document.activeElement : undefined;
+        if (panel.current && (typeof document === 'undefined' || !panel.current.contains(document.activeElement))) {
+            panel.current.focus({ preventScroll: true });
+        }
+        const onDocumentKeyDown = (event: KeyboardEvent): void => {
+            if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.key !== 'Escape') return;
+            if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
+                if (document.querySelectorAll('.nmx-plugin-modal-backdrop, .nmx-model-picker-portal, .nmx-composer-popover').length > 0) return;
+                const dialogs = document.querySelectorAll('.nmx-plugin-dialog');
+                if (dialogs.length > 0 && dialogs[dialogs.length - 1] !== panel.current) return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            if (!busyRef.current) onCloseRef.current();
+        };
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+            document.addEventListener('keydown', onDocumentKeyDown);
+        }
+        return () => {
+            if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+                document.removeEventListener('keydown', onDocumentKeyDown);
+            }
+            if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+        };
+    }, []);
     return <div className='nmx-sheet-backdrop nmx-dialog-backdrop' onMouseDown={() => { if (!props.busy) props.onClose(); }}>
-        <section className={`nmx-thread-dialog nmx-plugin-dialog ${props.className || ''}`} role='dialog' aria-modal='true' aria-labelledby={props.id} aria-busy={props.busy}
-            onMouseDown={event => event.stopPropagation()} onKeyDown={event => { if (event.key === 'Escape' && !props.busy) { event.stopPropagation(); props.onClose(); } }}>
+        <section ref={panel} tabIndex={-1} className={`nmx-thread-dialog nmx-plugin-dialog ${props.className || ''}`} role='dialog' aria-modal='true' aria-labelledby={props.id} aria-busy={props.busy}
+            onMouseDown={event => event.stopPropagation()} onKeyDown={event => {
+                if (event.nativeEvent?.isComposing || event.keyCode === 229) return;
+                if (event.key === 'Escape') {
+                    if (typeof document !== 'undefined' && typeof document.querySelectorAll === 'function'
+                        && document.querySelectorAll('.nmx-plugin-modal-backdrop, .nmx-model-picker-portal, .nmx-composer-popover').length > 0) {
+                        return;
+                    }
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (!props.busy) props.onClose();
+                }
+            }}>
             <header><h2 id={props.id} data-nmx-literal>{props.title}</h2><button type='button' aria-label={props.closeLabel} disabled={props.busy} onClick={props.onClose}>×</button></header>
             <div className='nmx-plugin-dialog-body'>{props.children}</div>
             <footer>{props.footer}</footer>
@@ -846,6 +902,8 @@ export interface AppPluginInlineControlsProps {
     readonly chatMessages?: readonly AppPluginChatMessage[];
     readonly chatBusy?: boolean;
     readonly chatModel?: AppPluginModel | null;
+    readonly chatComposerModelControls?: React.ReactNode;
+    readonly chatRenderMarkdown?: (text: string, key: string) => React.ReactNode;
     onSaveModel?(id: string, model: AppPluginModel, vision: AppPluginVisionModel | null): void;
     onChooseModel?(id: string): void;
     onConfigureParams?(id: string, params: Readonly<Record<string, unknown>>): void;
@@ -855,6 +913,7 @@ export interface AppPluginInlineControlsProps {
     onToggleChat?(): void;
     onChatSend?(request: AppPluginChatRequest): void;
     onChatClear?(): void;
+    onChatStopMessage?(messageId: string): void;
     onChatSelectModel?(model: AppPluginModel): void;
     onApplyChatToApp?(text: string): void;
 }
@@ -1356,18 +1415,116 @@ export interface AppPluginChatPanelProps {
     readonly messages?: readonly AppPluginChatMessage[];
     readonly busy?: boolean;
     readonly error?: string;
+    readonly composerModelControls?: React.ReactNode;
+    readonly renderMarkdown?: (text: string, key: string) => React.ReactNode;
     onSelectModel?(model: AppPluginModel): void;
     onSend?(request: AppPluginChatRequest): void;
     onClear?(): void;
+    onStopMessage?(messageId: string): void;
     onApplyToApp?(text: string): void;
     onClose?(): void;
 }
 
+function renderInlinePluginMarkdown(line: string, keyPrefix: string): React.ReactNode {
+    const tokens = line.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
+    return tokens.map((part, idx) => {
+        if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
+            return <code key={`${keyPrefix}-c-${idx}`} className='nmx-inline-code'>{part.slice(1, -1)}</code>;
+        }
+        if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+            return <strong key={`${keyPrefix}-b-${idx}`}>{part.slice(2, -2)}</strong>;
+        }
+        return <React.Fragment key={`${keyPrefix}-t-${idx}`}>{part}</React.Fragment>;
+    });
+}
+
+function renderSimplePluginMarkdown(text: string, keyPrefix: string): React.ReactNode {
+    const normalized = text.replace(/\r\n/g, '\n');
+    const blocks: React.ReactNode[] = [];
+    const fenceRegex = /```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g;
+    let cursor = 0;
+    let match: RegExpExecArray | null;
+    let blockIdx = 0;
+
+    const pushProse = (prose: string): void => {
+        const lines = prose.split('\n');
+        let listItems: { ordered: boolean; text: string }[] = [];
+        let paraLines: string[] = [];
+        const flushPara = (): void => {
+            if (!paraLines.length) return;
+            const joined = paraLines.join('\n').trim();
+            paraLines = [];
+            if (!joined) return;
+            blocks.push(<p key={`${keyPrefix}-p-${blockIdx++}`}>{joined.split('\n').map((ln, idx) =>
+                <React.Fragment key={idx}>{idx > 0 && <br />}{renderInlinePluginMarkdown(ln, `${keyPrefix}-pl-${blockIdx}-${idx}`)}</React.Fragment>)}</p>);
+        };
+        const flushList = (): void => {
+            if (!listItems.length) return;
+            const ordered = listItems[0].ordered;
+            const items = listItems;
+            listItems = [];
+            const Tag = ordered ? 'ol' : 'ul';
+            blocks.push(<Tag key={`${keyPrefix}-l-${blockIdx++}`}>{items.map((item, idx) =>
+                <li key={idx}>{renderInlinePluginMarkdown(item.text, `${keyPrefix}-li-${blockIdx}-${idx}`)}</li>)}</Tag>);
+        };
+        for (const rawLine of lines) {
+            const trimmed = rawLine.trim();
+            if (!trimmed) {
+                flushPara();
+                flushList();
+                continue;
+            }
+            const heading = /^(#{1,4})\s+(.+)$/.exec(trimmed);
+            if (heading) {
+                flushPara();
+                flushList();
+                const level = heading[1].length;
+                const HeadingTag = (`h${Math.min(4, level + 1)}` as 'h2' | 'h3' | 'h4');
+                blocks.push(<HeadingTag key={`${keyPrefix}-h-${blockIdx++}`}>{renderInlinePluginMarkdown(heading[2], `${keyPrefix}-hi-${blockIdx}`)}</HeadingTag>);
+                continue;
+            }
+            const bullet = /^[-*•]\s+(.+)$/.exec(trimmed);
+            const numbered = /^\d+\.\s+(.+)$/.exec(trimmed);
+            if (bullet || numbered) {
+                flushPara();
+                const ordered = Boolean(numbered);
+                if (listItems.length && listItems[0].ordered !== ordered) flushList();
+                listItems.push({ ordered, text: (bullet ? bullet[1] : numbered![1]) });
+                continue;
+            }
+            const quote = /^>\s?(.*)$/.exec(trimmed);
+            if (quote) {
+                flushPara();
+                flushList();
+                blocks.push(<blockquote key={`${keyPrefix}-q-${blockIdx++}`}>{renderInlinePluginMarkdown(quote[1], `${keyPrefix}-qi-${blockIdx}`)}</blockquote>);
+                continue;
+            }
+            flushList();
+            paraLines.push(rawLine);
+        }
+        flushPara();
+        flushList();
+    };
+
+    while ((match = fenceRegex.exec(normalized)) !== null) {
+        if (match.index > cursor) pushProse(normalized.slice(cursor, match.index));
+        const lang = (match[1] || '').trim();
+        const code = match[2].replace(/\n$/, '');
+        blocks.push(<pre key={`${keyPrefix}-code-${blockIdx++}`} className='nmx-code-block' data-lang={lang || undefined}>
+            {lang && <span className='nmx-code-block-lang'>{lang}</span>}
+            <code>{code}</code>
+        </pre>);
+        cursor = match.index + match[0].length;
+    }
+    if (cursor < normalized.length) pushProse(normalized.slice(cursor));
+    return blocks.length ? blocks : normalized;
+}
+
 /**
  * Interactive Multimodal AI Console & MCP Control Panel for an app tab / plugin:
- * - Unrestricted model selection across platform relays, own API connections, local servers, and workbench models.
- * - Multi-modality input & output (text, image, video, audio, structured files/scripts) with one-click download & app injection.
- * - Full capability & MCP server badge display with live screen frame and plugin signal context injection.
+ * - Shares the exact Relay Merchant / Own-API drawer & searchable Model Selector UX as the main conversation ("正文").
+ * - Renders turns and composer matching the main conversation ("正文对话").
+ * - Dispatches every message immediately and concurrently without queueing or locking the composer while previous replies stream.
  */
 export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactElement {
     const { locale, plugin, run } = props;
@@ -1388,6 +1545,38 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
     const [includeContext, setIncludeContext] = React.useState<boolean>(true);
     const [draft, setDraft] = React.useState<string>('');
     const [attachments, setAttachments] = React.useState<readonly AppPluginChatAttachment[]>([]);
+    const [fallbackPicker, setFallbackPicker] = React.useState<{ readonly kind: 'relay' | 'model'; readonly rect: DOMRect } | undefined>();
+    const [fallbackSourceKey, setFallbackSourceKey] = React.useState<string>('');
+    const [fallbackModelQuery, setFallbackModelQuery] = React.useState<string>('');
+    const messagesEndRef = React.useRef<HTMLDivElement>(null);
+    const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+    const messages = props.messages || [];
+    const lastMsgSignature = messages.map(m => `${m.id}:${m.text.length}:${Boolean(m.streaming || m.pending)}`).join('|');
+    React.useEffect(() => {
+        messagesEndRef.current?.scrollIntoView?.({ block: 'nearest' });
+    }, [lastMsgSignature]);
+
+    React.useEffect(() => {
+        if (!fallbackPicker || typeof document === 'undefined') return undefined;
+        const onKeyDown = (event: KeyboardEvent): void => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            event.stopPropagation();
+            setFallbackPicker(undefined);
+        };
+        const onPointerDown = (event: MouseEvent): void => {
+            const target = event.target as HTMLElement | null;
+            if (target?.closest?.('.nmx-model-picker-portal, .nmx-composer-relay-button, .nmx-route-button')) return;
+            setFallbackPicker(undefined);
+        };
+        document.addEventListener('keydown', onKeyDown, true);
+        document.addEventListener('mousedown', onPointerDown, true);
+        return () => {
+            document.removeEventListener('keydown', onKeyDown, true);
+            document.removeEventListener('mousedown', onPointerDown, true);
+        };
+    }, [Boolean(fallbackPicker)]);
 
     const permissions = plugin?.summary?.permissions?.length
         ? plugin.summary.permissions
@@ -1407,11 +1596,11 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
 
     const submit = (textValue: string, forcedModality?: AppPluginChatModality): void => {
         const clean = textValue.trim();
-        if ((!clean && !attachments.length) || props.busy || !props.onSend) return;
+        if ((!clean && !attachments.length) || !props.onSend) return;
         const usedModality = forcedModality || modality;
         props.onSend({
             text: clean || (zh ? '请处理附带的文件与当前画面' : 'Process the attached files and live screen'),
-            model: chosenModel,
+            ...(props.composerModelControls ? {} : { model: chosenModel }),
             modality: usedModality,
             includeScreenshot,
             includeContext,
@@ -1421,6 +1610,7 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
         });
         setDraft('');
         setAttachments([]);
+        if (textareaRef.current) textareaRef.current.style.height = '';
     };
 
     const onSelectFiles = (event: React.ChangeEvent<HTMLInputElement>): void => {
@@ -1448,14 +1638,158 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
         }
     };
 
-    const messages = props.messages || [];
+    const sourceKeyForModel = (item: AppPluginModel): string => item.source === 'connection'
+        ? `official:${item.connectionId || item.connectionLabel || 'api'}`
+        : item.source === 'local'
+            ? `local:${item.endpoint || item.protocol || 'local'}`
+            : `managed:${item.merchant || 'platform'}`;
+    const sourceLabelForModel = (item: AppPluginModel): string => item.source === 'connection'
+        ? (item.connectionLabel || item.connectionId || t(locale, 'ownApi'))
+        : item.source === 'local'
+            ? `${item.protocol || 'local'}${item.endpoint ? ` · ${item.endpoint}` : ''}`
+            : (item.merchant || t(locale, 'relay'));
+    const activeFallbackSource = fallbackSourceKey || sourceKeyForModel(chosenModel);
+    const fallbackSources = Array.from(new Map(models.map(item => [sourceKeyForModel(item), {
+        key: sourceKeyForModel(item),
+        label: sourceLabelForModel(item),
+        source: item.source
+    }])).values());
+    const fallbackModelsForSource = models.filter(item => {
+        if (fallbackSources.length > 1 && sourceKeyForModel(item) !== activeFallbackSource) return false;
+        const q = fallbackModelQuery.trim().toLowerCase();
+        if (!q) return true;
+        return `${item.label || ''} ${item.model} ${sourceLabelForModel(item)}`.toLowerCase().includes(q);
+    });
+
+    const renderedModelControls = props.composerModelControls ?? <>
+        <button type='button' className='nmx-composer-relay-button nmx-plugin-chat-relay-trigger'
+            aria-haspopup='dialog' aria-expanded={fallbackPicker?.kind === 'relay'}
+            onClick={event => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setFallbackPicker(prev => prev?.kind === 'relay' ? undefined : { kind: 'relay', rect });
+            }}>
+            <span>{sourceLabelForModel(chosenModel)}</span>
+            <i className='codicon codicon-chevron-down' aria-hidden='true' />
+        </button>
+        <button type='button' className='nmx-route-button nmx-composer-model-button nmx-plugin-chat-model-trigger'
+            aria-haspopup='dialog' aria-expanded={fallbackPicker?.kind === 'model'}
+            onClick={event => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setFallbackModelQuery('');
+                setFallbackPicker(prev => prev?.kind === 'model' ? undefined : { kind: 'model', rect });
+            }}>
+            <span>{chosenModel.label || chosenModel.model}</span>
+            <i className='codicon codicon-chevron-down' aria-hidden='true' />
+        </button>
+        {fallbackPicker && typeof document !== 'undefined' && createPortal(
+            <div className={`nmx-model-picker-portal${fallbackPicker.kind === 'relay' ? ' nmx-relay-picker-popover' : ''}`}
+                role='dialog' aria-label={fallbackPicker.kind === 'relay' ? (zh ? '选择中转商或自有 API' : 'Choose Relay or Own API') : (zh ? '选择对话模型' : 'Choose Model')}
+                style={{ position: 'fixed', left: Math.max(12, Math.min(fallbackPicker.rect.left, (typeof window !== 'undefined' ? window.innerWidth : 1024) - 340)), top: Math.max(12, fallbackPicker.rect.top - 260), zIndex: 10040 }}>
+                {fallbackPicker.kind === 'relay' ? (
+                    <div className='nmx-relay-popover'>
+                        <div className='nmx-relay-popover-header'><strong>{zh ? '中转商 / 自有 API' : 'Relays & Own APIs'}</strong></div>
+                        <div className='nmx-relay-source-list' role='listbox'>
+                            {fallbackSources.map(source => {
+                                const selected = source.key === activeFallbackSource;
+                                return <button key={source.key} type='button' role='option' aria-selected={selected}
+                                    className={`nmx-relay-option-select${selected ? ' is-selected' : ''}`}
+                                    onClick={() => {
+                                        setFallbackSourceKey(source.key);
+                                        const first = models.find(item => sourceKeyForModel(item) === source.key);
+                                        if (first) {
+                                            setActiveKey(inlineModelKey(first));
+                                            props.onSelectModel?.(first);
+                                        }
+                                        setFallbackPicker(undefined);
+                                    }}>
+                                    <span className='nmx-relay-option-name'><strong>{source.label}</strong></span>
+                                </button>;
+                            })}
+                        </div>
+                    </div>
+                ) : (
+                    <div className='nmx-model-picker-popover'>
+                        <div className='nmx-model-picker-search'>
+                            <i className='codicon codicon-search' aria-hidden='true' />
+                            <ImeInput value={fallbackModelQuery} placeholder={zh ? '搜索模型…' : 'Search models…'}
+                                onChange={event => setFallbackModelQuery(event.currentTarget.value)} />
+                        </div>
+                        <div className='nmx-model-picker-list' role='listbox'>
+                            {fallbackModelsForSource.map(item => {
+                                const itemKey = inlineModelKey(item);
+                                const selected = itemKey === inlineModelKey(chosenModel);
+                                return <button key={itemKey} type='button' role='option' aria-selected={selected}
+                                    className={`nmx-model-picker-option${selected ? ' is-selected' : ''}`}
+                                    onClick={() => {
+                                        setActiveKey(itemKey);
+                                        props.onSelectModel?.(item);
+                                        setFallbackPicker(undefined);
+                                    }}>
+                                    <strong>{item.label || item.model}</strong>
+                                    <small>{sourceLabelForModel(item)}</small>
+                                </button>;
+                            })}
+                        </div>
+                    </div>
+                )}
+            </div>,
+            document.body
+        )}
+    </>;
+
+    const renderAttachmentsBlock = (msgAttachments: readonly AppPluginChatAttachment[], isUser: boolean): React.ReactElement => (
+        <div className={`nmx-plugin-chat-attachments${isUser ? ' is-user' : ''}`}>
+            {msgAttachments.map((att, idx) => {
+                const href = att.dataUrl || att.url || (att.content ? `data:${att.mimeType || 'text/plain'};charset=utf-8,${encodeURIComponent(att.content)}` : '');
+                if (att.kind === 'image') {
+                    return <div key={att.id || idx} className='nmx-plugin-chat-media is-image'>
+                        {href && <img src={href} alt={att.name} />}
+                        <div className='nmx-plugin-chat-media-bar'>
+                            <span data-nmx-literal>{att.name}</span>
+                            {href && <a href={href} download={att.name}>{zh ? '下载图片' : 'Download'}</a>}
+                        </div>
+                    </div>;
+                }
+                if (att.kind === 'video') {
+                    return <div key={att.id || idx} className='nmx-plugin-chat-media is-video'>
+                        {href && <video src={href} controls playsInline preload='metadata'></video>}
+                        <div className='nmx-plugin-chat-media-bar'>
+                            <span data-nmx-literal>{att.name}</span>
+                            {href && <a href={href} download={att.name}>{zh ? '下载视频' : 'Download'}</a>}
+                        </div>
+                    </div>;
+                }
+                if (att.kind === 'audio') {
+                    return <div key={att.id || idx} className='nmx-plugin-chat-media is-audio'>
+                        {href && <audio src={href} controls preload='metadata'></audio>}
+                        <div className='nmx-plugin-chat-media-bar'>
+                            <span data-nmx-literal>{att.name}</span>
+                            {href && <a href={href} download={att.name}>{zh ? '下载音频' : 'Download'}</a>}
+                        </div>
+                    </div>;
+                }
+                return <div key={att.id || idx} className='nmx-plugin-chat-media is-file'>
+                    <div className='nmx-plugin-chat-media-bar'>
+                        <i className='codicon codicon-file-code' aria-hidden='true'></i>
+                        <strong data-nmx-literal>{att.name}</strong>
+                        {att.mimeType && <small data-nmx-literal>{att.mimeType}</small>}
+                        {href && <a href={href} download={att.name}>{zh ? '下载文件' : 'Download'}</a>}
+                        {!isUser && att.content && props.onApplyToApp && <button type='button' onClick={() => props.onApplyToApp?.(att.content!)}>
+                            {zh ? '发送到应用' : 'Send to App'}
+                        </button>}
+                    </div>
+                    {att.content && <pre data-nmx-literal>{att.content.slice(0, 600)}</pre>}
+                </div>;
+            })}
+        </div>
+    );
 
     return <div className='nmx-plugin-chat-panel' role='region' aria-label={zh ? '插件 AI 控制台' : 'Plugin AI Console'}>
         <div className='nmx-plugin-chat-header'>
             <div className='nmx-plugin-chat-title-row'>
                 <span className='nmx-plugin-chat-title'>
                     <i className='codicon codicon-comment-discussion' aria-hidden='true'></i>
-                    <strong data-nmx-literal>{zh ? '插件 AI 对话与多模态控制台' : 'Plugin AI & Multimodal Console'}</strong>
+                    <strong data-nmx-literal>{zh ? '标签内 AI 对话' : 'Tab AI Conversation'}</strong>
                 </span>
                 <div className='nmx-plugin-mcp-badges' aria-label={zh ? '已开放能力与 MCP' : 'Enabled Capabilities & MCP'}>
                     {permissions.map(perm => <span key={perm} className='nmx-plugin-cap-badge' data-nmx-literal>
@@ -1472,47 +1806,9 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
                     <i className='codicon codicon-close' aria-hidden='true'></i>
                 </button>}
             </div>
-            <div className='nmx-plugin-chat-toolbar'>
-                <label className='nmx-plugin-field'>
-                    <span>{zh ? '对话模型' : 'Model'}</span>
-                    <select className='nmx-plugin-chat-model-select' value={inlineModelKey(chosenModel)} disabled={props.busy}
-                        onChange={event => {
-                            const nextKey = event.currentTarget.value;
-                            setActiveKey(nextKey);
-                            const found = models.find(item => inlineModelKey(item) === nextKey);
-                            if (found) props.onSelectModel?.(found);
-                        }}>
-                        {models.map(model => <option key={inlineModelKey(model)} value={inlineModelKey(model)}>
-                            {model.label || model.model}{model.source === 'connection' ? ` · ${model.connectionLabel || model.connectionId}`
-                                : model.source === 'local' ? ` · ${model.protocol || 'local'} · ${model.endpoint || ''}`
-                                    : model.merchant ? ` · ${model.merchant}` : ` · ${t(locale, 'relay')}`}
-                        </option>)}
-                    </select>
-                </label>
-                <label className='nmx-plugin-field'>
-                    <span>{zh ? '输出格式' : 'Output'}</span>
-                    <select className='nmx-plugin-chat-modality-select' value={modality} disabled={props.busy}
-                        onChange={event => setModality(event.currentTarget.value as AppPluginChatModality)}>
-                        <option value='auto'>{zh ? '智能多模态 (文字/图/视频/文件)' : 'Auto Multimodal'}</option>
-                        <option value='text'>{zh ? '文字与指令' : 'Text & Actions'}</option>
-                        <option value='image'>{zh ? '图片生成 (PNG/SVG)' : 'Image Generation'}</option>
-                        <option value='video'>{zh ? '视频生成 (MP4/WebM)' : 'Video Generation'}</option>
-                        <option value='audio'>{zh ? '语音合成 (WAV/MP3)' : 'Audio / Speech'}</option>
-                        <option value='file'>{zh ? '结构化文件 (JSON/脚本)' : 'File / Script'}</option>
-                    </select>
-                </label>
-                <label className='nmx-plugin-check'>
-                    <input type='checkbox' checked={includeScreenshot} onChange={event => setIncludeScreenshot(event.currentTarget.checked)} />
-                    <span>{zh ? '附带实时画面' : 'Live Frame'}</span>
-                </label>
-                <label className='nmx-plugin-check'>
-                    <input type='checkbox' checked={includeContext} onChange={event => setIncludeContext(event.currentTarget.checked)} />
-                    <span>{zh ? '附带信号与MCP' : 'Signals & MCP'}</span>
-                </label>
-            </div>
         </div>
         <div className='nmx-plugin-chips nmx-plugin-chat-prompts' aria-label={zh ? '快捷指令' : 'Quick Prompts'}>
-            {quickPrompts.map(item => <button type='button' key={item.id} disabled={props.busy} data-nmx-literal
+            {quickPrompts.map(item => <button type='button' key={item.id} data-nmx-literal
                 onClick={() => {
                     if (item.modality) setModality(item.modality);
                     submit(item.prompt, item.modality);
@@ -1520,97 +1816,131 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
                 {item.label}
             </button>)}
         </div>
-        <div className='nmx-plugin-chat-messages' role='log' aria-live='polite'>
+        <div className='nmx-plugin-chat-messages nmx-conversation-stream' role='log' aria-live='polite'>
             {messages.length === 0 ? <div className='nmx-plugin-chat-empty'>
                 <i className='codicon codicon-sparkle' aria-hidden='true'></i>
                 <span data-nmx-literal>
                     {zh
-                        ? `已为「${appTitle}」开放完整插件控制面板权限（实时画面、键鼠动作、MCP 工具、多模型切换及文字/图片/视频/音频/文件多模态输出）。直接输入指令或点击上方快捷按钮开始对话。`
-                        : `Full plugin console permissions enabled for "${appTitle}" (live frame, input actions, MCP tools, unrestricted model selection, and text/image/video/audio/file output).`}
+                        ? `当前应用「${appTitle}」已就绪。支持与正文一致切换中转商或自有 API，多条消息无需排队可直接并发发送。`
+                        : `Ready for "${appTitle}". Switch relays or own APIs just like the main conversation, and send messages immediately without queueing.`}
                 </span>
-            </div> : messages.map(msg => <div key={msg.id} className={`nmx-plugin-chat-msg is-${msg.role}`}>
-                <div className='nmx-plugin-chat-msg-head'>
-                    <strong>{msg.role === 'user' ? (zh ? '你' : 'You') : (msg.model || 'AI')}</strong>
-                    {msg.modality && msg.modality !== 'auto' && <span className='nmx-plugin-cap-badge' data-nmx-literal>{msg.modality}</span>}
-                    <span className='nmx-plugin-chat-msg-actions'>
-                        {msg.role === 'assistant' && msg.text && <button type='button' onClick={() => void navigator.clipboard?.writeText?.(msg.text)}>
-                            <i className='codicon codicon-copy' aria-hidden='true'></i>{t(locale, 'copy')}
+            </div> : messages.map(msg => msg.role === 'user' ? (
+                <div key={msg.id} className='nmx-plugin-chat-turn nmx-plugin-chat-msg is-user'>
+                    <div className='nmx-user-message nmx-plugin-chat-user-bubble'>
+                        {msg.attachments && msg.attachments.length > 0 && renderAttachmentsBlock(msg.attachments, true)}
+                        {msg.text && <div className='nmx-user-message-text nmx-plugin-chat-text' data-nmx-literal>{msg.text}</div>}
+                    </div>
+                </div>
+            ) : (() => {
+                const isStreaming = Boolean(msg.streaming || msg.pending);
+                return (
+                <div key={msg.id} data-message-id={msg.id} data-reply-to-id={msg.replyToId} className={`nmx-plugin-chat-turn nmx-plugin-chat-msg is-assistant${isStreaming ? ' is-pending is-streaming' : ''}`}>
+                    <div className='nmx-plugin-chat-assistant-meta'>
+                        <span className='nmx-plugin-chat-assistant-model' data-nmx-literal>{msg.model || 'AI'}</span>
+                        {msg.routeLabel && msg.routeLabel !== (msg.model || 'AI') && <span className='nmx-plugin-chat-assistant-route' data-nmx-literal>{msg.routeLabel}</span>}
+                        {msg.modality && msg.modality !== 'auto' && <span className='nmx-plugin-cap-badge' data-nmx-literal>{msg.modality}</span>}
+                        {isStreaming && props.onStopMessage && <button type='button' className='nmx-plugin-chat-stop-msg' data-stop-message-id={msg.id}
+                            onClick={() => props.onStopMessage?.(msg.id)}>
+                            <i className='codicon codicon-debug-stop' aria-hidden='true'></i>{zh ? '停止' : 'Stop'}
                         </button>}
-                        {msg.role === 'assistant' && msg.text && props.onApplyToApp && <button type='button' onClick={() => props.onApplyToApp?.(msg.text)}>
+                    </div>
+                    {msg.thinking && <details className='nmx-plugin-chat-thinking'>
+                        <summary>{zh ? '思考过程' : 'Thinking'}</summary>
+                        <pre data-nmx-literal>{msg.thinking}</pre>
+                    </details>}
+                    {msg.toolCalls && msg.toolCalls.length > 0 && <div className='nmx-plugin-chat-tools'>
+                        {msg.toolCalls.map((call, idx) => <span key={`${call.name}-${idx}`} className='nmx-plugin-cap-badge is-mcp' data-nmx-literal>
+                            <i className='codicon codicon-tools' aria-hidden='true'></i>{call.name}{call.output ? `: ${call.output}` : ''}
+                        </span>)}
+                    </div>}
+                    {msg.text ? (
+                        <div className='nmx-gateway-content nmx-plugin-chat-markdown' data-nmx-literal>
+                            {props.renderMarkdown ? props.renderMarkdown(msg.text, msg.id) : renderSimplePluginMarkdown(msg.text, msg.id)}
+                        </div>
+                    ) : isStreaming ? (
+                        <div className='nmx-plugin-chat-pending' role='status' aria-label={zh ? '正在生成回复' : 'Generating reply'}>
+                            <span className='nmx-plugin-chat-dot' />
+                            <span className='nmx-plugin-chat-dot' />
+                            <span className='nmx-plugin-chat-dot' />
+                        </div>
+                    ) : null}
+                    {isStreaming && msg.text && <span className='nmx-plugin-chat-stream-caret' aria-hidden='true' />}
+                    {msg.error && <div className='nmx-plugin-muted is-error nmx-plugin-chat-error' data-nmx-literal>{msg.error}</div>}
+                    {msg.attachments && msg.attachments.length > 0 && renderAttachmentsBlock(msg.attachments, false)}
+                    {!isStreaming && msg.text && <div className='nmx-plugin-chat-msg-actions'>
+                        <button type='button' onClick={() => void navigator.clipboard?.writeText?.(msg.text)}>
+                            <i className='codicon codicon-copy' aria-hidden='true'></i>{t(locale, 'copy')}
+                        </button>
+                        {props.onApplyToApp && <button type='button' onClick={() => props.onApplyToApp?.(msg.text)}>
                             <i className='codicon codicon-terminal' aria-hidden='true'></i>{zh ? '键入应用' : 'Send to App'}
                         </button>}
-                    </span>
+                    </div>}
                 </div>
-                {msg.text && <div className='nmx-plugin-chat-text' data-nmx-literal>{msg.text}</div>}
-                {msg.error && <div className='nmx-plugin-muted is-error' data-nmx-literal>{msg.error}</div>}
-                {msg.toolCalls && msg.toolCalls.length > 0 && <div className='nmx-plugin-chat-tools'>
-                    {msg.toolCalls.map((call, idx) => <span key={`${call.name}-${idx}`} className='nmx-plugin-cap-badge is-mcp' data-nmx-literal>
-                        <i className='codicon codicon-tools' aria-hidden='true'></i>{call.name}{call.output ? `: ${call.output}` : ''}
-                    </span>)}
-                </div>}
-                {msg.attachments && msg.attachments.length > 0 && <div className='nmx-plugin-chat-attachments'>
-                    {msg.attachments.map((att, idx) => {
-                        const href = att.dataUrl || att.url || (att.content ? `data:${att.mimeType || 'text/plain'};charset=utf-8,${encodeURIComponent(att.content)}` : '');
-                        if (att.kind === 'image') {
-                            return <div key={att.id || idx} className='nmx-plugin-chat-media is-image'>
-                                {href && <img src={href} alt={att.name} />}
-                                <div className='nmx-plugin-chat-media-bar'>
-                                    <span data-nmx-literal>{att.name}</span>
-                                    {href && <a href={href} download={att.name}>{zh ? '下载图片' : 'Download'}</a>}
-                                </div>
-                            </div>;
-                        }
-                        if (att.kind === 'video') {
-                            return <div key={att.id || idx} className='nmx-plugin-chat-media is-video'>
-                                {href && <video src={href} controls playsInline preload='metadata'></video>}
-                                <div className='nmx-plugin-chat-media-bar'>
-                                    <span data-nmx-literal>{att.name}</span>
-                                    {href && <a href={href} download={att.name}>{zh ? '下载视频' : 'Download'}</a>}
-                                </div>
-                            </div>;
-                        }
-                        if (att.kind === 'audio') {
-                            return <div key={att.id || idx} className='nmx-plugin-chat-media is-audio'>
-                                {href && <audio src={href} controls preload='metadata'></audio>}
-                                <div className='nmx-plugin-chat-media-bar'>
-                                    <span data-nmx-literal>{att.name}</span>
-                                    {href && <a href={href} download={att.name}>{zh ? '下载音频' : 'Download'}</a>}
-                                </div>
-                            </div>;
-                        }
-                        return <div key={att.id || idx} className='nmx-plugin-chat-media is-file'>
-                            <div className='nmx-plugin-chat-media-bar'>
-                                <i className='codicon codicon-file-code' aria-hidden='true'></i>
-                                <strong data-nmx-literal>{att.name}</strong>
-                                {att.mimeType && <small data-nmx-literal>{att.mimeType}</small>}
-                                {href && <a href={href} download={att.name}>{zh ? '下载文件' : 'Download'}</a>}
-                                {att.content && props.onApplyToApp && <button type='button' onClick={() => props.onApplyToApp?.(att.content!)}>
-                                    {zh ? '发送到应用' : 'Send to App'}
-                                </button>}
-                            </div>
-                            {att.content && <pre data-nmx-literal>{att.content.slice(0, 600)}</pre>}
-                        </div>;
-                    })}
-                </div>}
-            </div>)}
+                );
+            })())}
+            <div ref={messagesEndRef} />
         </div>
-        {attachments.length > 0 && <div className='nmx-plugin-chat-pending-files'>
-            {attachments.map((att, idx) => <span key={att.id || idx} className='nmx-plugin-cap-badge' data-nmx-literal>
-                <i className='codicon codicon-file' aria-hidden='true'></i>{att.name}
-                <button type='button' aria-label={t(locale, 'close')} onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}>×</button>
-            </span>)}
-        </div>}
-        <form className='nmx-plugin-chat-composer' onSubmit={event => { event.preventDefault(); submit(draft); }}>
-            <label className='nmx-plugin-chat-attach' title={zh ? '添加图片/视频/音频/文件附件' : 'Attach image/video/audio/file'}>
-                <input type='file' multiple accept='image/*,video/*,audio/*,.txt,.md,.json,.csv,.js,.ts,.py' onChange={onSelectFiles} />
-                <i className='codicon codicon-clippy' aria-hidden='true'></i>
-            </label>
-            <ImeInput value={draft} maxLength={2000} disabled={props.busy}
-                placeholder={zh ? '输入文字与模型对话、调用 MCP 工具，或生成图片/视频/音频/文件…' : 'Chat with model, invoke MCP tools, or generate image/video/audio/files…'}
-                onChange={event => setDraft(event.currentTarget.value)} />
-            <button type='submit' className='is-primary' disabled={props.busy || (!draft.trim() && !attachments.length)}>
-                {props.busy ? t(locale, 'loading') : (zh ? '发送' : 'Send')}
-            </button>
+        <form className='nmx-composer nmx-plugin-chat-composer-card' onSubmit={event => { event.preventDefault(); submit(draft); }}>
+            {attachments.length > 0 && <div className='nmx-plugin-chat-pending-files'>
+                {attachments.map((att, idx) => <span key={att.id || idx} className='nmx-plugin-cap-badge' data-nmx-literal>
+                    <i className={`codicon codicon-${att.kind === 'image' ? 'file-media' : 'file'}`} aria-hidden='true'></i>{att.name}
+                    <button type='button' aria-label={t(locale, 'close')} onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}>×</button>
+                </span>)}
+            </div>}
+            <ImeTextarea ref={textareaRef} className='nmx-composer-input nmx-plugin-chat-textarea' rows={1} value={draft} maxLength={8000}
+                placeholder={zh ? '输入消息直接发送（Enter 发送，Shift+Enter 换行，无需等待上一条完成）…' : 'Type a message to send immediately (Enter to send, Shift+Enter for newline)…'}
+                onChange={event => {
+                    const el = event.currentTarget;
+                    setDraft(el.value);
+                    el.style.height = 'auto';
+                    el.style.height = `${Math.min(140, Math.max(36, el.scrollHeight))}px`;
+                }}
+                onKeyDown={event => {
+                    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+                    if (event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+                        event.preventDefault();
+                        submit(draft);
+                    }
+                }} />
+            <div className='nmx-composer-footer nmx-plugin-chat-composer-bar'>
+                <div className='nmx-plugin-chat-composer-tools'>
+                    <label className='nmx-composer-tool nmx-plugin-chat-attach' title={zh ? '添加图片/视频/音频/文件附件' : 'Attach image/video/audio/file'}>
+                        <input type='file' multiple accept='image/*,video/*,audio/*,.txt,.md,.json,.csv,.js,.ts,.py' onChange={onSelectFiles} />
+                        <i className='codicon codicon-add' aria-hidden='true'></i>
+                    </label>
+                    {renderedModelControls}
+                    <button type='button' className={`nmx-plugin-chat-toggle-pill${includeScreenshot ? ' is-active' : ''}`}
+                        aria-pressed={includeScreenshot} onClick={() => setIncludeScreenshot(prev => !prev)}
+                        title={zh ? '发送时附带应用实时画面截图' : 'Attach live window frame'}>
+                        <i className='codicon codicon-device-camera' aria-hidden='true'></i>
+                        <span>{zh ? '实时画面' : 'Live Frame'}</span>
+                    </button>
+                    <button type='button' className={`nmx-plugin-chat-toggle-pill${includeContext ? ' is-active' : ''}`}
+                        aria-pressed={includeContext} onClick={() => setIncludeContext(prev => !prev)}
+                        title={zh ? '附带窗口读数与 MCP 上下文' : 'Include window signals & MCP context'}>
+                        <i className='codicon codicon-plug' aria-hidden='true'></i>
+                        <span>{zh ? '信号/MCP' : 'Signals'}</span>
+                    </button>
+                    <label className='nmx-plugin-chat-modality-pill' title={zh ? '输出模态' : 'Output modality'}>
+                        <select className='nmx-plugin-chat-modality-select' value={modality}
+                            aria-label={zh ? '输出格式' : 'Output'}
+                            onChange={event => setModality(event.currentTarget.value as AppPluginChatModality)}>
+                            <option value='auto'>{zh ? '多模态' : 'Auto'}</option>
+                            <option value='text'>{zh ? '文字' : 'Text'}</option>
+                            <option value='image'>{zh ? '图片' : 'Image'}</option>
+                            <option value='video'>{zh ? '视频' : 'Video'}</option>
+                            <option value='audio'>{zh ? '音频' : 'Audio'}</option>
+                            <option value='file'>{zh ? '文件' : 'File'}</option>
+                        </select>
+                    </label>
+                </div>
+                <button type='submit' className='nmx-send-button nmx-plugin-chat-send-btn'
+                    aria-label={zh ? '立即发送' : 'Send immediately'}
+                    title={zh ? '立即发送（不进入排队队列）' : 'Send immediately without queueing'}
+                    disabled={!draft.trim() && !attachments.length}>
+                    <i className='codicon codicon-arrow-up' aria-hidden='true'></i>
+                </button>
+            </div>
         </form>
     </div>;
 }
@@ -1650,8 +1980,9 @@ export function AppPluginRunBar(props: AppPluginInlineControlsProps & { readonly
         </>}
         {props.chatOpen && <AppPluginChatPanel locale={locale} appName={props.appName || run.name} plugin={props.plugin} run={run}
             choices={props.choices} extraModels={props.extraModels} selectedModel={props.chatModel} messages={props.chatMessages}
-            busy={props.chatBusy} error={props.error} onSelectModel={props.onChatSelectModel} onSend={props.onChatSend}
-            onClear={props.onChatClear} onApplyToApp={props.onApplyChatToApp} onClose={props.onToggleChat} />}
+            busy={props.chatBusy} error={props.error} composerModelControls={props.chatComposerModelControls} renderMarkdown={props.chatRenderMarkdown}
+            onSelectModel={props.onChatSelectModel} onSend={props.onChatSend}
+            onClear={props.onChatClear} onStopMessage={props.onChatStopMessage} onApplyToApp={props.onApplyChatToApp} onClose={props.onToggleChat} />}
         {props.error && <span className='nmx-plugin-muted is-error' role='alert' data-nmx-literal>{props.error}</span>}
     </div>;
 }
@@ -1720,8 +2051,9 @@ export function AppPluginHubDialog(props: AppPluginInlineControlsProps & {
         {props.chatOpen && <div className='nmx-plugin-hub-chat'>
             <AppPluginChatPanel locale={locale} appName={props.appName} plugin={props.compatible[0]} run={props.activeRun}
                 choices={props.choices} extraModels={props.extraModels} selectedModel={props.chatModel} messages={props.chatMessages}
-                busy={props.chatBusy} error={props.error} onSelectModel={props.onChatSelectModel} onSend={props.onChatSend}
-                onClear={props.onChatClear} onApplyToApp={props.onApplyChatToApp} onClose={props.onToggleChat} />
+                busy={props.chatBusy} error={props.error} composerModelControls={props.chatComposerModelControls} renderMarkdown={props.chatRenderMarkdown}
+                onSelectModel={props.onChatSelectModel} onSend={props.onChatSend}
+                onClear={props.onChatClear} onStopMessage={props.onChatStopMessage} onApplyToApp={props.onApplyChatToApp} onClose={props.onToggleChat} />
         </div>}
         <section className='nmx-plugin-hub-section'>
             <h3 data-nmx-literal>{t(locale, 'hubInstalled', { app: props.appName })}</h3>
