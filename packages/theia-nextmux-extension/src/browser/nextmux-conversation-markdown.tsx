@@ -200,6 +200,165 @@ export function highlightCode(code: string, info: string, tokenizer: CodeTokeniz
     }).join('\n');
 }
 
+/**
+ * Coloured emphasis a model writes as HTML (`<span style="color: #d73a49">`, `<font color="red">`,
+ * `<mark style="background: gold">`), as open-source chat UIs show it. Only the colour survives, and only as one of
+ * these hues: each has a light-theme and a dark-theme shade that keep at least 4.5:1 against the reply
+ * (nextmux-markdown.css), so a reply can never write invisible or garish text. Every other attribute and CSS
+ * property is dropped and the output carries classes only (no style attribute), so nothing positions, sizes or
+ * scripts itself this way.
+ */
+export const MARKDOWN_INK_HUES = ['red', 'orange', 'yellow', 'green', 'teal', 'blue', 'purple', 'pink', 'gray'] as const;
+export type MarkdownInkHue = typeof MARKDOWN_INK_HUES[number];
+
+/** CSS colour names a model uses, by hue; black, white and other plain greys mean the ordinary text colour. */
+const NAMED_INK: Readonly<Record<string, MarkdownInkHue | null>> = {
+    red: 'red', darkred: 'red', crimson: 'red', firebrick: 'red', indianred: 'red', tomato: 'red', salmon: 'red', lightcoral: 'red', maroon: 'red', brown: 'red',
+    orange: 'orange', darkorange: 'orange', orangered: 'orange', coral: 'orange', chocolate: 'orange', sienna: 'orange', peru: 'orange', sandybrown: 'orange',
+    yellow: 'yellow', gold: 'yellow', goldenrod: 'yellow', darkgoldenrod: 'yellow', khaki: 'yellow', darkkhaki: 'yellow', olive: 'yellow', amber: 'yellow',
+    green: 'green', darkgreen: 'green', forestgreen: 'green', seagreen: 'green', mediumseagreen: 'green', limegreen: 'green', lime: 'green', lawngreen: 'green',
+    springgreen: 'green', olivedrab: 'green', yellowgreen: 'green',
+    teal: 'teal', darkcyan: 'teal', cyan: 'teal', aqua: 'teal', turquoise: 'teal', mediumturquoise: 'teal', lightseagreen: 'teal', aquamarine: 'teal',
+    blue: 'blue', navy: 'blue', darkblue: 'blue', mediumblue: 'blue', royalblue: 'blue', dodgerblue: 'blue', deepskyblue: 'blue', steelblue: 'blue',
+    skyblue: 'blue', lightskyblue: 'blue', cornflowerblue: 'blue', midnightblue: 'blue',
+    purple: 'purple', indigo: 'purple', violet: 'purple', darkviolet: 'purple', blueviolet: 'purple', mediumpurple: 'purple', rebeccapurple: 'purple',
+    magenta: 'purple', fuchsia: 'purple', orchid: 'purple', darkorchid: 'purple', plum: 'purple', slateblue: 'purple',
+    pink: 'pink', hotpink: 'pink', deeppink: 'pink', lightpink: 'pink', palevioletred: 'pink', mediumvioletred: 'pink',
+    gray: 'gray', grey: 'gray', darkgray: 'gray', darkgrey: 'gray', dimgray: 'gray', dimgrey: 'gray', silver: 'gray', slategray: 'gray', slategrey: 'gray',
+    lightslategray: 'gray', lightslategrey: 'gray', darkslategray: 'gray', darkslategrey: 'gray',
+    // Pale and deep shades a model names for highlights ("background: lightblue") map to their hue as well.
+    darksalmon: 'orange', lightsalmon: 'orange', peachpuff: 'orange', tan: 'orange', burlywood: 'orange',
+    lightyellow: 'yellow', lemonchiffon: 'yellow', lightgoldenrodyellow: 'yellow', palegoldenrod: 'yellow', cornsilk: 'yellow', beige: 'yellow',
+    wheat: 'yellow', moccasin: 'yellow', papayawhip: 'yellow', blanchedalmond: 'yellow', navajowhite: 'yellow',
+    lightgreen: 'green', palegreen: 'green', darkseagreen: 'green', mediumspringgreen: 'green', darkolivegreen: 'green', honeydew: 'green',
+    lightcyan: 'teal', paleturquoise: 'teal', darkturquoise: 'teal', cadetblue: 'teal', azure: 'teal',
+    lightblue: 'blue', powderblue: 'blue', lightsteelblue: 'blue', aliceblue: 'blue',
+    lavender: 'purple', thistle: 'purple', mediumorchid: 'purple', mediumslateblue: 'purple', darkslateblue: 'purple', darkmagenta: 'purple',
+    mistyrose: 'pink', lavenderblush: 'pink', rosybrown: 'pink',
+    black: null, white: null, inherit: null, initial: null, currentcolor: null, transparent: null, lightgray: null, lightgrey: null, gainsboro: null,
+    whitesmoke: null, snow: null, ivory: null, linen: null, oldlace: null, seashell: null, floralwhite: null, ghostwhite: null, mintcream: null
+};
+
+const COLOUR_NUMBER = String.raw`[+]?(?:\d{1,3}(?:\.\d+)?|\.\d+)`;
+const COLOUR_FUNCTION = new RegExp(String.raw`^(rgba?|hsla?)\(\s*(${COLOUR_NUMBER})(deg|%)?\s*(?:,\s*|\s+)(${COLOUR_NUMBER})(%)?\s*(?:,\s*|\s+)(${COLOUR_NUMBER})(%)?\s*(?:(?:,|/)\s*${COLOUR_NUMBER}%?\s*)?\)$`);
+
+/**
+ * The hue of a CSS colour value (`red`, `#d73a49`, `#f80`, `rgb(255 99 71)`, `hsl(210, 80%, 45%)`), undefined for
+ * anything else (variables, `url(\u2026)`, expressions\u2026) and null for black, white and pale or dark greys.
+ */
+export function markdownColorHue(raw: string): MarkdownInkHue | null | undefined {
+    const value = raw.trim().toLowerCase().replace(/\s*!important$/, '');
+    if (!value || value.length > 48) return undefined;
+    if (Object.prototype.hasOwnProperty.call(NAMED_INK, value)) return NAMED_INK[value];
+    let red: number, green: number, blue: number;
+    const hexMatch = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/.exec(value);
+    if (hexMatch) {
+        const digits = hexMatch[1].length <= 4 ? [...hexMatch[1].slice(0, 3)].map(digit => digit + digit) : [0, 2, 4].map(index => hexMatch[1].slice(index, index + 2));
+        [red, green, blue] = digits.map(pair => parseInt(pair, 16));
+    } else {
+        const fn = COLOUR_FUNCTION.exec(value);
+        if (!fn) return undefined;
+        const [, name, first, firstUnit, second, secondUnit, third, thirdUnit] = fn;
+        if (name.startsWith('rgb')) {
+            if (firstUnit === 'deg') return undefined;
+            const channel = (number: string, percent?: string): number => Math.min(255, Number(number) * (percent ? 2.55 : 1));
+            red = channel(first, firstUnit); green = channel(second, secondUnit); blue = channel(third, thirdUnit);
+        } else {
+            if (firstUnit === '%' || !secondUnit || !thirdUnit) return undefined;
+            const hue = ((Number(first) % 360) + 360) % 360, saturation = Math.min(1, Number(second) / 100), lightness = Math.min(1, Number(third) / 100);
+            const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation, x = chroma * (1 - Math.abs((hue / 60) % 2 - 1)), m = lightness - chroma / 2;
+            const [r1, g1, b1] = hue < 60 ? [chroma, x, 0] : hue < 120 ? [x, chroma, 0] : hue < 180 ? [0, chroma, x] : hue < 240 ? [0, x, chroma] : hue < 300 ? [x, 0, chroma] : [chroma, 0, x];
+            [red, green, blue] = [r1, g1, b1].map(channel => (channel + m) * 255);
+        }
+    }
+    const max = Math.max(red, green, blue) / 255, min = Math.min(red, green, blue) / 255;
+    const lightness = (max + min) / 2, delta = max - min;
+    const saturation = delta === 0 ? 0 : delta / (1 - Math.abs(2 * lightness - 1));
+    if (saturation < 0.16 || delta < 0.08) return lightness >= 0.3 && lightness <= 0.72 ? 'gray' : null;
+    const r = red / 255, g = green / 255, b = blue / 255;
+    let hue = max === r ? ((g - b) / delta) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+    hue = (hue * 60 + 360) % 360;
+    return hue < 15 || hue >= 345 ? 'red' : hue < 42 ? 'orange' : hue < 70 ? 'yellow' : hue < 160 ? 'green' : hue < 195 ? 'teal'
+        : hue < 255 ? 'blue' : hue < 305 ? 'purple' : 'pink';
+}
+
+const COLOUR_TAG_OPEN = /<(span|font|mark)((?:\s+[a-z_:][-a-z0-9_:.]*(?:\s*=\s*(?:"[^"<>]*"|'[^'<>]*'|[^\s"'=<>`]+))?)*)\s*>/iy;
+const COLOUR_TAG_CLOSE = /<\/(span|font|mark)\s*>/iy;
+const COLOUR_TAG_ATTRIBUTE = /([a-z_:][-a-z0-9_:.]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/gi;
+
+/** The text and highlight hues of a colour tag's attributes; every other attribute and property is ignored. */
+function colourTagHues(tag: string, attributes: string): { ink?: MarkdownInkHue; mark?: MarkdownInkHue | null } {
+    let ink: MarkdownInkHue | null | undefined, mark: MarkdownInkHue | null | undefined;
+    for (const match of attributes.matchAll(COLOUR_TAG_ATTRIBUTE)) {
+        const name = match[1].toLowerCase(), value = match[2] ?? match[3] ?? match[4] ?? '';
+        if (name === 'color' && tag === 'font') ink = markdownColorHue(value) ?? ink;
+        else if (name === 'style') {
+            for (const declaration of value.split(';')) {
+                const colon = declaration.indexOf(':');
+                if (colon < 0) continue;
+                const property = declaration.slice(0, colon).trim().toLowerCase(), hue = markdownColorHue(declaration.slice(colon + 1));
+                if (hue === undefined) continue;
+                if (property === 'color') ink = hue;
+                else if (property === 'background' || property === 'background-color') mark = hue;
+            }
+        }
+    }
+    return { ...(ink ? { ink } : {}), ...(mark !== undefined ? { mark } : {}) };
+}
+
+function findClosingBacktickRun(source: string, from: number, limit: number, runLength: number): number {
+    let index = from;
+    while (index < limit) {
+        const tick = source.indexOf('`', index);
+        if (tick < 0 || tick >= limit) return -1;
+        let end = tick + 1;
+        while (end < limit && source.charCodeAt(end) === 0x60 /* ` */) end++;
+        if (end - tick === runLength) return end;
+        index = end;
+    }
+    return -1;
+}
+
+/** Whether `</tag>` closes the tag opened at `from` within the inline text (same-name tags nest; inline backtick code spans are skipped). */
+function colourTagClosed(source: string, from: number, limit: number, tag: string): boolean {
+    const pattern = new RegExp(`<(/?)${tag}\\b[^<>]*>`, 'iy');
+    let depth = 1;
+    let index = from;
+    while (index < limit) {
+        const code = source.charCodeAt(index);
+        if (code === 0x5C /* \ */) {
+            index += 2;
+            continue;
+        }
+        if (code === 0x60 /* ` */) {
+            let runEnd = index + 1;
+            while (runEnd < limit && source.charCodeAt(runEnd) === 0x60 /* ` */) runEnd++;
+            const closedAt = findClosingBacktickRun(source, runEnd, limit, runEnd - index);
+            index = closedAt >= 0 ? closedAt : runEnd;
+            continue;
+        }
+        if (code === 0x3C /* < */) {
+            pattern.lastIndex = index;
+            const match = pattern.exec(source);
+            if (match && pattern.lastIndex <= limit) {
+                if (match[1]) {
+                    if (/^<\/[a-z]+\s*>$/i.test(match[0])) {
+                        depth -= 1;
+                        if (depth === 0) return true;
+                    }
+                    index = pattern.lastIndex;
+                    continue;
+                }
+                depth += 1;
+                index = pattern.lastIndex;
+                continue;
+            }
+        }
+        index += 1;
+    }
+    return false;
+}
+
 const WIDE_CHARACTER = /[\u1100-\u11ff\u2e80-\u303f\u3040-\u30ff\u3100-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]/u;
 
 interface RenderEnvironment {
@@ -272,8 +431,9 @@ function createRenderer(): MarkdownIt {
             + `<div class="nmx-md-think-body">${bodyHtml}</div></details>\n`;
     };
 
-    // Safe typographic inline HTML tags (`<kbd>`, `<mark>`, `<sub>`, `<sup>`, `<br>`) while keeping `html: false`
-    // so `<script>`, `<tuple>`, `Promise<void>`, etc. remain escaped as literal text.
+    // Safe typographic inline HTML tags (`<kbd>`, `<mark>`, `<sub>`, `<sup>`, `<u>`, `<ins>`, `<s>`, `<del>`, `<b>`,
+    // `<strong>`, `<i>`, `<em>`, `<small>`, `<br>`) while keeping `html: false` so `<script>`, `<tuple>`,
+    // `Promise<void>`, etc. remain escaped as literal text.
     md.inline.ruler.before('escape', 'nmx_safe_inline_html', (state, silent) => {
         const src = state.src;
         const pos = state.pos;
@@ -287,7 +447,7 @@ function createRenderer(): MarkdownIt {
             state.pos = pos + brMatch[0].length;
             return true;
         }
-        const tagMatch = /^<(\/?)(kbd|mark|sub|sup)>/i.exec(src.slice(pos));
+        const tagMatch = /^<(\/?)(kbd|mark|sub|sup|u|ins|s|del|b|strong|i|em|small)>/i.exec(src.slice(pos));
         if (!tagMatch) return false;
         const isClosing = Boolean(tagMatch[1]);
         const tag = tagMatch[2].toLowerCase();
@@ -300,6 +460,43 @@ function createRenderer(): MarkdownIt {
             token.content = `<${isClosing ? '/' : ''}${tag}>`;
         }
         state.pos = pos + tagMatch[0].length;
+        return true;
+    });
+
+    // Coloured emphasis (`<span style="color: …">`, `<font color>`, `<mark style="background: …">`): the tag becomes a
+    // class for one of MARKDOWN_INK_HUES, or disappears with its attributes when it names no usable colour; its text
+    // stays. Each opener is matched to its own closer (same-name tags nest), so a stray `</span>` stays literal text.
+    md.inline.ruler.before('nmx_safe_inline_html', 'nmx_safe_colour_html', (state, silent) => {
+        if (state.src.charCodeAt(state.pos) !== 0x3C /* < */) return false;
+        const open = state as typeof state & { nmxColourTags?: { readonly tag: string; readonly close: string }[] };
+        const stack = open.nmxColourTags ??= [];
+        COLOUR_TAG_CLOSE.lastIndex = state.pos;
+        const closing = COLOUR_TAG_CLOSE.exec(state.src);
+        if (closing && COLOUR_TAG_CLOSE.lastIndex <= state.posMax) {
+            const top = stack[stack.length - 1];
+            if (!top || top.tag !== closing[1].toLowerCase()) return false;
+            if (!silent) {
+                stack.pop();
+                if (top.close) state.push('html_inline', '', 0).content = top.close;
+            }
+            state.pos = COLOUR_TAG_CLOSE.lastIndex;
+            return true;
+        }
+        COLOUR_TAG_OPEN.lastIndex = state.pos;
+        const opening = COLOUR_TAG_OPEN.exec(state.src);
+        if (!opening || COLOUR_TAG_OPEN.lastIndex > state.posMax) return false;
+        const tag = opening[1].toLowerCase();
+        if (!colourTagClosed(state.src, COLOUR_TAG_OPEN.lastIndex, state.posMax, tag)) return false;
+        if (!silent) {
+            const { ink, mark } = colourTagHues(tag, opening[2] || '');
+            // A <mark> always highlights (in its own hue when it names one); a span only when it names a background colour.
+            const highlight = tag === 'mark' ? `nmx-md-mark${mark ? ` nmx-md-mark-${mark}` : ''}` : mark ? `nmx-md-mark nmx-md-mark-${mark}` : '';
+            const content = (highlight ? `<mark class="${highlight}">` : '') + (ink ? `<span class="nmx-md-ink nmx-md-ink-${ink}">` : '');
+            const close = (ink ? '</span>' : '') + (highlight ? '</mark>' : '');
+            if (content) state.push('html_inline', '', 0).content = content;
+            stack.push({ tag, close });
+        }
+        state.pos = COLOUR_TAG_OPEN.lastIndex;
         return true;
     });
 

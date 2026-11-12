@@ -8,6 +8,7 @@ import { desktopStatusMessage } from './nextmux-desktop-status-locale';
 import { skillDomainMessage } from './nextmux-skill-domain-locale';
 import { conversationDomainMessage } from './nextmux-conversation-domain-locale';
 import { componentDomainMessage } from './nextmux-component-domain-locale';
+import { agentOutcomeText } from './nextmux-agent-outcome-locale';
 
 /** Only stable domain identities choose copy. User prose and raw diagnostics are not templates. */
 export function desktopDomainMessage(locale: NextMuxDesktopLocale, message: DomainMessage): string {
@@ -15,6 +16,9 @@ export function desktopDomainMessage(locale: NextMuxDesktopLocale, message: Doma
 }
 
 function translated(locale: NextMuxDesktopLocale, message: DomainMessage): string | undefined {
+    if (message.code === 'INVALID_CONVERSATION' || message.code === 'INVALID_CONVERSATION_ID') {
+        return agentOutcomeText(locale, 'conversation_invalid');
+    }
     const schedule = Object.prototype.hasOwnProperty.call(scheduleTranslations, message.code)
         ? scheduleTranslations[message.code as keyof typeof scheduleTranslations][locale] : undefined;
     const validation = Object.prototype.hasOwnProperty.call(validationTranslations, message.code)

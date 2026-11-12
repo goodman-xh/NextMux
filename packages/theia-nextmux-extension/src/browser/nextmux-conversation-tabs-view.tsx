@@ -350,6 +350,8 @@ export interface ConversationWindowControls {
     readonly keys?: (input: { readonly text?: string; readonly key?: string; readonly modifiers?: readonly string[] }) => Promise<boolean>;
     /** Close the window and terminate its running process on user confirmation. */
     readonly terminateProcess?: () => Promise<boolean>;
+    /** A fresh picture of the window from the system's window capture (no side effects), at most `maxSize` px wide or high. */
+    readonly snapshot?: (maxSize?: number) => Promise<{ readonly data: string; readonly mimeType: string; readonly width: number; readonly height: number } | undefined>;
 }
 
 const SPECIAL_KEYS: Readonly<Record<string, string>> = {
@@ -443,6 +445,184 @@ export function isBlankOrPureBlackVideoFrame(video: HTMLVideoElement): boolean {
     } catch {
         return false;
     }
+}
+
+/**
+ * Mid-session frame stalls. A window capture can stop delivering frames while the window keeps changing (the app
+ * moved to another macOS Space or Windows virtual desktop, or the capture pipeline stalled), and the tab would show a
+ * frozen picture. A still window delivers no frames either, so a quiet stream alone proves nothing: after a quiet
+ * spell the watchdog compares two fresh snapshots of the window (the system's own window capture) and the frame on
+ * screen. Only a window that changes between the snapshots, or one that no longer looks like the picture, counts as
+ * a stall; the tab then restarts its capture with backoff, and falls back to the window's own snapshots when the
+ * capture keeps freezing.
+ */
+export const LIVE_FRAME_STALL_MS = 4_000;
+export const LIVE_FRAME_RECHECK_MAX_MS = 30_000;
+/** A frame this recent is the window as it is now: tabs.screenshot may read it instead of capturing again. */
+export const LIVE_FRAME_FRESH_MS = 1_500;
+const FINGERPRINT_COLUMNS = 16, FINGERPRINT_ROWS = 9;
+
+const liveVideoFrameTimes = new WeakMap<object, number>();
+/** Milliseconds since this live picture last presented a new frame; undefined when no frame was seen. */
+export function liveVideoFrameAgeMs(video: object | null | undefined, now = Date.now()): number | undefined {
+    const at = video ? liveVideoFrameTimes.get(video) : undefined;
+    return at === undefined ? undefined : Math.max(0, now - at);
+}
+
+/** A 16×9 grayscale miniature of a picture: enough to tell a changed window from an unchanged one. */
+export function frameFingerprint(source: CanvasImageSource, width: number, height: number): Uint8Array | undefined {
+    if (!(width > 0) || !(height > 0) || typeof document === 'undefined') return undefined;
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = FINGERPRINT_COLUMNS;
+        canvas.height = FINGERPRINT_ROWS;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (!context) return undefined;
+        context.drawImage(source, 0, 0, width, height, 0, 0, FINGERPRINT_COLUMNS, FINGERPRINT_ROWS);
+        const data = context.getImageData(0, 0, FINGERPRINT_COLUMNS, FINGERPRINT_ROWS).data;
+        const cells = new Uint8Array(FINGERPRINT_COLUMNS * FINGERPRINT_ROWS);
+        for (let index = 0; index < cells.length; index++) {
+            cells[index] = Math.round(0.299 * data[index * 4] + 0.587 * data[index * 4 + 1] + 0.114 * data[index * 4 + 2]);
+        }
+        return cells;
+    } catch { return undefined; }
+}
+
+/** The fingerprint of a window snapshot (base64 image from the system's window capture). */
+export async function snapshotFingerprint(shot: { readonly data: string; readonly mimeType?: string } | undefined): Promise<Uint8Array | undefined> {
+    if (!shot?.data || typeof createImageBitmap !== 'function' || typeof atob !== 'function') return undefined;
+    try {
+        const bytes = Uint8Array.from(atob(shot.data), character => character.charCodeAt(0));
+        const bitmap = await createImageBitmap(new Blob([bytes], { type: shot.mimeType || 'image/jpeg' }));
+        try { return frameFingerprint(bitmap, bitmap.width, bitmap.height); } finally { bitmap.close(); }
+    } catch { return undefined; }
+}
+
+/** Mean and largest per-cell difference of two fingerprints (0–255). */
+export function fingerprintDifference(a: Uint8Array, b: Uint8Array): { readonly mean: number; readonly max: number } {
+    if (a.length !== b.length || !a.length) return { mean: 255, max: 255 };
+    let total = 0, max = 0;
+    for (let index = 0; index < a.length; index++) {
+        const delta = Math.abs(a[index] - b[index]);
+        total += delta;
+        if (delta > max) max = delta;
+    }
+    return { mean: total / a.length, max };
+}
+
+/** Two snapshots of a still window differ by little more than a blinking caret; a changing one by much more. */
+export function windowIsChanging(first: Uint8Array, second: Uint8Array): boolean {
+    const difference = fingerprintDifference(first, second);
+    return difference.mean > 2 || difference.max > 24;
+}
+
+/** The picture on screen and the window now are different screens (generous: two capture paths never match exactly). */
+export function pictureIsOutdated(shown: Uint8Array, window: Uint8Array): boolean {
+    const difference = fingerprintDifference(shown, window);
+    return difference.mean > 28 && difference.max > 96;
+}
+
+export interface LiveFrameWatchOptions {
+    /** The window as it is now, as a fingerprint (a small system snapshot); undefined when it cannot be captured. */
+    readonly windowFingerprint: () => Promise<Uint8Array | undefined>;
+    /** The frame the tab shows now, as a fingerprint. */
+    readonly shownFingerprint: () => Uint8Array | undefined;
+    /** The capture stopped while the window changed: restart it (the watchdog stops itself). */
+    readonly onStall: () => void;
+    readonly now?: () => number;
+    readonly delay?: (ms: number) => Promise<void>;
+    readonly setInterval?: (callback: () => void, ms: number) => unknown;
+    readonly clearInterval?: (handle: unknown) => void;
+}
+
+/** Watches one live picture until the returned function is called (see LIVE_FRAME_STALL_MS above). */
+export function watchLiveVideoFrames(video: HTMLVideoElement, options: LiveFrameWatchOptions): () => void {
+    const now = options.now ?? Date.now;
+    const delay = options.delay ?? (ms => new Promise<void>(resolve => setTimeout(resolve, ms)));
+    const every = options.setInterval ?? ((callback: () => void, ms: number) => setInterval(callback, ms));
+    const cancel = options.clearInterval ?? (handle => clearInterval(handle as ReturnType<typeof setInterval>));
+    let stopped = false, checking = false, quietFor = LIVE_FRAME_STALL_MS;
+    let lastFrame = now(), lastCheck = 0, frameHandle: number | undefined, presented = -1;
+    const frame = (): void => {
+        lastFrame = now();
+        liveVideoFrameTimes.set(video, lastFrame);
+        quietFor = LIVE_FRAME_STALL_MS;
+    };
+    const presentedFrames = (): number => {
+        const quality = typeof video.getVideoPlaybackQuality === 'function' ? video.getVideoPlaybackQuality() : undefined;
+        return quality ? quality.totalVideoFrames : (video as HTMLVideoElement & { webkitDecodedFrameCount?: number }).webkitDecodedFrameCount ?? -1;
+    };
+    const frameCallbacks = typeof video.requestVideoFrameCallback === 'function';
+    const onVideoFrame = (): void => {
+        if (stopped) return;
+        frame();
+        frameHandle = video.requestVideoFrameCallback(onVideoFrame);
+    };
+    if (frameCallbacks) frameHandle = video.requestVideoFrameCallback(onVideoFrame);
+    else presented = presentedFrames();
+    // The first decoded frame is on screen when the watch starts (the tab reveals the picture on loadeddata).
+    frame();
+    const check = async (): Promise<void> => {
+        checking = true;
+        try {
+            const since = lastFrame;
+            const first = await options.windowFingerprint();
+            if (stopped || !first || lastFrame !== since) return;
+            await delay(900);
+            if (stopped || lastFrame !== since) return;
+            const second = await options.windowFingerprint();
+            if (stopped || !second || lastFrame !== since) return;
+            const shown = options.shownFingerprint();
+            if (windowIsChanging(first, second) || shown && pictureIsOutdated(shown, second)) {
+                stopped = true;
+                options.onStall();
+                return;
+            }
+            // A still window: look again after a longer quiet spell.
+            quietFor = Math.min(LIVE_FRAME_RECHECK_MAX_MS, quietFor * 2);
+        } finally {
+            checking = false;
+            lastCheck = now();
+        }
+    };
+    const timer = every(() => {
+        if (stopped) return;
+        if (!frameCallbacks) {
+            const count = presentedFrames();
+            if (count !== presented) { presented = count; frame(); }
+            else if (count === -1 && video.readyState >= 2 && !video.paused && !video.ended && video.videoWidth > 0) { frame(); }
+        }
+        if (checking || now() - Math.max(lastFrame, lastCheck) < quietFor) return;
+        void check().catch(() => undefined);
+    }, 1_000);
+    return () => {
+        stopped = true;
+        cancel(timer);
+        if (frameHandle !== undefined && typeof video.cancelVideoFrameCallback === 'function') video.cancelVideoFrameCallback(frameHandle);
+    };
+}
+
+/** Per window (its controls object): recent stall recoveries and until when the tab keeps to window snapshots. */
+const liveStallRecoveries = new WeakMap<object, { attempts: number; lastAt: number; snapshotsUntil: number }>();
+/** After this many stalls within LIVE_STALL_RESET_MS the tab uses window snapshots for LIVE_SNAPSHOT_HOLD_MS. */
+const LIVE_STALL_ATTEMPTS = 3, LIVE_STALL_RESET_MS = 120_000, LIVE_SNAPSHOT_HOLD_MS = 300_000;
+
+/** How long to wait before restarting a stalled capture: at once, then 2 s, 4 s … (30 s at most). */
+export function liveStallRestartDelay(owner: object, now = Date.now()): number {
+    const record = liveStallRecoveries.get(owner) ?? { attempts: 0, lastAt: 0, snapshotsUntil: 0 };
+    if (now - record.lastAt > LIVE_STALL_RESET_MS) record.attempts = 0;
+    const wait = record.attempts === 0 ? 0 : Math.min(30_000, 1_000 * 2 ** record.attempts);
+    record.attempts += 1;
+    record.lastAt = now;
+    if (record.attempts >= LIVE_STALL_ATTEMPTS) record.snapshotsUntil = now + LIVE_SNAPSHOT_HOLD_MS;
+    liveStallRecoveries.set(owner, record);
+    return wait;
+}
+
+/** Whether this window's capture froze repeatedly, so its tab shows the window's own snapshots for now. */
+export function liveStallPrefersSnapshots(owner: object | undefined, now = Date.now()): boolean {
+    const record = owner ? liveStallRecoveries.get(owner) : undefined;
+    return Boolean(record && record.snapshotsUntil > now);
 }
 
 /** Where a pointer event falls on the video's picture (object-fit: contain), as fractions of the window. */
@@ -1048,7 +1228,10 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                 }
             });
         };
-        attachStream(false);
+        // A capture that froze repeatedly this session gives way to the window's own snapshots for a while.
+        const preferSnapshots = typeof liveStallPrefersSnapshots === 'function' && Boolean(latest.current) && liveStallPrefersSnapshots(latest.current);
+        if (preferSnapshots) fallbackUsed = true;
+        attachStream(preferSnapshots);
         return () => {
             disposed = true;
             clearWatchdogs();
@@ -1587,6 +1770,19 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             document.removeEventListener('keydown', onKeyDown);
         };
     }, [visible, live, mouse, localOverlayOpen]);
+    // Mid-session frame-stall watchdog (watchLiveVideoFrames): a picture that stops while its window keeps changing
+    // restarts the capture (at once, then with backoff); a capture that keeps freezing gives way to window snapshots.
+    React.useEffect(() => {
+        const element = video.current, owner = latest.current;
+        if (!live || !visible || !element || !owner?.snapshot || typeof watchLiveVideoFrames !== 'function') return undefined;
+        let restart: ReturnType<typeof setTimeout> | undefined;
+        const stop = watchLiveVideoFrames(element, {
+            windowFingerprint: async () => snapshotFingerprint(await owner.snapshot!(256).catch(() => undefined)),
+            shownFingerprint: () => frameFingerprint(element, element.videoWidth, element.videoHeight),
+            onStall: () => { restart = setTimeout(bumpStreamGeneration, liveStallRestartDelay(owner)); }
+        });
+        return () => { stop(); if (restart) clearTimeout(restart); };
+    }, [live, visible, streamKey, generation]);
     const onSectionKeyDownCapture = (event: React.KeyboardEvent<HTMLElement>): void => {
         if (!live || !mouse || !latest.current?.keys) return;
         if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen)) return;

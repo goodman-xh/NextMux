@@ -137,6 +137,10 @@ const en = {
     price_changed: 'The model price changed. Refresh the catalog and choose the model again.',
     network_failed: 'The connection failed. Check your network and try again.',
     merchant_api_deleted: 'The merchant API was deleted and the conversation stopped. Switch models to continue.',
+    conversation_invalid: 'This conversation’s identifier is malformed, so NextMux cannot open its workspace. Start a new conversation and try again.',
+    conversation_deleted: 'This conversation was deleted. Start a new conversation to continue.',
+    sign_in_required: 'Sign in to NextMux to use relay models here, or choose one of your own APIs.',
+    app_window_closed: 'This tab’s app window is closed or cannot be captured right now. Reopen the app from the tab, then try again.',
     failed: 'Task needs attention',
     continueTask: 'Continue task',
     resumeContextHint: 'Continue from the saved context; the currently selected model applies to this continuation.',
@@ -150,6 +154,10 @@ type Catalog = Readonly<Record<AgentOutcomeTextKey, string>>;
 const translations: Readonly<Record<NextMuxDesktopLocale, Catalog>> = {
     en,
     'zh-CN': {
+        conversation_invalid: '对话标识格式有误，无法打开它的工作区。请新建对话后重试。',
+        conversation_deleted: '此对话已删除，请新建对话后继续。',
+        sign_in_required: '使用中转商模型需要先登录 NextMux，或改用你的自有 API。',
+        app_window_closed: '这个标签的应用窗口已关闭或暂时无法截取画面，请在标签中重新打开应用后再试。',
         contextWindowBody: '当前任务超过此模型的上下文容量。任务和恢复记录已保留，请选择上下文容量更大的模型继续。',
         privacy_route_unavailable: '当前线路不符合你的隐私设置，请选择支持的线路或检查隐私设置。',
         mediaContextPaused: '已暂停 · 媒体上下文已保留', mediaContextBody: '最新的图片或音频附件本身已超出该模型的输入容量。请降低图片分辨率、拆分音频文件，或换用上下文更大的模型后点击继续。原上下文已保留，未自动重新请求。',
@@ -161,6 +169,10 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Catalog>> = {
         failed: '任务需要处理', continueTask: '继续任务', resumeContextHint: '从已保存的上下文继续；当前选择的模型从本次续跑开始生效。', cancelledBody: '已停止当前任务，已完成的操作和过程记录仍然保留。', fallbackBody: '任务尚未完成，可以重试。'
     },
     'zh-TW': {
+        conversation_invalid: '對話識別碼格式有誤，無法開啟它的工作區。請新建對話後重試。',
+        conversation_deleted: '此對話已刪除，請新建對話後繼續。',
+        sign_in_required: '使用中轉商模型需要先登入 NextMux，或改用你的自有 API。',
+        app_window_closed: '這個分頁的應用程式視窗已關閉或暫時無法擷取畫面，請在分頁中重新開啟應用程式後再試。',
         switch_policy_invalid: '模型切換設定已失效，請重新選擇模型後重試。',
         route_unavailable: '目前模型線路暫時無法使用，請選擇其他線路後重試。',
         route_capacity: '目前模型線路繁忙，請稍後重試或選擇其他線路。',
@@ -176,6 +188,10 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Catalog>> = {
         failed: '任務需要處理', continueTask: '繼續任務', resumeContextHint: '從已儲存的上下文繼續；目前選擇的模型會從本次續跑開始生效。', cancelledBody: '目前任務已停止，已完成的操作和過程記錄仍會保留。', fallbackBody: '任務尚未完成，可以重試。'
     },
     ja: {
+        conversation_invalid: 'この会話の ID の形式が正しくないため、ワークスペースを開けません。新しい会話を作成してからもう一度お試しください。',
+        conversation_deleted: 'この会話は削除されています。新しい会話を作成して続けてください。',
+        sign_in_required: '中継モデルを使うには NextMux にサインインするか、自分の API を選んでください。',
+        app_window_closed: 'このタブのアプリのウィンドウが閉じているか、今は画面を取得できません。タブからアプリを開き直してからもう一度お試しください。',
         contextWindowBody: 'このタスクはモデルのコンテキスト容量を超えています。タスクと復元状態は保存されています。より大きなコンテキストのモデルを選んで続けてください。',
         switch_policy_invalid: 'モデル切り替えの設定が無効です。モデルを選び直して再試行してください。',
         route_unavailable: '選択したモデルの経路は現在利用できません。別の経路をお試しください。',
@@ -191,6 +207,10 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Catalog>> = {
         failed: 'タスクの確認が必要です', continueTask: 'タスクを続行', resumeContextHint: '保存済みのコンテキストから続行します。現在選択中のモデルはこの続行から適用されます。', cancelledBody: 'タスクを停止しました。完了済みの操作と履歴は保持されています。', fallbackBody: 'タスクは完了していません。再試行できます。'
     },
     ko: {
+        conversation_invalid: '이 대화의 ID 형식이 올바르지 않아 작업 공간을 열 수 없습니다. 새 대화를 만든 뒤 다시 시도하세요.',
+        conversation_deleted: '이 대화는 삭제되었습니다. 새 대화를 만들어 계속하세요.',
+        sign_in_required: '중계 모델을 사용하려면 NextMux에 로그인하거나 자체 API를 선택하세요.',
+        app_window_closed: '이 탭의 앱 창이 닫혔거나 지금은 화면을 캡처할 수 없습니다. 탭에서 앱을 다시 연 뒤 다시 시도하세요.',
         contextWindowBody: '이 작업이 모델의 컨텍스트 용량을 초과합니다. 작업과 복구 상태는 저장되었습니다. 더 큰 컨텍스트를 지원하는 모델을 선택해 계속하세요.',
         switch_policy_invalid: '모델 전환 설정이 유효하지 않습니다. 모델을 다시 선택한 뒤 재시도하세요.',
         route_unavailable: '선택한 모델 경로를 사용할 수 없습니다. 다른 경로를 시도하세요.',
@@ -206,6 +226,10 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Catalog>> = {
         failed: '작업 확인 필요', continueTask: '작업 계속', resumeContextHint: '저장된 컨텍스트에서 계속합니다. 현재 선택한 모델은 이번 계속 실행부터 적용됩니다.', cancelledBody: '작업이 중지되었습니다. 완료된 작업과 활동 기록은 보존됩니다.', fallbackBody: '작업이 완료되지 않았습니다. 다시 시도할 수 있습니다.'
     },
     es: {
+        conversation_invalid: 'El identificador de esta conversación no es válido, así que NextMux no puede abrir su espacio de trabajo. Crea una conversación nueva y vuelve a intentarlo.',
+        conversation_deleted: 'Esta conversación se eliminó. Crea una conversación nueva para continuar.',
+        sign_in_required: 'Inicia sesión en NextMux para usar modelos de relay aquí, o elige una de tus propias API.',
+        app_window_closed: 'La ventana de la app de esta pestaña está cerrada o no se puede capturar ahora. Vuelve a abrir la app desde la pestaña e inténtalo de nuevo.',
         contextWindowBody: 'Esta tarea supera la capacidad de contexto del modelo. La tarea y su estado de recuperación están guardados. Elige un modelo con más contexto para continuar.',
         switch_policy_invalid: 'La configuración de cambio de modelo no es válida. Vuelve a elegir el modelo e inténtalo de nuevo.',
         route_unavailable: 'La ruta del modelo elegida no está disponible. Prueba otra ruta.',
@@ -221,6 +245,10 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Catalog>> = {
         failed: 'La tarea requiere atención', continueTask: 'Continuar tarea', resumeContextHint: 'Continúa desde el contexto guardado; el modelo seleccionado se aplica desde esta continuación.', cancelledBody: 'La tarea se detuvo. El trabajo completado y la actividad se conservan.', fallbackBody: 'La tarea no terminó. Puedes volver a intentarlo.'
     },
     fr: {
+        conversation_invalid: 'L’identifiant de cette conversation n’est pas valide : NextMux ne peut pas ouvrir son espace de travail. Créez une nouvelle conversation et réessayez.',
+        conversation_deleted: 'Cette conversation a été supprimée. Créez une nouvelle conversation pour continuer.',
+        sign_in_required: 'Connectez-vous à NextMux pour utiliser les modèles relais ici, ou choisissez l’une de vos propres API.',
+        app_window_closed: 'La fenêtre de l’app de cet onglet est fermée ou ne peut pas être capturée pour l’instant. Rouvrez l’app depuis l’onglet, puis réessayez.',
         contextWindowBody: 'Cette tâche dépasse la capacité de contexte du modèle. La tâche et son état de reprise sont enregistrés. Choisissez un modèle avec un contexte plus grand pour continuer.',
         switch_policy_invalid: 'Les réglages de changement de modèle ne sont pas valides. Choisissez de nouveau le modèle et réessayez.',
         route_unavailable: 'La route du modèle choisie est indisponible. Essayez une autre route.',
@@ -236,6 +264,10 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Catalog>> = {
         failed: 'La tâche nécessite une action', continueTask: 'Continuer la tâche', resumeContextHint: 'Reprenez depuis le contexte enregistré ; le modèle sélectionné s’applique à partir de cette reprise.', cancelledBody: 'La tâche a été arrêtée. Le travail terminé et l’activité sont conservés.', fallbackBody: 'La tâche n’est pas terminée. Vous pouvez réessayer.'
     },
     de: {
+        conversation_invalid: 'Die Kennung dieser Unterhaltung ist ungültig, daher kann NextMux ihren Arbeitsbereich nicht öffnen. Starte eine neue Unterhaltung und versuche es erneut.',
+        conversation_deleted: 'Diese Unterhaltung wurde gelöscht. Starte eine neue Unterhaltung, um fortzufahren.',
+        sign_in_required: 'Melde dich bei NextMux an, um hier Relay-Modelle zu nutzen, oder wähle eine deiner eigenen APIs.',
+        app_window_closed: 'Das App-Fenster dieses Tabs ist geschlossen oder kann gerade nicht erfasst werden. Öffne die App im Tab erneut und versuche es dann noch einmal.',
         contextWindowBody: 'Diese Aufgabe übersteigt die Kontextkapazität des Modells. Aufgabe und Wiederherstellungsstand sind gespeichert. Wähle ein Modell mit größerem Kontext, um fortzufahren.',
         switch_policy_invalid: 'Die Einstellungen zum Modellwechsel sind ungültig. Wähle das Modell erneut und versuche es noch einmal.',
         route_unavailable: 'Die gewählte Modellroute ist nicht verfügbar. Versuche eine andere Route.',
@@ -251,6 +283,10 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Catalog>> = {
         failed: 'Aufgabe erfordert Aufmerksamkeit', continueTask: 'Aufgabe fortsetzen', resumeContextHint: 'Aus dem gespeicherten Kontext fortsetzen; das ausgewählte Modell gilt ab dieser Fortsetzung.', cancelledBody: 'Die Aufgabe wurde gestoppt. Abgeschlossene Arbeit und Aktivitäten bleiben erhalten.', fallbackBody: 'Die Aufgabe wurde nicht abgeschlossen. Sie können es erneut versuchen.'
     },
     'pt-BR': {
+        conversation_invalid: 'O identificador desta conversa é inválido, então o NextMux não consegue abrir o espaço de trabalho dela. Crie uma nova conversa e tente novamente.',
+        conversation_deleted: 'Esta conversa foi excluída. Crie uma nova conversa para continuar.',
+        sign_in_required: 'Entre no NextMux para usar modelos de relay aqui, ou escolha uma das suas próprias APIs.',
+        app_window_closed: 'A janela do app desta aba está fechada ou não pode ser capturada agora. Reabra o app pela aba e tente novamente.',
         contextWindowBody: 'Esta tarefa excede a capacidade de contexto do modelo. A tarefa e o estado de recuperação foram salvos. Escolha um modelo com mais contexto para continuar.',
         switch_policy_invalid: 'As configurações de troca de modelo são inválidas. Escolha o modelo novamente e tente de novo.',
         route_unavailable: 'A rota do modelo escolhida está indisponível. Tente outra rota.',
@@ -266,6 +302,10 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Catalog>> = {
         failed: 'A tarefa precisa de atenção', continueTask: 'Continuar tarefa', resumeContextHint: 'Continue do contexto salvo; o modelo selecionado passa a valer nesta continuação.', cancelledBody: 'A tarefa foi interrompida. O trabalho concluído e o histórico foram preservados.', fallbackBody: 'A tarefa não terminou. Você pode tentar novamente.'
     },
     ru: {
+        conversation_invalid: 'Идентификатор этого разговора некорректен, поэтому NextMux не может открыть его рабочую область. Создайте новый разговор и повторите попытку.',
+        conversation_deleted: 'Этот разговор удалён. Создайте новый разговор, чтобы продолжить.',
+        sign_in_required: 'Войдите в NextMux, чтобы использовать здесь модели ретрансляторов, или выберите один из своих API.',
+        app_window_closed: 'Окно приложения в этой вкладке закрыто или сейчас недоступно для захвата. Откройте приложение во вкладке заново и повторите попытку.',
         contextWindowBody: 'Задача превышает объём контекста модели. Задача и состояние восстановления сохранены. Выберите модель с большим контекстом, чтобы продолжить.',
         switch_policy_invalid: 'Настройки переключения модели недействительны. Выберите модель заново и повторите попытку.',
         route_unavailable: 'Выбранный маршрут модели недоступен. Попробуйте другой маршрут.',
@@ -281,6 +321,10 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Catalog>> = {
         failed: 'Задача требует внимания', continueTask: 'Продолжить задачу', resumeContextHint: 'Продолжить из сохранённого контекста; выбранная модель применяется с этого продолжения.', cancelledBody: 'Задача остановлена. Выполненная работа и журнал сохранены.', fallbackBody: 'Задача не завершена. Можно повторить попытку.'
     },
     ar: {
+        conversation_invalid: 'معرّف هذه المحادثة غير صالح، لذا لا يستطيع NextMux فتح مساحة عملها. أنشئ محادثة جديدة وحاول مرة أخرى.',
+        conversation_deleted: 'تم حذف هذه المحادثة. أنشئ محادثة جديدة للمتابعة.',
+        sign_in_required: 'سجّل الدخول إلى NextMux لاستخدام نماذج الوسطاء هنا، أو اختر إحدى واجهات API الخاصة بك.',
+        app_window_closed: 'نافذة التطبيق في علامة التبويب هذه مغلقة أو لا يمكن التقاطها الآن. أعد فتح التطبيق من علامة التبويب ثم حاول مرة أخرى.',
         contextWindowBody: 'تتجاوز هذه المهمة سعة السياق للنموذج. حُفظت المهمة وحالة الاستعادة. اختر نموذجاً بسياق أكبر للمتابعة.',
         switch_policy_invalid: 'إعدادات تبديل النموذج غير صالحة. اختر النموذج مجدداً ثم أعد المحاولة.',
         route_unavailable: 'مسار النموذج المحدد غير متاح. جرّب مساراً آخر.',
@@ -296,6 +340,10 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Catalog>> = {
         failed: 'المهمة تحتاج إلى إجراء', continueTask: 'متابعة المهمة', resumeContextHint: 'تابع من السياق المحفوظ؛ يطبّق النموذج المحدد بدءاً من هذه المتابعة.', cancelledBody: 'تم إيقاف المهمة مع الاحتفاظ بالعمل المكتمل وسجل النشاط.', fallbackBody: 'لم تكتمل المهمة. يمكنك المحاولة مجدداً.'
     },
     hi: {
+        conversation_invalid: 'इस बातचीत का पहचानकर्ता सही प्रारूप में नहीं है, इसलिए NextMux इसका वर्कस्पेस नहीं खोल सकता। नई बातचीत शुरू करें और फिर से कोशिश करें।',
+        conversation_deleted: 'यह बातचीत हटा दी गई है। जारी रखने के लिए नई बातचीत शुरू करें।',
+        sign_in_required: 'यहाँ रिले मॉडल इस्तेमाल करने के लिए NextMux में साइन इन करें, या अपना कोई API चुनें।',
+        app_window_closed: 'इस टैब की ऐप विंडो बंद है या अभी कैप्चर नहीं हो सकती। टैब से ऐप दोबारा खोलें, फिर कोशिश करें।',
         contextWindowBody: 'यह काम मॉडल की संदर्भ क्षमता से बड़ा है। काम और पुनर्प्राप्ति स्थिति सहेजी गई है। जारी रखने के लिए बड़े संदर्भ वाला मॉडल चुनें।',
         switch_policy_invalid: 'मॉडल बदलने की सेटिंग अमान्य है। मॉडल फिर से चुनें और दोबारा कोशिश करें।',
         route_unavailable: 'चुना गया मॉडल मार्ग उपलब्ध नहीं है। कोई दूसरा मार्ग आज़माएँ।',
@@ -390,6 +438,9 @@ export function desktopFailureMessage(locale: NextMuxDesktopLocale, value: unkno
     if (['PRICE_QUOTE_INVALID', 'PRICE_AUTHORIZATION_INVALID', 'PRICE_QUOTE_CHANGED', 'PRICE_CHANGED'].includes(code)) {
         return agentOutcomeText(locale, 'price_changed');
     }
+    // The service names these in Chinese for its logs; readers get their own language and what to do next.
+    if (code === 'INVALID_CONVERSATION' || code === 'INVALID_CONVERSATION_ID') return agentOutcomeText(locale, 'conversation_invalid');
+    if (code === 'CONVERSATION_DELETED') return agentOutcomeText(locale, 'conversation_deleted');
     const metadata = failureRecords(value).some(record => Boolean(record.readableError)
         || Boolean(record.data && typeof record.data === 'object' && (record.data as Record<string, unknown>).readableError));
     if (metadata) {

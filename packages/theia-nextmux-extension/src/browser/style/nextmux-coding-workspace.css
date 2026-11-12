@@ -1310,7 +1310,8 @@
 @media (max-width: 560px) { .nmx-plugin-sources { grid-template-columns: 1fr; } .nmx-plugin-limits { grid-template-columns: 1fr; } .nmx-plugin-card-actions, .nmx-plugin-details, .nmx-plugin-tests { margin-inline-start: 0; padding-inline-start: 0; } }
 
 /* A tab's plugin: header button with its menu, the run bar, and the readings over the picture. */
-.nmx-visual-tab-action.nmx-plugin-tab-market.is-active { background: var(--nmx-hover); }
+.nmx-visual-tab-action.nmx-plugin-tab-chat.is-active,
+.nmx-visual-tab-action.nmx-plugin-tab-market.is-active { color: var(--nmx-text); background: var(--nmx-hover); }
 .nmx-plugin-menu { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 30; display: flex; flex-direction: column; gap: 2px; min-width: 240px; max-width: 320px; padding: 6px;
   border: 1px solid var(--nmx-menu-border, var(--nmx-border)); border-radius: 10px; background: var(--nmx-menu-background, var(--nmx-panel)); box-shadow: 0 12px 32px rgba(0, 0, 0, .28); }
 .nmx-plugin-menu > button { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; border-radius: 7px; color: var(--nmx-menu-foreground, var(--nmx-text)); background: transparent; text-align: start; cursor: pointer; }
@@ -1484,17 +1485,14 @@
 .nmx-plugin-chat-markdown {
   line-height: 1.6; color: var(--nmx-text); word-break: break-word;
 }
-.nmx-plugin-chat-markdown p { margin: 0 0 6px; }
-.nmx-plugin-chat-markdown p:last-child { margin-bottom: 0; }
-.nmx-plugin-chat-markdown ul, .nmx-plugin-chat-markdown ol { margin: 4px 0 6px; padding-inline-start: 20px; }
-.nmx-plugin-chat-markdown pre.nmx-code-block {
-  position: relative; margin: 6px 0; padding: 10px 12px; overflow-x: auto; border-radius: 8px;
-  border: 1px solid var(--nmx-border); background: color-mix(in srgb, var(--nmx-text) 5%, transparent);
-  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+/* The console renders replies with the conversation's StreamText + Markdown (nextmux-markdown.css): keep the
+   console's compact type size instead of the main column's 15px narration. */
+.nmx-desktop-widget .nmx-plugin-chat-markdown > .nmx-stream-text.nmx-agent-narration {
+  margin: 0 !important;
+  font-size: inherit;
+  line-height: 1.6;
 }
-.nmx-plugin-chat-markdown .nmx-code-block-lang {
-  display: block; margin-bottom: 4px; font-size: 10.5px; color: var(--nmx-muted); text-transform: uppercase;
-}
+.nmx-desktop-widget .nmx-plugin-chat-markdown .nmx-assistant-markdown { --md-gap: 8px; }
 .nmx-plugin-chat-pending {
   display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 2px 0;
 }
@@ -1585,9 +1583,25 @@
 .nmx-plugin-chat-attach:hover { color: var(--nmx-text); background: var(--nmx-hover); }
 .nmx-plugin-chat-attach > input[type='file'] { display: none; }
 .nmx-plugin-chat-send-btn {
-  width: 26px; height: 26px; flex: 0 0 26px; border-radius: 999px;
+  width: 26px; height: 26px; min-height: 26px !important; flex: 0 0 26px; border-radius: 999px;
   display: inline-grid; place-items: center; border: 0;
   background: var(--nmx-text); color: var(--nmx-panel, #16181d); cursor: pointer;
+}
+.nmx-plugin-chat-send-btn:not(:disabled) {
+  background: #f4f4f5 !important; color: #18181b !important;
+}
+.nmx-plugin-chat-send-btn:not(:disabled):is(:hover, :active, :focus-visible) {
+  background: #ffffff !important; color: #18181b !important;
+}
+.nmx-plugin-chat-send-btn:not(:disabled) :where(i.codicon, svg) { color: inherit !important; }
+:is(.nmx-theme-light, .nmx-desktop-widget.nmx-theme-light, .nmx-shell.nmx-theme-light, body.theia-light, body.nextmux-light, body.NextMux-light, [data-nextmux-theme='light']) .nmx-plugin-chat-send-btn:not(:disabled) {
+  background: #1f1d1e !important; color: #ffffff !important;
+}
+:is(.nmx-theme-light, .nmx-desktop-widget.nmx-theme-light, .nmx-shell.nmx-theme-light, body.theia-light, body.nextmux-light, body.NextMux-light, [data-nextmux-theme='light']) .nmx-plugin-chat-send-btn:not(:disabled):is(:hover, :active, :focus-visible) {
+  background: #2d292b !important; color: #ffffff !important;
+}
+:is(.nmx-theme-light, .nmx-desktop-widget.nmx-theme-light, .nmx-shell.nmx-theme-light, body.theia-light, body.nextmux-light, body.NextMux-light, [data-nextmux-theme='light']) .nmx-plugin-chat-send-btn:not(:disabled) :where(i.codicon, svg) {
+  color: #ffffff !important;
 }
 .nmx-plugin-chat-send-btn:disabled { opacity: .35; cursor: default; }
 .nmx-shell .nmx-visual-tab-overlay { position: absolute; pointer-events: none; }

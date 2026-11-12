@@ -294,6 +294,18 @@ function compactToolSummary(value: unknown): unknown | undefined {
         ...(Array.isArray(value.checkpointIds) ? { checkpointIds: [...new Set(value.checkpointIds
             .filter((id): id is string => typeof id === 'string' && Boolean(id.trim()) && !id.includes('\0'))
             .slice(0, 10_000).map(id => boundedString(id, 200)))] } : {}),
+        ...(Array.isArray(value.restoredCheckpointIds) ? { restoredCheckpointIds: [...new Set(value.restoredCheckpointIds
+            .filter((id): id is string => typeof id === 'string' && Boolean(id.trim()) && !id.includes('\0'))
+            .slice(0, 5_000).map(id => boundedString(id, 200)))] } : {}),
+        ...(Array.isArray(value.reappliedCheckpointIds) ? { reappliedCheckpointIds: [...new Set(value.reappliedCheckpointIds
+            .filter((id): id is string => typeof id === 'string' && Boolean(id.trim()) && !id.includes('\0'))
+            .slice(0, 5_000).map(id => boundedString(id, 200)))] } : {}),
+        ...(Array.isArray(value.restoredVersions) ? { restoredVersions: value.restoredVersions
+            .filter((item): item is { workspaceRoot: string; checkpointId: string } => isRecord(item)
+                && typeof item.workspaceRoot === 'string' && Boolean(item.workspaceRoot.trim()) && !item.workspaceRoot.includes('\0')
+                && typeof item.checkpointId === 'string' && Boolean(item.checkpointId.trim()) && !item.checkpointId.includes('\0'))
+            .slice(0, 5_000)
+            .map(item => ({ workspaceRoot: boundedString(item.workspaceRoot, 4_096), checkpointId: boundedString(item.checkpointId, 200) })) } : {}),
         ...(Array.isArray(value.changedPaths) ? { changedPaths: [...new Set(value.changedPaths
             .filter((path): path is string => typeof path === 'string' && Boolean(path.trim()) && !path.includes('\0'))
             .slice(0, 10_000).map(path => boundedString(path, 32_768)))] } : {}),

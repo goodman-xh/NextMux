@@ -16,6 +16,9 @@ import type {
     AppPluginModel, AppPluginModelChoices, AppPluginOverlayItem, AppPluginParam, AppPluginParamFileValue, AppPluginParamValue, AppPluginPreset, AppPluginRunSnapshot, AppPluginServerProbe, AppPluginSummary, AppPluginUploadProblem, AppPluginVisionModel
 } from '../common/nextmux-app-plugins';
 import { APP_PLUGIN_PRICE } from '../common/nextmux-app-plugins';
+import { ConversationMarkdown } from './nextmux-conversation-markdown';
+import { StreamText } from './nextmux-conversation-stream';
+import { normalizeConversationMarkdown } from './nextmux-markdown';
 
 function appPluginDiagnostics(locale: NextMuxDesktopLocale, value: Parameters<typeof originalAppPluginDiagnostics>[1]): readonly string[] {
     if (value.diagnostics?.length) return value.diagnostics.map(item => appPluginPackageError(locale, item.code)
@@ -1421,6 +1424,7 @@ export interface AppPluginChatPanelProps {
     readonly locale: Locale;
     readonly appName?: string;
     readonly plugin?: AppPluginInfo;
+    readonly plugins?: readonly AppPluginInfo[];
     readonly run?: AppPluginRunSnapshot;
     readonly choices?: AppPluginModelChoices;
     readonly extraModels?: readonly AppPluginModel[];
@@ -1429,7 +1433,8 @@ export interface AppPluginChatPanelProps {
     readonly busy?: boolean;
     readonly error?: string;
     readonly composerModelControls?: React.ReactNode;
-    readonly renderMarkdown?: (text: string, key: string) => React.ReactNode;
+    readonly renderMarkdown?: (text: string, key: string, className?: string) => React.ReactNode;
+    readonly onContentClick?: React.MouseEventHandler<HTMLElement>;
     onSelectModel?(model: AppPluginModel): void;
     onSend?(request: AppPluginChatRequest): void;
     onClear?(): void;
@@ -1438,99 +1443,58 @@ export interface AppPluginChatPanelProps {
     onClose?(): void;
 }
 
-function renderInlinePluginMarkdown(line: string, keyPrefix: string): React.ReactNode {
-    const tokens = line.split(/(`[^`]+`|\*\*[^*]+\*\*)/g);
-    return tokens.map((part, idx) => {
-        if (part.startsWith('`') && part.endsWith('`') && part.length >= 2) {
-            return <code key={`${keyPrefix}-c-${idx}`} className='nmx-inline-code'>{part.slice(1, -1)}</code>;
+/**
+ * The conversation's own Markdown renderer for a console without one passed in (tests, other hosts): the AI Console
+ * reads exactly like the main conversation, never through a second, simpler parser. One function per locale keeps
+ * StreamText's per-block memo effective.
+ */
+const SAFE_DATA_URL_RE = /^data:(?:image\/(?:png|jpe?g|gif|webp|bmp|avif)|audio\/(?:mpeg|mp3|wav|x-wav|wave|ogg|webm|aac|flac|mp4|x-m4a)|video\/(?:mp4|webm|ogg|quicktime)|application\/pdf)(?:;[a-z0-9=._-]+)*;base64,[A-Za-z0-9+/=\s]+$/i;
+
+/**
+ * Validates attachment URLs rendered inside `AppPluginChatPanel` so untrusted model/MCP attachments can never inject
+ * `javascript:`, `vbscript:`, `file:`, `data:text/html`, or `data:image/svg+xml` payloads.
+ */
+export function safePluginChatAttachmentHref(att: AppPluginChatAttachment): string {
+    const raw = (att.dataUrl || att.url || '').trim();
+    if (raw) {
+        if (/[\u0000-\u001f\u007f]/.test(raw)) return '';
+        if (/^https?:\/\//i.test(raw)) {
+            try {
+                const parsed = new URL(raw);
+                return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? raw : '';
+            } catch {
+                return '';
+            }
         }
-        if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
-            return <strong key={`${keyPrefix}-b-${idx}`}>{part.slice(2, -2)}</strong>;
+        if (/^blob:/i.test(raw)) {
+            try {
+                const parsed = new URL(raw);
+                return parsed.protocol === 'blob:' ? raw : '';
+            } catch {
+                return '';
+            }
         }
-        return <React.Fragment key={`${keyPrefix}-t-${idx}`}>{part}</React.Fragment>;
-    });
+        if (/^data:/i.test(raw)) {
+            return SAFE_DATA_URL_RE.test(raw) ? raw : '';
+        }
+        return '';
+    }
+    if (typeof att.content === 'string' && att.content.length > 0) {
+        const safeTextMime = att.mimeType === 'application/json' ? 'application/json' : 'text/plain';
+        return `data:${safeTextMime};charset=utf-8,${encodeURIComponent(att.content)}`;
+    }
+    return '';
 }
 
-function renderSimplePluginMarkdown(text: string, keyPrefix: string): React.ReactNode {
-    const normalized = text.replace(/\r\n/g, '\n');
-    const blocks: React.ReactNode[] = [];
-    const fenceRegex = /```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g;
-    let cursor = 0;
-    let match: RegExpExecArray | null;
-    let blockIdx = 0;
-
-    const pushProse = (prose: string): void => {
-        const lines = prose.split('\n');
-        let listItems: { ordered: boolean; text: string }[] = [];
-        let paraLines: string[] = [];
-        const flushPara = (): void => {
-            if (!paraLines.length) return;
-            const joined = paraLines.join('\n').trim();
-            paraLines = [];
-            if (!joined) return;
-            blocks.push(<p key={`${keyPrefix}-p-${blockIdx++}`}>{joined.split('\n').map((ln, idx) =>
-                <React.Fragment key={idx}>{idx > 0 && <br />}{renderInlinePluginMarkdown(ln, `${keyPrefix}-pl-${blockIdx}-${idx}`)}</React.Fragment>)}</p>);
-        };
-        const flushList = (): void => {
-            if (!listItems.length) return;
-            const ordered = listItems[0].ordered;
-            const items = listItems;
-            listItems = [];
-            const Tag = ordered ? 'ol' : 'ul';
-            blocks.push(<Tag key={`${keyPrefix}-l-${blockIdx++}`}>{items.map((item, idx) =>
-                <li key={idx}>{renderInlinePluginMarkdown(item.text, `${keyPrefix}-li-${blockIdx}-${idx}`)}</li>)}</Tag>);
-        };
-        for (const rawLine of lines) {
-            const trimmed = rawLine.trim();
-            if (!trimmed) {
-                flushPara();
-                flushList();
-                continue;
-            }
-            const heading = /^(#{1,4})\s+(.+)$/.exec(trimmed);
-            if (heading) {
-                flushPara();
-                flushList();
-                const level = heading[1].length;
-                const HeadingTag = (`h${Math.min(4, level + 1)}` as 'h2' | 'h3' | 'h4');
-                blocks.push(<HeadingTag key={`${keyPrefix}-h-${blockIdx++}`}>{renderInlinePluginMarkdown(heading[2], `${keyPrefix}-hi-${blockIdx}`)}</HeadingTag>);
-                continue;
-            }
-            const bullet = /^[-*•]\s+(.+)$/.exec(trimmed);
-            const numbered = /^\d+\.\s+(.+)$/.exec(trimmed);
-            if (bullet || numbered) {
-                flushPara();
-                const ordered = Boolean(numbered);
-                if (listItems.length && listItems[0].ordered !== ordered) flushList();
-                listItems.push({ ordered, text: (bullet ? bullet[1] : numbered![1]) });
-                continue;
-            }
-            const quote = /^>\s?(.*)$/.exec(trimmed);
-            if (quote) {
-                flushPara();
-                flushList();
-                blocks.push(<blockquote key={`${keyPrefix}-q-${blockIdx++}`}>{renderInlinePluginMarkdown(quote[1], `${keyPrefix}-qi-${blockIdx}`)}</blockquote>);
-                continue;
-            }
-            flushList();
-            paraLines.push(rawLine);
-        }
-        flushPara();
-        flushList();
-    };
-
-    while ((match = fenceRegex.exec(normalized)) !== null) {
-        if (match.index > cursor) pushProse(normalized.slice(cursor, match.index));
-        const lang = (match[1] || '').trim();
-        const code = match[2].replace(/\n$/, '');
-        blocks.push(<pre key={`${keyPrefix}-code-${blockIdx++}`} className='nmx-code-block' data-lang={lang || undefined}>
-            {lang && <span className='nmx-code-block-lang'>{lang}</span>}
-            <code>{code}</code>
-        </pre>);
-        cursor = match.index + match[0].length;
+const pluginChatMarkdownRenderers = new Map<string, (text: string, key: string) => React.ReactNode>();
+function pluginChatMarkdown(locale: Locale, className = 'nmx-assistant-markdown'): (text: string, key: string) => React.ReactNode {
+    const cacheKey = `${locale}\n${className}`;
+    let render = pluginChatMarkdownRenderers.get(cacheKey);
+    if (!render) {
+        render = (text, key) => <ConversationMarkdown key={key} markdown={normalizeConversationMarkdown(text)} className={className} locale={locale} />;
+        pluginChatMarkdownRenderers.set(cacheKey, render);
     }
-    if (cursor < normalized.length) pushProse(normalized.slice(cursor));
-    return blocks.length ? blocks : normalized;
+    return render;
 }
 
 /**
@@ -1588,11 +1552,15 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
         };
     }, [Boolean(fallbackPicker)]);
 
-    const appTitle = props.appName || run?.name || plugin?.summary?.name || (zh ? '当前应用' : 'Current App');
+    const activeRun = run && !run.ended ? run : undefined;
+    const appTitle = props.appName || activeRun?.name || plugin?.summary?.name || (zh ? '当前应用' : 'Current App');
 
     const submit = (textValue: string): void => {
         const clean = textValue.trim();
         if ((!clean && !attachments.length) || !props.onSend) return;
+        const narrowedPluginId = activeRun
+            ? activeRun.pluginId
+            : (props.plugins && props.plugins.length > 1 ? undefined : plugin?.id);
         props.onSend({
             text: clean || (zh ? '请处理附带的文件与当前画面' : 'Process the attached files and live screen'),
             ...(props.composerModelControls ? {} : { model: chosenModel }),
@@ -1600,8 +1568,8 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
             includeScreenshot: true,
             includeContext: true,
             attachments,
-            pluginId: plugin?.id || run?.pluginId,
-            runId: run?.runId
+            pluginId: narrowedPluginId,
+            runId: activeRun?.runId
         });
         setDraft('');
         setAttachments([]);
@@ -1745,10 +1713,34 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
         })()}
     </>;
 
+    const handleMessagesClick = (event: React.MouseEvent<HTMLDivElement>): void => {
+        const targetEl = (event.target as Element | null) ?? null;
+        const downloadAnchor = targetEl?.closest?.('a[download]') as HTMLAnchorElement | null;
+        if (downloadAnchor && downloadAnchor.closest?.('.nmx-plugin-chat-media-bar')) {
+            const dlHref = downloadAnchor.getAttribute('href') || '';
+            if (/^(?:data:|blob:)/i.test(dlHref)) return;
+        }
+        props.onContentClick?.(event);
+        if (!event.defaultPrevented) {
+            const linkLike = targetEl?.closest?.('a[href], a[data-href], .nmx-file-path-pill[data-href]');
+            if (linkLike) event.preventDefault();
+        }
+    };
+
+    const renderUserMessageContent = (msg: AppPluginChatMessage): React.ReactNode => {
+        if (props.renderMarkdown) {
+            return <div className='nmx-user-message-text'>{props.renderMarkdown(msg.text, `${msg.id}:0`, 'nmx-user-markdown')}</div>;
+        }
+        if (typeof document !== 'undefined') {
+            return <div className='nmx-user-message-text'>{pluginChatMarkdown(locale, 'nmx-user-markdown')(msg.text, `${msg.id}:0`)}</div>;
+        }
+        return <div className='nmx-user-message-text nmx-user-markdown nmx-plugin-chat-text' data-nmx-literal>{msg.text}</div>;
+    };
+
     const renderAttachmentsBlock = (msgAttachments: readonly AppPluginChatAttachment[], isUser: boolean): React.ReactElement => (
         <div className={`nmx-plugin-chat-attachments${isUser ? ' is-user' : ''}`}>
             {msgAttachments.map((att, idx) => {
-                const href = att.dataUrl || att.url || (att.content ? `data:${att.mimeType || 'text/plain'};charset=utf-8,${encodeURIComponent(att.content)}` : '');
+                const href = safePluginChatAttachmentHref(att);
                 if (att.kind === 'image') {
                     return <div key={att.id || idx} className='nmx-plugin-chat-media is-image'>
                         {href && <img src={href} alt={att.name} />}
@@ -1792,12 +1784,12 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
         </div>
     );
 
-    return <div className='nmx-plugin-chat-panel' role='region' aria-label={zh ? 'AI 控制台' : 'AI Console'}>
+    return <div className='nmx-plugin-chat-panel' role='region' aria-label={t(locale, 'aiConsole')}>
         <div className='nmx-plugin-chat-header'>
             <div className='nmx-plugin-chat-title-row'>
                 <span className='nmx-plugin-chat-title'>
                     <i className='codicon codicon-comment-discussion' aria-hidden='true'></i>
-                    <strong data-nmx-literal>{zh ? 'AI 控制台' : 'AI Console'}</strong>
+                    <strong data-nmx-literal>{t(locale, 'aiConsole')}</strong>
                     <small className='nmx-plugin-chat-subtitle' data-nmx-literal title={appTitle}>{appTitle}</small>
                 </span>
                 <span className='nmx-plugin-chat-header-actions'>
@@ -1810,7 +1802,7 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
                 </span>
             </div>
         </div>
-        <div className='nmx-plugin-chat-messages nmx-conversation-stream' role='log' aria-live='polite'>
+        <div className='nmx-plugin-chat-messages nmx-conversation-stream' role='log' aria-live='polite' onClick={handleMessagesClick}>
             {messages.length === 0 ? <div className='nmx-plugin-chat-empty'>
                 <i className='codicon codicon-sparkle' aria-hidden='true'></i>
                 <span data-nmx-literal>
@@ -1822,7 +1814,7 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
                 <div key={msg.id} className='nmx-plugin-chat-turn nmx-plugin-chat-msg is-user'>
                     <div className='nmx-user-message nmx-plugin-chat-user-bubble'>
                         {msg.attachments && msg.attachments.length > 0 && renderAttachmentsBlock(msg.attachments, true)}
-                        {msg.text && <div className='nmx-user-message-text nmx-plugin-chat-text' data-nmx-literal>{msg.text}</div>}
+                        {msg.text && renderUserMessageContent(msg)}
                     </div>
                 </div>
             ) : (() => {
@@ -1851,7 +1843,9 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
                     </div>}
                     {msg.text ? (
                         <div className='nmx-gateway-content nmx-plugin-chat-markdown' data-nmx-literal>
-                            {props.renderMarkdown ? props.renderMarkdown(msg.text, msg.id) : renderSimplePluginMarkdown(msg.text, msg.id)}
+                            {/* Same streamed blocks as the main conversation: an unfinished fence, code span or bold never flashes raw. */}
+                            <StreamText text={msg.text} streaming={isStreaming} markdownKey={msg.id}
+                                renderMarkdown={props.renderMarkdown || pluginChatMarkdown(locale)} />
                         </div>
                     ) : isStreaming ? (
                         <div className='nmx-plugin-chat-pending' role='status' aria-label={zh ? '正在生成回复' : 'Generating reply'}>

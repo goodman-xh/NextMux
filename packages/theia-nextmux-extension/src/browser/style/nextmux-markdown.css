@@ -34,6 +34,27 @@
     --md-tok-inserted-bg: rgba(46, 160, 67, .15);
     --md-tok-deleted: #ffdcd7;
     --md-tok-deleted-bg: rgba(248, 81, 73, .15);
+    --md-inline-border: rgba(255, 255, 255, .1);
+    /* Coloured emphasis (MARKDOWN_INK_HUES): ≥ 6:1 on every dark surface a reply sits on (main column, panels, AI Console). */
+    --md-ink-red: #ff7b72;
+    --md-ink-orange: #ffa657;
+    --md-ink-yellow: #e3b341;
+    --md-ink-green: #56d364;
+    --md-ink-teal: #3fd0c0;
+    --md-ink-blue: #79c0ff;
+    --md-ink-purple: #d2a8ff;
+    --md-ink-pink: #ff8fc7;
+    --md-ink-gray: #adb5bd;
+    /* Highlights: body text stays ≥ 6.4:1 on each. */
+    --md-mark-yellow: rgba(234, 179, 8, .32);
+    --md-mark-red: rgba(248, 81, 73, .3);
+    --md-mark-orange: rgba(249, 115, 22, .3);
+    --md-mark-green: rgba(46, 160, 67, .34);
+    --md-mark-teal: rgba(20, 184, 166, .3);
+    --md-mark-blue: rgba(56, 139, 253, .32);
+    --md-mark-purple: rgba(163, 113, 247, .32);
+    --md-mark-pink: rgba(236, 72, 153, .3);
+    --md-mark-gray: rgba(255, 255, 255, .12);
     text-autospace: normal;
 }
 
@@ -63,6 +84,26 @@
     --md-tok-inserted-bg: #e6ffec;
     --md-tok-deleted: #82071e;
     --md-tok-deleted-bg: #ffebe9;
+    --md-inline-border: rgba(31, 27, 30, .12);
+    /* ≥ 5.6:1 on the darkest light surface (#f0eeee) and ≥ 4.9:1 on an alert's own tint. */
+    --md-ink-red: #b42318;
+    --md-ink-orange: #9a3c00;
+    --md-ink-yellow: #7a5300;
+    --md-ink-green: #116329;
+    --md-ink-teal: #0b6660;
+    --md-ink-blue: #0550ae;
+    --md-ink-purple: #6534c2;
+    --md-ink-pink: #a1205f;
+    --md-ink-gray: #50575e;
+    --md-mark-yellow: rgba(250, 204, 21, .38);
+    --md-mark-red: rgba(248, 113, 113, .28);
+    --md-mark-orange: rgba(251, 146, 60, .3);
+    --md-mark-green: rgba(74, 222, 128, .3);
+    --md-mark-teal: rgba(45, 212, 191, .28);
+    --md-mark-blue: rgba(96, 165, 250, .28);
+    --md-mark-purple: rgba(167, 139, 250, .28);
+    --md-mark-pink: rgba(244, 114, 182, .26);
+    --md-mark-gray: rgba(31, 27, 30, .1);
 }
 
 /* ---- Block rhythm -------------------------------------------------- */
@@ -146,8 +187,8 @@
 /* ---- Inline -------------------------------------------------------- */
 
 .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :not(pre) > code {
-    padding: .12em .4em;
-    border: 0;
+    padding: .06em .36em;
+    border: 1px solid var(--md-inline-border);
     border-radius: 6px;
     color: var(--nmx-text);
     background: var(--md-inline-bg);
@@ -155,6 +196,8 @@
     line-height: 1.45;
     white-space: normal;
     overflow-wrap: anywhere;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
 }
 .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(h1, h2, h3, h4) > code { font-size: .9em; }
 
@@ -361,7 +404,42 @@
     transition: text-decoration-color 150ms ease;
 }
 .nmx-desktop-widget .nmx-assistant-markdown a:hover { text-decoration-color: currentColor; }
-.nmx-desktop-widget .nmx-assistant-markdown del { color: var(--nmx-subtle); }
+.nmx-desktop-widget .nmx-assistant-markdown :is(del, s) { color: var(--nmx-subtle); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) :is(u, ins) {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) small { font-size: .86em; }
+
+/* Coloured emphasis from `<span style="color">` / `<font color>` / `<mark>` (renderer: MARKDOWN_INK_HUES). */
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-ink-red { color: var(--md-ink-red); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-ink-orange { color: var(--md-ink-orange); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-ink-yellow { color: var(--md-ink-yellow); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-ink-green { color: var(--md-ink-green); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-ink-teal { color: var(--md-ink-teal); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-ink-blue { color: var(--md-ink-blue); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-ink-purple { color: var(--md-ink-purple); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-ink-pink { color: var(--md-ink-pink); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-ink-gray { color: var(--md-ink-gray); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) mark {
+    padding: .04em .22em;
+    border-radius: 4px;
+    color: var(--nmx-text);
+    background: var(--md-mark-yellow);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) mark.nmx-md-mark-red { background: var(--md-mark-red); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) mark.nmx-md-mark-orange { background: var(--md-mark-orange); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) mark.nmx-md-mark-green { background: var(--md-mark-green); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) mark.nmx-md-mark-teal { background: var(--md-mark-teal); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) mark.nmx-md-mark-blue { background: var(--md-mark-blue); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) mark.nmx-md-mark-purple { background: var(--md-mark-purple); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) mark.nmx-md-mark-pink { background: var(--md-mark-pink); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) mark.nmx-md-mark-gray { background: var(--md-mark-gray); }
+/* A tinted highlight lowers a coloured word below 4.5:1, so on a highlight the hue is the highlight's alone. */
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) mark .nmx-md-ink { color: inherit; }
 
 /* ---- Quotes, rules, images ------------------------------------------ */
 
@@ -374,15 +452,23 @@
     color: var(--nmx-subtle);
 }
 .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote > :last-child { margin-bottom: 0; }
+/* GitHub alerts (Primer's semantic hues, MIT): border, icon and title in the hue, a faint surface tint of it.
+   The title keeps ≥ 4.9:1 on its own tint in both themes (the --md-ink-* shades). */
 .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote.nmx-md-alert {
-    --nmx-alert-color: #3b82f6;
-    border-inline-start-color: var(--nmx-alert-color);
+    --nmx-alert-color: var(--md-ink-blue);
+    padding: 8px 12px;
+    padding-inline-start: 13px;
+    /* !important: the light theme forces every border to #e4e0dd (`.nmx-theme-light *`), which would grey the semantic edge. */
+    border-inline-start-color: var(--nmx-alert-color) !important;
+    border-start-end-radius: 8px;
+    border-end-end-radius: 8px;
     color: var(--nmx-text);
+    background: color-mix(in srgb, var(--nmx-alert-color) 9%, transparent);
 }
-.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote.nmx-md-alert.is-tip { --nmx-alert-color: #10b981; }
-.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote.nmx-md-alert.is-important { --nmx-alert-color: #8b5cf6; }
-.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote.nmx-md-alert.is-warning { --nmx-alert-color: #f59e0b; }
-.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote.nmx-md-alert.is-caution { --nmx-alert-color: #ef4444; }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote.nmx-md-alert.is-tip { --nmx-alert-color: var(--md-ink-green); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote.nmx-md-alert.is-important { --nmx-alert-color: var(--md-ink-purple); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote.nmx-md-alert.is-warning { --nmx-alert-color: var(--md-ink-yellow); }
+.nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) blockquote.nmx-md-alert.is-caution { --nmx-alert-color: var(--md-ink-red); }
 .nmx-desktop-widget :is(.nmx-assistant-markdown, .nmx-user-markdown) .nmx-md-alert-title {
     display: flex;
     align-items: center;

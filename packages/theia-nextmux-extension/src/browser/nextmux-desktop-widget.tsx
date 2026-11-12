@@ -41,6 +41,7 @@ import { SurfaceTooltips } from './nextmux-surface-tooltips';
 import { declaredReasoningEfforts, declaredReasoningSettings, defaultReasoningEffortChoice, normalizeReasoningSettings, reasoningDepthChoices, type ModelReasoningSettings, type ReasoningDepthChoices, type ReasoningDepthOption } from '../common/nextmux-model-controls';
 import { isReasoningOptionRejection, reasoningEvidenceState, reasoningOptionKey, type ReasoningEvidenceState } from '@nextmux/model-runtime/reasoning-evidence';
 import { CatalogSnapshotRefresh, merchantSnapshotRemoved } from './nextmux-catalog-refresh';
+import { appPluginAiContext, appPluginConsoleContextLines, appPluginMcpServers, boundedMcpResult, openSoftwareTabsBlock, pluginMcpFailureText } from '../common/nextmux-app-plugin-context';
 import { COMPUTER_USER_ESC_OBSERVATION, isDesktopPluginAction, isDesktopTabAction, type DesktopComputerCapability, type DesktopComputerToolRequest, type DesktopComputerToolResult } from '../common/nextmux-computer-automation';
 import { MODEL_VISIBILITY_KEY, parseModelVisibilityPreferences, isModelVisible as modelVisible, setModelsVisible, ModelVisibilityGroup, ModelVisibilityCategory, createModelVisibilityCatalog, migrateModelVisibilityPreferences, modelVisibilityCategories, resolveModelVisibilityId } from './nextmux-model-visibility';
 import { AnonymousModelsToggle, ModelVisibilitySettings, modelVisibilityCopy, type ModelCreativityMode } from './nextmux-model-visibility-settings';
@@ -123,7 +124,7 @@ const MERCHANT_CONSOLE_HINTS: Readonly<Record<NextMuxDesktopLocale, string>> = {
 };
 /** Where developers upload plugins for review (the website's plugin pages). */
 import { DataLocationSection } from './nextmux-data-location';
-import { ConversationTabStrip, ConversationVisualTabView, conversationTabsText, type ConversationTabPluginParts, conversationWindowText as tabWindowText, type ComputerViewCapability, type ConversationWindowControls, type ConversationWindowPlacement, type ConversationWindowTextKey } from './nextmux-conversation-tabs-view';
+import { ConversationTabStrip, ConversationVisualTabView, conversationTabsText, LIVE_FRAME_FRESH_MS, liveVideoFrameAgeMs, type ConversationTabPluginParts, conversationWindowText as tabWindowText, type ComputerViewCapability, type ConversationWindowControls, type ConversationWindowPlacement, type ConversationWindowTextKey } from './nextmux-conversation-tabs-view';
 import { SystemPermissionsSettings, systemPermissionsText, type SystemPermissionsBridge } from './nextmux-system-permissions-panel';
 import { ComputerPermissionWait, computerPermissionNames, type ComputerPermissionKind } from './nextmux-computer-permission-wait';
 import { deskInputDigest, stableUuid } from '../common/nextmux-stable-id';
@@ -8724,6 +8725,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     if (ok) widget.nudgeSnapshotStream(conversationId, ref.pid, ref.windowId, false);
                     return ok;
                 } } : {}),
+                // The tab's frame-stall watchdog compares the live picture with the window as the system captures it now.
+                ...(bridge.computerWindowSnapshot ? { snapshot: async (maxSize?: number) => {
+                    const shot = await bridge.computerWindowSnapshot!(conversationId, ref.pid, ref.windowId,
+                        Math.max(64, Math.min(2048, Math.round(maxSize || 256)))).catch(() => undefined);
+                    return shot?.ok && shot.data && shot.width && shot.height
+                        ? { data: shot.data, mimeType: shot.mimeType || 'image/jpeg', width: shot.width, height: shot.height } : undefined;
+                } } : {}),
                 place: async placement => {
                     widget.loadConversationTabs();
                     const currentTab = visualTabsFor(widget.conversationTabs, conversationId).find(item => item.id === tab.id) || tab;
@@ -8999,7 +9007,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // looking at, which may be another conversation's tab while this one works in the background.
             const liveVideo = (this as unknown as { readonly node?: HTMLElement }).node?.querySelector?.(
                 `.nmx-visual-tab-screen video.is-ready[data-window-key="${ref.pid}:${ref.windowId}"]`) as HTMLVideoElement | null | undefined;
-            if (liveVideo && liveVideo.readyState >= 2 && liveVideo.videoWidth > 0 && liveVideo.videoHeight > 0 && typeof window.document?.createElement === 'function') {
+            const liveFrame = (): typeof shot => {
+                if (!liveVideo || liveVideo.readyState < 2 || !(liveVideo.videoWidth > 0) || !(liveVideo.videoHeight > 0) || typeof window.document?.createElement !== 'function') return undefined;
                 try {
                     const scale = Math.min(1, maxSize / Math.max(liveVideo.videoWidth, liveVideo.videoHeight));
                     const width = Math.max(1, Math.round(liveVideo.videoWidth * scale));
@@ -9008,18 +9017,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     canvas.width = width;
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
-                    if (ctx) {
-                        ctx.drawImage(liveVideo, 0, 0, width, height);
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-                        const prefix = 'data:image/jpeg;base64,';
-                        if (dataUrl.startsWith(prefix)) {
-                            shot = { ok: true, mimeType: 'image/jpeg', data: dataUrl.slice(prefix.length), width, height };
-                        }
-                    }
-                } catch { /* fall back to bridge snapshot */ }
-            }
+                    if (!ctx) return undefined;
+                    ctx.drawImage(liveVideo, 0, 0, width, height);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+                    const prefix = 'data:image/jpeg;base64,';
+                    return dataUrl.startsWith(prefix) ? { ok: true, mimeType: 'image/jpeg', data: dataUrl.slice(prefix.length), width, height } : undefined;
+                } catch { return undefined; }
+            };
+            // The live frame is the window as it is only while the stream keeps presenting frames (a still window or a
+            // stalled capture shows the same picture): otherwise a fresh capture of the window, and the last live frame
+            // only when that capture fails.
+            const frameAge = liveVideo && typeof liveVideoFrameAgeMs === 'function' ? liveVideoFrameAgeMs(liveVideo) : undefined;
+            const liveIsCurrent = frameAge !== undefined && frameAge <= (typeof LIVE_FRAME_FRESH_MS === 'number' ? LIVE_FRAME_FRESH_MS : 1_500);
+            let staleLiveFrame = false;
+            if (liveIsCurrent) shot = liveFrame();
             if (!shot) {
                 shot = await bridge?.computerWindowSnapshot?.(conversationId, ref.pid, ref.windowId, maxSize, { source: 'agent' });
+            }
+            if (!shot?.ok && !liveIsCurrent && shot?.error !== 'interrupted_by_user_esc' && shot?.error !== 'user_escape') {
+                const fallback = liveFrame();
+                if (fallback) { shot = fallback; staleLiveFrame = true; }
             }
             if (shot?.error === 'interrupted_by_user_esc' || shot?.error === 'user_escape' || this.desktopControlEscapedConversations?.has(conversationId)) {
                 this.desktopControlEscapedConversations?.add(conversationId);
@@ -9029,7 +9046,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.tabShotSizes.set(key, { width: shot.width, height: shot.height });
             if (this.tabShotSizes.size > 64) this.tabShotSizes.delete(this.tabShotSizes.keys().next().value!);
             this.updateConversationVisualTab(conversationId, canonicalTabId, { frameUrl: `data:${shot.mimeType};base64,${shot.data}` });
-            return { ...done({ tabId: canonicalTabId, pid: ref.pid, windowId: ref.windowId, window: currentTab.target, width: shot.width, height: shot.height }), images: [{ mimeType: shot.mimeType || 'image/jpeg', data: shot.data }] };
+            return { ...done({ tabId: canonicalTabId, pid: ref.pid, windowId: ref.windowId, window: currentTab.target, width: shot.width, height: shot.height,
+                ...(staleLiveFrame ? { note: 'The window could not be captured just now; this is the last picture its live view showed, which may be out of date. Take tabs.screenshot again before relying on it.' } : {}) }),
+            images: [{ mimeType: shot.mimeType || 'image/jpeg', data: shot.data }] };
         }
         this.tabInteractedIds.add(key);
         if (this.tabInteractedIds.size > 64) this.tabInteractedIds.delete(this.tabInteractedIds.values().next().value!);
@@ -9144,16 +9163,28 @@ export class NextMuxDesktopWidget extends ReactWidget {
             dryRun: run.dryRun, elapsedSeconds: Math.round(run.elapsedMs / 1000), spentUsd: run.costUsd, maxCostUsd: run.maxCostUsd, actions: run.actions, decisions: run.decisions,
             lastAction: run.lastAction?.action || null, lastDecision: run.lastDecision ? { choice: run.lastDecision.choice, confidence: Math.round(run.lastDecision.confidence * 100) / 100 } : null,
             readings: run.signals, events: run.events.slice(-8).map(event => ({ id: event.id, message: event.modelMessage || `Plugin event: ${event.id}`, paused: event.pause, stopped: event.stop })), ...(run.error ? { lastError: run.error } : {}) });
+        if (request.action === 'pluginMcpCall') {
+            return this.handlePluginMcpCall?.(request, pinnedTabId) ?? failed('Plugin MCP tools are not available in this version of NextMux.');
+        }
         if (request.action === 'pluginList') {
             await this.loadAppPlugins(true);
-            if (pinnedTabId && !visualTabsFor(this.conversationTabs, conversationId).some(item => item.id === pinnedTabId)) {
+            const pinnedTab = pinnedTabId ? visualTabsFor(this.conversationTabs, conversationId).find(item => item.id === pinnedTabId) : undefined;
+            if (pinnedTabId && !pinnedTab) {
                 return failed(`Tab "${pinnedTabId}" is no longer open.`);
             }
-            return done({ plugins: this.appPlugins.filter(plugin => plugin.ok && plugin.summary).map(plugin => ({ id: plugin.id, name: (plugin.modelSummary || plugin.summary)!.name, description: plugin.modelSummary?.description || '',
+            // A tab's AI Console lists only that tab's own plugins (its run's plugin and those made for its app).
+            const bound = pinnedTab ? this.appPluginsBoundToTab?.(conversationId, pinnedTab) : undefined;
+            const boundIds = bound ? new Set(bound.map(plugin => plugin.id)) : undefined;
+            return done({ plugins: this.appPlugins.filter(plugin => plugin.ok && plugin.summary && (!boundIds || boundIds.has(plugin.id))).map(plugin => ({ id: plugin.id, name: (plugin.modelSummary || plugin.summary)!.name, description: plugin.modelSummary?.description || '',
                 apps: plugin.summary!.apps.map(app => app.platform === 'macos' ? app.bundleId : app.program), goalExamples: plugin.modelSummary?.goals.examples || [],
                 ...(plugin.modelSummary?.params?.length ? { params: plugin.modelSummary.params, paramValues: plugin.params } : {}),
                 enabled: plugin.enabled, ready: Boolean(plugin.ready),
-                ...(plugin.ready ? {} : { notReady: plugin.enabled ? 'No decision model chosen yet: the user chooses one in Settings → Skill plugins.' : 'The user turned this plugin off.' }) })),
+                ...(plugin.ready ? {} : { notReady: plugin.enabled ? 'No decision model chosen yet: the user chooses one in Settings → Skill plugins.' : 'The user turned this plugin off.' }),
+                // Its MCP tools, callable with plugins.mcp_call (names only here; omit tool there for their schemas).
+                ...((): { mcp?: unknown } => {
+                    const servers = typeof appPluginMcpServers === 'function' ? appPluginMcpServers(plugin) : [];
+                    return servers.length ? { mcp: servers.map(server => ({ server: server.id, tools: server.tools.map(tool => tool.name) })) } : {};
+                })() })),
                 runs: [...this.appPluginRuns.values()].filter(run => run.conversationId === conversationId && (!pinnedTabId || run.tabId === pinnedTabId)).map(describeRun) });
         }
         if ((request.action as string) === 'pluginConfigure') {
@@ -9202,6 +9233,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const plugin = this.appPlugins.find(item => item.id === input.plugin || item.summary?.name === input.plugin);
             if (!plugin?.ok || !plugin.summary) return failed(`No installed plugin "${String(input.plugin)}"; use plugins.list.`);
             if (!pluginsForApp([plugin], appTabIdentity(tab), navigator.platform, tab.title, tab.windows?.find(item => item.alive !== false && item.windowId === tab.windowRef?.windowId && item.pid === tab.windowRef?.pid)?.title || tab.target).length && plugin.enabled) return failed(`"${plugin.summary.name}" is made for ${plugin.summary.apps.map(app => app.bundleId || app.program).join(', ')}, not for the app in this tab.`);
+            // A tab's AI Console starts only its own tab's plugins, enabled or not.
+            const pinnedBound = pinnedTabId ? this.appPluginsBoundToTab?.(conversationId, tab) : undefined;
+            if (pinnedBound && !pinnedBound.some(item => item.id === plugin.id)) return failed(`"${plugin.summary.name}" is not a plugin of the app in this tab.`);
             const launchKey = `${conversationId}\n${tab.id}`;
             const priorOverride = this.appPluginTabLaunchOverrides?.get(launchKey);
             const baseTabParams = priorOverride?.pluginId === plugin.id && priorOverride.params && Object.keys(priorOverride.params).length
@@ -25183,6 +25217,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         let recoveredHostRunId: string | undefined;
         let recoveredCompletedAt: number | undefined;
         let recoveredUnsettledEvents: readonly AgentRunEvent[] = [];
+        let recoveredRollbackEvents: readonly AgentRunEvent[] = [];
         let unread: readonly AgentSteeringMessage[] = [];
         try {
             const snapshot = await this.platformService.getAgentRunSnapshot(requestedHostRunId, 0, 0, recoveryOwnerHint);
@@ -25200,6 +25235,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // or an instruction to replay it from the older checkpoint.
             if (recoveryOwnerHint) recoveredUnsettledEvents = snapshot.events.filter(event =>
                 event.type === 'tool_started' && !toolCallIds.includes(event.callId));
+            recoveredRollbackEvents = snapshot.events.filter(event =>
+                event.type === 'tool_completed' && event.toolName === 'workspace.restore_checkpoints' && event.ok === true
+                && !(turn.events || []).some(existing => existing.type === 'tool_completed' && existing.callId === event.callId));
             unread = snapshot.pendingMessages || [];
             failure = snapshot.error
                 ? normalizeDesktopFailure(this.desktopLocale, snapshot.error)
@@ -25226,15 +25264,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
             || legacyRecoveryRejected && currentTurn.failure?.code !== recoveryFailureCode
             || currentRun && (currentRun.submitting || currentRun.activeAgentRunId || currentRun.agentStartController)
             || currentTurn.agentRootRunId !== turn.agentRootRunId || currentTurn.agentHostRunId !== turn.agentHostRunId) return;
+        const recoveredEventsDelta = [...recoveredUnsettledEvents, ...recoveredRollbackEvents];
+        const mergedInterruptedEvents = recoveredEventsDelta.length
+            ? appendAgentActivityEvents(turn.events || [], recoveredEventsDelta)
+            : (turn.events || []);
         this.updateCodingTurn(sessionId, turn.id, {
             stage: 'error',
             error: failure.message,
             failure,
             completedAt: recoveredCompletedAt || turn.completedAt || turn.createdAt || Date.now(),
             ...(recoveredHostRunId ? { agentHostRunId: recoveredHostRunId } : {}),
-            ...(recoveredUnsettledEvents.length ? { events: appendAgentActivityEvents(turn.events || [], recoveredUnsettledEvents) } : {}),
+            ...(recoveredEventsDelta.length ? { events: mergedInterruptedEvents } : {}),
             ...(failure.resumeCheckpointId ? { resumeCheckpointId: failure.resumeCheckpointId } : {})
         });
+        await this.syncInRunCheckpointRollbacks?.(
+            sessionId,
+            mergedInterruptedEvents,
+            this.codingSessionWorkspaceRoot?.(current) || current?.privateWorkspacePath || current?.workspacePath,
+            turn.id
+        );
         await this.flushConversationHistory();
         this.requeueUnreadDirections(sessionId, turn.id, unread);
         if (this.activeCodingSessionId === sessionId && this.activeThreadTurnId === turn.id
@@ -29901,6 +29949,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 sourceRoute.kind === 'managed_gateway' ? sourceRoute.keyPriceQuoteId : undefined
             );
 
+            let didRestoreWorkspace = Boolean(restoreWorkspace && mode === 'branch' && requestedRestorePlan.length > 0);
             if (restoreWorkspace && mode === 'replace') {
                 const restoreSession = source;
                 const checkpointIds = requestedCheckpointIds;
@@ -29910,6 +29959,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         : await this.createWorkspaceRestorePlan(source, checkpointIds, pending.turnId);
                     const restored = await this.platformService.restoreAgentCheckpointGroups(restorePlans, { conversationId: targetSessionId, turnId: replacementTurn.id });
                     restoredVersions = restored.versions || [];
+                    didRestoreWorkspace = true;
                     for (const checkpointId of restored.checkpointIds) this.markCheckpointRestored(checkpointId, restoreSession);
                 }
             }
@@ -29947,6 +29997,71 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     updatedAt: now
                 };
                 this.codingSessions = [truncated, ...this.codingSessions.filter(session => session.id !== source.id)];
+            }
+            if (didRestoreWorkspace) {
+                const cutIndex = committedSource.turns.findIndex(turn => turn.id === pending.turnId);
+                if (cutIndex >= 0) {
+                    const extractRollbackSummaries = (turn: CodingTurnRecord): readonly ToolExecutionSummary[] => {
+                        const out: ToolExecutionSummary[] = [];
+                        for (const event of turn.events || []) {
+                            if (event.type === 'tool_completed' && event.toolName === 'workspace.restore_checkpoints' && event.ok && event.summary) {
+                                out.push(event.summary);
+                            }
+                        }
+                        const activities = (turn as { readonly toolActivities?: readonly { readonly toolName?: string; readonly name?: string; readonly ok?: boolean; readonly summary?: ToolExecutionSummary; readonly restoredCheckpointIds?: readonly string[]; readonly reappliedCheckpointIds?: readonly string[]; readonly sourceCheckpointIds?: readonly string[] }[] }).toolActivities;
+                        for (const act of activities || []) {
+                            if ((act.toolName === 'workspace.restore_checkpoints' || act.name === 'workspace.restore_checkpoints') && act.ok !== false) {
+                                if (act.summary) out.push(act.summary);
+                                else if (act.restoredCheckpointIds || act.reappliedCheckpointIds || act.sourceCheckpointIds) {
+                                    out.push({
+                                        title: 'workspace.restore_checkpoints',
+                                        restoredCheckpointIds: act.restoredCheckpointIds || act.sourceCheckpointIds,
+                                        reappliedCheckpointIds: act.reappliedCheckpointIds
+                                    });
+                                }
+                            }
+                        }
+                        return out;
+                    };
+                    const survivingNetRestored = new Set<string>();
+                    for (const survivingTurn of committedSource.turns.slice(0, cutIndex)) {
+                        for (const summary of extractRollbackSummaries(survivingTurn)) {
+                            for (const id of summary.reappliedCheckpointIds || []) if (id) survivingNetRestored.delete(id);
+                            for (const id of summary.restoredCheckpointIds || []) if (id) survivingNetRestored.add(id);
+                        }
+                    }
+                    const removedRestoredIds = new Set<string>();
+                    const removedReappliedIds = new Set<string>();
+                    for (const removedTurn of committedSource.turns.slice(cutIndex)) {
+                        for (const summary of extractRollbackSummaries(removedTurn)) {
+                            for (const id of summary.restoredCheckpointIds || []) if (id) removedRestoredIds.add(id);
+                            for (const id of summary.reappliedCheckpointIds || []) if (id) removedReappliedIds.add(id);
+                        }
+                    }
+                    const unmarkIds = [...removedRestoredIds].filter(id => !survivingNetRestored.has(id));
+                    const remarkIds = [...removedReappliedIds].filter(id => survivingNetRestored.has(id) && !unmarkIds.includes(id));
+                    if (unmarkIds.length > 0 || remarkIds.length > 0) {
+                        const mutated = this.codingSessions.find(session => session.id === targetSessionId);
+                        if (mutated) {
+                            if (typeof this.unmarkCheckpointRestored === 'function') {
+                                for (const id of unmarkIds) this.unmarkCheckpointRestored(id, mutated);
+                            } else if (unmarkIds.length > 0) {
+                                const unmarkSet = new Set(unmarkIds);
+                                const patched: CodingSessionRecord = {
+                                    ...mutated,
+                                    turns: mutated.turns.map(turn => turn.restoredCheckpointIds?.some(id => unmarkSet.has(id))
+                                        ? { ...turn, restoredCheckpointIds: turn.restoredCheckpointIds.filter(id => !unmarkSet.has(id)) }
+                                        : turn)
+                                };
+                                this.codingSessions = this.codingSessions.map(session => session.id === targetSessionId ? patched : session);
+                            }
+                            if (remarkIds.length > 0 && typeof this.markCheckpointRestored === 'function') {
+                                const refreshed = this.codingSessions.find(session => session.id === targetSessionId) || mutated;
+                                for (const id of remarkIds) this.markCheckpointRestored(id, refreshed);
+                            }
+                        }
+                    }
+                }
             }
             await this.recordCommittedRestores(targetSessionId, restoredVersions, replacementTurn.id, true);
             this.pendingTurnEdit = undefined;
@@ -35028,6 +35143,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         : { kind: 'official_connection', connectionId: (route as Extract<DesktopModelRoute, { kind: 'official_connection' }>).connection.id,
                             model: (route as Extract<DesktopModelRoute, { kind: 'official_connection' }>).connection.model },
                 conversationId: session.id,
+                turnId: turn.id,
                 workbench: 'coding',
                 ...(this.creativityRunField?.() ?? {}),
                 prompt: task.prompt,
@@ -35077,6 +35193,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 verification: result.verification,
                 checkpointWarnings: result.checkpointWarnings
             });
+            await this.syncInRunCheckpointRollbacks?.(session.id, result.events, task.workspacePath, turn.id);
             if (runCompleted) {
                 const settledTurn = this.codingSessions?.find(item => item.id === session!.id)?.turns?.find(item => item.id === turn!.id)
                     ?? { ...turn, stage: 'complete' as const, events: result.events };
@@ -35098,9 +35215,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (result.billing.kind === 'platform') void this.loadAccountOverview(true);
         } catch (error) {
             if (scheduledState.cancelRequested || (error as { code?: string })?.code === 'AGENT_CANCELLED') {
-                if (session && turn) this.updateCodingTurn(session.id, turn.id, {
-                    stage: 'cancelled', stopReason: 'cancel_requested', completedAt: Date.now(), error: '', failure: undefined
-                });
+                if (session && turn) {
+                    this.updateCodingTurn(session.id, turn.id, {
+                        stage: 'cancelled', stopReason: 'cancel_requested', completedAt: Date.now(), error: '', failure: undefined
+                    });
+                    const cancelledEvents = this.codingSessions?.find(s => s.id === session!.id)?.turns?.find(t => t.id === turn!.id)?.events;
+                    if (cancelledEvents?.length) {
+                        await this.syncInRunCheckpointRollbacks?.(session.id, cancelledEvents, task.workspacePath, turn.id);
+                    }
+                }
                 this.updateScheduledTask(task.id, { enabled: false, lastStatus: undefined, lastMessage: desktopStatus('SCHEDULE_STOPPED').fallbackEnglish, lastMessageDescriptor: desktopStatus('SCHEDULE_STOPPED'), pauseReason: desktopStatus('SCHEDULE_STOPPED').fallbackEnglish });
                 await this.platformService.removeDesktopScheduledTask(task.id).catch(() => undefined);
                 return;
@@ -35121,7 +35244,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             const lastMessageDescriptor = domainMessageFromError(error) || { ...desktopStatus('SCHEDULE_FAILED'), technicalDetails: error instanceof Error ? error.message : '' };
             const message = desktopDomainMessage(this.desktopLocale, lastMessageDescriptor);
-            if (session && turn) this.updateCodingTurn(session.id, turn.id, { stage: 'error', error: message });
+            if (session && turn) {
+                this.updateCodingTurn(session.id, turn.id, { stage: 'error', error: message });
+                const failedEvents = this.codingSessions?.find(s => s.id === session!.id)?.turns?.find(t => t.id === turn!.id)?.events;
+                if (failedEvents?.length) {
+                    await this.syncInRunCheckpointRollbacks?.(session.id, failedEvents, task.workspacePath, turn.id);
+                }
+            }
             this.updateScheduledTask(task.id, {
                 enabled: task.cadence === 'once' || requiresAttention ? false : (this.scheduledTasks.find(current => current.id === task.id)?.enabled ?? false),
                 lastStatus: 'error',
@@ -37478,9 +37607,23 @@ export class NextMuxDesktopWidget extends ReactWidget {
             || Boolean(this.activeAgentRunId)
             || session?.turns.some(turn => turn.stage === 'running')
         );
-        const hasRestorableTurn = Boolean((session?.turns || []).some(turn =>
-            Boolean(turn.changes?.length) && turn.changes!.some(change => !this.isCheckpointRestored?.(change.checkpointId))
-        ));
+        const hasRestorableTurn = Boolean((session?.turns || []).some(turn => {
+            if (!turn.changes?.length) return false;
+            if (typeof groupAgentCheckpointChanges === 'function') {
+                return groupAgentCheckpointChanges(turn.changes).some(group =>
+                    !(group.checkpointIds || [group.checkpointId]).some(id => this.isCheckpointRestored?.(id, session))
+                );
+            }
+            const groups = new Map<string, string[]>();
+            for (const change of turn.changes) {
+                if (/^restore-[0-9a-f-]{36}$/i.test(change.checkpointId)) continue;
+                const key = change.externalTarget || `${change.workspaceRoot || ''}\0${change.path || change.checkpointId}`;
+                const ids = groups.get(key) || [];
+                ids.push(change.checkpointId);
+                groups.set(key, ids);
+            }
+            return [...groups.values()].some(ids => !ids.some(id => this.isCheckpointRestored?.(id, session)));
+        }));
         const councilActiveOrPending = Boolean(this.hasActiveOrPendingCouncilMode?.(this.activeCodingSessionId));
         const allCommands = buildComposerSlashCommands({
             locale: this.desktopLocale,
@@ -37677,9 +37820,23 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const session = this.activeCodingSession?.();
         const zh = this.desktopLocale.startsWith('zh');
         if (!session) return;
-        const restorableTurn = [...session.turns].reverse().find(turn =>
-            Boolean(turn.changes?.length) && turn.changes!.some(change => !this.isCheckpointRestored?.(change.checkpointId))
-        );
+        const restorableTurn = [...session.turns].reverse().find(turn => {
+            if (!turn.changes?.length) return false;
+            if (typeof groupAgentCheckpointChanges === 'function') {
+                return groupAgentCheckpointChanges(turn.changes).some(group =>
+                    !(group.checkpointIds || [group.checkpointId]).some(id => this.isCheckpointRestored?.(id, session))
+                );
+            }
+            const groups = new Map<string, string[]>();
+            for (const change of turn.changes) {
+                if (/^restore-[0-9a-f-]{36}$/i.test(change.checkpointId)) continue;
+                const key = change.externalTarget || `${change.workspaceRoot || ''}\0${change.path || change.checkpointId}`;
+                const ids = groups.get(key) || [];
+                ids.push(change.checkpointId);
+                groups.set(key, ids);
+            }
+            return [...groups.values()].some(ids => !ids.some(id => this.isCheckpointRestored?.(id, session)));
+        });
         if (!restorableTurn?.changes?.length) {
             this.addNotification?.('info', zh ? '当前对话暂无可撤回的文件改动' : 'No restorable file changes in this conversation', '', session.id);
             this.update();
@@ -46302,6 +46459,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     unlinkedPrivateWorkspaceBindingIds: codingSession.workspaceBindings.filter(binding => binding.kind === 'private' && binding.status === 'unlinked').map(binding => binding.id)
                 } : {}),
                 conversationId: codingSession?.id,
+                ...(codingTurn?.id ? { turnId: codingTurn.id } : {}),
                 permissionMode: runPermission,
                 reasoningEffort: runReasoningEffort,
                 ...runReasoningSettings,
@@ -46318,6 +46476,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // The sidebar gives each specialist of this run's roster a row from the start (sessionCouncilRoleChildren);
             // a single-model run records an empty roster, so a Council config enabled meanwhile seeds nothing for it.
             if (workbench === 'coding' && codingSession) this.councilRunRosters?.set(codingSession.id, startRequest.councilConfig?.slots ?? []);
+            // Live app tabs of this conversation (and their plugins) for this turn only: never written into the turn's text,
+            // so history and its cached prefix stay unchanged. A resumed run continues its own checkpoint.
+            if (workbench === 'coding' && codingSession && !resumedExecution) {
+                const tabsBlock = this.openSoftwareTabsPromptBlock?.(codingSession.id);
+                if (tabsBlock) (startRequest as { prompt?: string }).prompt = `${tabsBlock}\n\n${startRequest.prompt}`;
+            }
             // Documents a model cannot read natively are sent as extracted text, and a text too long to send with every
             // request is saved for reading in parts (see deliverableAttachments); later turns are told where it is.
             if (taskAttachments.length && typeof this.deliverableAttachments === 'function') {
@@ -46581,6 +46745,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         verification: snapshot.result?.verification,
                         checkpointWarnings: snapshot.result?.checkpointWarnings
                     });
+                    await this.syncInRunCheckpointRollbacks?.(
+                        codingSession.id,
+                        snapshot.result?.events ? appendAgentActivityEvents(run.liveAgentEvents, snapshot.result.events) : run.liveAgentEvents,
+                        effectiveWorkspaceRoot,
+                        codingTurn.id
+                    );
                     if (snapshot.result) {
                         this.captureAgentBrowsers(codingSession.id, snapshot.result);
                     }
@@ -46646,6 +46816,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     events: run.liveAgentEvents,
                     childAgents: run.liveAgentChildren
                 });
+                await this.syncInRunCheckpointRollbacks?.(codingSession.id, run.agentResult.events, effectiveWorkspaceRoot, codingTurn.id);
                 this.captureAgentBrowsers(codingSession.id, run.agentResult);
                 // A finished page, SVG graphic or Mermaid diagram opens in the drawer's 浏览器 tab; a fragment waits for its button.
                 const previewArtifact = typeof detectPreviewableArtifact === 'function' ? detectPreviewableArtifact(run.agentResult.finalText) : undefined;
@@ -46764,6 +46935,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             : {})
                     } : {})
                 });
+                await this.syncInRunCheckpointRollbacks?.(codingSession.id, run.liveAgentEvents, effectiveWorkspaceRoot, codingTurn.id);
             }
             if (terminalFailure?.billing) void this.loadAccountOverview(true);
         } finally {
@@ -46858,6 +47030,87 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         this.update();
         return submissionAccepted;
+    }
+
+    /**
+     * Synchronizes UI restore state, receipt tracking, and open editor/preview tabs after in-run `workspace.restore_checkpoints`
+     * calls so prompt-driven rollbacks and UI click-to-rollback controls share one exact source of truth.
+     */
+    protected async syncInRunCheckpointRollbacks(
+        sessionId: string,
+        events: readonly AgentRunEvent[] | undefined,
+        fallbackWorkspaceRoot?: string,
+        ownerTurnId?: string
+    ): Promise<void> {
+        if (!sessionId || !events?.length) return;
+        const rollbackEvents = events.filter(
+            (event): event is Extract<AgentRunEvent, { readonly type: 'tool_completed' }> =>
+                event.type === 'tool_completed' && event.toolName === 'workspace.restore_checkpoints' && event.ok === true
+        );
+        if (!rollbackEvents.length) return;
+        const netRestored = new Set<string>();
+        const netReapplied = new Set<string>();
+        const versionsByKey = new Map<string, { workspaceRoot: string; checkpointId: string }>();
+        for (const event of rollbackEvents) {
+            const summary = event.summary;
+            if (!summary) continue;
+            for (const id of summary.reappliedCheckpointIds || []) {
+                if (typeof id === 'string' && id) {
+                    netRestored.delete(id);
+                    netReapplied.add(id);
+                }
+            }
+            for (const id of summary.restoredCheckpointIds || []) {
+                if (typeof id === 'string' && id) {
+                    netReapplied.delete(id);
+                    netRestored.add(id);
+                }
+            }
+            if (summary.restoredVersions?.length) {
+                for (const item of summary.restoredVersions) {
+                    if (item?.workspaceRoot && item?.checkpointId) {
+                        versionsByKey.set(`${item.workspaceRoot}\0${item.checkpointId}`, {
+                            workspaceRoot: item.workspaceRoot,
+                            checkpointId: item.checkpointId
+                        });
+                    }
+                }
+            } else if (fallbackWorkspaceRoot && summary.checkpointIds?.length) {
+                for (const checkpointId of summary.checkpointIds) {
+                    if (typeof checkpointId === 'string' && checkpointId) {
+                        versionsByKey.set(`${fallbackWorkspaceRoot}\0${checkpointId}`, {
+                            workspaceRoot: fallbackWorkspaceRoot,
+                            checkpointId
+                        });
+                    }
+                }
+            }
+        }
+        const versions = [...versionsByKey.values()];
+        const latestSession = this.codingSessions?.find(candidate => candidate.id === sessionId);
+        if (versions.length && latestSession && typeof this.recordContextFileVersion === 'function') {
+            const recordedIds = new Set(latestSession.turns.flatMap(turn => [
+                ...(turn.changes || []).map(change => change.checkpointId),
+                ...(turn.fileVersionReceipts || []).map(change => change.checkpointId)
+            ]));
+            const unrecorded = versions.filter(version => !recordedIds.has(version.checkpointId));
+            const targetTurnId = ownerTurnId || latestSession.turns.at(-1)?.id;
+            for (const version of unrecorded) {
+                await this.recordContextFileVersion(sessionId, version.workspaceRoot, version.checkpointId, targetTurnId, false, true).catch(() => undefined);
+            }
+        }
+        const owner = this.codingSessions?.find(candidate => candidate.id === sessionId);
+        if (owner) {
+            for (const id of netReapplied) this.unmarkCheckpointRestored?.(id, owner);
+            const refreshedOwner = this.codingSessions?.find(candidate => candidate.id === sessionId) || owner;
+            for (const id of netRestored) this.markCheckpointRestored?.(id, refreshedOwner);
+        }
+        if (versions.length && typeof this.refreshRestoredContextFiles === 'function') {
+            await this.refreshRestoredContextFiles(sessionId, versions).catch(() => false);
+        }
+        if (this.activeCodingSessionId === sessionId && typeof this.loadContextFiles === 'function') {
+            await this.loadContextFiles(true).catch(() => undefined);
+        }
     }
 
     protected async restoreCheckpoint(checkpointId: string, undo = false): Promise<void> {
@@ -47325,7 +47578,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const viewSessionId = this.activeCodingSessionId;
         if ((!session && !this.activeWorkspaceRoot) || this.restoringCheckpointId
             || session?.turns.some(turn => turn.stage === 'running')) return;
-        const ordered = undo ? changes.filter(change => !/^restore-[0-9a-f-]{36}$/i.test(change.checkpointId)) : [...changes].reverse();
+        const realChanges = changes.filter(change => !/^restore-[0-9a-f-]{36}$/i.test(change.checkpointId));
+        const ordered = undo ? realChanges : [...realChanges].reverse();
         const checkpointIds = [...new Set(ordered.map(change => change.checkpointId))];
         if (!checkpointIds.length) return;
         const release = session ? this.conversationMutations.tryAcquire(session.id) : undefined;
@@ -49603,6 +49857,99 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return run && !run.ended ? run : undefined;
     }
 
+    /**
+     * The plugins that belong to one app tab: the plugin of its current run first, then every installed plugin made for
+     * the app in it. A tab's AI Console sees and calls only these (plugins.list, plugins.mcp_call), never another tab's.
+     */
+    protected appPluginsBoundToTab(conversationId: string, tab: ConversationVisualTab): AppPluginInfo[] {
+        const run = this.activeAppPluginRun?.(conversationId, tab.id);
+        const installed = (this.appPlugins || []).filter(plugin => plugin.ok && plugin.summary);
+        const windowTitle = tab.windows?.find(item => item.alive !== false && item.windowId === tab.windowRef?.windowId && item.pid === tab.windowRef?.pid)?.title || tab.target;
+        const compatible = typeof pluginsForApp === 'function' && typeof appTabIdentity === 'function'
+            ? pluginsForApp(installed, appTabIdentity(tab), typeof navigator !== 'undefined' ? navigator.platform : 'MacIntel', tab.title, windowTitle) : [];
+        const bound: AppPluginInfo[] = [];
+        const runPlugin = run ? installed.find(plugin => plugin.id === run.pluginId) : undefined;
+        for (const plugin of [...(runPlugin ? [runPlugin] : []), ...compatible]) if (!bound.some(known => known.id === plugin.id)) bound.push(plugin);
+        return bound;
+    }
+
+    /**
+     * `<open_software_tabs>` for a main-conversation turn: every live app tab of the conversation with its switches,
+     * plugin run and the bound plugins' guidance, actions and MCP tools, so one model can supervise several apps.
+     */
+    protected openSoftwareTabsPromptBlock(conversationId: string): string {
+        if (typeof openSoftwareTabsBlock !== 'function' || typeof appPluginAiContext !== 'function') return '';
+        const tabs = typeof visualTabsFor === 'function' && this.conversationTabs ? visualTabsFor(this.conversationTabs, conversationId).filter(tab => tab.windowRef) : [];
+        if (!tabs.length) return '';
+        const showing = typeof activeTabFor === 'function' ? activeTabFor(this.conversationTabs, conversationId) : undefined;
+        return openSoftwareTabsBlock(tabs.map(tab => {
+            const run = this.activeAppPluginRun?.(conversationId, tab.id);
+            const state = this.computerWindowControls?.get?.(`${conversationId}:${tab.windowRef!.pid}:${tab.windowRef!.windowId}`)?.state;
+            return {
+                tabId: tab.id, title: tab.title || tab.target || tab.appId || tab.id, app: tab.target || tab.appId,
+                status: tab.status, ...(state?.placement ? { placement: state.placement } : {}),
+                ...(state ? { keyboardMouse: state.userInput === true } : {}), ...(typeof state?.sound === 'boolean' ? { sound: state.sound } : {}),
+                showing: showing === tab.id, windows: (tab.windows || []).filter(item => item.alive !== false).length,
+                ...(run ? { run: { runId: run.runId, pluginId: run.pluginId, name: run.name, paused: run.paused, ended: run.ended, goal: run.goal } } : {}),
+                plugins: (this.appPluginsBoundToTab?.(conversationId, tab) || []).map(plugin => appPluginAiContext(plugin))
+            };
+        }));
+    }
+
+    /**
+     * plugins.mcp_call: one MCP tool of a plugin through the desktop host (apps/desktop invokePluginMcp, which keeps the
+     * permission, signature and consent checks). From a tab's AI Console (pinnedTabId) only that tab's own plugins can
+     * be called; from the conversation, a tabId binds the call to that tab's window and plugin run.
+     */
+    protected async handlePluginMcpCall(request: DesktopComputerToolRequest, pinnedTabId: string): Promise<DesktopComputerToolResult> {
+        const done = (output: unknown, images?: readonly { readonly mimeType: string; readonly data: string }[]): DesktopComputerToolResult =>
+            ({ requestId: request.id, ok: true, output, ...(images?.length ? { images } : {}) });
+        const failed = (error: string): DesktopComputerToolResult => ({ requestId: request.id, ok: false, error });
+        const conversationId = request.conversationId;
+        if (this.desktopControlEscapedConversations?.has(conversationId)) return failed(COMPUTER_USER_ESC_OBSERVATION);
+        const bridge = window.nextmuxDesktop;
+        if (typeof bridge?.callAppPluginMcp !== 'function') return failed('Plugin MCP tools are not available in this version of NextMux.');
+        const input = request.input || {};
+        await this.loadAppPlugins(true);
+        this.loadConversationTabs();
+        const tabs = visualTabsFor(this.conversationTabs, conversationId);
+        const requestedTab = typeof input.tabId === 'string' ? input.tabId.trim() : '';
+        const tab = pinnedTabId ? tabs.find(item => item.id === pinnedTabId) : requestedTab ? findConversationTabByTarget(tabs, requestedTab) : undefined;
+        if (pinnedTabId && !tab) return failed(`Tab "${pinnedTabId}" is no longer open.`);
+        if (requestedTab && !tab) return failed(`No app tab "${requestedTab}" in this conversation; use tabs.list.`);
+        const candidates = tab ? this.appPluginsBoundToTab(conversationId, tab) : this.appPlugins.filter(plugin => plugin.ok && plugin.summary);
+        const wanted = typeof input.plugin === 'string' ? input.plugin.trim() : '';
+        const matches = (plugin: AppPluginInfo): boolean => plugin.id === wanted || plugin.summary?.name === wanted || plugin.modelSummary?.name === wanted;
+        const plugin = wanted ? candidates.find(matches) : tab ? candidates[0] : undefined;
+        if (!plugin) {
+            if (!wanted) return failed(tab ? `No plugin for the app in tab ${tab.id}; use plugins.list.` : 'Name the plugin (its id is in plugins.list).');
+            return failed(tab && this.appPlugins.some(matches)
+                ? `"${wanted}" is not a plugin of the app in tab ${tab.id}${pinnedTabId ? '; this console can only use its own tab\'s plugins' : ''}.`
+                : `No installed plugin "${wanted}"; use plugins.list.`);
+        }
+        const name = (plugin.modelSummary || plugin.summary)?.name || plugin.id;
+        const servers = appPluginMcpServers(plugin);
+        if (!servers.length) return failed(pluginMcpFailureText('mcp_not_declared', name));
+        const server = typeof input.server === 'string' && input.server.trim() ? input.server.trim() : '';
+        if (server && !servers.some(item => item.id === server)) return failed(`"${name}" has no MCP server "${server}"; its servers: ${servers.map(item => item.id).join(', ')}.`);
+        const tool = typeof input.tool === 'string' ? input.tool.trim() : '';
+        const args = input.arguments && typeof input.arguments === 'object' && !Array.isArray(input.arguments) ? input.arguments as Record<string, unknown> : {};
+        const run = tab ? this.activeAppPluginRun(conversationId, tab.id) : undefined;
+        const result = await bridge.callAppPluginMcp({
+            pluginId: plugin.id,
+            ...(run && run.pluginId === plugin.id ? { runId: run.runId } : {}),
+            ...(server ? { serverId: server } : {}),
+            ...(tool ? { tool, arguments: args } : { method: 'tools/list' }),
+            conversationId,
+            ...(tab ? { tabId: tab.id, ...(tab.windowRef ? { pid: tab.windowRef.pid, windowId: tab.windowRef.windowId } : {}) } : {})
+        }).catch(() => undefined);
+        if (this.desktopControlEscapedConversations?.has(conversationId)) return failed(COMPUTER_USER_ESC_OBSERVATION);
+        if (!result?.ok) return failed(pluginMcpFailureText(result?.error, name));
+        if (!tool) void this.loadAppPlugins?.(true);
+        const { output, images } = boundedMcpResult(result.result);
+        return done({ plugin: plugin.id, server: result.serverId || server || servers[0].id, ...(tab ? { tabId: tab.id } : {}), ...(tool ? { tool } : {}), ...output }, images);
+    }
+
     /** Opens the start dialog; resolves when the user starts or cancels (the AI's plugins.start waits on it). */
     protected requestAppPluginStart(request: Omit<NonNullable<NextMuxDesktopWidget['appPluginStart']>, 'resolve'>): Promise<{ ok: boolean; runId?: string; error?: string; dryRun?: boolean }> {
         const tabKey = `${request.conversationId}\n${request.tabId}`;
@@ -50721,10 +51068,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         );
     }
 
-    protected renderAppPluginChatMarkdown = (markdown: string, _key: string): React.ReactNode => (
+    protected renderAppPluginChatMarkdown = (markdown: string, _key: string, className = 'nmx-assistant-markdown'): React.ReactNode => (
         <ConversationMarkdown
             markdown={normalizeConversationMarkdown(markdown)}
-            className='nmx-assistant-markdown'
+            className={className}
             locale={this.desktopLocale}
             tokenizer={conversationCodeTokenizer}
             onRender={this.decorateConversationContent}
@@ -50937,10 +51284,34 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const currentTab = (typeof visualTabsFor === 'function' && this.conversationTabs
                 ? visualTabsFor(this.conversationTabs, conversationId).find(item => item.id === tab.id)
                 : undefined) || tab;
-            const run = this.appPluginRunFor?.(conversationId, currentTab.id);
-            const plugin = (request.pluginId && this.appPlugins?.find(p => p.id === request.pluginId))
-                || (run && this.appPlugins?.find(p => p.id === run.pluginId))
-                || (this.appPlugins ? pluginsForApp(this.appPlugins, appTabIdentity(currentTab), typeof navigator !== 'undefined' ? navigator.platform : 'MacIntel', currentTab.title, currentTab.target)[0] : undefined);
+            // The tab's app quit or its window closed: say so (and how to fix it) before anything is sent.
+            const windowClosed = (): Error => Object.assign(new Error(typeof agentOutcomeText === 'function'
+                ? agentOutcomeText(this.desktopLocale, 'app_window_closed') : 'The app window of this tab is closed.'), { code: 'APP_WINDOW_CLOSED', nmxPluginChatDiagnostic: true });
+            if (currentTab.status === 'disconnected') throw windowClosed();
+            const rawRun = typeof this.activeAppPluginRun === 'function'
+                ? this.activeAppPluginRun(conversationId, currentTab.id)
+                : this.appPluginRunFor?.(conversationId, currentTab.id);
+            const run = rawRun && !rawRun.ended ? rawRun : undefined;
+            const boundPlugins: AppPluginInfo[] = typeof this.appPluginsBoundToTab === 'function'
+                ? this.appPluginsBoundToTab(conversationId, currentTab)
+                : (() => {
+                    const installed = (this.appPlugins || []).filter(item => item.ok && item.summary);
+                    const activeWinTitle = currentTab.windows?.find(item => item.alive !== false && item.windowId === currentTab.windowRef?.windowId && item.pid === currentTab.windowRef?.pid)?.title || currentTab.target;
+                    const compatible = typeof pluginsForApp === 'function' && typeof appTabIdentity === 'function'
+                        ? pluginsForApp(installed, appTabIdentity(currentTab), typeof navigator !== 'undefined' ? navigator.platform : 'MacIntel', currentTab.title, activeWinTitle)
+                        : [];
+                    const list: AppPluginInfo[] = [];
+                    const rp = run ? installed.find(item => item.id === run.pluginId) : undefined;
+                    for (const item of [...(rp ? [rp] : []), ...compatible]) {
+                        if (!list.some(known => known.id === item.id)) list.push(item);
+                    }
+                    return list;
+                })();
+            const requestedBoundPlugin = request.pluginId ? boundPlugins.find(p => p.id === request.pluginId) : undefined;
+            const scopedPlugins = requestedBoundPlugin ? [requestedBoundPlugin] : boundPlugins.slice(0, 6);
+            const plugin = requestedBoundPlugin
+                || (run ? boundPlugins.find(p => p.id === run.pluginId) : undefined)
+                || boundPlugins[0];
             const fallbackModel = request.model || this.appPluginChatModels.get(key) || run?.model || plugin?.model
                 || { source: 'nextmux' as const, model: '~typesafe/jev-latest', label: 'Platform AI', images: true };
 
@@ -50953,6 +51324,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             let snapHeight = 0;
             if (request.includeScreenshot !== false && currentTab.windowRef && typeof bridge?.computerWindowSnapshot === 'function') {
                 const snap = await bridge.computerWindowSnapshot(conversationId, currentTab.windowRef.pid, currentTab.windowRef.windowId, 1280, { source: 'user' }).catch(() => undefined);
+                if (snap && !snap.ok && /(?:window|app)_(?:closed|gone|not_found|not_viewable|missing)|no_window/i.test(snap.error || '')) throw windowClosed();
                 if (snap?.ok && snap.data) {
                     const mime = (snap.mimeType || 'image/jpeg').toLowerCase();
                     frameMime = mime === 'image/png' || mime === 'image/webp' || mime === 'image/gif' ? mime : 'image/jpeg';
@@ -51077,7 +51449,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     `- Tab Switches: \`tabs.set\` ({ placement?: "tab"|"desktop", keyboardMouse?: boolean, sound?: boolean }).`,
                     activeJevRunning
                         ? `- JEV Skill Plugin Coordination (ACTIVE RUN): Skill plugin run "${run!.runId}" is actively running right now! Coordinate via \`plugins.status\`, \`plugins.command\` (update goal / pause / resume), or \`plugins.stop\` rather than fighting its reflex inputs, unless the user explicitly asks you to click or type directly.`
-                        : `- JEV Skill Plugin Coordination: Whenever a JEV skill plugin is actively running (not paused/ended), coordinate via \`plugins.status\` / \`plugins.command\` / \`plugins.stop\` rather than competing with its reflex inputs unless the user explicitly asks for direct input.`
+                        : `- JEV Skill Plugin Coordination: Whenever a JEV skill plugin is actively running (not paused/ended), coordinate via \`plugins.status\` / \`plugins.command\` / \`plugins.stop\` rather than competing with its reflex inputs unless the user explicitly asks for direct input.`,
+                    `- Plugin MCP Tools: \`plugins.mcp_call\` ({ plugin?, server?, tool?, arguments? }) calls an MCP tool of this tab's plugin (section 3); omit tool to list a server's tools. \`plugins.list\` shows only this tab's plugins. Other tabs, windows and plugins are outside this console.`
                 ].join('\n');
 
                 const pluginLines: string[] = ['## 3. Plugin Connection Status & Manifest Capabilities'];
@@ -51089,6 +51462,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         request.includeContext !== false && run.signals && Object.keys(run.signals).length > 0
                             ? `- Live Signals JSON: ${JSON.stringify(run.signals)}`
                             : '- Live Signals: {}'
+                    );
+                } else if (scopedPlugins.length > 1) {
+                    pluginLines.push(
+                        `- Connection Status: ${scopedPlugins.length} compatible plugins installed & bound to this tab (not currently running)`,
+                        `- Bound Plugins (${scopedPlugins.length}): ${scopedPlugins.map(item => `${item.id} (${(item.modelSummary || item.summary)?.name || item.id})`).join(', ')}`
                     );
                 } else if (plugin && pluginSummary) {
                     const jevModelDesc = plugin.model
@@ -51103,37 +51481,69 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         `- Connection Status: not installed (no skill/JEV plugin installed for this app; direct window observation and control via \`tabs.*\` and \`computer.*\` remain fully available)`
                     );
                 }
-                if (pluginSummary) {
-                    const currentParams = run?.params || plugin?.params || {};
-                    if (pluginSummary.panel?.systemPrompt) {
-                        pluginLines.push(`- Plugin System Prompt: ${pluginSummary.panel.systemPrompt}`);
+                const appendBoundPluginManifest = (targetPlugin: AppPluginInfo, includeHeading: boolean): string[] => {
+                    const targetSummary = targetPlugin.modelSummary || targetPlugin.summary;
+                    if (!targetSummary) return [];
+                    const lines: string[] = [];
+                    if (includeHeading) {
+                        const jevModelDesc = targetPlugin.model
+                            ? `${targetPlugin.model.label || targetPlugin.model.model} (source=${targetPlugin.model.source}${targetPlugin.model.merchant ? `, merchant=${targetPlugin.model.merchant}` : ''})`
+                            : 'none';
+                        lines.push(
+                            `### Bound Plugin: ${targetSummary.name} (\`${targetPlugin.id}\`, v${targetSummary.version}, enabled=${Boolean(targetPlugin.enabled)}, ready=${Boolean(targetPlugin.ready)}, selectedJevModel=${jevModelDesc})`
+                        );
                     }
-                    if (pluginSummary.actions?.length) {
-                        pluginLines.push(`- Declared Actions: ${JSON.stringify(pluginSummary.actions)}`);
+                    const currentParams = (run && run.pluginId === targetPlugin.id ? run.params : undefined) || targetPlugin.params || {};
+                    const locked = targetPlugin.locked === true || targetPlugin.aiLocked === true || (targetPlugin.paid === true && targetPlugin.licensed === false);
+                    // The plugin author's guidance for models: panel system prompt, knowledge, AGENT.md / SKILL.md / prompts,
+                    // callable actions and MCP tools with their schemas (bounded; nextmux-app-plugin-context.ts).
+                    const pluginContextLines = typeof appPluginAiContext === 'function' && typeof appPluginConsoleContextLines === 'function'
+                        ? appPluginConsoleContextLines(appPluginAiContext(targetPlugin)) : undefined;
+                    if (pluginContextLines) lines.push(...pluginContextLines);
+                    else {
+                        if (!locked && targetSummary.panel?.systemPrompt) {
+                            lines.push(`- Plugin System Prompt: ${targetSummary.panel.systemPrompt}`);
+                        }
+                        if (targetSummary.actions?.length) {
+                            lines.push(`- Declared Actions: ${JSON.stringify(targetSummary.actions)}`);
+                        }
                     }
-                    if (pluginSummary.decisions?.length) {
-                        pluginLines.push(`- Declared Decisions: ${JSON.stringify(pluginSummary.decisions)}`);
+                    if (targetSummary.decisions?.length) {
+                        lines.push(`- Declared Decisions: ${JSON.stringify(targetSummary.decisions)}`);
                     }
-                    if (pluginSummary.params?.length) {
-                        pluginLines.push(`- Params Schema: ${JSON.stringify(pluginSummary.params)}`);
-                        pluginLines.push(`- Current Param Values: ${JSON.stringify(currentParams)}`);
+                    if (targetSummary.params?.length) {
+                        lines.push(`- Params Schema: ${JSON.stringify(targetSummary.params)}`);
+                        lines.push(`- Current Param Values: ${JSON.stringify(currentParams)}`);
                     }
-                    if (pluginSummary.goals) {
-                        pluginLines.push(`- Goals: ${JSON.stringify(pluginSummary.goals)}`);
+                    if (targetSummary.goals) {
+                        lines.push(`- Goals: ${JSON.stringify(targetSummary.goals)}`);
                     }
-                    const presets = plugin?.presets?.length ? plugin.presets : pluginSummary.presets;
+                    const presets = targetPlugin.presets?.length ? targetPlugin.presets : targetSummary.presets;
                     if (presets?.length) {
-                        pluginLines.push(`- Presets: ${JSON.stringify(presets)}`);
+                        lines.push(`- Presets: ${JSON.stringify(presets)}`);
                     }
-                    if (pluginSummary.reflexes?.length) {
-                        pluginLines.push(`- Reflexes: ${JSON.stringify(pluginSummary.reflexes)}`);
+                    if (targetSummary.reflexes?.length) {
+                        lines.push(`- Reflexes: ${JSON.stringify(targetSummary.reflexes)}`);
                     }
-                    if (pluginSummary.events?.length) {
-                        pluginLines.push(`- Events: ${JSON.stringify(pluginSummary.events)}`);
+                    if (targetSummary.events?.length) {
+                        lines.push(`- Events: ${JSON.stringify(targetSummary.events)}`);
                     }
-                    if (pluginSummary.mcp?.length) {
-                        pluginLines.push(`- Declared MCP Servers & Tools: ${JSON.stringify(pluginSummary.mcp.map(m => ({ id: m.id, name: m.name, transport: m.transport, tools: m.tools || [] })))}`);
+                    if (!pluginContextLines && targetSummary.mcp?.length) {
+                        lines.push(`- Declared MCP Servers & Tools: ${JSON.stringify(targetSummary.mcp.map(m => ({ id: m.id, name: m.name, transport: m.transport, tools: m.tools || [] })))}`);
                     }
+                    return lines;
+                };
+                let usedPluginGuidanceChars = 0;
+                const maxPluginGuidanceChars = 28_000;
+                for (const targetPlugin of scopedPlugins) {
+                    const blockLines = appendBoundPluginManifest(targetPlugin, scopedPlugins.length > 1);
+                    const blockText = blockLines.join('\n');
+                    if (usedPluginGuidanceChars > 0 && usedPluginGuidanceChars + blockText.length > maxPluginGuidanceChars) {
+                        pluginLines.push(`- Additional bound plugin details truncated at context budget (${scopedPlugins.length} bound plugins; call \`plugins.list\` for full metadata).`);
+                        break;
+                    }
+                    usedPluginGuidanceChars += blockText.length;
+                    pluginLines.push(...blockLines);
                 }
                 const pluginSection = pluginLines.filter(Boolean).join('\n');
 
@@ -51367,8 +51777,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
         } catch (error) {
             this.syncUnlinkedSessionFromFailure(error);
             if (!controller.signal.aborted) {
-                const v1Err = this.describeV1GatewayFailure?.(error, activeRoute?.kind === 'official_connection' ? 'own_api' : 'relay');
-                const errText = v1Err?.text
+                // Specific, actionable text first: a closed window (thrown above), a relay route without a signed-in
+                // account (never signed in or the session expired); then the gateway / route / model classifications.
+                const diagnostic = error instanceof Error && (error as Error & { nmxPluginChatDiagnostic?: boolean }).nmxPluginChatDiagnostic ? error.message : '';
+                const relayRoute = activeRoute ? activeRoute.kind === 'managed_gateway' : chosenRelayKey.startsWith('managed:');
+                const signIn = !diagnostic && relayRoute && this.platformSession && !this.platformSession.linked && typeof agentOutcomeText === 'function'
+                    ? agentOutcomeText(this.desktopLocale, 'sign_in_required') : '';
+                const v1Err = diagnostic || signIn ? undefined : this.describeV1GatewayFailure?.(error, activeRoute?.kind === 'official_connection' ? 'own_api' : 'relay');
+                const errText = diagnostic || signIn || v1Err?.text
                     || (typeof desktopFailureMessage === 'function' ? desktopFailureMessage(this.desktopLocale, error) : '')
                     || (typeof modelFailureText === 'function' ? modelFailureText(this.desktopLocale, error) : '')
                     || (error instanceof Error ? error.message : String(error));
@@ -51414,10 +51830,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const headerExtra = <>
             <button type='button' className={`nmx-visual-tab-action nmx-plugin-tab-chat ${chatOpen ? 'is-active' : ''}`}
                 aria-pressed={chatOpen}
-                title={this.desktopLocale.startsWith('zh') ? '插件 AI 对话与多模态控制台' : 'Plugin AI & Multimodal Console'}
+                title={appPluginText(this.desktopLocale, 'aiConsoleTitle')}
                 onClick={() => this.toggleAppPluginChat(key)}>
                 <i className='codicon codicon-comment-discussion' aria-hidden='true'></i>
-                {this.desktopLocale.startsWith('zh') ? 'AI 控制台' : 'AI Console'}
+                {appPluginText(this.desktopLocale, 'aiConsole')}
             </button>
             <button type='button' className={`nmx-visual-tab-action nmx-plugin-tab-market ${this.appPluginHub?.key === key ? 'is-active' : ''}`} aria-haspopup='dialog'
                 title={appPluginText(this.desktopLocale, 'tabMarket')}
@@ -51426,6 +51842,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     windowTitle: currentTab.windows?.find(item => item.alive !== false && item.windowId === currentTab.windowRef!.windowId && item.pid === currentTab.windowRef!.pid)?.title || currentTab.target })}>
                 <i className='codicon codicon-extensions' aria-hidden='true'></i>{appPluginText(this.desktopLocale, 'tabMarket')}</button>
         </>;
+        const boundPlugins = this.appPluginsBoundToTab(conversationId, currentTab);
         const baseRunPlugin = run ? this.appPlugins.find(plugin => plugin.id === run.pluginId) : undefined;
         const runPlugin = baseRunPlugin && active && (active.model !== undefined || active.vision !== undefined)
             ? {
@@ -51434,8 +51851,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 ...(active.vision !== undefined ? { vision: active.vision } : {})
             }
             : baseRunPlugin;
-        const activePlugin = runPlugin
-            || pluginsForApp(this.appPlugins, appTabIdentity(currentTab), navigator.platform, currentTab.title, currentTab.target)[0];
+        const activeBoundPlugin = active
+            ? (() => {
+                const base = boundPlugins.find(plugin => plugin.id === active.pluginId) || baseRunPlugin;
+                return base && (active.model !== undefined || active.vision !== undefined)
+                    ? {
+                        ...base,
+                        ...(active.model !== undefined ? { model: active.model } : {}),
+                        ...(active.vision !== undefined ? { vision: active.vision } : {})
+                    }
+                    : base;
+            })()
+            : boundPlugins[0];
         const bar = run ? <AppPluginRunBar locale={this.desktopLocale} run={run} now={Date.now()} overlay={this.appPluginOverlays.has(run.runId)}
             plugin={runPlugin} appName={currentTab.target || currentTab.title}
             choices={this.appPluginChoices} extraModels={extraModels} modelBusy={this.appPluginModelBusy} error={this.appPluginsError}
@@ -51463,11 +51890,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.update();
             }} /> : undefined;
         const floatingChat = chatOpen ? <AppPluginChatPanel locale={this.desktopLocale} appName={currentTab.target || currentTab.title}
-            plugin={activePlugin} run={run}
+            plugin={activeBoundPlugin} plugins={boundPlugins} run={active}
             choices={this.appPluginChoices} extraModels={extraModels} selectedModel={chatModel} messages={chatMessages}
             busy={false} error={this.appPluginsError}
             composerModelControls={this.renderAppPluginChatModelControls(key, 'panel')}
             renderMarkdown={this.renderAppPluginChatMarkdown}
+            onContentClick={event => this.handleAssistantContentClick(event)}
             onSelectModel={model => { this.appPluginChatModels.set(key, model); this.update(); }}
             onSend={req => void this.sendAppPluginChatMessage(key, conversationId, currentTab, req)}
             onStopMessage={msgId => void this.stopAppPluginChatMessage(key, msgId)}
