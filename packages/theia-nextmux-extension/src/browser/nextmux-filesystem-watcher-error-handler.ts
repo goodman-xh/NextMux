@@ -3,12 +3,36 @@ import { CancellationToken } from '@theia/core/lib/common/cancellation';
 import {
     Message,
     MessageClient,
+    MessageType,
     ProgressMessage,
     ProgressUpdate
 } from '@theia/core/lib/common/message-service-protocol';
 import { FileSystemWatcherErrorHandler } from '@theia/filesystem/lib/browser/filesystem-watcher-error-handler';
 
 const WATCHER_EXHAUSTED_RE = /Unable to watch for file changes in this large workspace/i;
+
+export const THEIA_MESSAGE_EVENT = 'nextmux:theia-message';
+export const THEIA_CONFIRMATION_EVENT = 'nextmux:theia-confirmation';
+
+export interface TheiaConfirmationEventDetail {
+    readonly message: Message;
+    readonly actions: readonly string[];
+    handled: boolean;
+    promise?: Promise<string | undefined>;
+}
+
+export function theiaMessageNotificationKind(type: MessageType | undefined): 'info' | 'warning' | 'error' | undefined {
+    if (type === MessageType.Error) {
+        return 'error';
+    }
+    if (type === MessageType.Warning) {
+        return 'warning';
+    }
+    if (type === MessageType.Log) {
+        return undefined;
+    }
+    return 'info';
+}
 
 /**
  * Replaces Theia's stock FileSystemWatcherErrorHandler, which otherwise shows a
@@ -49,11 +73,28 @@ export class NextMuxMessageClient extends MessageClient {
             }
             return Promise.resolve(undefined);
         }
-        if (Array.isArray(message.actions) && message.actions.length > 0) {
+        const actions = Array.isArray(message.actions)
+            ? message.actions.map(action => typeof action === 'string' ? action.trim() : '').filter(Boolean)
+            : [];
+        if (actions.length > 0) {
+            if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined' && typeof window.dispatchEvent === 'function') {
+                const detail: TheiaConfirmationEventDetail = {
+                    message,
+                    actions,
+                    handled: false
+                };
+                window.dispatchEvent(new CustomEvent(THEIA_CONFIRMATION_EVENT, { detail, cancelable: true }));
+                if (detail.handled && detail.promise) {
+                    return detail.promise;
+                }
+            }
             return super.showMessage(message);
         }
-        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-            window.dispatchEvent(new CustomEvent('nextmux:theia-message', { detail: message }));
+        if (theiaMessageNotificationKind(message.type) === undefined) {
+            return Promise.resolve(undefined);
+        }
+        if (typeof window !== 'undefined' && typeof CustomEvent !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            window.dispatchEvent(new CustomEvent(THEIA_MESSAGE_EVENT, { detail: message }));
         }
         return Promise.resolve(undefined);
     }

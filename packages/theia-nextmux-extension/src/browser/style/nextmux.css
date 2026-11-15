@@ -195,7 +195,7 @@
 }
 
 /* Newer surfaces size their own <small> text (the ID selector here would otherwise override every class rule). */
-#nextmux\.desktop\.widget small:not(:is(.nmx-import-panel, .nmx-cast-sheet, .nmx-permission-wait, .nmx-comic-setup, .nmx-step-summary, .nmx-music-lyrics, .nmx-music-song, .nmx-music-output, .nmx-music-mv, .nmx-comic-kind-sheet, .nmx-comic-cats, .nmx-plugins-settings, .nmx-plugin-dialog, .nmx-plugin-modal-backdrop, .nmx-plugin-menu, .nmx-comic-chat-popover, .nmx-comic-library-anchor, .nmx-comic-chat-drawers, .nmx-comic-chat-refs, .nmx-comic-materials, .nmx-cut-bin-group-head, .nmx-desk-review, .nmx-desk-source-editor, .nmx-comic-export-check, .nmx-board, .nmx-desk-canvas-notice, .nmx-council-step-label, .nmx-council-assignments, .nmx-council-popover) small) {
+#nextmux\.desktop\.widget small:not(:is(.nmx-import-panel, .nmx-cast-sheet, .nmx-permission-wait, .nmx-comic-setup, .nmx-step-summary, .nmx-music-lyrics, .nmx-music-song, .nmx-music-output, .nmx-music-mv, .nmx-comic-kind-sheet, .nmx-comic-cats, .nmx-plugins-settings, .nmx-plugin-dialog, .nmx-plugin-modal-backdrop, .nmx-plugin-menu, .nmx-comic-chat-popover, .nmx-comic-library-anchor, .nmx-comic-chat-drawers, .nmx-comic-chat-refs, .nmx-comic-materials, .nmx-cut-bin-group-head, .nmx-desk-review, .nmx-desk-source-editor, .nmx-comic-export-check, .nmx-board, .nmx-desk-canvas-notice, .nmx-plugin-chat-panel, .nmx-visual-tab-schedule-drawer, .nmx-council-step-label, .nmx-council-assignments, .nmx-council-popover) small) {
     font-size: inherit;
 }
 :where(.nmx-cast-sheet, .nmx-comic-setup, .nmx-step-summary, .nmx-music-lyrics, .nmx-music-song, .nmx-music-output, .nmx-music-mv, .nmx-comic-kind-sheet, .nmx-comic-cats, .nmx-plugins-settings, .nmx-plugin-dialog, .nmx-plugin-menu) small { font-size: 11.5px; }
@@ -16095,13 +16095,24 @@ body.theia-dark .nmx-file-editor-tabs:hover::-webkit-scrollbar-thumb,
 }
 .nmx-model-picker-popover .nmx-merchant-catalog-status:has(.codicon-loading) { justify-content: center; }
 .nmx-model-picker-popover .nmx-merchant-catalog-status span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+/* 重试 and 前往模型中心 beside a list's status (centred in an empty list, or under the rows): the drawer's outlined
+   button, as in its empty state, never Chromium's 2px outset square. Colour, border colour and hover come from the
+   popover button rule; the 2px focus ring sits inside the status padding, so the list never clips it. */
 .nmx-model-picker-popover .nmx-merchant-catalog-status button {
     flex: 0 0 auto;
     width: auto;
     min-height: 26px;
     display: inline-flex;
     align-items: center;
-    padding: 4px 8px;
+    padding: 3px 10px;
+    border: 1px solid var(--nmx-border);
+    border-radius: 7px;
+    color: var(--nmx-text);
+    background: transparent;
+    font: inherit;
+    line-height: 18px;
+    white-space: nowrap;
+    cursor: pointer;
 }
 .nmx-model-picker-popover .nmx-merchant-catalog-status.is-centered {
     width: 100%;
@@ -18356,6 +18367,8 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     align-items: center;
     justify-content: center;
 }
+/* The message is read and acted on (“API Key 无效或缺失”, “模型目录加载失败”): the drawer's own muted text, as its
+   “加载中…” in the same place, not the dim #817b7e (3.7:1 dark, 4.1:1 light; this is 6.4:1 and 5.1:1). */
 .nmx-model-picker-popover > .nmx-model-picker-empty-list .nmx-route-empty {
     width: 100%;
     min-height: 100%;
@@ -18364,6 +18377,7 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     justify-content: center;
     padding: 12px 16px;
     box-sizing: border-box;
+    color: var(--nmx-muted);
     white-space: normal;
     text-align: center;
 }
@@ -21429,6 +21443,17 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     padding: 7px 10px;
     border-radius: 8px;
     text-align: start;
+}
+/* The source drawers' own lines (暂无可用中转商, 还没有自有 API, no match) in the drawer's muted text, as its model list
+   says 加载中…: the dim #817b7e under .nmx-route-empty is 3.7:1 on the dark drawer and 4.1:1 on the light one. */
+.nmx-model-picker-relay-view .nmx-relay-options > .nmx-route-empty {
+    color: var(--nmx-muted);
+    overflow-wrap: anywhere;
+}
+/* 已保存的直连线路不可用 is a warning above the rows: full-strength text on a light wash of the warning colour. */
+.nmx-model-picker-relay-view .nmx-relay-options > .nmx-route-empty.is-warning {
+    color: var(--nmx-text);
+    background: color-mix(in srgb, var(--nmx-warning, #d7a05d) 14%, transparent);
 }
 .nmx-model-picker-relay-view .nmx-relay-options:has(> .nmx-relay-loading-center):not(:has(> .nmx-relay-option-row)) {
     display: flex;

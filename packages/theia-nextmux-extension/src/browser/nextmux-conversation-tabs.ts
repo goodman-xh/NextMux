@@ -27,6 +27,30 @@ export interface ConversationTabWindowItem {
     readonly followed?: boolean;
     readonly role?: 'launcher' | 'client' | 'game' | 'app';
     readonly alive?: boolean;
+    /**
+     * Windows, from the open result: a Chromium-family app (browser, Electron, CEF, WebView2) that stops drawing while its
+     * window is hidden, whether NextMux started it with the switches that keep it drawing, why not, and whether a
+     * restart would. Facts about this app session only: windows are never saved.
+     */
+    readonly selfThrottles?: boolean;
+    readonly realtimeLaunch?: boolean;
+    readonly realtimeLaunchReason?: string;
+    readonly realtimeRelaunchAvailable?: boolean;
+}
+
+/** The open result's realtime facts (Windows), as kept on the window's record. */
+export type ConversationTabRealtimeFacts = Pick<ConversationTabWindowItem, 'selfThrottles' | 'realtimeLaunch' | 'realtimeLaunchReason' | 'realtimeRelaunchAvailable'>;
+
+/** Only the realtime facts an open result actually reported (absent ones never overwrite what a record knows). */
+export function tabRealtimeFacts(source: object | undefined): ConversationTabRealtimeFacts {
+    if (!source) return {};
+    const opened = source as Readonly<Record<string, unknown>>;
+    return {
+        ...(typeof opened.selfThrottles === 'boolean' ? { selfThrottles: opened.selfThrottles } : {}),
+        ...(typeof opened.realtimeLaunch === 'boolean' ? { realtimeLaunch: opened.realtimeLaunch } : {}),
+        ...(typeof opened.realtimeLaunchReason === 'string' && opened.realtimeLaunchReason ? { realtimeLaunchReason: opened.realtimeLaunchReason.slice(0, 40) } : {}),
+        ...(typeof opened.realtimeRelaunchAvailable === 'boolean' ? { realtimeRelaunchAvailable: opened.realtimeRelaunchAvailable } : {})
+    };
 }
 
 export interface ConversationVisualTab {
@@ -243,10 +267,16 @@ function tabWindowStageRank(item: Pick<ConversationTabWindowItem, 'app' | 'title
  */
 export function attachTabWindow(
     tab: ConversationVisualTab,
-    opened: { readonly pid: number; readonly windowId: number; readonly app?: string; readonly title?: string; readonly followed?: boolean; readonly appId?: string; readonly programs?: readonly string[]; readonly familyId?: string; readonly role?: ConversationTabWindowItem['role']; readonly windows?: readonly ConversationTabWindowItem[] },
+    opened: { readonly pid: number; readonly windowId: number; readonly app?: string; readonly title?: string; readonly followed?: boolean; readonly appId?: string; readonly programs?: readonly string[]; readonly familyId?: string; readonly role?: ConversationTabWindowItem['role']; readonly windows?: readonly ConversationTabWindowItem[] }
+        & ConversationTabRealtimeFacts,
     activate = true
 ): ConversationVisualTab {
-    const current = opened.windows || tab.windows || tabWindows(tab);
+    // A fresh list from the app side keeps what the tab already knew about each window's realtime launch.
+    const known = tab.windows || [];
+    const current = opened.windows?.map(item => {
+        const facts = tabRealtimeFacts(known.find(old => old.pid === item.pid && old.windowId === item.windowId));
+        return Object.keys(facts).length ? { ...facts, ...item } : item;
+    }) || tab.windows || tabWindows(tab);
     const appName = opened.app?.trim().slice(0, 80) || undefined;
     const itemTitle = (opened.title?.trim() || appName || tab.target || tab.title || `PID ${opened.pid}`).slice(0, 120);
     const entry: ConversationTabWindowItem = {
@@ -257,7 +287,8 @@ export function attachTabWindow(
         alive: true,
         ...(opened.role ? { role: opened.role } : {}),
         ...(appName ? { app: appName } : {}),
-        ...(opened.followed ? { followed: true } : {})
+        ...(opened.followed ? { followed: true } : {}),
+        ...tabRealtimeFacts(opened)
     };
     const withoutTarget = current.filter(item => !(item.pid === opened.pid && item.windowId === opened.windowId));
     const nextWindows = [...withoutTarget, entry].sort((a, b) => tabWindowStageRank(a) - tabWindowStageRank(b));
@@ -354,7 +385,8 @@ export function findConversationTabByTarget(
  * desktop: controlling a desktop window with computer.* never opens one.
  */
 export function appWindowTab(opened: { readonly pid: number; readonly windowId: number; readonly app: string; readonly title?: string; readonly followed?: boolean; readonly appId?: string;
-    readonly programs?: readonly string[]; readonly familyId?: string; readonly role?: ConversationTabWindowItem['role']; readonly windows?: readonly ConversationTabWindowItem[] }, platform: string): Omit<ConversationVisualTab, 'createdAt'> {
+    readonly programs?: readonly string[]; readonly familyId?: string; readonly role?: ConversationTabWindowItem['role']; readonly windows?: readonly ConversationTabWindowItem[] }
+    & ConversationTabRealtimeFacts, platform: string): Omit<ConversationVisualTab, 'createdAt'> {
     const name = opened.app.trim().slice(0, 120) || `PID ${opened.pid}`;
     // A followed window is named by its own title when it has one ("微信 · 张三", a game's name).
     const title = opened.followed && opened.title?.trim() && opened.title.trim() !== name ? `${name} · ${opened.title.trim()}` : name;
@@ -362,7 +394,7 @@ export function appWindowTab(opened: { readonly pid: number; readonly windowId: 
     return { id: appWindowTabId(opened.pid, opened.windowId), kind: 'local-desktop', title: title.slice(0, 120), target: (opened.title?.trim() || name).slice(0, 200),
         platform: computerPlatform(platform), status: 'connected', windowRef: { pid: opened.pid, windowId: opened.windowId }, ...(opened.followed ? { followed: true } : {}),
         ...(opened.familyId ? { familyId: opened.familyId } : {}),
-        windows: opened.windows?.length ? opened.windows : [{ pid: opened.pid, windowId: opened.windowId, app: name, title: opened.title || name, alive: true, ...(opened.role ? { role: opened.role } : {}) }],
+        windows: opened.windows?.length ? opened.windows : [{ pid: opened.pid, windowId: opened.windowId, app: name, title: opened.title || name, alive: true, ...(opened.role ? { role: opened.role } : {}), ...tabRealtimeFacts(opened) }],
         ...(opened.appId?.trim() ? { appId: opened.appId.trim().slice(0, 160) } : {}), ...(programs.length ? { programs } : {}) };
 }
 

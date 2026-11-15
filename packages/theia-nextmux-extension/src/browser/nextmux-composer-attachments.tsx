@@ -17,7 +17,8 @@ export type ComposerAttachmentUiKey =
     | 'dropTitle' | 'dropHint' | 'folder' | 'folderFiles' | 'unsupported' | 'remove' | 'preview' | 'restoring' | 'restoreFailed'
     | 'folderEmpty' | 'folderFailed' | 'folderAsProject' | 'anchoredAfter' | 'anchoredStart' | 'dropInsertTitle' | 'dropInsertHint'
     | 'dropReadTitle' | 'dropReadHint' | 'dropProjectTitle' | 'dropProjectHint'
-    | 'willExtract' | 'willDescribe' | 'willExtractHint' | 'willDescribeHint' | 'readInParts' | 'readInPartsHint';
+    | 'willExtract' | 'willDescribe' | 'willExtractHint' | 'willDescribeHint' | 'readInParts' | 'readInPartsHint'
+    | 'unreadableSkipped' | 'unreadableSkippedMany' | 'othersAdded' | 'textCut' | 'longTextHint';
 
 const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<ComposerAttachmentUiKey, string>>>> = {
     'zh-CN': {
@@ -30,7 +31,8 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<ComposerAtt
         dropProjectTitle: '松开将文件夹设为项目文件夹', dropProjectHint: '拖入文件夹将设为当前对话的项目目录，文件仍作为附件添加',
         willExtract: '发送时提取文字', willDescribe: '模型无法直接读取',
         willExtractHint: '这个模型不能直接读取此格式，发送时由 NextMux 提取文字交给 AI。', willDescribeHint: '这个模型不接收此类文件，发送时只附上文件名和类型；需要读取内容请换用支持该格式的模型。',
-        readInParts: '分段阅读 · {lines} 行', readInPartsHint: '内容太长，不再随每次请求整篇发送：已存为文本，AI 按需分段读取，后续消息里也能继续查阅。'
+        readInParts: '分段阅读 · {lines} 行', readInPartsHint: '内容太长，不再随每次请求整篇发送：已存为文本，AI 按需分段读取，后续消息里也能继续查阅。',
+        unreadableSkipped: '无法读取「{name}」，已跳过：它可能已被移动、删除，或没有读取权限。', othersAdded: '其他文件已照常添加。', unreadableSkippedMany: '有 {count} 项无法读取（如「{name}」），已跳过：可能已被移动、删除，或没有读取权限。', textCut: '「{name}」较长，AI 只收到了前 {kept} 字，后面的内容没有发送。', longTextHint: '这个文件可能超过此模型一次能直接读取的长度（12 万字）。发送时由 NextMux 读取文字交给 AI，太长时 AI 会分段阅读；若只能发送一部分，会告诉你。'
     },
     'zh-TW': {
         dropTitle: '放開即可新增', dropHint: '支援圖片、PDF、Office 文件、程式碼與文字、影音和資料夾',
@@ -42,7 +44,8 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<ComposerAtt
         dropProjectTitle: '放開設為專案資料夾', dropProjectHint: '拖入資料夾將設為目前對話的專案目錄，檔案仍以附件加入',
         willExtract: '傳送時擷取文字', willDescribe: '模型無法直接讀取',
         willExtractHint: '此模型不能直接讀取這個格式，傳送時由 NextMux 擷取文字交給 AI。', willDescribeHint: '此模型不接收這類檔案，傳送時只附上檔名和類型；需要讀取內容請改用支援該格式的模型。',
-        readInParts: '分段閱讀 · {lines} 行', readInPartsHint: '內容太長，不再隨每次請求整篇傳送：已存為文字，AI 依需要分段讀取，後續訊息中也能繼續查閱。'
+        readInParts: '分段閱讀 · {lines} 行', readInPartsHint: '內容太長，不再隨每次請求整篇傳送：已存為文字，AI 依需要分段讀取，後續訊息中也能繼續查閱。',
+        unreadableSkipped: '無法讀取「{name}」，已略過：它可能已被移動、刪除，或沒有讀取權限。', othersAdded: '其他檔案已照常加入。', unreadableSkippedMany: '有 {count} 項無法讀取（如「{name}」），已略過：可能已被移動、刪除，或沒有讀取權限。', textCut: '「{name}」較長，AI 只收到了前 {kept} 字，後面的內容沒有傳送。', longTextHint: '這個檔案可能超過此模型一次能直接讀取的長度（12 萬字）。傳送時由 NextMux 讀取文字交給 AI，太長時 AI 會分段閱讀；若只能傳送一部分，會告訴你。'
     },
     en: {
         dropTitle: 'Drop to attach', dropHint: 'Images, PDFs, Office documents, code and text, audio, video and folders',
@@ -54,7 +57,8 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<ComposerAtt
         dropProjectTitle: 'Drop to set as project folder', dropProjectHint: 'Dropped folders become this conversation’s project directory; files attach as usual',
         willExtract: 'Text extracted on send', willDescribe: 'Model can’t read this type',
         willExtractHint: 'This model can’t read the format directly, so NextMux extracts the text and sends that.', willDescribeHint: 'This model doesn’t accept this file type; only the name and type are sent. Switch to a model that accepts it to share the content.',
-        readInParts: 'Read in parts · {lines} lines', readInPartsHint: 'Too long to send whole with every request: saved as text the AI reads in parts, also in later messages.'
+        readInParts: 'Read in parts · {lines} lines', readInPartsHint: 'Too long to send whole with every request: saved as text the AI reads in parts, also in later messages.',
+        unreadableSkipped: 'Couldn’t read “{name}”, so it was skipped. It may have been moved or deleted, or you may not have permission to read it.', othersAdded: 'Your other files were added.', unreadableSkippedMany: '{count} items couldn’t be read (such as “{name}”) and were skipped. They may have been moved or deleted, or you may not have permission to read them.', textCut: '“{name}” is long: the AI received only its first {kept} characters; the rest was not sent.', longTextHint: 'This file may be longer than this model reads directly (120,000 characters). NextMux reads its text and sends that; if it is too long, the AI reads it in parts, and you are told if only part of it can be sent.'
     },
     ja: {
         dropTitle: 'ドロップして添付', dropHint: '画像、PDF、Office 文書、コードとテキスト、音声・動画、フォルダーに対応',
@@ -66,7 +70,8 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<ComposerAtt
         dropProjectTitle: 'ドロップしてプロジェクトフォルダーに設定', dropProjectHint: 'フォルダーはこの会話のプロジェクトディレクトリになり、ファイルは添付として追加されます',
         willExtract: '送信時にテキスト抽出', willDescribe: 'モデルは直接読めません',
         willExtractHint: 'このモデルは形式を直接読めないため、NextMux がテキストを抽出して送信します。', willDescribeHint: 'このモデルはこの種類のファイルを受け付けません。名前と種類のみ送信されます。',
-        readInParts: '分割して読む · {lines} 行', readInPartsHint: '長いため毎回全文は送りません。テキストとして保存し、AI が必要な部分を読みます（後のメッセージでも参照できます）。'
+        readInParts: '分割して読む · {lines} 行', readInPartsHint: '長いため毎回全文は送りません。テキストとして保存し、AI が必要な部分を読みます（後のメッセージでも参照できます）。',
+        unreadableSkipped: '「{name}」を読み込めなかったため、スキップしました。移動・削除されたか、読み取り権限がない可能性があります。', othersAdded: 'ほかのファイルは追加されています。', unreadableSkippedMany: '{count} 件（「{name}」など）を読み込めなかったため、スキップしました。移動・削除されたか、読み取り権限がない可能性があります。', textCut: '「{name}」は長いため、AI に届いたのは先頭の {kept} 文字だけです。残りは送信されていません。', longTextHint: 'このファイルは、このモデルが直接読める長さ（12 万文字）を超えている可能性があります。送信時に NextMux がテキストを読み取って AI に渡し、長すぎる場合は AI が分けて読みます。一部しか送れない場合はお知らせします。'
     },
     ko: {
         dropTitle: '놓아서 첨부', dropHint: '이미지, PDF, Office 문서, 코드와 텍스트, 오디오·비디오, 폴더 지원',
@@ -78,7 +83,8 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<ComposerAtt
         dropProjectTitle: '놓아서 프로젝트 폴더로 설정', dropProjectHint: '폴더는 현재 대화의 프로젝트 디렉터리로 설정되며 파일은 첨부 파일로 추가됩니다',
         willExtract: '보낼 때 텍스트 추출', willDescribe: '모델이 직접 읽을 수 없음',
         willExtractHint: '이 모델은 형식을 직접 읽을 수 없어 NextMux가 텍스트를 추출해 보냅니다.', willDescribeHint: '이 모델은 이 파일 형식을 받지 않아 이름과 형식만 보냅니다.',
-        readInParts: '나눠 읽기 · {lines}줄', readInPartsHint: '너무 길어 요청마다 전체를 보내지 않습니다. 텍스트로 저장해 AI가 필요한 부분만 읽으며, 이후 메시지에서도 참조합니다.'
+        readInParts: '나눠 읽기 · {lines}줄', readInPartsHint: '너무 길어 요청마다 전체를 보내지 않습니다. 텍스트로 저장해 AI가 필요한 부분만 읽으며, 이후 메시지에서도 참조합니다.',
+        unreadableSkipped: '“{name}”을(를) 읽을 수 없어 건너뛰었습니다. 이동·삭제되었거나 읽기 권한이 없을 수 있습니다.', othersAdded: '다른 파일은 추가되었습니다.', unreadableSkippedMany: '{count}개 항목(예: “{name}”)을 읽을 수 없어 건너뛰었습니다. 이동·삭제되었거나 읽기 권한이 없을 수 있습니다.', textCut: '“{name}”이(가) 길어 AI에는 앞부분 {kept}자만 전달되었습니다. 나머지는 보내지 않았습니다.', longTextHint: '이 파일은 이 모델이 직접 읽을 수 있는 길이(12만 자)를 넘을 수 있습니다. 보낼 때 NextMux가 텍스트를 읽어 AI에 전달하고, 너무 길면 AI가 나눠 읽습니다. 일부만 보낼 수 있으면 알려 드립니다.'
     },
     es: {
         dropTitle: 'Suelta para adjuntar', dropHint: 'Imágenes, PDF, documentos de Office, código y texto, audio, vídeo y carpetas',
@@ -90,7 +96,8 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<ComposerAtt
         dropProjectTitle: 'Suelta para usar como carpeta del proyecto', dropProjectHint: 'Las carpetas serán el directorio del proyecto de esta conversación y los archivos se adjuntarán',
         willExtract: 'Se extrae el texto al enviar', willDescribe: 'El modelo no puede leerlo',
         willExtractHint: 'Este modelo no lee el formato directamente; NextMux extrae el texto y lo envía.', willDescribeHint: 'Este modelo no acepta este tipo de archivo; solo se envían el nombre y el tipo.',
-        readInParts: 'Lectura por partes · {lines} líneas', readInPartsHint: 'Demasiado largo para enviarlo entero en cada solicitud: se guardó como texto y la IA lee las partes que necesita, también en mensajes posteriores.'
+        readInParts: 'Lectura por partes · {lines} líneas', readInPartsHint: 'Demasiado largo para enviarlo entero en cada solicitud: se guardó como texto y la IA lee las partes que necesita, también en mensajes posteriores.',
+        unreadableSkipped: 'No se pudo leer «{name}» y se omitió. Puede que se haya movido o eliminado, o que no tengas permiso para leerlo.', othersAdded: 'Los demás archivos se añadieron.', unreadableSkippedMany: 'No se pudieron leer {count} elementos (como «{name}») y se omitieron. Puede que se hayan movido o eliminado, o que no tengas permiso para leerlos.', textCut: '«{name}» es largo: la IA solo recibió sus primeros {kept} caracteres; el resto no se envió.', longTextHint: 'Este archivo puede superar lo que este modelo lee directamente (120.000 caracteres). NextMux lee su texto y lo envía; si es demasiado largo, la IA lo lee por partes, y se te avisa si solo puede enviarse una parte.'
     },
     fr: {
         dropTitle: 'Déposez pour joindre', dropHint: 'Images, PDF, documents Office, code et texte, audio, vidéo et dossiers',
@@ -102,7 +109,8 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<ComposerAtt
         dropProjectTitle: 'Déposez pour définir comme dossier du projet', dropProjectHint: 'Les dossiers deviennent le répertoire de projet de cette conversation ; les fichiers sont joints',
         willExtract: 'Texte extrait à l’envoi', willDescribe: 'Le modèle ne peut pas le lire',
         willExtractHint: 'Ce modèle ne lit pas ce format directement ; NextMux en extrait le texte et l’envoie.', willDescribeHint: 'Ce modèle n’accepte pas ce type de fichier ; seuls le nom et le type sont envoyés.',
-        readInParts: 'Lu par parties · {lines} lignes', readInPartsHint: 'Trop long pour être envoyé en entier à chaque requête : enregistré en texte, l’IA en lit les parties utiles, y compris dans les messages suivants.'
+        readInParts: 'Lu par parties · {lines} lignes', readInPartsHint: 'Trop long pour être envoyé en entier à chaque requête : enregistré en texte, l’IA en lit les parties utiles, y compris dans les messages suivants.',
+        unreadableSkipped: 'Impossible de lire « {name} » : il a été ignoré. Il a peut-être été déplacé ou supprimé, ou vous n’avez pas l’autorisation de le lire.', othersAdded: 'Vos autres fichiers ont été ajoutés.', unreadableSkippedMany: '{count} éléments (dont « {name} ») n’ont pas pu être lus et ont été ignorés. Ils ont peut-être été déplacés ou supprimés, ou vous n’avez pas l’autorisation de les lire.', textCut: '« {name} » est long : l’IA n’en a reçu que les {kept} premiers caractères ; le reste n’a pas été envoyé.', longTextHint: 'Ce fichier dépasse peut-être ce que ce modèle lit directement (120 000 caractères). NextMux en lit le texte et l’envoie ; s’il est trop long, l’IA le lit par parties, et vous êtes prévenu si seule une partie peut être envoyée.'
     },
     de: {
         dropTitle: 'Zum Anhängen loslassen', dropHint: 'Bilder, PDFs, Office-Dokumente, Code und Text, Audio, Video und Ordner',
@@ -114,7 +122,8 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<ComposerAtt
         dropProjectTitle: 'Loslassen, um als Projektordner festzulegen', dropProjectHint: 'Ordner werden zum Projektverzeichnis dieser Unterhaltung; Dateien werden als Anhänge hinzugefügt',
         willExtract: 'Text wird beim Senden extrahiert', willDescribe: 'Modell kann es nicht lesen',
         willExtractHint: 'Dieses Modell liest das Format nicht direkt; NextMux extrahiert den Text und sendet ihn.', willDescribeHint: 'Dieses Modell akzeptiert diesen Dateityp nicht; nur Name und Typ werden gesendet.',
-        readInParts: 'In Teilen gelesen · {lines} Zeilen', readInPartsHint: 'Zu lang, um es mit jeder Anfrage ganz zu senden: als Text gespeichert, die KI liest die nötigen Teile – auch in späteren Nachrichten.'
+        readInParts: 'In Teilen gelesen · {lines} Zeilen', readInPartsHint: 'Zu lang, um es mit jeder Anfrage ganz zu senden: als Text gespeichert, die KI liest die nötigen Teile – auch in späteren Nachrichten.',
+        unreadableSkipped: '„{name}“ konnte nicht gelesen werden und wurde übersprungen. Es wurde möglicherweise verschoben oder gelöscht, oder Ihnen fehlt die Leseberechtigung.', othersAdded: 'Ihre anderen Dateien wurden hinzugefügt.', unreadableSkippedMany: '{count} Elemente (z. B. „{name}“) konnten nicht gelesen werden und wurden übersprungen. Sie wurden möglicherweise verschoben oder gelöscht, oder Ihnen fehlt die Leseberechtigung.', textCut: '„{name}“ ist lang: Die KI hat nur die ersten {kept} Zeichen erhalten; der Rest wurde nicht gesendet.', longTextHint: 'Diese Datei ist möglicherweise länger, als dieses Modell direkt liest (120.000 Zeichen). NextMux liest ihren Text und sendet ihn; ist sie zu lang, liest die KI sie in Teilen, und Sie erfahren es, wenn nur ein Teil gesendet werden kann.'
     },
     'pt-BR': {
         dropTitle: 'Solte para anexar', dropHint: 'Imagens, PDFs, documentos do Office, código e texto, áudio, vídeo e pastas',
@@ -126,7 +135,8 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<ComposerAtt
         dropProjectTitle: 'Solte para definir como pasta do projeto', dropProjectHint: 'Pastas passam a ser o diretório de projeto desta conversa; arquivos são anexados',
         willExtract: 'Texto extraído ao enviar', willDescribe: 'O modelo não lê este tipo',
         willExtractHint: 'Este modelo não lê o formato diretamente; o NextMux extrai o texto e o envia.', willDescribeHint: 'Este modelo não aceita este tipo de arquivo; só o nome e o tipo são enviados.',
-        readInParts: 'Leitura por partes · {lines} linhas', readInPartsHint: 'Longo demais para enviar inteiro a cada solicitação: salvo como texto para a IA ler as partes necessárias, também em mensagens seguintes.'
+        readInParts: 'Leitura por partes · {lines} linhas', readInPartsHint: 'Longo demais para enviar inteiro a cada solicitação: salvo como texto para a IA ler as partes necessárias, também em mensagens seguintes.',
+        unreadableSkipped: 'Não foi possível ler “{name}”, então ele foi ignorado. Ele pode ter sido movido ou excluído, ou você não tem permissão para lê-lo.', othersAdded: 'Seus outros arquivos foram adicionados.', unreadableSkippedMany: '{count} itens (como “{name}”) não puderam ser lidos e foram ignorados. Eles podem ter sido movidos ou excluídos, ou você não tem permissão para lê-los.', textCut: '“{name}” é longo: a IA recebeu só os primeiros {kept} caracteres; o restante não foi enviado.', longTextHint: 'Este arquivo pode ser maior do que este modelo lê diretamente (120.000 caracteres). O NextMux lê o texto e o envia; se for longo demais, a IA o lê por partes, e você é avisado se só uma parte puder ser enviada.'
     },
     ru: {
         dropTitle: 'Отпустите, чтобы прикрепить', dropHint: 'Изображения, PDF, документы Office, код и текст, аудио, видео и папки',
@@ -138,7 +148,8 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<ComposerAtt
         dropProjectTitle: 'Отпустите, чтобы выбрать папкой проекта', dropProjectHint: 'Папка станет каталогом проекта для этого диалога, а файлы добавятся как вложения',
         willExtract: 'Текст извлекается при отправке', willDescribe: 'Модель не читает этот тип',
         willExtractHint: 'Модель не читает этот формат напрямую, поэтому NextMux извлекает и отправляет текст.', willDescribeHint: 'Модель не принимает этот тип файла; отправляются только имя и тип.',
-        readInParts: 'Чтение по частям · строк: {lines}', readInPartsHint: 'Слишком длинный, чтобы отправлять целиком с каждым запросом: сохранён как текст, ИИ читает нужные части, в том числе в следующих сообщениях.'
+        readInParts: 'Чтение по частям · строк: {lines}', readInPartsHint: 'Слишком длинный, чтобы отправлять целиком с каждым запросом: сохранён как текст, ИИ читает нужные части, в том числе в следующих сообщениях.',
+        unreadableSkipped: 'Не удалось прочитать «{name}», он пропущен. Возможно, его переместили или удалили, либо нет прав на чтение.', othersAdded: 'Остальные файлы добавлены.', unreadableSkippedMany: 'Не удалось прочитать несколько объектов ({count}), например «{name}», — они пропущены. Возможно, их переместили или удалили, либо нет прав на чтение.', textCut: '«{name}» слишком длинный: ИИ получил только первые {kept} символов, остальное не отправлено.', longTextHint: 'Этот файл может быть длиннее, чем модель читает напрямую (120 000 символов). NextMux прочитает его текст и отправит; если он слишком длинный, ИИ прочитает его по частям, а если можно отправить только часть, вы об этом узнаете.'
     },
     ar: {
         dropTitle: 'أفلت للإرفاق', dropHint: 'الصور وملفات PDF ومستندات Office والشيفرة والنصوص والصوت والفيديو والمجلدات',
@@ -150,7 +161,8 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<ComposerAtt
         dropProjectTitle: 'أفلت لتعيينه مجلدًا للمشروع', dropProjectHint: 'يصبح المجلد دليل المشروع لهذه المحادثة وتُضاف الملفات كمرفقات',
         willExtract: 'يُستخرج النص عند الإرسال', willDescribe: 'لا يستطيع النموذج قراءته',
         willExtractHint: 'لا يقرأ هذا النموذج التنسيق مباشرة، لذا يستخرج NextMux النص ويرسله.', willDescribeHint: 'لا يقبل هذا النموذج هذا النوع من الملفات؛ يُرسل الاسم والنوع فقط.',
-        readInParts: 'قراءة على أجزاء · {lines} سطر', readInPartsHint: 'أطول من أن يُرسل كاملًا مع كل طلب: حُفظ نصًا ليقرأ الذكاء الاصطناعي الأجزاء التي يحتاجها، وفي الرسائل اللاحقة أيضًا.'
+        readInParts: 'قراءة على أجزاء · {lines} سطر', readInPartsHint: 'أطول من أن يُرسل كاملًا مع كل طلب: حُفظ نصًا ليقرأ الذكاء الاصطناعي الأجزاء التي يحتاجها، وفي الرسائل اللاحقة أيضًا.',
+        unreadableSkipped: 'تعذّرت قراءة «{name}» فتم تخطيه. ربما نُقل أو حُذف، أو ليست لديك صلاحية قراءته.', othersAdded: 'أُضيفت ملفاتك الأخرى.', unreadableSkippedMany: 'تعذّرت قراءة عدد من العناصر ({count})، مثل «{name}»، فتم تخطيها. ربما نُقلت أو حُذفت، أو ليست لديك صلاحية قراءتها.', textCut: '«{name}» طويل: تلقّى الذكاء الاصطناعي أول {kept} حرفًا منه فقط، ولم يُرسل الباقي.', longTextHint: 'قد يكون هذا الملف أطول مما يقرؤه هذا النموذج مباشرةً (120,000 حرف). يقرأ NextMux نصه ويرسله؛ وإن كان طويلًا جدًا يقرؤه الذكاء الاصطناعي على أجزاء، وستُبلَّغ إن أمكن إرسال جزء منه فقط.'
     },
     hi: {
         dropTitle: 'संलग्न करने के लिए छोड़ें', dropHint: 'इमेज, PDF, Office दस्तावेज़, कोड और टेक्स्ट, ऑडियो, वीडियो और फ़ोल्डर',
@@ -162,7 +174,8 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<ComposerAtt
         dropProjectTitle: 'प्रोजेक्ट फ़ोल्डर बनाने के लिए छोड़ें', dropProjectHint: 'फ़ोल्डर इस बातचीत की प्रोजेक्ट निर्देशिका बन जाएगा और फ़ाइलें अटैचमेंट के रूप में जुड़ेंगी',
         willExtract: 'भेजते समय टेक्स्ट निकाला जाएगा', willDescribe: 'मॉडल इसे सीधे नहीं पढ़ सकता',
         willExtractHint: 'यह मॉडल फ़ॉर्मैट सीधे नहीं पढ़ता, इसलिए NextMux टेक्स्ट निकालकर भेजता है।', willDescribeHint: 'यह मॉडल इस फ़ाइल प्रकार को स्वीकार नहीं करता; केवल नाम और प्रकार भेजे जाते हैं।',
-        readInParts: 'हिस्सों में पढ़ा जाता है · {lines} पंक्तियाँ', readInPartsHint: 'हर अनुरोध के साथ पूरा भेजने के लिए बहुत लंबा: टेक्स्ट के रूप में सहेजा गया, AI ज़रूरी हिस्से पढ़ता है — आगे के संदेशों में भी।'
+        readInParts: 'हिस्सों में पढ़ा जाता है · {lines} पंक्तियाँ', readInPartsHint: 'हर अनुरोध के साथ पूरा भेजने के लिए बहुत लंबा: टेक्स्ट के रूप में सहेजा गया, AI ज़रूरी हिस्से पढ़ता है — आगे के संदेशों में भी।',
+        unreadableSkipped: '“{name}” पढ़ा नहीं जा सका, इसलिए उसे छोड़ दिया गया। हो सकता है वह हटाया या स्थानांतरित किया गया हो, या उसे पढ़ने की अनुमति न हो।', othersAdded: 'आपकी बाकी फ़ाइलें जोड़ दी गई हैं।', unreadableSkippedMany: '{count} आइटम (जैसे “{name}”) पढ़े नहीं जा सके, इसलिए छोड़ दिए गए। हो सकता है वे हटाए या स्थानांतरित किए गए हों, या उन्हें पढ़ने की अनुमति न हो।', textCut: '“{name}” लंबी है: AI को केवल पहले {kept} अक्षर मिले; बाकी हिस्सा नहीं भेजा गया।', longTextHint: 'यह फ़ाइल इस मॉडल की सीधे पढ़ने की सीमा (1,20,000 अक्षर) से लंबी हो सकती है। भेजते समय NextMux इसका टेक्स्ट पढ़कर AI को देता है; बहुत लंबी होने पर AI इसे हिस्सों में पढ़ता है, और केवल कुछ हिस्सा भेजा जा सके तो आपको बताया जाता है।'
     }
 };
 
@@ -285,6 +298,11 @@ export function fileExtension(name: string): string {
     return index > 0 ? base.slice(index + 1) : '';
 }
 
+/** Every extension the table files under these families, e.g. for a file picker's accept list. */
+export function fileTypeExtensions(families: readonly FileTypeFamily[]): readonly string[] {
+    return Object.keys(specs).filter(extension => families.includes(specs[extension][0]));
+}
+
 export const FOLDER_SNAPSHOT_SUFFIX = '.folder.md';
 
 export function isFolderSnapshotName(name: string): boolean {
@@ -315,6 +333,15 @@ export function fileTypeInfo(name: string, mimeType = '', kind?: 'image' | 'text
     const [color, fallback] = familyDefaults[family];
     const label = extension && extension.length <= 4 && /^[a-z0-9+#]+$/.test(extension) ? extension.toLocaleUpperCase() : fallback;
     return { family, color, label, ink: '#fff' };
+}
+
+/** An attachment's size as the composer chips show it ("512 B", "3.4 KB", "12.0 MB"); empty when unknown. */
+export function formatAttachmentSize(bytes: number | undefined): string {
+    if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes <= 0) return '';
+    if (bytes < 1024) return `${Math.round(bytes)} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
 // ---------------------------------------------------------------------------
@@ -777,4 +804,45 @@ export function TextDropIndicator({ caret, locale }: { readonly caret: TextareaD
 /** Text lookups that never throw: an unknown key or language falls back (see nextmux-copy-fallback.ts). */
 export function composerAttachmentUiText(locale: Parameters<typeof uncheckedComposerAttachmentUiText>[0], key: Parameters<typeof uncheckedComposerAttachmentUiText>[1], ...rest: AfterLocaleAndKey<Parameters<typeof uncheckedComposerAttachmentUiText>>): string {
     return totalCopy(locale, key, language => uncheckedComposerAttachmentUiText(language, key, ...rest));
+}
+
+/** A notice keeps 120 characters of its title (the widget's addNotification); a file name in it at most 28 graphemes. */
+const NOTICE_TITLE_MAX = 120;
+const NOTICE_NAME_MAX = 28;
+
+function graphemes(text: string): string[] {
+    const Segmenter = (Intl as { Segmenter?: new (locale?: string, options?: { granularity: 'grapheme' }) => { segment(input: string): Iterable<{ segment: string }> } }).Segmenter;
+    return Segmenter ? Array.from(new Segmenter(undefined, { granularity: 'grapheme' }).segment(text), part => part.segment) : [...text];
+}
+
+/**
+ * A file name shortened in its middle to at most `max` graphemes and code units, keeping its beginning and its extension
+ * ("quarterly-sales-r…-final.csv"), as Finder and VS Code's tabs shorten long names: what tells files apart is usually at
+ * either end. The name itself when it fits.
+ */
+export function middleEllipsisFileName(name: string, max: number): string {
+    const parts = graphemes(name);
+    if (parts.length <= max && name.length <= max) return name;
+    const dot = name.lastIndexOf('.');
+    const extension = dot > 0 && name.length - dot <= 10 ? graphemes(name.slice(dot)) : [];
+    const ending = extension.length && extension.length <= max / 2 ? extension : [];
+    const stem = parts.slice(0, parts.length - ending.length);
+    for (let room = Math.max(1, max - 1 - ending.length); room > 0; room--) {
+        const tail = Math.floor(room / 2);
+        const short = `${stem.slice(0, room - tail).join('').trimEnd()}…${stem.slice(stem.length - tail).join('').trimStart()}${ending.join('')}`;
+        if (short.length <= max) return short;
+    }
+    // Not even one grapheme fits (an emoji sequence longer than the room): the ellipsis alone, the full name is said elsewhere.
+    return '…';
+}
+
+/**
+ * The notice for a text the AI received only in part: which file and how many characters. A long file name is shortened in
+ * the title (the count and "the rest was not sent" are never cut off), and then the body gives it in full.
+ */
+export function composerTextCutNotice(locale: NextMuxDesktopLocale, name: string, kept: number): { readonly title: string; readonly body: string } {
+    const count = kept.toLocaleString(locale);
+    const room = NOTICE_TITLE_MAX - composerAttachmentUiText(locale, 'textCut', { name: '', kept: count }).length;
+    const short = middleEllipsisFileName(name, Math.max(1, Math.min(NOTICE_NAME_MAX, room)));
+    return { title: composerAttachmentUiText(locale, 'textCut', { name: short, kept: count }), body: short === name ? '' : name };
 }

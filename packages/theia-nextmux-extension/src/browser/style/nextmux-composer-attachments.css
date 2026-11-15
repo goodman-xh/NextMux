@@ -755,6 +755,18 @@ body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay .dialogTitle { col
 body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay .dialogTitle i.closeButton:hover { background: rgba(0, 0, 0, .06); }
 body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay .dialogControl .theia-button { color: #393336; background: #f4f2f3; border-color: #d8d3d6; }
 body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay .dialogControl .theia-button.main { color: #fff; background: #2c282a; border-color: #2c282a; }
+/* A Theia confirmation (an extension or the workbench asking with actions, TheiaConfirmationActionDialog): the panel keeps
+ * one width whatever the message; a long file path breaks anywhere instead of being cut off at the panel's edge, and a long
+ * message scrolls inside it. The heading reads from the start like every NextMux dialog; buttons that do not fit in one row
+ * move onto a second row, right-aligned, and a label longer than the panel wraps inside its button (never cut short). */
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogBlock { width: min(520px, calc(100vw - 40px)); min-width: 0; }
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogTitle { gap: 8px; text-align: start; }
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogTitle > div { min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogTitle i.closeButton { flex: none; }
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogContent { max-height: min(48vh, 360px); overscroll-behavior: contain; }
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .nmx-theia-confirm-message { overflow-wrap: anywhere; user-select: text; }
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogControl { flex-wrap: wrap; }
+body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogControl .theia-button { max-width: 100%; height: auto; min-height: 32px; padding-block: 6px; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) {
     body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay { animation: none; }
 }
@@ -1188,10 +1200,30 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
     animation: none;
     opacity: 1;
 }
-/* The visual tab is an opaque overlay; hide the conversation layer while it is
- * mounted so no frame can show through, even before the first paint. */
-.nmx-shell .nmx-coding-stage:has(> .nmx-visual-tab) > .nmx-task-view,
-.nmx-shell .nmx-coding-stage:has(> .nmx-visual-tab) > .nmx-empty-task {
+/* The conversation's app tabs live in one layer over the conversation (renderCodingWorkbench): the tab on show, and the
+ * app tabs kept warm behind it so their windows' pictures are live the moment they come back. Whatever is not on show
+ * keeps the stage's full size (hidden, never display: none or a zero box), so its capture goes on decoding at the real
+ * size and returns on its next frame, with no resize, no black first paint and no new capture. Hidden is complete: no
+ * pixels (opacity also covers a descendant that sets visibility back), no pointer, no focus or tab stop (the view sets
+ * inert), nothing for a screen reader (aria-hidden), and a parked layer sits under everything else in the stage. The
+ * layer clips rather than scrolls, so focusing something inside it can never shift it. */
+.nmx-shell .nmx-coding-stage > .nmx-visual-tab-warm-layer {
+    position: absolute;
+    z-index: 4;
+    inset: 0;
+    overflow: clip;
+}
+.nmx-shell .nmx-coding-stage > .nmx-visual-tab-warm-layer:not(.is-active),
+.nmx-shell .nmx-visual-tab-warm-layer > .nmx-visual-tab.is-parked {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+}
+.nmx-shell .nmx-coding-stage > .nmx-visual-tab-warm-layer:not(.is-active) { z-index: -1; }
+.nmx-shell .nmx-visual-tab-warm-layer > .nmx-visual-tab.is-parked { z-index: 0; }
+/* The tab on show is opaque; the conversation under it is hidden as well, so no frame of it can show through, even
+ * before the tab's first paint. */
+.nmx-shell .nmx-coding-stage:has(> .nmx-visual-tab-warm-layer.is-active) > :is(.nmx-task-view, .nmx-empty-task) {
     visibility: hidden;
     pointer-events: none;
 }
@@ -1204,6 +1236,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 /* The window switcher menu and the terminate bubble hang below the header, so
  * the scroll container must step aside while they are open or they'd be cut. */
 .nmx-shell .nmx-visual-tab > header:has(.nmx-visual-tab-windows.is-open),
+.nmx-shell .nmx-visual-tab > header:has(.nmx-visual-tab-schedule.is-open),
 .nmx-shell .nmx-visual-tab > header:has(.nmx-visual-tab-live-bubble) { overflow: visible; }
 .nmx-shell .nmx-visual-tab > header strong { color: var(--nmx-text); font-weight: 600; white-space: nowrap; }
 .nmx-shell .nmx-visual-tab > header span { min-width: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }
@@ -1348,6 +1381,11 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 .nmx-shell .nmx-visual-tab-empty > .codicon { font-size: 28px; opacity: .7; }
 .nmx-shell .nmx-visual-tab-empty strong { color: var(--nmx-text); font-weight: 600; }
 .nmx-shell .nmx-visual-tab-empty p { margin: 0; line-height: 1.6; font-size: 13px; }
+/* The snapshot bridge (nextmux-live-frame-bridge.ts): the window's own snapshots over a stalled or repeating video, in
+   the video's exact box (the view gives both the same size and corner radius). No z-index: it paints right after the
+   video and below the note, the overlays and the toast that follow it; clicks go through to the video. */
+.nmx-shell .nmx-visual-tab-screen > canvas.nmx-visual-tab-bridge { position: absolute; inset: 0; margin: auto; max-width: 100%; max-height: 100%; object-fit: contain; pointer-events: none; }
+.nmx-shell .nmx-visual-tab-screen > canvas.nmx-visual-tab-bridge[hidden] { display: none; }
 /* Live window: the app's own pixels, scaled down to fit, with a small "live" badge and the placement switch. */
 .nmx-shell .nmx-visual-tab-screen { position: relative; }
 .nmx-shell .nmx-visual-tab-screen > video { background: transparent; opacity: 0; pointer-events: none; transition: opacity 160ms ease-out; }
@@ -1580,66 +1618,171 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 }
 .nmx-shell .nmx-visual-tab-toast-close > .codicon { font-size: 12px; }
 
-/* Mouse and sound switches: off by default, so a stray click never reaches the app and the app stays quiet. */
-.nmx-shell .nmx-visual-tab-switch {
-    flex: none; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 7px; border: 1px solid var(--nmx-border); border-radius: 7px;
-    color: var(--nmx-muted); background: color-mix(in srgb, var(--nmx-text) 2%, transparent); font-size: 12px; white-space: nowrap; cursor: pointer; user-select: none;
-    transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+/* ---------------------------------------------------------------------------
+ * The tab bar's icon controls (Discord-like): plans, 键鼠, sound, placement and the plugin marketplace.
+ * Mouse and sound are off by default, so a stray click never reaches the app and the app stays quiet. Colours
+ * are hues, not borders: the light theme turns every border one grey.
+ * ------------------------------------------------------------------------ */
+.nmx-shell .nmx-visual-tab-icon-btn {
+    position: relative; flex: none; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+    width: 28px; height: 26px; min-width: 28px; min-height: 26px; margin: 0; padding: 0; border: 0; border-radius: 8px;
+    color: var(--nmx-muted); background: transparent; font: inherit; line-height: 1; cursor: pointer; user-select: none;
+    transition: background-color 140ms ease, color 140ms ease, box-shadow 180ms ease, transform 120ms ease;
 }
-.nmx-shell .nmx-visual-tab-switch:hover { border-color: color-mix(in srgb, var(--nmx-text) 24%, var(--nmx-border)); color: var(--nmx-text); }
-.nmx-shell .nmx-visual-tab-switch > input { width: 13px; height: 13px; margin: 0; accent-color: var(--nmx-accent, #d14a79); cursor: pointer; }
-.nmx-shell .nmx-visual-tab-switch:has(> input:checked),
-.nmx-shell .nmx-visual-tab-switch.is-on {
-    color: var(--nmx-text);
-    border-color: color-mix(in srgb, var(--nmx-accent, #d14a79) 42%, var(--nmx-border));
-    background: color-mix(in srgb, var(--nmx-accent, #d14a79) 10%, transparent);
+.nmx-shell .nmx-visual-tab-icon-btn:hover { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 9%, transparent); }
+.nmx-shell .nmx-visual-tab-icon-btn:active { transform: scale(.94); }
+.nmx-shell .nmx-visual-tab-icon-btn:focus-visible { outline: 2px solid var(--nmx-focus-ring, #6b8afd); outline-offset: 1px; }
+.nmx-shell .nmx-visual-tab-icon-btn > .nmx-tab-glyph { display: block; flex: none; pointer-events: none; }
+/* 键鼠 on: the app takes clicks and keys in the tab — a green glow. */
+.nmx-shell .nmx-visual-tab-switch.is-input.is-on {
+    color: #3ec46d; background: color-mix(in srgb, #23a55a 16%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #23a55a 44%, transparent), 0 0 14px -3px color-mix(in srgb, #23a55a 72%, transparent);
 }
-.nmx-shell .nmx-visual-tab-switch.is-sound.is-off {
-    color: var(--nmx-text);
-    border-color: color-mix(in srgb, #d97706 38%, var(--nmx-border));
-    background: color-mix(in srgb, #d97706 8%, transparent);
+.nmx-shell .nmx-visual-tab-switch.is-input.is-on:hover { background: color-mix(in srgb, #23a55a 24%, transparent); }
+/* Sound on: blurple; muted: the amber that says the app is silenced. */
+.nmx-shell .nmx-visual-tab-switch.is-sound.is-on {
+    color: #a3abff; background: color-mix(in srgb, #5865f2 20%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #5865f2 50%, transparent), 0 0 14px -3px color-mix(in srgb, #5865f2 75%, transparent);
 }
-.nmx-shell .nmx-visual-tab-switch.is-sound.is-off > .codicon { color: #d97706; }
-.nmx-shell .nmx-visual-tab-switch.is-on > .codicon { color: var(--nmx-accent, #d14a79); }
-.nmx-shell .nmx-visual-tab-switch[data-state]::after {
-    content: attr(data-state);
-    display: inline-flex; align-items: center; height: 17px; padding: 0 5px; margin-inline-start: 1px; border-radius: 999px;
-    font-size: 10.5px; font-weight: 600; line-height: 1; letter-spacing: 0.01em;
-    color: var(--nmx-muted); background: color-mix(in srgb, var(--nmx-text) 8%, transparent);
+.nmx-shell .nmx-visual-tab-switch.is-sound.is-on:hover { background: color-mix(in srgb, #5865f2 28%, transparent); }
+.nmx-shell .nmx-visual-tab-switch.is-sound.is-off { color: #f0b232; }
+.nmx-shell .nmx-visual-tab-switch.is-sound.is-off:hover { background: color-mix(in srgb, #f0b232 14%, transparent); }
+.nmx-shell.nmx-theme-light .nmx-visual-tab-switch.is-input.is-on {
+    color: #0f6b2c; background: rgba(35, 165, 90, .12); box-shadow: inset 0 0 0 1px rgba(15, 107, 44, .34), 0 0 12px -4px rgba(35, 165, 90, .55);
 }
-.nmx-shell .nmx-visual-tab-switch.is-sound.is-off[data-state]::after {
-    color: #b45309; background: color-mix(in srgb, #f59e0b 20%, transparent);
+.nmx-shell.nmx-theme-light .nmx-visual-tab-switch.is-input.is-on:hover { background: rgba(35, 165, 90, .18); }
+.nmx-shell.nmx-theme-light .nmx-visual-tab-switch.is-sound.is-on {
+    color: #4752c4; background: rgba(88, 101, 242, .12); box-shadow: inset 0 0 0 1px rgba(71, 82, 196, .34), 0 0 12px -4px rgba(88, 101, 242, .55);
 }
-.nmx-theme-dark .nmx-visual-tab-switch.is-sound.is-off[data-state]::after,
-.nmx-shell.nmx-theme-dark .nmx-visual-tab-switch.is-sound.is-off[data-state]::after,
-[data-nmx-theme='dark'] .nmx-shell .nmx-visual-tab-switch.is-sound.is-off[data-state]::after,
-.nmx-shell[data-nmx-theme='dark'] .nmx-visual-tab-switch.is-sound.is-off[data-state]::after {
-    color: #fbbf24; background: color-mix(in srgb, #f59e0b 22%, transparent);
+.nmx-shell.nmx-theme-light .nmx-visual-tab-switch.is-sound.is-on:hover { background: rgba(88, 101, 242, .18); }
+.nmx-shell.nmx-theme-light .nmx-visual-tab-switch.is-sound.is-off { color: #8a4600; }
+.nmx-shell.nmx-theme-light .nmx-visual-tab-switch.is-sound.is-off:hover { background: rgba(240, 178, 50, .16); }
+/* 插件市场: the open hub keeps the button pressed; a dot while a plugin runs (amber while paused). */
+.nmx-shell .nmx-visual-tab-icon-btn.nmx-plugin-tab-market.is-active { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 12%, transparent); }
+.nmx-shell .nmx-plugin-tab-market-dot {
+    position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%;
+    background: #23a55a; box-shadow: 0 0 0 2px var(--nmx-bg, #151515); pointer-events: none;
 }
-.nmx-shell .nmx-visual-tab-switch.is-on[data-state]::after {
-    color: var(--nmx-accent, #d14a79); background: color-mix(in srgb, var(--nmx-accent, #d14a79) 18%, transparent);
+.nmx-shell .nmx-plugin-tab-market-dot.is-paused { background: #f0b232; }
+.nmx-shell.nmx-theme-light .nmx-plugin-tab-market-dot { background: #1a7f37; }
+.nmx-shell.nmx-theme-light .nmx-plugin-tab-market-dot.is-paused { background: #b7791f; }
+
+/* Plans: a clock with their count right before 键鼠; a drawer of switches beneath it on hover, focus or a click. */
+.nmx-shell .nmx-visual-tab-schedule { position: relative; flex: none; display: inline-flex; align-items: center; }
+.nmx-shell .nmx-visual-tab-icon-btn.nmx-visual-tab-schedule-trigger { width: auto; padding: 0 6px 0 5px; }
+.nmx-shell .nmx-visual-tab-schedule-count {
+    display: inline-grid; place-items: center; box-sizing: border-box; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 999px;
+    color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 13%, transparent);
+    font-size: 10px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
 }
-.nmx-shell .nmx-visual-tab-switch:has(> input:focus-visible) { outline: 2px solid var(--nmx-focus, #6b8afd); outline-offset: 1px; }
-.nmx-shell .nmx-visual-tab-switch .codicon { font-size: 13px; }
+.nmx-shell .nmx-visual-tab-schedule.has-active .nmx-visual-tab-schedule-trigger { color: #a3abff; }
+.nmx-shell .nmx-visual-tab-schedule.has-active .nmx-visual-tab-schedule-count { color: #ffffff; background: #5865f2; }
+.nmx-shell .nmx-visual-tab-schedule.is-open .nmx-visual-tab-schedule-trigger { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 11%, transparent); }
+.nmx-shell.nmx-theme-light .nmx-visual-tab-schedule.has-active .nmx-visual-tab-schedule-trigger { color: #4752c4; }
+.nmx-shell.nmx-theme-light .nmx-visual-tab-schedule.has-active .nmx-visual-tab-schedule-count { background: #4752c4; }
+.nmx-shell .nmx-visual-tab-schedule-drawer {
+    position: absolute; z-index: 45; inset-block-start: calc(100% + 8px); inset-inline-end: -4px;
+    box-sizing: border-box; width: min(320px, calc(100vw - 24px)); padding: 5px;
+    border-radius: 12px; color: var(--nmx-text); font-size: 12px; line-height: 1.4; white-space: normal;
+    background: var(--nmx-menu-background, var(--nmx-panel, #242123));
+    box-shadow: 0 16px 40px rgba(0, 0, 0, .42), 0 2px 8px rgba(0, 0, 0, .28), 0 0 0 1px color-mix(in srgb, var(--nmx-text) 10%, transparent);
+    transform-origin: top right;
+    animation: nmx-visual-tab-schedule-in 170ms cubic-bezier(.22, 1, .36, 1) both;
+}
+/* The bridge over the gap: the pointer travels from the clock to the drawer without leaving either. */
+.nmx-shell .nmx-visual-tab-schedule-drawer::before { content: ''; position: absolute; inset-inline: 0; inset-block-start: -10px; height: 10px; }
+@keyframes nmx-visual-tab-schedule-in {
+    from { opacity: 0; transform: translateY(-4px) scale(.98); }
+    to { opacity: 1; transform: none; }
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab-schedule-drawer {
+    background: #ffffff;
+    box-shadow: 0 14px 34px rgba(36, 28, 33, .16), 0 2px 6px rgba(36, 28, 33, .08), 0 0 0 1px rgba(36, 28, 33, .1);
+}
+.nmx-shell .nmx-visual-tab-schedule-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 0 0 3px; padding: 5px 7px 7px;
+    box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--nmx-text) 9%, transparent);
+}
+.nmx-shell .nmx-visual-tab-schedule-drawer .nmx-visual-tab-schedule-head > strong { color: var(--nmx-text); font-size: 12px; font-weight: 700; }
+.nmx-shell .nmx-visual-tab-schedule-head > small { color: var(--nmx-muted); font-size: 10.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nmx-shell .nmx-visual-tab-schedule-list {
+    display: grid; gap: 1px; margin: 0; padding: 0; list-style: none;
+    max-height: min(320px, 60vh); overflow-y: auto; overscroll-behavior: contain;
+}
+.nmx-shell .nmx-visual-tab-schedule-item {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
+    padding: 6px 4px 6px 8px; border-radius: 8px; transition: background-color 120ms ease;
+}
+.nmx-shell .nmx-visual-tab-schedule-item:hover { background: color-mix(in srgb, var(--nmx-text) 6%, transparent); }
+.nmx-shell .nmx-visual-tab-schedule-text { display: grid; gap: 1px; min-width: 0; }
+.nmx-shell .nmx-visual-tab-schedule-drawer .nmx-visual-tab-schedule-text > strong {
+    overflow: hidden; color: var(--nmx-text); font-size: 12.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap;
+}
+.nmx-shell .nmx-visual-tab-schedule-text > small {
+    overflow: hidden; color: var(--nmx-muted); font-size: 11px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap;
+}
+.nmx-shell .nmx-visual-tab-schedule-item:not(.is-enabled) .nmx-visual-tab-schedule-text { opacity: .72; }
+/* An iOS / macOS switch: a pill track (#34C759 when on), a white thumb with a soft lift that springs across. */
+.nmx-shell .nmx-apple-switch {
+    position: relative; flex: none; box-sizing: border-box; width: 36px; height: 22px; min-width: 36px; min-height: 22px; margin: 0; padding: 0;
+    border: 0; border-radius: 999px; background: rgba(120, 120, 128, .36); cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08);
+    transition: background-color 220ms ease, box-shadow 220ms ease;
+}
+.nmx-shell .nmx-apple-switch[aria-checked='true'] { background: #34c759; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .04); }
+.nmx-shell .nmx-apple-switch-thumb {
+    position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 999px; background: #ffffff;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, .26), 0 1px 1px rgba(0, 0, 0, .14), 0 0 0 .5px rgba(0, 0, 0, .05);
+    transition: transform 260ms cubic-bezier(.3, 1.35, .5, 1), width 160ms ease;
+    pointer-events: none;
+}
+.nmx-shell .nmx-apple-switch[aria-checked='true'] > .nmx-apple-switch-thumb { transform: translateX(14px); }
+.nmx-shell .nmx-apple-switch:not(:disabled):active > .nmx-apple-switch-thumb { width: 22px; }
+.nmx-shell .nmx-apple-switch[aria-checked='true']:not(:disabled):active > .nmx-apple-switch-thumb { transform: translateX(10px); }
+.nmx-shell .nmx-apple-switch:dir(rtl) > .nmx-apple-switch-thumb { left: auto; right: 2px; }
+.nmx-shell .nmx-apple-switch[aria-checked='true']:dir(rtl) > .nmx-apple-switch-thumb { transform: translateX(-14px); }
+.nmx-shell .nmx-apple-switch:focus-visible { outline: 2px solid var(--nmx-focus-ring, #6b8afd); outline-offset: 2px; }
+.nmx-shell .nmx-apple-switch:disabled { opacity: .42; cursor: not-allowed; }
+.nmx-shell.nmx-theme-light .nmx-apple-switch { background: #e3e3e8; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .06); }
+.nmx-shell.nmx-theme-light .nmx-apple-switch[aria-checked='true'] { background: #34c759; }
+.nmx-shell .nmx-visual-tab-schedule-delete {
+    display: inline-grid; place-items: center; box-sizing: border-box; width: 26px; height: 26px; min-width: 26px; min-height: 26px; margin: 0; padding: 0;
+    border: 0; border-radius: 7px; color: var(--nmx-muted); background: transparent; cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+.nmx-shell .nmx-visual-tab-schedule-delete:hover { color: #ff6b6e; background: rgba(242, 63, 66, .15); }
+.nmx-shell .nmx-visual-tab-schedule-delete:focus-visible { outline: 2px solid var(--nmx-focus-ring, #6b8afd); outline-offset: 1px; }
+.nmx-shell .nmx-visual-tab-schedule-delete > .nmx-tab-glyph { display: block; pointer-events: none; }
+/* Armed by the first click (the scheduled page's red, a white glyph): a second click within 4 seconds deletes the plan. */
+.nmx-shell .nmx-visual-tab-schedule-delete.is-armed { color: #ffffff; background: var(--nmxv-danger-fill, #c64541); }
+.nmx-shell .nmx-visual-tab-schedule-delete.is-armed:is(:hover, :active) { color: #ffffff; background: color-mix(in srgb, var(--nmxv-danger-fill, #c64541) 86%, #000000); }
 .nmx-shell .nmx-visual-tab-screen > video { cursor: default; }
 /* The strip lights up while a torn-off tab is dragged back onto it. */
 .nmx-shell .nmx-conversation-tabs.is-drop-target { box-shadow: inset 0 -2px 0 var(--nmx-accent, #d14a79); background: color-mix(in srgb, var(--nmx-accent, #d14a79) 8%, transparent); }
 .nmx-shell .nmx-visual-tab.is-pointer .nmx-visual-tab-screen > video { cursor: pointer; }
 /* The hidden field that takes keys and input-method composition while 键鼠 is on. */
 .nmx-shell .nmx-visual-tab-keys { position: absolute; inset-inline-start: 12px; inset-block-end: 12px; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; resize: none; pointer-events: none; }
+/* Where the window shows: two icons in one segmented control (only in the tab · also on the desktop). */
 .nmx-shell .nmx-visual-tab-place {
-    flex: none; display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--nmx-border); border-radius: 8px;
-    background: color-mix(in srgb, var(--nmx-text) 4%, var(--nmx-bg));
+    flex: none; display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 9px;
+    background: color-mix(in srgb, var(--nmx-text) 6%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nmx-text) 8%, transparent);
 }
-.nmx-shell .nmx-visual-tab-place > button, .nmx-shell .nmx-visual-tab-action {
-    display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border: 0; border-radius: 6px;
-    color: var(--nmx-muted); background: transparent; font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer;
+.nmx-shell .nmx-visual-tab-place > .nmx-visual-tab-place-btn {
+    display: inline-grid; place-items: center; box-sizing: border-box; width: 28px; height: 22px; min-width: 28px; min-height: 22px; margin: 0; padding: 0;
+    border: 0; border-radius: 7px; color: var(--nmx-muted); background: transparent; font: inherit; line-height: 1; cursor: pointer;
+    transition: background-color 140ms ease, color 140ms ease, box-shadow 180ms ease;
 }
-.nmx-shell .nmx-visual-tab-place > button[aria-pressed='true'] { color: var(--nmx-text); background: var(--nmx-bg); box-shadow: 0 1px 2px rgba(0, 0, 0, .12), 0 0 0 1px var(--nmx-border); font-weight: 600; }
-.nmx-shell .nmx-visual-tab-place > button:not([aria-pressed='true']):hover, .nmx-shell .nmx-visual-tab-action:hover { color: var(--nmx-text); background: color-mix(in srgb, currentColor 10%, transparent); }
-.nmx-shell .nmx-visual-tab-place > button:disabled, .nmx-shell .nmx-visual-tab-action:disabled { opacity: .55; cursor: default; }
-.nmx-shell .nmx-visual-tab-action { flex: none; border: 1px solid var(--nmx-border); }
-.nmx-shell .nmx-visual-tab-place .codicon, .nmx-shell .nmx-visual-tab-action .codicon { font-size: 13px; }
+.nmx-shell .nmx-visual-tab-place > .nmx-visual-tab-place-btn:not([aria-pressed='true']):not(:disabled):hover { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 9%, transparent); }
+.nmx-shell .nmx-visual-tab-place > .nmx-visual-tab-place-btn[aria-pressed='true'] {
+    color: var(--nmx-text); background: var(--nmx-panel, var(--nmx-bg));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 0 0 1px color-mix(in srgb, var(--nmx-text) 12%, transparent);
+}
+.nmx-shell .nmx-visual-tab-place > .nmx-visual-tab-place-btn[aria-disabled='true'] { opacity: .5; cursor: help; }
+.nmx-shell .nmx-visual-tab-place > .nmx-visual-tab-place-btn:disabled { opacity: .55; cursor: default; }
+.nmx-shell .nmx-visual-tab-place > .nmx-visual-tab-place-btn:focus-visible { outline: 2px solid var(--nmx-focus-ring, #6b8afd); outline-offset: 1px; }
+.nmx-shell .nmx-visual-tab-place > .nmx-visual-tab-place-btn > .nmx-tab-glyph { display: block; pointer-events: none; }
+.nmx-shell.nmx-theme-light .nmx-visual-tab-place > .nmx-visual-tab-place-btn[aria-pressed='true'] { background: #ffffff; box-shadow: 0 1px 2px rgba(36, 28, 33, .14), 0 0 0 1px rgba(36, 28, 33, .1); }
 .nmx-shell .nmx-visual-tab-note {
     /* At the top: the composer floats over the bottom of the tab. */
     position: absolute; inset-block-start: 10px; inset-inline-start: 50%; transform: translateX(-50%); margin: 0;
@@ -1647,6 +1790,45 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
     color: #f5f5f7; background: rgba(24, 24, 28, .72); font-size: 12px; pointer-events: none; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
 [dir='rtl'] .nmx-shell .nmx-visual-tab-note, .nmx-shell[dir='rtl'] .nmx-visual-tab-note { transform: translateX(50%); }
+/* "Reopen in real-time mode" (Windows, LiveTabView's RealtimeLaunchPrompt): an infobar between the tab's header and
+   its picture, as Chromium's infobars and VS Code's editor banners, so it never covers the app's own controls (a
+   browser's tab strip, an editor's command centre); the picture shrinks to fit while it shows. The amber attention
+   card of the permission wait above the composer, in the theme's own colours. Its amber edge carries !important
+   because the light theme forces every border to one hairline (nextmux.css `.nmx-theme-light *`). Focus rings are
+   the widget's own (nextmux-desktop-production.css). */
+@keyframes nmx-visual-tab-realtime-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+.nmx-shell .nmx-visual-tab > .nmx-visual-tab-realtime {
+    --nmx-realtime-amber: #f0c75e; --nmx-realtime-body: #b9b3b6;
+    flex: 0 0 auto; box-sizing: border-box; min-width: 0; margin: 0;
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'icon copy close' 'icon actions actions'; gap: 6px 10px; align-items: start;
+    padding-block: 9px 10px; padding-inline: 12px 8px; border: 1px solid; border-color: color-mix(in srgb, #f59e0b 40%, var(--nmx-border)) !important; border-radius: 10px;
+    color: var(--nmx-text); background: color-mix(in srgb, #f59e0b 9%, var(--nmx-panel)); font-size: 12.5px; line-height: 1.45; text-align: start;
+    animation: nmx-visual-tab-realtime-in .16s ease-out;
+}
+/* Its own body ink: the theme's muted token is declared twice in the light theme, one of them below AA on amber. */
+.nmx-shell.nmx-theme-light .nmx-visual-tab > .nmx-visual-tab-realtime,
+[data-nextmux-theme='light'] .nmx-shell .nmx-visual-tab > .nmx-visual-tab-realtime { --nmx-realtime-amber: #8f5c0d; --nmx-realtime-body: #5f585c; }
+.nmx-shell .nmx-visual-tab-realtime > .codicon { grid-area: icon; margin-block-start: 1px; color: var(--nmx-realtime-amber); font-size: 16px; }
+.nmx-shell .nmx-visual-tab-realtime-copy { grid-area: copy; display: grid; gap: 2px; min-width: 0; }
+.nmx-shell .nmx-visual-tab-realtime-copy > strong { color: var(--nmx-text); font-size: 13px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.nmx-shell .nmx-visual-tab-realtime-copy > span { color: var(--nmx-realtime-body); overflow-wrap: anywhere; }
+.nmx-shell .nmx-visual-tab-realtime-copy > span.is-warning { color: var(--nmx-realtime-amber); }
+.nmx-shell .nmx-visual-tab-realtime-actions { grid-area: actions; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.nmx-shell .nmx-visual-tab-realtime-actions > button {
+    display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; max-width: 100%; height: auto; min-height: 28px; margin: 0; padding: 5px 10px;
+    border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: var(--nmx-panel);
+    font: inherit; font-size: 12px; font-weight: 600; line-height: 1.25; white-space: normal; text-align: center; overflow-wrap: anywhere; cursor: pointer;
+}
+.nmx-shell .nmx-visual-tab-realtime-actions > button:hover { background: var(--nmx-panel-2); }
+.nmx-shell .nmx-visual-tab-realtime .nmx-visual-tab-realtime-actions > button.is-primary { border-color: transparent !important; color: #fff; background: #b45309; }
+.nmx-shell .nmx-visual-tab-realtime .nmx-visual-tab-realtime-actions > button.is-primary:hover { background: #92400e; }
+.nmx-shell .nmx-visual-tab-realtime-actions > button:disabled { opacity: .55; cursor: default; }
+.nmx-shell .nmx-visual-tab-realtime > button.nmx-visual-tab-realtime-close {
+    grid-area: close; display: grid; place-items: center; box-sizing: border-box; width: 24px; height: 24px; min-height: 0; margin: -3px 0 0; padding: 0;
+    border: 0; border-radius: 6px; color: var(--nmx-muted); background: transparent; font: inherit; font-size: 14px; line-height: 1; cursor: pointer;
+}
+.nmx-shell .nmx-visual-tab-realtime > button.nmx-visual-tab-realtime-close:hover { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 8%, transparent); }
+@media (prefers-reduced-motion: reduce) { .nmx-shell .nmx-visual-tab > .nmx-visual-tab-realtime { animation: none; } }
 @media (max-width: 560px) {
     .nmx-shell .nmx-visual-tab > header { flex-wrap: wrap; }
     .nmx-shell .nmx-visual-tab-note { white-space: normal; max-width: calc(100% - 24px); text-align: center; }
@@ -1656,6 +1838,8 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
     .nmx-shell .nmx-visual-tab-screen > video { transition: none; }
     .nmx-shell .nmx-visual-tab-toast,
     .nmx-shell .nmx-visual-tab-toast.is-fading-out { animation: none; transition: none; }
+    .nmx-shell .nmx-visual-tab-schedule-drawer { animation: none; }
+    .nmx-shell :is(.nmx-visual-tab-icon-btn, .nmx-visual-tab-place-btn, .nmx-apple-switch, .nmx-apple-switch-thumb, .nmx-visual-tab-schedule-delete) { transition: none; }
 }
 .nmx-media-viewer-error { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-radius: 12px; color: #f7f7f8; background: rgba(27, 27, 29, .86); pointer-events: auto; }
 
@@ -1806,6 +1990,12 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 .nmx-shell .nmx-permission-wait-actions > button:hover { background: var(--nmx-panel-2); }
 .nmx-shell .nmx-permission-wait-actions > button.is-primary { border-color: transparent; color: #fff; background: #b45309; }
 .nmx-shell .nmx-permission-wait-actions > button.is-primary:hover { background: #92400e; }
+/* Two notes under the body (relaunch, then "turn the switch off and on again"): a hair apart, not a paragraph gap. */
+.nmx-shell .nmx-permission-wait small + small { margin-block-start: 1px; }
+/* A picked app's wait: Cancel is a quiet text button at the end of the row, never competing with the steps. The light
+   theme forces every border to one hairline (nextmux.css `.nmx-theme-light *`), so its transparent edge says so too. */
+.nmx-shell .nmx-permission-wait-actions > button.is-quiet { color: var(--nmx-muted); background: transparent; border-color: transparent !important; font-weight: 500; }
+.nmx-shell .nmx-permission-wait-actions > button.is-quiet:hover { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-text) 8%, transparent); }
 
 .nmx-shell.nmx-theme-light .nmx-composer-dock { --nmx-dock-fill: #ecebe8; }
 .nmx-shell .nmx-composer-dock::before {
@@ -2187,6 +2377,19 @@ body.nmx-window-inactive:not(.nmx-window-fullscreen):not(.nmx-modal-open):has(#n
 .nmx-shell .nmx-council-generalist-note > .codicon { flex: none; font-size: 14px; margin-top: 2px; }
 .nmx-shell .nmx-council-generalist-note > span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .nmx-shell .nmx-council-generalist-note.is-warning > .codicon { color: var(--theia-notificationsWarningIcon-foreground, #d49e53); }
+/* An own API's model list being read, or not readable, for the chosen source: one line on a light wash above the slots,
+   with its action (重试, or 前往模型中心 for a refused key). Text in the subtle tone (6.9:1 dark, 6.0:1 light; the muted
+   tone is 3.9:1 in the light modal); the button is the modal's outlined control, and the line's padding holds its 2px
+   focus ring, which .nmx-council-assignments (overflow: hidden) would otherwise clip. The button wraps under the text
+   when the column is narrow. */
+.nmx-shell .nmx-council-official-status { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; padding-block: 6px; padding-inline: 10px 6px; border: 0; border-radius: 8px; background: color-mix(in srgb, var(--nmx-text) 5%, transparent); color: var(--nmx-subtle); font-size: 12px; line-height: 1.5; }
+.nmx-shell .nmx-council-official-status > .codicon { flex: none; font-size: 14px; color: var(--nmx-subtle); }
+.nmx-shell .nmx-council-official-status:not([data-council-official-status='loading']) > .codicon { color: var(--nmx-warning, #d7a05d); }
+.nmx-shell .nmx-council-official-status > span { flex: 1 1 140px; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.nmx-shell .nmx-council-official-status > button { flex: none; display: inline-flex; align-items: center; min-height: 26px; margin-inline-start: auto; padding: 0 10px; border: 1px solid var(--nmx-border-strong); border-radius: 7px; color: var(--nmx-text); background: transparent; font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.nmx-shell .nmx-council-official-status > button:hover { border-color: color-mix(in srgb, var(--nmx-text) 28%, var(--nmx-border-strong)); background: var(--nmx-hover); }
+/* The modal's source list says 还没有自有 API / no match in the same subtle tone: its muted tone is 3.9:1 in the light theme. */
+.nmx-shell .nmx-council-source-list .nmx-relay-options > .nmx-route-empty:not(.is-warning) { color: var(--nmx-subtle); }
 .nmx-shell .nmx-council-slots-list { flex: 1 1 0; display: flex; flex-direction: column; border-top: 1px solid var(--nmx-border); min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-gutter: stable; padding-inline-end: 3px; }
 .nmx-shell .nmx-council-slot-row { display: grid; flex: none; grid-template-columns: 16px minmax(0, 1fr) 24px; align-items: center; gap: 5px 6px; padding: 8px 0; border-bottom: 1px solid var(--nmx-border); min-width: 0; }
 .nmx-shell .nmx-council-slot-row .nmx-council-slot-model { grid-column: 2; grid-row: 1; }

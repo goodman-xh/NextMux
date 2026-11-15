@@ -1,6 +1,8 @@
 import * as React from '@theia/core/shared/react';
 import * as ReactDOM from '@theia/core/shared/react-dom';
-import type { NextMuxDesktopLocale } from './nextmux-locale';
+import { desktopText, type NextMuxDesktopLocale } from './nextmux-locale';
+import { agentOutcomeText } from './nextmux-agent-outcome-locale';
+import { relayText } from './nextmux-relay-locale';
 import { transcriptionText } from './nextmux-transcription-locale';
 import { OfferingPriceHover, offeringMultiplierBps, offeringPriceText } from './nextmux-offering-price';
 import { ImeInput } from './nextmux-ime-field';
@@ -228,6 +230,13 @@ export interface ComicSetupSource {
     readonly depositVerified?: boolean;
 }
 
+/** An own API or local source not yet represented by a step candidate (e.g. saved untested without models). */
+export interface ComicPendingOwnSource {
+    readonly key: string;
+    readonly label: string;
+    readonly kind?: 'official' | 'local';
+}
+
 /**
  * The sources of one tab — relays (NextMux routing first) or the user's own APIs and this Mac — each with the
  * functions of this kind it can do, the most capable first. Relays the directory knows but whose models are not
@@ -235,7 +244,8 @@ export interface ComicSetupSource {
  */
 export function comicSetupSources(steps: readonly ComicModelSetupStep[], tab: 'relay' | 'own',
     pending: Partial<Record<ComicStepCapability, readonly ComicStepRelay[]>> = {},
-    deposits?: ReadonlyMap<string, boolean>): readonly ComicSetupSource[] {
+    deposits?: ReadonlyMap<string, boolean>,
+    pendingOwn: readonly ComicPendingOwnSource[] = []): readonly ComicSetupSource[] {
     const order = steps.map(step => step.capability);
     const bySource = new Map<string, { key: string; kind: ComicStepSource['kind']; label: string; steps: Set<ComicStepCapability>; listed: Set<ComicStepCapability>; rank: number; offeringDeposit: boolean }>();
     for (const step of steps) for (const candidate of step.candidates) {
@@ -250,6 +260,19 @@ export function comicSetupSources(steps: readonly ComicModelSetupStep[], tab: 'r
         const entry = bySource.get(relay.key) || { key: relay.key, kind: 'managed' as const, label: relay.label, steps: new Set<ComicStepCapability>(), listed: new Set<ComicStepCapability>(), rank: Number.MAX_SAFE_INTEGER, offeringDeposit: false };
         if (!entry.steps.has(step.capability)) entry.listed.add(step.capability);
         bySource.set(entry.key, entry);
+    }
+    if (tab === 'own') for (const own of pendingOwn) {
+        if (!bySource.has(own.key)) {
+            bySource.set(own.key, {
+                key: own.key,
+                kind: own.kind || 'official',
+                label: own.label,
+                steps: new Set<ComicStepCapability>(),
+                listed: new Set<ComicStepCapability>(),
+                rank: Number.MAX_SAFE_INTEGER,
+                offeringDeposit: false
+            });
+        }
     }
     const kindOrder: Readonly<Record<ComicStepSource['kind'], number>> = { automatic: 0, official: 0, managed: 1, local: 2 };
     const sorted = (set: Set<ComicStepCapability>): ComicStepCapability[] => order.filter(capability => set.has(capability));
@@ -294,6 +317,14 @@ export interface ComicModelSetupProps {
     readonly depositVerified?: ReadonlyMap<string, boolean>;
     /** What the directory shows of each listed relay (public number, introduction), by source key, for the hint of a deposit-verified name. */
     readonly storeProfiles?: ReadonlyMap<string, Omit<DepositVerifiedStore, 'name'>>;
+    /** Own APIs whose model lists are not loaded yet (or whose discovery failed) so they appear in the 自有 API tab. */
+    readonly pendingOwnSources?: readonly ComicPendingOwnSource[];
+    /** Discovery state for the currently selected official API source, when active. */
+    readonly officialSourceLoading?: boolean;
+    readonly officialSourceFailed?: boolean;
+    readonly officialSourceAuthFailed?: boolean;
+    readonly onRetryOfficialSource?: () => void;
+    readonly onOpenModelCenter?: () => void;
     /** The relay whose models are being read. */
     readonly loadingRelayKey?: string;
     readonly busy?: boolean;
@@ -428,12 +459,12 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
     const step = props.steps.find(item => item.capability === active) || props.steps[0];
     const pending = props.pendingRelays || {};
     const relaySources = React.useMemo(() => comicSetupSources(props.steps, 'relay', pending, props.depositVerified), [props.steps, pending, props.depositVerified]);
-    const ownSources = React.useMemo(() => comicSetupSources(props.steps, 'own'), [props.steps]);
+    const ownSources = React.useMemo(() => comicSetupSources(props.steps, 'own', undefined, undefined, props.pendingOwnSources), [props.steps, props.pendingOwnSources]);
     const sources = tab === 'relay' ? relaySources : ownSources;
     const needle = query.trim().toLocaleLowerCase();
     const shown = needle ? sources.filter(source => sourceName(source).toLocaleLowerCase().includes(needle)) : sources;
     const chosenSource = [...relaySources, ...ownSources].find(source => source.key === chosen);
-    const loadingChosen = Boolean(chosen) && props.loadingRelayKey === chosen;
+    const loadingChosen = Boolean(chosen) && (props.loadingRelayKey === chosen || Boolean(props.officialSourceLoading));
     function sourceName(source: Pick<ComicStepSource, 'kind' | 'label'>): string {
         return source.kind === 'automatic' ? comicStepText(props.locale, 'automatic') : source.kind === 'local' ? comicStepText(props.locale, 'local') : source.label;
     }
@@ -485,7 +516,7 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
         <div ref={sourceList} className='nmx-comic-setup-sources' role='listbox' aria-label={p(tab === 'relay' ? 'relays' : 'ownApis')}>
             {shown.map(source => {
                 const selected = source.key === chosen;
-                const loading = props.loadingRelayKey === source.key;
+                const loading = props.loadingRelayKey === source.key || (selected && Boolean(props.officialSourceLoading));
                 return <button key={source.key} type='button' role='option' aria-selected={selected} className={`nmx-comic-setup-source ${selected ? 'is-selected' : ''}`}
                     onClick={() => choose(source.key)}>
                     {sourceIcon(source)}{sourceCopy(source)}
@@ -512,9 +543,24 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
             const match = item.candidates.find(other => other.source.key === chosen && other.model.toLowerCase() === candidate.model.toLowerCase());
             return match ? [[item.capability, match.key]] : [];
         }));
+        const officialActive = Boolean(chosen && chosen.startsWith('official:'));
         const empty = (): React.ReactNode => {
             if (!chosen) return <p className='nmx-comic-setup-hint'>{p('noSource')}</p>;
             if (loadingChosen || props.busy && !here.length) return <p className='nmx-comic-setup-hint'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>{p('loadingRelay')}</p>;
+            if (officialActive && props.officialSourceFailed) {
+                return <div className='nmx-comic-setup-gap' role='status' data-comic-official-status={props.officialSourceAuthFailed ? 'auth_failed' : 'failed'}>
+                    <p><i className='codicon codicon-warning' aria-hidden='true'></i><span>{props.officialSourceAuthFailed ? agentOutcomeText(props.locale, 'api_key_rejected') : relayText(props.locale, 'modelsFailed')}</span></p>
+                    {selected && !covered && <small data-nmx-literal>{p('usingOther', { model: selected.label, source: comicStepSourceLabel(props.locale, selected.source) })}</small>}
+                    <div>
+                        {props.officialSourceAuthFailed && props.onOpenModelCenter
+                            ? <button type='button' className='nmx-link-button' onClick={props.onOpenModelCenter}>{relayText(props.locale, 'openModelCenter')}</button>
+                            : !props.officialSourceAuthFailed && props.onRetryOfficialSource
+                                ? <button type='button' className='nmx-link-button' onClick={props.onRetryOfficialSource}>{desktopText(props.locale, 'retry')}</button>
+                                : null}
+                        <button type='button' className='nmx-link-button' onClick={openSources}>{p('changeSource')}</button>
+                    </div>
+                </div>;
+            }
             return <div className='nmx-comic-setup-gap'>
                 <p><i className='codicon codicon-info' aria-hidden='true'></i><span>{p('sourceLacks', { source: sourceLabel || p('sourceTitle'), step: label(current.capability) })}</span></p>
                 {selected && !covered && <small data-nmx-literal>{p('usingOther', { model: selected.label, source: comicStepSourceLabel(props.locale, selected.source) })}</small>}
@@ -527,6 +573,24 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
         return <div className='nmx-comic-setup-models' role='tabpanel' id={`${id}-pane`} aria-labelledby={`${id}-step-${current.capability}`}>
             {covered && <p className='nmx-comic-setup-covered'><i className='codicon codicon-check' aria-hidden='true'></i>{p('covered', { model: props.soundVideoModel! })}</p>}
             {elsewhere && here.length > 0 && <p className='nmx-comic-setup-covered is-elsewhere' data-nmx-literal><i className='codicon codicon-check' aria-hidden='true'></i>{p('usingOther', { model: selected!.label, source: comicStepSourceLabel(props.locale, selected!.source) })}</p>}
+            {here.length > 0 && officialActive && (props.officialSourceLoading || props.officialSourceFailed) && (
+                <div className='nmx-comic-setup-status' role='status' data-comic-official-status={props.officialSourceLoading ? 'loading' : props.officialSourceAuthFailed ? 'auth_failed' : 'failed'}>
+                    <i className={`codicon codicon-${props.officialSourceLoading ? 'loading codicon-modifier-spin' : 'warning'}`} aria-hidden='true' />
+                    <span>
+                        {props.officialSourceLoading
+                            ? relayText(props.locale, 'modelsLoading')
+                            : props.officialSourceAuthFailed
+                                ? agentOutcomeText(props.locale, 'api_key_rejected')
+                                : relayText(props.locale, 'modelsUnavailable')}
+                    </span>
+                    {!props.officialSourceLoading && props.officialSourceAuthFailed && props.onOpenModelCenter && (
+                        <button type='button' onClick={props.onOpenModelCenter}>{relayText(props.locale, 'openModelCenter')}</button>
+                    )}
+                    {!props.officialSourceLoading && !props.officialSourceAuthFailed && props.onRetryOfficialSource && (
+                        <button type='button' onClick={props.onRetryOfficialSource}>{desktopText(props.locale, 'retry')}</button>
+                    )}
+                </div>
+            )}
             {here.length ? <div className='nmx-comic-setup-list' role='listbox' aria-label={label(current.capability)}>
                 {here.map((candidate, index) => {
                     const isChosen = !covered && selected?.key === candidate.key;

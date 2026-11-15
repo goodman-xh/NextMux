@@ -13,7 +13,8 @@ import type {
     DesktopAgentChildSnapshot,
     DesktopAgentCouncilSlot
 } from '../common/nextmux-platform-protocol';
-import type { NextMuxDesktopLocale } from './nextmux-locale';
+import { desktopText, type NextMuxDesktopLocale } from './nextmux-locale';
+import { agentOutcomeText } from './nextmux-agent-outcome-locale';
 import { councilModeText, councilRoleLabel } from './nextmux-council-mode-locale';
 import { councilValidationMessage } from './nextmux-council-validation';
 import { ModelAuthenticityTag } from './nextmux-model-authenticity';
@@ -635,6 +636,11 @@ export interface CouncilConfigModalProps {
     readonly renderModelOptionHoverPortal?: (model: CouncilModelCandidate) => React.ReactNode;
     readonly errorMessage?: string;
     readonly configWarning?: string;
+    readonly officialModelsLoading?: boolean;
+    readonly officialModelsFailed?: boolean;
+    readonly officialModelsAuthFailed?: boolean;
+    readonly onRetryOfficialRelay?: () => void;
+    readonly onOpenModelCenter?: () => void;
     readonly agentRunning?: boolean;
     readonly closing?: boolean;
 }
@@ -660,6 +666,11 @@ export const CouncilConfigModal: React.FC<CouncilConfigModalProps> = props => {
         onDismissDropdowns,
         errorMessage,
         configWarning,
+        officialModelsLoading,
+        officialModelsFailed,
+        officialModelsAuthFailed,
+        onRetryOfficialRelay,
+        onOpenModelCenter,
         agentRunning
     } = props;
 
@@ -829,6 +840,38 @@ export const CouncilConfigModal: React.FC<CouncilConfigModalProps> = props => {
                             <i className={`codicon codicon-${hasGeneralist ? 'pass-filled' : 'warning'}`} aria-hidden='true' />
                             <span>{councilModeText(locale, hasGeneralist ? 'generalistReady' : 'generalistWarning')}</span>
                         </div>}
+
+                        {relayKey && (officialModelsLoading || officialModelsFailed) && (
+                            <div
+                                className='nmx-council-official-status nmx-merchant-catalog-status'
+                                role='status'
+                                data-council-official-status={officialModelsLoading ? 'loading' : officialModelsAuthFailed ? 'auth_failed' : 'failed'}
+                            >
+                                <i
+                                    className={`codicon codicon-${officialModelsLoading ? 'loading codicon-modifier-spin' : 'warning'}`}
+                                    aria-hidden='true'
+                                />
+                                <span>
+                                    {officialModelsLoading
+                                        ? relayText(locale, 'modelsLoading')
+                                        : officialModelsAuthFailed
+                                            ? agentOutcomeText(locale, 'api_key_rejected')
+                                            : models.length > 0
+                                                ? relayText(locale, 'modelsUnavailable')
+                                                : relayText(locale, 'modelsFailed')}
+                                </span>
+                                {!officialModelsLoading && officialModelsAuthFailed && onOpenModelCenter && (
+                                    <button type='button' onClick={onOpenModelCenter}>
+                                        {relayText(locale, 'openModelCenter')}
+                                    </button>
+                                )}
+                                {!officialModelsLoading && !officialModelsAuthFailed && onRetryOfficialRelay && (
+                                    <button type='button' onClick={onRetryOfficialRelay}>
+                                        {desktopText(locale, 'retry')}
+                                    </button>
+                                )}
+                            </div>
+                        )}
 
                         <div className='nmx-council-slots-list'>
                             {slots.map((slot, index) => {
@@ -1020,15 +1063,26 @@ export const CouncilConfigModal: React.FC<CouncilConfigModalProps> = props => {
                         </div>
                     </div>
 
-                    {(errorMessage || !validation.valid && relayKey || configWarning) && (
-                        <p className='nmx-council-validation-error' role='alert'>
-                            <i className='codicon codicon-error' aria-hidden='true' />
-                            <span>
-                                {errorMessage || (relayKey && !validation.valid
-                                    ? councilValidationMessage(locale, validation.error) : configWarning)}
-                            </span>
-                        </p>
-                    )}
+                    {(() => {
+                        const suppressMissingModel = Boolean(
+                            !errorMessage
+                            && relayKey
+                            && !validation.valid
+                            && validation.error === 'slot_model_required'
+                            && models.length === 0
+                            && (officialModelsLoading || officialModelsFailed)
+                        );
+                        if (!errorMessage && (!relayKey || validation.valid || suppressMissingModel) && !configWarning) return null;
+                        return (
+                            <p className='nmx-council-validation-error' role='alert'>
+                                <i className='codicon codicon-error' aria-hidden='true' />
+                                <span>
+                                    {errorMessage || (relayKey && !validation.valid && !suppressMissingModel
+                                        ? councilValidationMessage(locale, validation.error) : configWarning)}
+                                </span>
+                            </p>
+                        );
+                    })()}
                 </div>
 
                 <footer className='nmx-council-modal-footer'>

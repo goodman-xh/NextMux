@@ -3,6 +3,9 @@ import type { NextMuxDesktopLocale } from './nextmux-locale';
 import { CONVERSATION_TAB_ID, selectTabWindow, tabWindowItemLabel, tabWindows, type ConversationVisualTab } from './nextmux-conversation-tabs';
 import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
 import { ConversationWindowInputQueue } from './nextmux-window-input-queue';
+import { goalScheduleText } from './nextmux-goal-schedule-locale';
+import { SurfaceTooltips } from './nextmux-surface-tooltips';
+import { bridgeLiveVideo, liveBridgeShown, nudgeLiveVideoBridge } from './nextmux-live-frame-bridge';
 
 type TabsTextKey = 'strip' | 'conversation' | 'closeConversation' | 'closeTab' | 'connecting' | 'connected' | 'disconnected' | 'error'
     | 'desktopEmpty' | 'desktopHint' | 'remoteDesktop' | 'localDesktop' | 'virtualMachine';
@@ -157,7 +160,9 @@ type WindowTextKey = 'live' | 'lastFrame' | 'onlyInTab' | 'alsoOnDesktop' | 'pla
     | 'parkForeground' | 'parkUwp' | 'parkMinimized' | 'parkMissing' | 'lockUnavailable'
     | 'reopenApp' | 'reopenRunningTitle' | 'reopenRunningBody' | 'reopenRunningConfirm' | 'reopenFailed'
     | 'windowOwned' | 'controlHint' | 'dismissNotice' | 'escStopped' | 'resumeControl'
-    | 'terminateBubble' | 'terminateTitle' | 'terminateBody' | 'terminateConfirm' | 'terminateCancel' | 'terminateFailed';
+    | 'terminateBubble' | 'terminateTitle' | 'terminateBody' | 'terminateConfirm' | 'terminateCancel' | 'terminateFailed'
+    | 'schedules' | 'scheduleSummary' | 'scheduleDelete' | 'scheduleDeleteConfirm'
+    | 'realtimeTitle' | 'realtimeReopen' | 'realtimeBody' | 'realtimeConfirm' | 'realtimeUnavailable';
 
 const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<WindowTextKey, string>>>> = {
     'zh-CN': { live: '实时', lastFrame: '最近画面', onlyInTab: '只在标签', alsoOnDesktop: '也在桌面', placement: '窗口显示位置',
@@ -167,7 +172,9 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         waiting: '等待画面', parkForeground: 'Windows 上 AI 只能操作显示在桌面上的窗口，所以这个窗口会留在桌面', parkUwp: '这个应用不接受后台操作，窗口需要留在桌面', parkMinimized: '窗口已最小化：先还原它，AI 才能看到并操作', parkMissing: '找不到这个窗口，它可能已关闭', lockUnavailable: '桌面上的窗口始终可以直接操作',
         reopenApp: "重新打开", reopenRunningTitle: "该应用已经在运行中，是否关闭重新打开？", reopenRunningBody: "关闭当前正在运行的「{app}」并重新打开到当前标签中。", reopenRunningConfirm: "关闭并重新打开", reopenFailed: "未能重新打开应用，请稍后再试",
         dismissNotice: "关闭通知", windowOwned: "该应用窗口已在另一段对话中打开，请先在原对话关闭标签。", controlHint: "按Esc可以退出插件控制(请先关闭键鼠)", escStopped: "已按 Esc 退出桌面控制：本轮 AI 不再操作电脑窗口，会改用其他方式继续。", resumeControl: "恢复控制",
-        terminateBubble: '点我关闭进程', terminateTitle: '结束「{app}」进程？', terminateBody: '将关闭「{app}」窗口并结束其运行进程，未保存的内容可能会丢失。', terminateConfirm: '结束进程', terminateCancel: '取消', terminateFailed: '未能结束进程，请稍后再试' },
+        terminateBubble: '点我关闭进程', terminateTitle: '结束「{app}」进程？', terminateBody: '将关闭「{app}」窗口并结束其运行进程，未保存的内容可能会丢失。', terminateConfirm: '结束进程', terminateCancel: '取消', terminateFailed: '未能结束进程，请稍后再试',
+        schedules: '计划任务', scheduleSummary: '{count} 个计划 · {on} 个已启用', scheduleDelete: '删除计划', scheduleDeleteConfirm: '再点一次删除计划',
+        realtimeTitle: '「{app}」在后台会暂停画面', realtimeReopen: '以实时模式重新打开', realtimeBody: '浏览器和 Electron 类应用在窗口被隐藏时会停止绘制，这个标签的画面可能会卡住。以实时模式重新打开即可保持画面实时。', realtimeConfirm: '「{app}」会先关闭再重新打开，其中未保存的内容可能会丢失。', realtimeUnavailable: '这个应用无法以实时模式打开。选择「也在桌面」可保持画面实时。' },
     'zh-TW': { live: '即時', lastFrame: '最近畫面', onlyInTab: '只在分頁', alsoOnDesktop: '也在桌面', placement: '視窗顯示位置',
         inTabHint: '視窗在背景執行，不佔用你的桌面', switchToWindow: '切到此視窗', moveFailed: '視窗無法移動，請稍後再試',
         mouse: '鍵鼠', mouseHint: '開啟後可以在分頁內點按、捲動和打字；關閉時分頁內僅由 AI 和外掛操作，桌面上的視窗始終可以直接操作。', mouseOff: '鍵鼠已關閉：開啟「鍵鼠」後才能在分頁內操作這個視窗', inputBlocked: '「{app}」正由 AI 操作：在它的分頁裡開啟「鍵鼠」後，你就能在分頁內操作。', sound: '聲音', soundHint: '關閉時這個 App 保持靜音', soundFailed: '無法切換聲音：需要「螢幕與系統錄音」權限', switchOn: '已開', switchOff: '已關', soundOff: '已靜音',
@@ -175,7 +182,9 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         waiting: '等待畫面', parkForeground: 'Windows 上 AI 只能操作顯示在桌面上的視窗，所以這個視窗會留在桌面', parkUwp: '這個 App 不接受背景操作，視窗需要留在桌面', parkMinimized: '視窗已最小化：先還原它，AI 才能看到並操作', parkMissing: '找不到這個視窗，它可能已關閉', lockUnavailable: '桌面上的視窗始終可以直接操作',
         reopenApp: "重新開啟", reopenRunningTitle: "此 App 已在執行中，是否關閉並重新開啟？", reopenRunningBody: "關閉目前正在執行的「{app}」，並在目前分頁中重新開啟。", reopenRunningConfirm: "關閉並重新開啟", reopenFailed: "無法重新開啟 App，請稍後再試",
         dismissNotice: "關閉通知", windowOwned: "此應用程式視窗已在另一段對話中開啟，請先在原對話關閉分頁。", controlHint: "按Esc可以退出外掛控制(請先關閉鍵鼠)", escStopped: "已按 Esc 結束桌面控制：本輪 AI 不再操作電腦視窗，會改用其他方式繼續。", resumeControl: "恢復控制",
-        terminateBubble: '點我關閉處理程序', terminateTitle: '結束「{app}」處理程序？', terminateBody: '將關閉「{app}」視窗並結束其執行中的處理程序，未儲存的內容可能會遺失。', terminateConfirm: '結束處理程序', terminateCancel: '取消', terminateFailed: '無法結束處理程序，請稍後再試' },
+        terminateBubble: '點我關閉處理程序', terminateTitle: '結束「{app}」處理程序？', terminateBody: '將關閉「{app}」視窗並結束其執行中的處理程序，未儲存的內容可能會遺失。', terminateConfirm: '結束處理程序', terminateCancel: '取消', terminateFailed: '無法結束處理程序，請稍後再試',
+        schedules: '排程任務', scheduleSummary: '{count} 個排程 · {on} 個已啟用', scheduleDelete: '刪除排程', scheduleDeleteConfirm: '再按一次刪除排程',
+        realtimeTitle: '「{app}」在背景會暫停畫面', realtimeReopen: '以即時模式重新開啟', realtimeBody: '瀏覽器和 Electron 類 App 在視窗被隱藏時會停止繪製，這個分頁的畫面可能會卡住。以即時模式重新開啟即可保持畫面即時。', realtimeConfirm: '「{app}」會先關閉再重新開啟，其中未儲存的內容可能會遺失。', realtimeUnavailable: '這個 App 無法以即時模式開啟。選擇「也在桌面」可保持畫面即時。' },
     en: { live: 'Live', lastFrame: 'Last frame', onlyInTab: 'Tab only', alsoOnDesktop: 'Also on desktop', placement: 'Where the window shows',
         inTabHint: 'Runs in the background, off your desktop', switchToWindow: 'Switch to window', moveFailed: 'Couldn’t move the window. Try again.',
         mouse: 'Keyboard & mouse', mouseHint: 'Turn on to click, scroll and type inside this tab. When off, only the AI and plugins control the tab; windows on the desktop can always be used directly.', mouseOff: 'Keyboard & mouse is off. Turn it on to use this window inside the tab.', inputBlocked: '“{app}” is controlled by the AI. Turn on “Keyboard & mouse” in its tab to use it inside the tab.', sound: 'Sound', soundHint: 'When off, this app stays muted', soundFailed: 'Couldn’t change the sound. NextMux needs the Screen & System Audio Recording permission.', switchOn: 'On', switchOff: 'Off', soundOff: 'Muted',
@@ -183,7 +192,9 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         waiting: 'Waiting for the picture', parkForeground: 'On Windows the AI can only work in windows shown on the desktop, so this window stays there', parkUwp: 'This app does not accept input in the background, so its window stays on the desktop', parkMinimized: 'The window is minimized: restore it so the AI can see and use it', parkMissing: 'This window can no longer be found; it may have closed', lockUnavailable: 'Windows on the desktop can always be used directly',
         reopenApp: "Reopen", reopenRunningTitle: "This app is already running. Close and reopen it?", reopenRunningBody: "Close the running “{app}” and reopen it in this tab.", reopenRunningConfirm: "Close and reopen", reopenFailed: "Couldn’t reopen the app. Try again.",
         dismissNotice: "Dismiss notification", windowOwned: "This app window is open in another conversation. Close its tab there first.", controlHint: "Press Esc to exit plugin control (turn off input first)", escStopped: "You pressed Esc to end desktop control: for the rest of this turn the AI won’t operate windows and continues another way.", resumeControl: "Resume control",
-        terminateBubble: 'Click to end process', terminateTitle: 'End “{app}” process?', terminateBody: 'This will close the “{app}” window and terminate its running process. Unsaved changes may be lost.', terminateConfirm: 'End process', terminateCancel: 'Cancel', terminateFailed: 'Couldn’t end the process. Try again.' },
+        terminateBubble: 'Click to end process', terminateTitle: 'End “{app}” process?', terminateBody: 'This will close the “{app}” window and terminate its running process. Unsaved changes may be lost.', terminateConfirm: 'End process', terminateCancel: 'Cancel', terminateFailed: 'Couldn’t end the process. Try again.',
+        schedules: 'Scheduled tasks', scheduleSummary: '{count} scheduled · {on} on', scheduleDelete: 'Delete schedule', scheduleDeleteConfirm: 'Click again to delete',
+        realtimeTitle: '{app} stops updating in the background', realtimeReopen: 'Reopen in real-time mode', realtimeBody: 'Browsers and Electron apps stop drawing while their window is hidden, so this tab may freeze. Reopen it in real-time mode to keep the picture live.', realtimeConfirm: '{app} will close and open again. Unsaved changes in it may be lost.', realtimeUnavailable: 'This app can’t be opened in real-time mode. Choose “Also on desktop” to keep the picture live.' },
     ja: { live: 'ライブ', lastFrame: '最新の画面', onlyInTab: 'タブのみ', alsoOnDesktop: 'デスクトップにも', placement: 'ウィンドウの表示場所',
         inTabHint: 'バックグラウンドで動作し、デスクトップには表示されません', switchToWindow: 'このウィンドウへ切り替え', moveFailed: 'ウィンドウを移動できませんでした。もう一度お試しください。',
         mouse: 'キー・マウス', mouseHint: 'オンにすると、このタブ内でクリック・スクロール・入力ができます。オフの間はタブ内では AI とプラグインだけが操作し、デスクトップ上のウィンドウは常に直接操作できます。', mouseOff: 'キー・マウスはオフです。オンにするとこのタブ内でウィンドウを操作できます。', inputBlocked: '「{app}」は AI が操作中です。タブで「キー・マウス」をオンにするとタブ内で操作できます。', sound: 'サウンド', soundHint: 'オフの間、このアプリは消音されます', soundFailed: 'サウンドを切り替えられませんでした。「画面とシステムオーディオの録音」の許可が必要です。', switchOn: 'オン', switchOff: 'オフ', soundOff: '消音中',
@@ -191,7 +202,9 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         waiting: '画面を待っています', parkForeground: 'Windows では AI はデスクトップに表示されたウィンドウしか操作できないため、このウィンドウはデスクトップに残ります', parkUwp: 'このアプリはバックグラウンドでの操作を受け付けないため、ウィンドウはデスクトップに残ります', parkMinimized: 'ウィンドウが最小化されています。元に戻すと AI が表示・操作できます', parkMissing: 'このウィンドウが見つかりません。閉じられた可能性があります', lockUnavailable: 'デスクトップ上のウィンドウは常に直接操作できます',
         reopenApp: "再度開く", reopenRunningTitle: "このアプリは実行中です。閉じて開き直しますか？", reopenRunningBody: "実行中の「{app}」を閉じて、このタブで開き直します。", reopenRunningConfirm: "閉じて開き直す", reopenFailed: "アプリを開き直せませんでした。もう一度お試しください。",
         dismissNotice: "通知を閉じる", windowOwned: "このアプリのウィンドウは別の会話で開いています。先にそちらのタブを閉じてください。", controlHint: "Escでプラグイン制御を終了(先に操作をオフにしてください)", escStopped: "Esc でデスクトップ操作を終了しました。このターンの間、AI はウィンドウを操作せず別の方法で続けます。", resumeControl: "操作を再開",
-        terminateBubble: 'クリックでプロセス終了', terminateTitle: '「{app}」のプロセスを終了しますか？', terminateBody: '「{app}」のウィンドウを閉じて実行中のプロセスを終了します。保存されていない内容は失われる可能性があります。', terminateConfirm: 'プロセスを終了', terminateCancel: 'キャンセル', terminateFailed: 'プロセスを終了できませんでした。もう一度お試しください。' },
+        terminateBubble: 'クリックでプロセス終了', terminateTitle: '「{app}」のプロセスを終了しますか？', terminateBody: '「{app}」のウィンドウを閉じて実行中のプロセスを終了します。保存されていない内容は失われる可能性があります。', terminateConfirm: 'プロセスを終了', terminateCancel: 'キャンセル', terminateFailed: 'プロセスを終了できませんでした。もう一度お試しください。',
+        schedules: 'スケジュール', scheduleSummary: '{count} 件 · 有効 {on} 件', scheduleDelete: 'スケジュールを削除', scheduleDeleteConfirm: 'もう一度押すと削除',
+        realtimeTitle: '「{app}」はバックグラウンドで画面の更新を止めます', realtimeReopen: 'リアルタイムモードで開き直す', realtimeBody: 'ブラウザーや Electron 系のアプリは、ウィンドウが隠れていると描画を止めるため、このタブの画面が止まることがあります。リアルタイムモードで開き直すと、画面が常に更新されます。', realtimeConfirm: '「{app}」はいったん終了してから開き直します。保存していない変更は失われることがあります。', realtimeUnavailable: 'このアプリはリアルタイムモードで開けません。「デスクトップにも」を選ぶと画面が常に更新されます。' },
     ko: { live: '실시간', lastFrame: '최근 화면', onlyInTab: '탭에만', alsoOnDesktop: '데스크톱에도', placement: '창 표시 위치',
         inTabHint: '백그라운드에서 실행되며 데스크톱에 표시되지 않습니다', switchToWindow: '이 창으로 전환', moveFailed: '창을 옮기지 못했습니다. 다시 시도하세요.',
         mouse: '키보드·마우스', mouseHint: '켜면 이 탭 안에서 클릭·스크롤·입력할 수 있습니다. 꺼져 있으면 탭 안에서는 AI와 플러그인만 조작하며, 데스크톱에 있는 창은 언제나 직접 조작할 수 있습니다.', mouseOff: '키보드·마우스가 꺼져 있습니다. 켜야 탭 안에서 이 창을 조작할 수 있습니다.', inputBlocked: '“{app}”은(는) AI가 조작 중입니다. 탭에서 ‘키보드·마우스’를 켜면 탭 안에서 조작할 수 있습니다.', sound: '소리', soundHint: '꺼져 있으면 이 앱은 음소거됩니다', soundFailed: '소리를 전환하지 못했습니다. ‘화면 및 시스템 오디오 녹음’ 권한이 필요합니다.', switchOn: '켜짐', switchOff: '꺼짐', soundOff: '음소거',
@@ -199,7 +212,9 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         waiting: '화면을 기다리는 중', parkForeground: 'Windows에서는 AI가 데스크톱에 표시된 창만 조작할 수 있어 이 창은 데스크톱에 남습니다', parkUwp: '이 앱은 백그라운드 입력을 받지 않아 창이 데스크톱에 남아야 합니다', parkMinimized: '창이 최소화되었습니다. 복원해야 AI가 보고 조작할 수 있습니다', parkMissing: '이 창을 찾을 수 없습니다. 닫혔을 수 있습니다', lockUnavailable: '데스크톱에 있는 창은 언제나 직접 조작할 수 있습니다',
         reopenApp: "다시 열기", reopenRunningTitle: "이 앱이 이미 실행 중입니다. 닫고 다시 열까요?", reopenRunningBody: "실행 중인 “{app}”을(를) 닫고 현재 탭에서 다시 엽니다.", reopenRunningConfirm: "닫고 다시 열기", reopenFailed: "앱을 다시 열지 못했습니다. 다시 시도하세요.",
         dismissNotice: "알림 닫기", windowOwned: "이 앱 창은 다른 대화에서 열려 있습니다. 먼저 해당 탭을 닫으세요.", controlHint: "Esc로 플러그인 제어 종료(먼저 입력을 꺼주세요)", escStopped: "Esc로 데스크톱 제어를 종료했습니다. 이번 턴 동안 AI는 창을 조작하지 않고 다른 방법으로 계속합니다.", resumeControl: "제어 재개",
-        terminateBubble: '클릭하여 프로세스 종료', terminateTitle: '“{app}” 프로세스를 종료할까요?', terminateBody: '“{app}” 창을 닫고 실행 중인 프로세스를 종료합니다. 저장하지 않은 내용은 사라질 수 있습니다.', terminateConfirm: '프로세스 종료', terminateCancel: '취소', terminateFailed: '프로세스를 종료하지 못했습니다. 다시 시도하세요.' },
+        terminateBubble: '클릭하여 프로세스 종료', terminateTitle: '“{app}” 프로세스를 종료할까요?', terminateBody: '“{app}” 창을 닫고 실행 중인 프로세스를 종료합니다. 저장하지 않은 내용은 사라질 수 있습니다.', terminateConfirm: '프로세스 종료', terminateCancel: '취소', terminateFailed: '프로세스를 종료하지 못했습니다. 다시 시도하세요.',
+        schedules: '예약 작업', scheduleSummary: '{count}개 예약 · {on}개 사용 중', scheduleDelete: '예약 삭제', scheduleDeleteConfirm: '한 번 더 누르면 삭제',
+        realtimeTitle: '{app} 앱은 백그라운드에서 화면 갱신을 멈춥니다', realtimeReopen: '실시간 모드로 다시 열기', realtimeBody: '브라우저와 Electron 기반 앱은 창이 가려지면 그리기를 멈추므로 이 탭의 화면이 멈출 수 있습니다. 실시간 모드로 다시 열면 화면이 계속 갱신됩니다.', realtimeConfirm: '{app} 앱이 종료된 후 다시 열립니다. 저장하지 않은 변경 사항은 사라질 수 있습니다.', realtimeUnavailable: '이 앱은 실시간 모드로 열 수 없습니다. ‘데스크톱에도’를 선택하면 화면이 계속 갱신됩니다.' },
     es: { live: 'En vivo', lastFrame: 'Última imagen', onlyInTab: 'Solo en la pestaña', alsoOnDesktop: 'También en el escritorio', placement: 'Dónde se muestra la ventana',
         inTabHint: 'Se ejecuta en segundo plano, fuera de tu escritorio', switchToWindow: 'Ir a la ventana', moveFailed: 'No se pudo mover la ventana. Inténtalo de nuevo.',
         mouse: 'Teclado y ratón', mouseHint: 'Actívalo para hacer clic, desplazarte y escribir dentro de esta pestaña. Desactivado, solo la IA y los plugins controlan la pestaña; las ventanas en el escritorio siempre se pueden usar directamente.', mouseOff: 'Teclado y ratón está desactivado. Actívalo para usar esta ventana en la pestaña.', inputBlocked: 'La IA controla «{app}». Activa «Teclado y ratón» en su pestaña para usarla allí.', sound: 'Sonido', soundHint: 'Mientras está desactivado, esta app permanece en silencio', soundFailed: 'No se pudo cambiar el sonido. NextMux necesita el permiso de grabación de pantalla y audio del sistema.', switchOn: 'Sí', switchOff: 'No', soundOff: 'Silencio',
@@ -207,7 +222,9 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         waiting: 'Esperando la imagen', parkForeground: 'En Windows la IA solo puede usar ventanas visibles en el escritorio, así que esta ventana se queda allí', parkUwp: 'Esta app no acepta acciones en segundo plano, así que su ventana se queda en el escritorio', parkMinimized: 'La ventana está minimizada: restáurala para que la IA pueda verla y usarla', parkMissing: 'No se encuentra esta ventana; puede que se haya cerrado', lockUnavailable: 'Las ventanas en el escritorio siempre se pueden usar directamente',
         reopenApp: "Volver a abrir", reopenRunningTitle: "Esta app ya está en ejecución. ¿Cerrarla y volver a abrirla?", reopenRunningBody: "Cierra «{app}» y vuelve a abrirla en esta pestaña.", reopenRunningConfirm: "Cerrar y volver a abrir", reopenFailed: "No se pudo volver a abrir la app. Inténtalo de nuevo.",
         dismissNotice: "Cerrar notificación", windowOwned: "Esta ventana está abierta en otra conversación. Cierra primero su pestaña.", controlHint: "Pulsa Esc para salir del control del plugin (desactiva antes teclado y ratón)", escStopped: "Pulsaste Esc para salir del control del escritorio: durante el resto de este turno la IA no manejará ventanas y seguirá de otra forma.", resumeControl: "Reanudar control",
-        terminateBubble: 'Haz clic para cerrar el proceso', terminateTitle: '¿Finalizar el proceso de «{app}»?', terminateBody: 'Se cerrará la ventana de «{app}» y finalizará su proceso en ejecución. Los cambios no guardados podrían perderse.', terminateConfirm: 'Finalizar proceso', terminateCancel: 'Cancelar', terminateFailed: 'No se pudo finalizar el proceso. Inténtalo de nuevo.' },
+        terminateBubble: 'Haz clic para cerrar el proceso', terminateTitle: '¿Finalizar el proceso de «{app}»?', terminateBody: 'Se cerrará la ventana de «{app}» y finalizará su proceso en ejecución. Los cambios no guardados podrían perderse.', terminateConfirm: 'Finalizar proceso', terminateCancel: 'Cancelar', terminateFailed: 'No se pudo finalizar el proceso. Inténtalo de nuevo.',
+        schedules: 'Tareas programadas', scheduleSummary: '{count} programadas · {on} activas', scheduleDelete: 'Eliminar programación', scheduleDeleteConfirm: 'Pulsa otra vez para eliminar',
+        realtimeTitle: '{app} pausa su imagen en segundo plano', realtimeReopen: 'Reabrir en tiempo real', realtimeBody: 'Los navegadores y las apps de Electron dejan de dibujar cuando su ventana está oculta, así que esta pestaña puede congelarse. Vuelve a abrir la app en tiempo real para mantener la imagen en vivo.', realtimeConfirm: '{app} se cerrará y volverá a abrirse. Los cambios sin guardar podrían perderse.', realtimeUnavailable: 'Esta app no se puede abrir en tiempo real. Elige «También en el escritorio» para mantener la imagen en vivo.' },
     fr: { live: 'En direct', lastFrame: 'Dernière image', onlyInTab: 'Onglet seul', alsoOnDesktop: 'Aussi sur le bureau', placement: 'Affichage de la fenêtre',
         inTabHint: 'S’exécute en arrière-plan, hors de votre bureau', switchToWindow: 'Aller à la fenêtre', moveFailed: 'Impossible de déplacer la fenêtre. Réessayez.',
         mouse: 'Clavier et souris', mouseHint: 'Activez-le pour cliquer, faire défiler et taper dans cet onglet. Désactivé, seuls l’IA et les plugins contrôlent l’onglet ; les fenêtres sur le bureau restent toujours utilisables directement.', mouseOff: 'Clavier et souris est désactivé. Activez-le pour utiliser cette fenêtre dans l’onglet.', inputBlocked: 'L’IA contrôle « {app} ». Activez « Clavier et souris » dans son onglet pour l’utiliser.', sound: 'Son', soundHint: 'Désactivé, cette app reste muette', soundFailed: 'Impossible de changer le son. NextMux a besoin de l’autorisation d’enregistrement de l’écran et de l’audio système.', switchOn: 'Oui', switchOff: 'Non', soundOff: 'Muet',
@@ -215,7 +232,9 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         waiting: 'En attente de l’image', parkForeground: 'Sous Windows, l’IA ne peut utiliser que les fenêtres affichées sur le bureau : cette fenêtre y reste', parkUwp: 'Cette app n’accepte pas d’actions en arrière-plan : sa fenêtre reste sur le bureau', parkMinimized: 'La fenêtre est réduite : restaurez-la pour que l’IA puisse la voir et l’utiliser', parkMissing: 'Cette fenêtre est introuvable ; elle a peut-être été fermée', lockUnavailable: 'Les fenêtres sur le bureau restent toujours utilisables directement',
         reopenApp: "Rouvrir", reopenRunningTitle: "Cette app est déjà en cours d’exécution. La fermer et la rouvrir ?", reopenRunningBody: "Fermez « {app} » et rouvrez-la dans cet onglet.", reopenRunningConfirm: "Fermer et rouvrir", reopenFailed: "Impossible de rouvrir l’app. Réessayez.",
         dismissNotice: "Fermer la notification", windowOwned: "Cette fenêtre est ouverte dans une autre conversation. Fermez d’abord son onglet.", controlHint: "Appuyez sur Échap pour quitter le contrôle du plugin (désactivez d’abord clavier/souris)", escStopped: "Vous avez appuyé sur Échap pour quitter le contrôle du bureau : pour le reste de ce tour, l’IA ne manipule plus les fenêtres et continue autrement.", resumeControl: "Reprendre le contrôle",
-        terminateBubble: 'Cliquer pour arrêter le processus', terminateTitle: 'Arrêter le processus de « {app} » ?', terminateBody: 'La fenêtre de « {app} » sera fermée et son processus en cours sera arrêté. Les modifications non enregistrées peuvent être perdues.', terminateConfirm: 'Arrêter le processus', terminateCancel: 'Annuler', terminateFailed: 'Impossible d’arrêter le processus. Réessayez.' },
+        terminateBubble: 'Cliquer pour arrêter le processus', terminateTitle: 'Arrêter le processus de « {app} » ?', terminateBody: 'La fenêtre de « {app} » sera fermée et son processus en cours sera arrêté. Les modifications non enregistrées peuvent être perdues.', terminateConfirm: 'Arrêter le processus', terminateCancel: 'Annuler', terminateFailed: 'Impossible d’arrêter le processus. Réessayez.',
+        schedules: 'Tâches planifiées', scheduleSummary: '{count} planifiées · {on} actives', scheduleDelete: 'Supprimer la planification', scheduleDeleteConfirm: 'Cliquez encore pour supprimer',
+        realtimeTitle: '{app} fige son image en arrière-plan', realtimeReopen: 'Rouvrir en temps réel', realtimeBody: 'Les navigateurs et les apps Electron cessent de s’actualiser quand leur fenêtre est masquée : cet onglet peut se figer. Rouvrez l’app en temps réel pour garder l’image en direct.', realtimeConfirm: '{app} va se fermer puis se rouvrir. Les modifications non enregistrées risquent d’être perdues.', realtimeUnavailable: 'Cette app ne peut pas s’ouvrir en temps réel. Choisissez « Aussi sur le bureau » pour garder l’image en direct.' },
     de: { live: 'Live', lastFrame: 'Letztes Bild', onlyInTab: 'Nur im Tab', alsoOnDesktop: 'Auch auf dem Desktop', placement: 'Wo das Fenster erscheint',
         inTabHint: 'Läuft im Hintergrund, nicht auf Ihrem Desktop', switchToWindow: 'Zum Fenster wechseln', moveFailed: 'Das Fenster ließ sich nicht verschieben. Bitte erneut versuchen.',
         mouse: 'Tastatur & Maus', mouseHint: 'Einschalten, um in diesem Tab zu klicken, zu scrollen und zu tippen. Aus: Im Tab steuern nur die KI und Plugins; Fenster auf dem Desktop lassen sich immer direkt bedienen.', mouseOff: 'Tastatur & Maus ist aus. Schalten Sie es ein, um das Fenster im Tab zu bedienen.', inputBlocked: 'Die KI steuert „{app}“. Schalten Sie in seinem Tab „Tastatur & Maus“ ein, um es im Tab zu bedienen.', sound: 'Ton', soundHint: 'Aus: Diese App bleibt stumm', soundFailed: 'Der Ton ließ sich nicht umschalten. NextMux benötigt die Berechtigung für Bildschirm- und Systemaudioaufnahme.', switchOn: 'An', switchOff: 'Aus', soundOff: 'Stumm',
@@ -223,7 +242,9 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         waiting: 'Warte auf das Bild', parkForeground: 'Unter Windows kann die KI nur Fenster auf dem Desktop bedienen, daher bleibt dieses Fenster dort', parkUwp: 'Diese App nimmt keine Eingaben im Hintergrund an, daher bleibt ihr Fenster auf dem Desktop', parkMinimized: 'Das Fenster ist minimiert: Stellen Sie es wieder her, damit die KI es sehen und bedienen kann', parkMissing: 'Dieses Fenster wurde nicht gefunden; es wurde möglicherweise geschlossen', lockUnavailable: 'Fenster auf dem Desktop lassen sich immer direkt bedienen',
         reopenApp: "Erneut öffnen", reopenRunningTitle: "Diese App läuft bereits. Schließen und erneut öffnen?", reopenRunningBody: "Die laufende App „{app}“ schließen und in diesem Tab erneut öffnen.", reopenRunningConfirm: "Schließen und erneut öffnen", reopenFailed: "Die App ließ sich nicht erneut öffnen. Bitte erneut versuchen.",
         dismissNotice: "Hinweis schließen", windowOwned: "Dieses App-Fenster ist in einer anderen Unterhaltung geöffnet. Schließen Sie dort zuerst den Tab.", controlHint: "Esc beendet die Plugin-Steuerung (zuerst Eingabe ausschalten)", escStopped: "Mit Esc wurde die Desktopsteuerung beendet: Für den Rest dieses Zugs bedient die KI keine Fenster und macht anders weiter.", resumeControl: "Steuerung fortsetzen",
-        terminateBubble: 'Klicken, um Prozess zu beenden', terminateTitle: 'Prozess von „{app}“ beenden?', terminateBody: 'Das Fenster von „{app}“ wird geschlossen und der laufende Prozess beendet. Ungespeicherte Inhalte können verloren gehen.', terminateConfirm: 'Prozess beenden', terminateCancel: 'Abbrechen', terminateFailed: 'Der Prozess konnte nicht beendet werden. Bitte erneut versuchen.' },
+        terminateBubble: 'Klicken, um Prozess zu beenden', terminateTitle: 'Prozess von „{app}“ beenden?', terminateBody: 'Das Fenster von „{app}“ wird geschlossen und der laufende Prozess beendet. Ungespeicherte Inhalte können verloren gehen.', terminateConfirm: 'Prozess beenden', terminateCancel: 'Abbrechen', terminateFailed: 'Der Prozess konnte nicht beendet werden. Bitte erneut versuchen.',
+        schedules: 'Geplante Aufgaben', scheduleSummary: '{count} geplant · {on} aktiv', scheduleDelete: 'Planung löschen', scheduleDeleteConfirm: 'Zum Löschen erneut klicken',
+        realtimeTitle: '{app} aktualisiert sich im Hintergrund nicht', realtimeReopen: 'Im Echtzeitmodus neu öffnen', realtimeBody: 'Browser und Electron-Apps zeichnen nicht weiter, solange ihr Fenster verborgen ist – dieser Tab kann daher einfrieren. Öffnen Sie die App im Echtzeitmodus neu, damit das Bild live bleibt.', realtimeConfirm: '{app} wird geschlossen und neu geöffnet. Nicht gespeicherte Änderungen können verloren gehen.', realtimeUnavailable: 'Diese App lässt sich nicht im Echtzeitmodus öffnen. Wählen Sie „Auch auf dem Desktop“, damit das Bild live bleibt.' },
     'pt-BR': { live: 'Ao vivo', lastFrame: 'Última imagem', onlyInTab: 'Só na aba', alsoOnDesktop: 'Também na área de trabalho', placement: 'Onde a janela aparece',
         inTabHint: 'Roda em segundo plano, fora da sua área de trabalho', switchToWindow: 'Ir para a janela', moveFailed: 'Não foi possível mover a janela. Tente de novo.',
         mouse: 'Teclado e mouse', mouseHint: 'Ative para clicar, rolar e digitar nesta aba. Desativado, só a IA e os plugins controlam a aba; janelas na área de trabalho sempre podem ser usadas diretamente.', mouseOff: 'Teclado e mouse está desativado. Ative para usar esta janela na aba.', inputBlocked: 'A IA está controlando “{app}”. Ative “Teclado e mouse” na aba dele para usar na aba.', sound: 'Som', soundHint: 'Desativado, este app fica sem som', soundFailed: 'Não foi possível mudar o som. O NextMux precisa da permissão de gravação de tela e áudio do sistema.', switchOn: 'Ativo', switchOff: 'Inativo', soundOff: 'Mudo',
@@ -231,7 +252,9 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         waiting: 'Aguardando a imagem', parkForeground: 'No Windows a IA só consegue usar janelas visíveis na área de trabalho, então esta janela fica lá', parkUwp: 'Este app não aceita ações em segundo plano, então a janela fica na área de trabalho', parkMinimized: 'A janela está minimizada: restaure-a para que a IA possa vê-la e usá-la', parkMissing: 'Esta janela não foi encontrada; ela pode ter sido fechada', lockUnavailable: 'Janelas na área de trabalho sempre podem ser usadas diretamente',
         reopenApp: "Reabrir", reopenRunningTitle: "Este app já está em execução. Fechar e reabrir?", reopenRunningBody: "Feche “{app}” e abra-o novamente nesta aba.", reopenRunningConfirm: "Fechar e reabrir", reopenFailed: "Não foi possível reabrir o app. Tente novamente.",
         dismissNotice: "Fechar notificação", windowOwned: "Esta janela está aberta em outra conversa. Feche a aba lá primeiro.", controlHint: "Pressione Esc para sair do controle do plugin (desative antes teclado e mouse)", escStopped: "Você pressionou Esc para sair do controle da área de trabalho: no restante deste turno a IA não opera janelas e continua de outra forma.", resumeControl: "Retomar controle",
-        terminateBubble: 'Clique para encerrar o processo', terminateTitle: 'Encerrar o processo de “{app}”?', terminateBody: 'A janela de “{app}” será fechada e o processo em execução será encerrado. Alterações não salvas podem ser perdidas.', terminateConfirm: 'Encerrar processo', terminateCancel: 'Cancelar', terminateFailed: 'Não foi possível encerrar o processo. Tente de novo.' },
+        terminateBubble: 'Clique para encerrar o processo', terminateTitle: 'Encerrar o processo de “{app}”?', terminateBody: 'A janela de “{app}” será fechada e o processo em execução será encerrado. Alterações não salvas podem ser perdidas.', terminateConfirm: 'Encerrar processo', terminateCancel: 'Cancelar', terminateFailed: 'Não foi possível encerrar o processo. Tente de novo.',
+        schedules: 'Tarefas agendadas', scheduleSummary: '{count} agendadas · {on} ativas', scheduleDelete: 'Excluir agendamento', scheduleDeleteConfirm: 'Clique de novo para excluir',
+        realtimeTitle: 'O {app} pausa a imagem em segundo plano', realtimeReopen: 'Reabrir em tempo real', realtimeBody: 'Navegadores e apps Electron param de desenhar quando a janela fica oculta, então esta aba pode congelar. Reabra o app em tempo real para manter a imagem ao vivo.', realtimeConfirm: 'O {app} será fechado e aberto de novo. Alterações não salvas podem ser perdidas.', realtimeUnavailable: 'Este app não pode ser aberto em tempo real. Escolha “Também na área de trabalho” para manter a imagem ao vivo.' },
     ru: { live: 'В эфире', lastFrame: 'Последний кадр', onlyInTab: 'Только во вкладке', alsoOnDesktop: 'И на рабочем столе', placement: 'Где показывать окно',
         inTabHint: 'Работает в фоне и не занимает рабочий стол', switchToWindow: 'Перейти к окну', moveFailed: 'Не удалось переместить окно. Попробуйте ещё раз.',
         mouse: 'Клавиатура и мышь', mouseHint: 'Включите, чтобы нажимать, прокручивать и печатать внутри этой вкладки. Когда выключено, во вкладке управляют только ИИ и плагины, а окном на рабочем столе всегда можно пользоваться напрямую.', mouseOff: 'Клавиатура и мышь выключены. Включите, чтобы управлять окном во вкладке.', inputBlocked: '«{app}» управляет ИИ. Включите «Клавиатура и мышь» в его вкладке, чтобы работать во вкладке.', sound: 'Звук', soundHint: 'Когда выключено, приложение без звука', soundFailed: 'Не удалось переключить звук. NextMux нужно разрешение на запись экрана и системного звука.', switchOn: 'Вкл', switchOff: 'Выкл', soundOff: 'Без звука',
@@ -239,7 +262,9 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         waiting: 'Ожидание изображения', parkForeground: 'В Windows ИИ может работать только с окнами на рабочем столе, поэтому это окно остаётся там', parkUwp: 'Это приложение не принимает ввод в фоне, поэтому окно остаётся на рабочем столе', parkMinimized: 'Окно свёрнуто: разверните его, чтобы ИИ мог его видеть и управлять им', parkMissing: 'Окно не найдено; возможно, оно закрыто', lockUnavailable: 'Окном на рабочем столе всегда можно пользоваться напрямую',
         reopenApp: "Открыть снова", reopenRunningTitle: "Приложение уже запущено. Закрыть и открыть снова?", reopenRunningBody: "Закройте работающее приложение «{app}» и откройте его снова в этой вкладке.", reopenRunningConfirm: "Закрыть и открыть снова", reopenFailed: "Не удалось открыть приложение снова. Повторите попытку.",
         dismissNotice: "Закрыть уведомление", windowOwned: "Это окно открыто в другой беседе. Сначала закройте его вкладку там.", controlHint: "Нажмите Esc для выхода из управления плагином (сначала выключите ввод)", escStopped: "Вы нажали Esc и завершили управление рабочим столом: до конца этого хода ИИ не управляет окнами и продолжает другим способом.", resumeControl: "Возобновить управление",
-        terminateBubble: 'Нажмите, чтобы завершить процесс', terminateTitle: 'Завершить процесс «{app}»?', terminateBody: 'Окно «{app}» будет закрыто, а его запущенный процесс завершён. Несохранённые данные могут быть потеряны.', terminateConfirm: 'Завершить процесс', terminateCancel: 'Отмена', terminateFailed: 'Не удалось завершить процесс. Попробуйте ещё раз.' },
+        terminateBubble: 'Нажмите, чтобы завершить процесс', terminateTitle: 'Завершить процесс «{app}»?', terminateBody: 'Окно «{app}» будет закрыто, а его запущенный процесс завершён. Несохранённые данные могут быть потеряны.', terminateConfirm: 'Завершить процесс', terminateCancel: 'Отмена', terminateFailed: 'Не удалось завершить процесс. Попробуйте ещё раз.',
+        schedules: 'Задачи по расписанию', scheduleSummary: 'Всего {count} · включено {on}', scheduleDelete: 'Удалить расписание', scheduleDeleteConfirm: 'Нажмите ещё раз, чтобы удалить',
+        realtimeTitle: '«{app}» в фоне перестаёт обновлять изображение', realtimeReopen: 'Открыть заново в реальном времени', realtimeBody: 'Браузеры и приложения на Electron перестают отрисовывать окно, когда оно скрыто, поэтому изображение во вкладке может застыть. Откройте приложение заново в режиме реального времени, чтобы картинка оставалась живой.', realtimeConfirm: '«{app}» закроется и откроется снова. Несохранённые изменения могут пропасть.', realtimeUnavailable: 'Это приложение нельзя открыть в режиме реального времени. Выберите «И на рабочем столе», чтобы картинка оставалась живой.' },
     ar: { live: 'مباشر', lastFrame: 'آخر لقطة', onlyInTab: 'في علامة التبويب فقط', alsoOnDesktop: 'وعلى سطح المكتب أيضًا', placement: 'مكان عرض النافذة',
         inTabHint: 'تعمل في الخلفية بعيدًا عن سطح مكتبك', switchToWindow: 'الانتقال إلى النافذة', moveFailed: 'تعذّر نقل النافذة. حاول مرة أخرى.',
         mouse: 'لوحة المفاتيح والفأرة', mouseHint: 'فعّلها للنقر والتمرير والكتابة داخل علامة التبويب هذه. عند الإيقاف يتحكم الذكاء الاصطناعي والإضافات فقط داخل علامة التبويب، بينما يمكن دائمًا استخدام النافذة مباشرةً على سطح المكتب.', mouseOff: 'لوحة المفاتيح والفأرة متوقفة. فعّلها لاستخدام هذه النافذة داخل علامة التبويب.', inputBlocked: 'يتحكم الذكاء الاصطناعي في «{app}». فعّل «لوحة المفاتيح والفأرة» في علامة تبويبه لاستخدامه هناك.', sound: 'الصوت', soundHint: 'عند إيقافه يبقى هذا التطبيق صامتًا', soundFailed: 'تعذّر تبديل الصوت. يحتاج NextMux إلى إذن تسجيل الشاشة وصوت النظام.', switchOn: 'مفعّل', switchOff: 'متوقف', soundOff: 'مكتوم',
@@ -247,7 +272,9 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         waiting: 'بانتظار الصورة', parkForeground: 'في Windows يمكن للذكاء الاصطناعي العمل فقط في النوافذ الظاهرة على سطح المكتب، لذا تبقى هذه النافذة هناك', parkUwp: 'لا يقبل هذا التطبيق الإدخال في الخلفية، لذا تبقى نافذته على سطح المكتب', parkMinimized: 'النافذة مصغّرة: استعدها ليتمكن الذكاء الاصطناعي من رؤيتها واستخدامها', parkMissing: 'تعذّر العثور على هذه النافذة؛ ربما أُغلقت', lockUnavailable: 'يمكن دائمًا استخدام النافذة مباشرةً على سطح المكتب',
         reopenApp: "إعادة الفتح", reopenRunningTitle: "هذا التطبيق يعمل بالفعل. هل تريد إغلاقه وإعادة فتحه؟", reopenRunningBody: "أغلق التطبيق «{app}» الجاري تشغيله وأعد فتحه في علامة التبويب الحالية.", reopenRunningConfirm: "إغلاق وإعادة فتح", reopenFailed: "تعذرت إعادة فتح التطبيق. حاول مجددًا.",
         dismissNotice: "إغلاق الإشعار", windowOwned: "نافذة هذا التطبيق مفتوحة في محادثة أخرى. أغلق علامة تبويبها هناك أولاً.", controlHint: "اضغط Esc للخروج من تحكم الإضافة (أوقف الإدخال أولاً)", escStopped: "ضغطت Esc لإنهاء التحكم في سطح المكتب: لبقية هذا الدور لن يشغّل الذكاء الاصطناعي النوافذ وسيتابع بطريقة أخرى.", resumeControl: "استئناف التحكم",
-        terminateBubble: 'انقر لإنهاء العملية', terminateTitle: 'إنهاء عملية «{app}»؟', terminateBody: 'سيتم إغلاق نافذة «{app}» وإنهاء عمليتها قيد التشغيل. قد تُفقد التغييرات غير المحفوظة.', terminateConfirm: 'إنهاء العملية', terminateCancel: 'إلغاء', terminateFailed: 'تعذّر إنهاء العملية. حاول مرة أخرى.' },
+        terminateBubble: 'انقر لإنهاء العملية', terminateTitle: 'إنهاء عملية «{app}»؟', terminateBody: 'سيتم إغلاق نافذة «{app}» وإنهاء عمليتها قيد التشغيل. قد تُفقد التغييرات غير المحفوظة.', terminateConfirm: 'إنهاء العملية', terminateCancel: 'إلغاء', terminateFailed: 'تعذّر إنهاء العملية. حاول مرة أخرى.',
+        schedules: 'المهام المجدولة', scheduleSummary: '{count} مجدولة · {on} مفعّلة', scheduleDelete: 'حذف الجدولة', scheduleDeleteConfirm: 'اضغط مرة أخرى للحذف',
+        realtimeTitle: 'يوقف {app} تحديث صورته في الخلفية', realtimeReopen: 'إعادة الفتح في الوضع الفوري', realtimeBody: 'تتوقف المتصفحات وتطبيقات Electron عن الرسم عندما تكون نافذتها مخفية، لذا قد تتجمد هذه العلامة. أعد فتح التطبيق في الوضع الفوري لتبقى الصورة مباشرة.', realtimeConfirm: 'سيُغلق {app} ثم يُفتح من جديد. قد تضيع التغييرات غير المحفوظة فيه.', realtimeUnavailable: 'لا يمكن فتح هذا التطبيق في الوضع الفوري. اختر «وعلى سطح المكتب أيضًا» لتبقى الصورة مباشرة.' },
     hi: { live: 'लाइव', lastFrame: 'अंतिम फ़्रेम', onlyInTab: 'सिर्फ़ टैब में', alsoOnDesktop: 'डेस्कटॉप पर भी', placement: 'विंडो कहाँ दिखे',
         inTabHint: 'बैकग्राउंड में चलती है, आपके डेस्कटॉप पर नहीं', switchToWindow: 'विंडो पर जाएँ', moveFailed: 'विंडो को हटाया नहीं जा सका। फिर से कोशिश करें।',
         mouse: 'कीबोर्ड-माउस', mouseHint: 'चालू करने पर इस टैब के अंदर क्लिक, स्क्रॉल और टाइप कर सकते हैं। बंद रहने पर टैब के अंदर सिर्फ़ AI और प्लगइन चलाते हैं; डेस्कटॉप पर विंडो को हमेशा सीधे चलाया जा सकता है।', mouseOff: 'कीबोर्ड-माउस बंद है। टैब के अंदर इस विंडो को चलाने के लिए इसे चालू करें।', inputBlocked: '“{app}” को AI चला रहा है। टैब में चलाने के लिए उसके टैब में “कीबोर्ड-माउस” चालू करें।', sound: 'ध्वनि', soundHint: 'बंद रहने पर यह ऐप म्यूट रहता है', soundFailed: 'ध्वनि नहीं बदली जा सकी। NextMux को स्क्रीन और सिस्टम ऑडियो रिकॉर्डिंग की अनुमति चाहिए।', switchOn: 'चालू', switchOff: 'बंद', soundOff: 'म्यूट',
@@ -255,7 +282,9 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         waiting: 'तस्वीर का इंतज़ार', parkForeground: 'Windows पर AI सिर्फ़ डेस्कटॉप पर दिख रही विंडो चला सकता है, इसलिए यह विंडो वहीं रहती है', parkUwp: 'यह ऐप बैकग्राउंड में इनपुट नहीं लेता, इसलिए इसकी विंडो डेस्कटॉप पर रहती है', parkMinimized: 'विंडो छोटी (मिनिमाइज़) है: AI को दिखाने और चलाने के लिए इसे वापस खोलें', parkMissing: 'यह विंडो नहीं मिली; शायद बंद हो गई है', lockUnavailable: 'डेस्कटॉप पर विंडो को हमेशा सीधे चलाया जा सकता है',
         reopenApp: "फिर से खोलें", reopenRunningTitle: "यह ऐप पहले से चल रहा है। क्या इसे बंद करके फिर से खोलें?", reopenRunningBody: "चल रहे “{app}” को बंद करके मौजूदा टैब में फिर से खोलें।", reopenRunningConfirm: "बंद करके फिर से खोलें", reopenFailed: "ऐप फिर से नहीं खुल सका। दोबारा कोशिश करें.",
         dismissNotice: "सूचना बंद करें", windowOwned: "यह ऐप विंडो दूसरी बातचीत में खुली है। पहले वहाँ उसका टैब बंद करें।", controlHint: "प्लगइन नियंत्रण से बाहर निकलने के लिए Esc दबाएँ (पहले कीबोर्ड-माउस बंद करें)", escStopped: "आपने डेस्कटॉप नियंत्रण समाप्त करने के लिए Esc दबाया: इस बारी के बाकी हिस्से में AI विंडो नहीं चलाएगा और दूसरे तरीके से जारी रखेगा।", resumeControl: "नियंत्रण फिर शुरू करें",
-        terminateBubble: 'प्रोसेस बंद करने के लिए क्लिक करें', terminateTitle: '“{app}” प्रोसेस समाप्त करें?', terminateBody: 'यह “{app}” विंडो को बंद कर देगा और इसके चल रहे प्रोसेस को समाप्त कर देगा। बिना सहेजे गए बदलाव खो सकते हैं।', terminateConfirm: 'प्रोसेस समाप्त करें', terminateCancel: 'रद्द करें', terminateFailed: 'प्रोसेस समाप्त नहीं किया जा सका। फिर से कोशिश करें।' }
+        terminateBubble: 'प्रोसेस बंद करने के लिए क्लिक करें', terminateTitle: '“{app}” प्रोसेस समाप्त करें?', terminateBody: 'यह “{app}” विंडो को बंद कर देगा और इसके चल रहे प्रोसेस को समाप्त कर देगा। बिना सहेजे गए बदलाव खो सकते हैं।', terminateConfirm: 'प्रोसेस समाप्त करें', terminateCancel: 'रद्द करें', terminateFailed: 'प्रोसेस समाप्त नहीं किया जा सका। फिर से कोशिश करें।',
+        schedules: 'शेड्यूल किए गए कार्य', scheduleSummary: '{count} शेड्यूल · {on} चालू', scheduleDelete: 'शेड्यूल हटाएँ', scheduleDeleteConfirm: 'हटाने के लिए फिर से क्लिक करें',
+        realtimeTitle: '{app} बैकग्राउंड में अपनी तस्वीर रोक देता है', realtimeReopen: 'रियल-टाइम मोड में फिर खोलें', realtimeBody: 'ब्राउज़र और Electron ऐप विंडो छिपी होने पर ड्रॉ करना बंद कर देते हैं, इसलिए यह टैब रुक सकता है। तस्वीर लाइव रखने के लिए ऐप को रियल-टाइम मोड में फिर से खोलें।', realtimeConfirm: '{app} बंद होकर फिर खुलेगा। उसमें बिना सहेजे बदलाव खो सकते हैं।', realtimeUnavailable: 'यह ऐप रियल-टाइम मोड में नहीं खुल सकता। तस्वीर लाइव रखने के लिए “डेस्कटॉप पर भी” चुनें।' }
 };
 
 /** A window's reason (apps/desktop computer-window-view on Windows) → its explanation. */
@@ -320,6 +349,54 @@ export function pointerModifiers(
     return mods;
 }
 
+/** One picture of a tab's window: base64 `data`, or the image `bytes` when asked for binary. */
+export interface ConversationWindowSnapshot {
+    readonly data?: string;
+    readonly bytes?: Uint8Array;
+    readonly mimeType: string;
+    readonly width: number;
+    readonly height: number;
+}
+
+/**
+ * Whether this NextMux window is on screen (not minimised or hidden), as the main process sees it: its windows run with
+ * background throttling off, and then Chromium keeps the page "visible" while the window is minimised or in the tray
+ * (Electron's Page Visibility rule). One subscription serves every tab view.
+ */
+let windowShownNow = true;
+let stopWatchingWindowShown: (() => void) | undefined;
+const windowShownListeners = new Set<() => void>();
+export function isWindowShown(): boolean { return windowShownNow; }
+export function watchWindowShown(listener: () => void): () => void {
+    windowShownListeners.add(listener);
+    if (windowShownListeners.size === 1 && typeof window !== 'undefined') {
+        const desktop = (window as Window & { nextmuxDesktop?: {
+            getWindowFocusState?(): Promise<{ readonly shown?: boolean } | undefined>;
+            onWindowFocusChange?(callback: (state: { readonly shown?: boolean }) => void): () => void;
+        } }).nextmuxDesktop;
+        const apply = (state: { readonly shown?: boolean } | undefined): void => {
+            if (typeof state?.shown !== 'boolean' || state.shown === windowShownNow) return;
+            windowShownNow = state.shown;
+            for (const each of [...windowShownListeners]) each();
+        };
+        stopWatchingWindowShown = desktop?.onWindowFocusChange?.(apply);
+        void desktop?.getWindowFocusState?.().then(apply, () => undefined);
+    }
+    return () => {
+        windowShownListeners.delete(listener);
+        if (!windowShownListeners.size) { stopWatchingWindowShown?.(); stopWatchingWindowShown = undefined; }
+    };
+}
+
+/**
+ * How a tab asks for its live picture. Starts run one at a time: `shown` puts the tab on show first, and a start whose
+ * view is no longer `current` (its tab closed or switched past while it waited) is skipped.
+ */
+export interface ConversationWindowStartOptions {
+    readonly preferSnapshot?: boolean;
+    readonly shown?: () => boolean;
+    readonly current?: () => boolean;
+}
 /** What a tab can do with the app window it shows (this computer's windows only). */
 export interface ConversationWindowControls {
     /** The window can live in the tab only, off the user's screens (macOS). */
@@ -329,7 +406,7 @@ export interface ConversationWindowControls {
     /** The tab's sound switch can mute the app. */
     readonly canMute: boolean;
     /** Start the live view: the window's own capture stream, where the window is and whether its sound is on. */
-    readonly start: (options?: { readonly preferSnapshot?: boolean }) => Promise<{ readonly stream?: MediaStream; readonly placement?: ConversationWindowPlacement; readonly sound?: boolean; readonly snapshotStream?: boolean }>;
+    readonly start: (options?: ConversationWindowStartOptions) => Promise<{ readonly stream?: MediaStream; readonly placement?: ConversationWindowPlacement; readonly sound?: boolean; readonly snapshotStream?: boolean }>;
     /** Move the window to the tab only, or onto the desktop in front. Resolves to where it is afterwards. */
     readonly place: (placement: ConversationWindowPlacement) => Promise<ConversationWindowPlacement | undefined>;
     readonly pointer: (input: ConversationWindowPointer) => Promise<boolean>;
@@ -342,7 +419,9 @@ export interface ConversationWindowControls {
      * The switches as they are now, shared by the tab's header and the AI's tabs.set: when either changes one, the
      * other sees it (subscribe returns the unsubscribe function).
      */
-    readonly state?: { readonly placement?: ConversationWindowPlacement; readonly sound?: boolean; readonly userInput: boolean; readonly parkReason?: string };
+    readonly state?: { readonly placement?: ConversationWindowPlacement; readonly sound?: boolean; readonly userInput: boolean; readonly parkReason?: string;
+        /** Windows: a Chromium-family window that stops drawing while hidden; parked windows follow desktop switches; the tab-behind experiment's place. */
+        readonly selfThrottles?: boolean; readonly desktopFollow?: boolean; readonly tether?: 'behind' | 'corner' };
     /** False when this computer cannot keep the user's own input away from the window on the desktop (Windows without the input hook). */
     readonly canLock?: boolean;
     readonly subscribe?: (listener: () => void) => () => void;
@@ -350,8 +429,11 @@ export interface ConversationWindowControls {
     readonly keys?: (input: { readonly text?: string; readonly key?: string; readonly modifiers?: readonly string[] }) => Promise<boolean>;
     /** Close the window and terminate its running process on user confirmation. */
     readonly terminateProcess?: () => Promise<boolean>;
-    /** A fresh picture of the window from the system's window capture (no side effects), at most `maxSize` px wide or high. */
-    readonly snapshot?: (maxSize?: number) => Promise<{ readonly data: string; readonly mimeType: string; readonly width: number; readonly height: number } | undefined>;
+    /**
+     * A fresh picture of the window from the system's window capture (no side effects), at most `maxSize` px wide or high:
+     * base64 `data`, or JPEG `bytes` with `binary`. A failure the app side named comes back as `{ error }`.
+     */
+    readonly snapshot?: (maxSize?: number, options?: { readonly binary?: boolean }) => Promise<ConversationWindowSnapshot | { readonly error: string } | undefined>;
 }
 
 const SPECIAL_KEYS: Readonly<Record<string, string>> = {
@@ -465,6 +547,8 @@ const FINGERPRINT_COLUMNS = 16, FINGERPRINT_ROWS = 9;
 const liveVideoFrameTimes = new WeakMap<object, number>();
 /** Milliseconds since this live picture last presented a new frame; undefined when no frame was seen. */
 export function liveVideoFrameAgeMs(video: object | null | undefined, now = Date.now()): number | undefined {
+    // While window snapshots stand in for it (the capture stalled or repeats an old frame), the video is not the window now.
+    if (typeof liveBridgeShown === 'function' && liveBridgeShown(video)) return undefined;
     const at = video ? liveVideoFrameTimes.get(video) : undefined;
     return at === undefined ? undefined : Math.max(0, now - at);
 }
@@ -488,12 +572,14 @@ export function frameFingerprint(source: CanvasImageSource, width: number, heigh
     } catch { return undefined; }
 }
 
-/** The fingerprint of a window snapshot (base64 image from the system's window capture). */
-export async function snapshotFingerprint(shot: { readonly data: string; readonly mimeType?: string } | undefined): Promise<Uint8Array | undefined> {
-    if (!shot?.data || typeof createImageBitmap !== 'function' || typeof atob !== 'function') return undefined;
+/** The fingerprint of a window snapshot (image bytes, or base64 from a host without binary snapshots). */
+export async function snapshotFingerprint(shot: { readonly data?: string; readonly bytes?: Uint8Array; readonly mimeType?: string; readonly error?: string } | undefined): Promise<Uint8Array | undefined> {
+    if (!(shot?.bytes && shot.bytes.byteLength > 0) && !shot?.data || typeof createImageBitmap !== 'function') return undefined;
     try {
-        const bytes = Uint8Array.from(atob(shot.data), character => character.charCodeAt(0));
-        const bitmap = await createImageBitmap(new Blob([bytes], { type: shot.mimeType || 'image/jpeg' }));
+        const bytes = shot.bytes && shot.bytes.byteLength > 0 ? shot.bytes
+            : typeof atob === 'function' ? Uint8Array.from(atob(shot.data!), character => character.charCodeAt(0)) : undefined;
+        if (!bytes) return undefined;
+        const bitmap = await createImageBitmap(new Blob([bytes as unknown as BlobPart], { type: shot.mimeType || 'image/jpeg' }));
         try { return frameFingerprint(bitmap, bitmap.width, bitmap.height); } finally { bitmap.close(); }
     } catch { return undefined; }
 }
@@ -642,26 +728,47 @@ export function pictureFraction(video: HTMLVideoElement, clientX: number, client
     return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x, y } : undefined;
 }
 
-/**
- * The body of an AI-opened tab: the live window (else its last frame, else a waiting state) under a slim toolbar.
- * The tab strip already names the tab, so the body does not repeat it.
- */
 /** What a skill plugin adds to its tab: a header control, its status bar and its readings over the picture. */
 export interface ConversationTabPluginParts {
     readonly headerExtra?: React.ReactNode;
     readonly bar?: React.ReactNode;
+    /** The open AI Console (AppPluginChatPanel): a dialog moved by its title bar and resized from every side. */
     readonly floatingChat?: React.ReactNode;
     readonly overlay?: React.ReactNode;
     readonly running?: boolean;
     readonly onStop?: () => void;
     /** Plugin studio: pick areas (drag) and points with their colour (click) on the live picture, as plugin.json values. */
     readonly studio?: { readonly labels: Readonly<Record<'studio' | 'studioHint' | 'copy' | 'copied' | 'close' | 'studioArea' | 'studioPoint', string>>; onClose(): void };
+    /** The AI Console lives on the picture, never in the header: open as floatingChat, closed as a launcher on an edge. */
+    readonly chatOpen?: boolean;
+    readonly onToggleChat?: () => void;
+    /** A reply is still arriving: the closed launcher pulses, so it is not missed. */
+    readonly chatStreaming?: boolean;
+    /** The launcher's name (its tooltip and accessible label). */
+    readonly chatLabel?: string;
 }
 
 export const PLUGIN_CHAT_SIZE_STORAGE_KEY = 'nextmux.desktop.pluginChatSize.v1';
+/** The open console's place and size in the picture: { x, y, width, height } in pixels from the picture's top left. */
+export const PLUGIN_CHAT_RECT_STORAGE_KEY = 'nextmux.desktop.pluginChatRect.v1';
+/** Where the closed console's launcher rests: an edge of the picture and how far along it (0…1). */
+export const PLUGIN_CHAT_DOCK_STORAGE_KEY = 'nextmux.desktop.pluginChatDock.v1';
 export const PLUGIN_CHAT_DEFAULT_SIZE = { width: 340, height: 380 } as const;
 export const PLUGIN_CHAT_MIN_WIDTH = 280;
 export const PLUGIN_CHAT_MIN_HEIGHT = 240;
+/** The console keeps this far from every edge of the picture (the 20px of slack clampPluginChatOverlaySize leaves). */
+export const PLUGIN_CHAT_EDGE_MARGIN = 10;
+export const PLUGIN_CHAT_DOCK_SIZE = 42;
+export const PLUGIN_CHAT_DOCK_INSET = 10;
+/** Moved further than this, a press on the launcher is a drag rather than a click. */
+export const PLUGIN_CHAT_DRAG_THRESHOLD = 5;
+
+export type PluginChatDockEdge = 'left' | 'right' | 'top' | 'bottom';
+export interface PluginChatDock { readonly edge: PluginChatDockEdge; readonly offsetRatio: number }
+export interface PluginChatRect { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+export type PluginChatResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+export const PLUGIN_CHAT_DOCK_DEFAULT: PluginChatDock = { edge: 'right', offsetRatio: 0.5 };
+interface PluginChatArea { readonly width: number; readonly height: number }
 
 export function clampPluginChatOverlaySize(
     desired: { readonly width: number; readonly height: number },
@@ -675,148 +782,462 @@ export function clampPluginChatOverlaySize(
             height: Math.max(PLUGIN_CHAT_MIN_HEIGHT, Math.min(900, rawH))
         };
     }
-    const availW = Math.max(220, Math.floor(container.width - 20));
-    const availH = Math.max(180, Math.floor(container.height - 20));
+    // Inside the picture with PLUGIN_CHAT_EDGE_MARGIN on each side, however small the picture: in one under 240 × 200 the
+    // console shrinks below its usual minimum (its messages scroll) rather than spilling past the edge.
+    const availW = Math.max(1, Math.floor(container.width - 2 * PLUGIN_CHAT_EDGE_MARGIN));
+    const availH = Math.max(1, Math.floor(container.height - 2 * PLUGIN_CHAT_EDGE_MARGIN));
     return {
         width: Math.max(Math.min(PLUGIN_CHAT_MIN_WIDTH, availW), Math.min(rawW, availW)),
         height: Math.max(Math.min(PLUGIN_CHAT_MIN_HEIGHT, availH), Math.min(rawH, availH))
     };
 }
 
-function readStoredPluginChatSize(): { width: number; height: number } {
-    try {
-        const raw = typeof window !== 'undefined' ? window.localStorage?.getItem(PLUGIN_CHAT_SIZE_STORAGE_KEY) : undefined;
-        if (!raw) return { ...PLUGIN_CHAT_DEFAULT_SIZE };
-        const parsed = JSON.parse(raw) as { width?: unknown; height?: unknown };
-        const width = typeof parsed?.width === 'number' && Number.isFinite(parsed.width) ? parsed.width : PLUGIN_CHAT_DEFAULT_SIZE.width;
-        const height = typeof parsed?.height === 'number' && Number.isFinite(parsed.height) ? parsed.height : PLUGIN_CHAT_DEFAULT_SIZE.height;
-        return clampPluginChatOverlaySize({ width, height });
-    } catch {
-        return { ...PLUGIN_CHAT_DEFAULT_SIZE };
+/** The open console in the picture: its size first (clampPluginChatOverlaySize), then its place, a margin from every edge. */
+export function clampPluginChatRect(rect: { readonly x?: number; readonly y?: number; readonly width: number; readonly height: number },
+    container: PluginChatArea, margin = PLUGIN_CHAT_EDGE_MARGIN): PluginChatRect {
+    const size = clampPluginChatOverlaySize(rect, container);
+    const maxX = Math.max(margin, Math.floor(container.width - size.width - margin));
+    const maxY = Math.max(margin, Math.floor(container.height - size.height - margin));
+    const x = typeof rect.x === 'number' && Number.isFinite(rect.x) ? Math.round(rect.x) : maxX;
+    const y = typeof rect.y === 'number' && Number.isFinite(rect.y) ? Math.round(rect.y) : margin;
+    return { x: Math.min(maxX, Math.max(margin, x)), y: Math.min(maxY, Math.max(margin, y)), ...size };
+}
+
+/** A resize from a side or a corner: only the dragged edges move, each stopping at the picture's margin and the minimum size. */
+export function resizePluginChatRect(start: PluginChatRect, edge: PluginChatResizeEdge, dx: number, dy: number,
+    container: PluginChatArea, margin = PLUGIN_CHAT_EDGE_MARGIN): PluginChatRect {
+    const from = clampPluginChatRect(start, container, margin);
+    const maxRight = Math.max(from.x + from.width, container.width - margin);
+    const maxBottom = Math.max(from.y + from.height, container.height - margin);
+    const minWidth = Math.min(PLUGIN_CHAT_MIN_WIDTH, maxRight - margin), minHeight = Math.min(PLUGIN_CHAT_MIN_HEIGHT, maxBottom - margin);
+    const moveX = Number.isFinite(dx) ? dx : 0, moveY = Number.isFinite(dy) ? dy : 0;
+    let left = from.x, top = from.y, right = from.x + from.width, bottom = from.y + from.height;
+    if (edge.includes('w')) left = Math.min(right - minWidth, Math.max(margin, left + moveX));
+    if (edge.includes('e')) right = Math.max(left + minWidth, Math.min(maxRight, right + moveX));
+    if (edge.includes('n')) top = Math.min(bottom - minHeight, Math.max(margin, top + moveY));
+    if (edge.includes('s')) bottom = Math.max(top + minHeight, Math.min(maxBottom, bottom + moveY));
+    return { x: Math.round(left), y: Math.round(top), width: Math.round(right - left), height: Math.round(bottom - top) };
+}
+
+const pluginChatDockRatio = (value: number): number => Math.round(Math.min(0.92, Math.max(0.08, value)) * 1000) / 1000;
+
+/** Where a released launcher goes: the edge nearest its centre, at the same point along that edge (kept off the corners). */
+export function nearestPluginChatDockEdge(center: { readonly x: number; readonly y: number }, container: PluginChatArea): PluginChatDock {
+    const width = Math.max(1, container.width), height = Math.max(1, container.height);
+    const x = Math.min(width, Math.max(0, Number.isFinite(center.x) ? center.x : width));
+    const y = Math.min(height, Math.max(0, Number.isFinite(center.y) ? center.y : height / 2));
+    const distances: readonly (readonly [PluginChatDockEdge, number])[] = [['right', width - x], ['left', x], ['bottom', height - y], ['top', y]];
+    const [edge] = distances.reduce((best, candidate) => candidate[1] < best[1] ? candidate : best);
+    return { edge, offsetRatio: pluginChatDockRatio(edge === 'left' || edge === 'right' ? y / height : x / width) };
+}
+
+/** A stored launcher place, or the default (the right edge, halfway down) for anything missing or malformed. */
+export function parsePluginChatDock(value: unknown): PluginChatDock {
+    const saved = value && typeof value === 'object' ? value as { readonly edge?: unknown; readonly offsetRatio?: unknown } : undefined;
+    const edge = saved && (['left', 'right', 'top', 'bottom'] as const).find(item => item === saved.edge);
+    return edge && typeof saved.offsetRatio === 'number' && Number.isFinite(saved.offsetRatio)
+        ? { edge, offsetRatio: pluginChatDockRatio(saved.offsetRatio) } : PLUGIN_CHAT_DOCK_DEFAULT;
+}
+
+/** The launcher's resting place (pixels from the picture's top left): flush to its edge and wholly inside the picture. */
+export function pluginChatDockPosition(dock: PluginChatDock, container: PluginChatArea): { readonly left: number; readonly top: number } {
+    const size = PLUGIN_CHAT_DOCK_SIZE, inset = PLUGIN_CHAT_DOCK_INSET;
+    const far = (length: number): number => Math.max(inset, Math.round(length - size - inset));
+    const along = (length: number): number => Math.min(far(length), Math.max(inset, Math.round(dock.offsetRatio * length - size / 2)));
+    switch (dock.edge) {
+        case 'left': return { left: inset, top: along(container.height) };
+        case 'top': return { left: along(container.width), top: inset };
+        case 'bottom': return { left: along(container.width), top: far(container.height) };
+        default: return { left: far(container.width), top: along(container.height) };
     }
 }
 
+/** Where the console opens: its last place once the user moved or resized it, else beside its launcher on the launcher's edge. */
+export function pluginChatOpenRect(saved: { readonly x?: number; readonly y?: number; readonly width: number; readonly height: number },
+    dock: PluginChatDock, container: PluginChatArea): PluginChatRect {
+    if (typeof saved.x === 'number' && Number.isFinite(saved.x) && typeof saved.y === 'number' && Number.isFinite(saved.y)) return clampPluginChatRect(saved, container);
+    const size = clampPluginChatOverlaySize(saved, container), icon = pluginChatDockPosition(dock, container), margin = PLUGIN_CHAT_EDGE_MARGIN;
+    return clampPluginChatRect({
+        ...size,
+        x: dock.edge === 'left' ? margin : dock.edge === 'right' ? container.width - size.width - margin : icon.left + PLUGIN_CHAT_DOCK_SIZE / 2 - size.width / 2,
+        y: dock.edge === 'top' ? margin : dock.edge === 'bottom' ? container.height - size.height - margin : icon.top + PLUGIN_CHAT_DOCK_SIZE / 2 - size.height / 2
+    }, container);
+}
+
+function readPluginChatStorage(key: string): unknown {
+    try {
+        const raw = typeof window !== 'undefined' ? window.localStorage?.getItem(key) : undefined;
+        return raw ? JSON.parse(raw) : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+function writePluginChatStorage(key: string, value: unknown): void {
+    try { window.localStorage?.setItem(key, JSON.stringify(value)); } catch { /* private storage or quota */ }
+}
+
+/** The saved console: its size (all that older builds kept) and, once the user moved or resized it, its place. */
+function readStoredPluginChatRect(): { readonly x?: number; readonly y?: number; readonly width: number; readonly height: number } {
+    const finite = (value: unknown): number | undefined => typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+    const saved = (readPluginChatStorage(PLUGIN_CHAT_RECT_STORAGE_KEY) ?? readPluginChatStorage(PLUGIN_CHAT_SIZE_STORAGE_KEY)) as Record<string, unknown> | undefined;
+    const size = clampPluginChatOverlaySize({ width: finite(saved?.width) ?? PLUGIN_CHAT_DEFAULT_SIZE.width, height: finite(saved?.height) ?? PLUGIN_CHAT_DEFAULT_SIZE.height });
+    const x = finite(saved?.x), y = finite(saved?.y);
+    return x !== undefined && y !== undefined ? { ...size, x, y } : size;
+}
+
+function readStoredPluginChatDock(): PluginChatDock {
+    return parsePluginChatDock(readPluginChatStorage(PLUGIN_CHAT_DOCK_STORAGE_KEY));
+}
+
+function storePluginChatDock(dock: PluginChatDock): void {
+    writePluginChatStorage(PLUGIN_CHAT_DOCK_STORAGE_KEY, dock);
+}
+
+export type ConversationTabGlyphName = 'input' | 'input-off' | 'sound' | 'sound-off' | 'in-tab' | 'on-desktop' | 'schedule' | 'trash' | 'console' | 'market';
+
+/**
+ * The tab bar's and the AI Console launcher's own icons, drawn for this UI on a 24-unit grid with round 1.7 strokes in
+ * currentColor. An "off" icon is the same drawing cut by a slash, with a clear gap where the slash crosses it.
+ */
+export function ConversationTabGlyph({ name, size = 18 }: { readonly name: ConversationTabGlyphName; readonly size?: number }): React.ReactElement {
+    const cut = `nmx-glyph-cut-${React.useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+    const slashed = name === 'input-off' || name === 'sound-off';
+    const speaker = <path d='M3.6 9.6v4.8c0 .6.5 1.1 1.1 1.1h2.9l4.2 3.6c.6.5 1.5.1 1.5-.7V5.6c0-.8-.9-1.2-1.5-.7L7.6 8.5H4.7c-.6 0-1.1.5-1.1 1.1z' />;
+    const drawing = name === 'input' || name === 'input-off' ? <>
+        <rect x='1.9' y='8.6' width='13.2' height='9.2' rx='2.4' />
+        <path d='M5.2 11.9h.01M8.5 11.9h.01M11.8 11.9h.01M6.4 14.7h5.2' />
+        <rect x='17.3' y='5.6' width='4.9' height='9.6' rx='2.45' />
+        <path d='M19.75 8v1.6' />
+    </> : name === 'sound' ? <>{speaker}<path d='M16.2 9.2a4 4 0 0 1 0 5.6M18.9 6.6a7.7 7.7 0 0 1 0 10.8' /></>
+        : name === 'sound-off' ? <>{speaker}<path d='M16.4 9.4a3.7 3.7 0 0 1 .6 2.6' /></>
+        : name === 'in-tab' ? <>
+            <path d='M2.8 8V17.6a2.2 2.2 0 0 0 2.2 2.2h14a2.2 2.2 0 0 0 2.2-2.2V9.4a2.2 2.2 0 0 0-2.2-2.2h-7.3l-1.5-2.4H5a2.2 2.2 0 0 0-2.2 2.2z' />
+            <rect x='6.6' y='10.6' width='10.8' height='5.8' rx='1.3' fill='currentColor' stroke='none' />
+        </> : name === 'on-desktop' ? <>
+            <rect x='2.6' y='3.6' width='18.8' height='12.8' rx='2.2' />
+            <path d='M9 20.2h6M12 16.4v3.8' />
+            <rect x='5.8' y='6.6' width='8.4' height='5.6' rx='1.1' fill='currentColor' stroke='none' />
+        </> : name === 'schedule' ? <>
+            <circle cx='12' cy='12.6' r='8' />
+            <path d='M12 8.6v4.2l2.8 1.8M4.6 4.4 2.8 6.2M19.4 4.4l1.8 1.8' />
+        </> : name === 'trash' ? <path d='M4.6 7h14.8M9.6 7V5.3c0-.6.5-1.1 1.1-1.1h2.6c.6 0 1.1.5 1.1 1.1V7M6.6 7l.8 11.4c.1 1 .9 1.8 1.9 1.8h5.4c1 0 1.8-.8 1.9-1.8L17.4 7M10.2 10.8v5.6M13.8 10.8v5.6' />
+        : name === 'console' ? <>
+            <path d='M6.8 4h10.4A2.8 2.8 0 0 1 20 6.8v7.4a2.8 2.8 0 0 1-2.8 2.8h-5.6l-4.1 3.1c-.4.3-1 0-1-.5V17h.3A2.8 2.8 0 0 1 4 14.2V6.8A2.8 2.8 0 0 1 6.8 4z' />
+            <path d='M12 6.9l1.1 2.4 2.4 1.1-2.4 1.1L12 13.9l-1.1-2.4-2.4-1.1 2.4-1.1z' fill='currentColor' strokeWidth='.8' />
+        </> : <path d='M4.2 6.8h3.2a.4.4 0 0 0 .4-.5 2.6 2.6 0 1 1 5.2 0 .4.4 0 0 0 .4.5h3.3a1.5 1.5 0 0 1 1.5 1.5v3.2a.4.4 0 0 0 .5.4 2.6 2.6 0 1 1 0 5.2.4.4 0 0 0-.5.4v1.3a1.5 1.5 0 0 1-1.5 1.5H4.2a1.5 1.5 0 0 1-1.5-1.5V8.3a1.5 1.5 0 0 1 1.5-1.5z' />;
+    return <svg className={`nmx-tab-glyph is-${name}`} width={size} height={size} viewBox='0 0 24 24' aria-hidden='true' focusable='false'
+        fill='none' stroke='currentColor' strokeWidth='1.7' strokeLinecap='round' strokeLinejoin='round'>
+        {slashed ? <>
+            <defs><mask id={cut} maskUnits='userSpaceOnUse'><rect width='24' height='24' fill='#fff' /><path d='M3.4 3.4l17.2 17.2' stroke='#000' strokeWidth='5' /></mask></defs>
+            <g mask={`url(#${cut})`} opacity='.78'>{drawing}</g>
+            <path d='M3.4 3.4l17.2 17.2' />
+        </> : drawing}
+    </svg>;
+}
+
+const PLUGIN_CHAT_RESIZE_EDGES: readonly PluginChatResizeEdge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+/** A press on the console's title bar moves it, unless it lands on one of the bar's own controls. */
+const PLUGIN_CHAT_DRAG_IGNORE = 'button, a, input, textarea, select, label, summary, [role="button"], [role="switch"], [contenteditable="true"]';
+
+/**
+ * The open AI Console over the picture: dragged by its title bar it stays exactly where it is let go (inside the picture,
+ * PLUGIN_CHAT_EDGE_MARGIN from each edge); every side and corner resizes it. Place and size are kept for the next time.
+ */
 function FloatingPluginChatOverlay(props: {
     readonly containerSize?: { readonly width: number; readonly height: number };
+    readonly dock: PluginChatDock;
     readonly children: React.ReactNode;
 }): React.ReactElement {
-    const [savedSize, setSavedSize] = React.useState<{ width: number; height: number }>(() => readStoredPluginChatSize());
-    const clamped = clampPluginChatOverlaySize(savedSize, props.containerSize);
-    const dragRef = React.useRef<{
-        edge: 'left' | 'bottom' | 'corner';
-        pointerId: number;
-        startX: number;
-        startY: number;
-        startWidth: number;
-        startHeight: number;
-    }>();
-
-    const persistSize = (next: { width: number; height: number }): void => {
-        try {
-            window.localStorage?.setItem(PLUGIN_CHAT_SIZE_STORAGE_KEY, JSON.stringify(next));
-        } catch { /* ignore storage quota */ }
-    };
-
-    const onResizePointerDown = (edge: 'left' | 'bottom' | 'corner') => (event: React.PointerEvent<HTMLDivElement>): void => {
-        if (event.button !== 0) return;
+    const root = React.useRef<HTMLDivElement>(null);
+    const [saved, setSaved] = React.useState(() => readStoredPluginChatRect());
+    const [gestureKind, setGestureKind] = React.useState<'dragging' | 'resizing'>();
+    const gesture = React.useRef<{ readonly kind: 'move' | PluginChatResizeEdge; readonly pointerId: number; readonly startX: number; readonly startY: number;
+        readonly rect: PluginChatRect; latest: PluginChatRect }>();
+    const container = props.containerSize && props.containerSize.width > 0 && props.containerSize.height > 0 ? props.containerSize : undefined;
+    const rect = container ? pluginChatOpenRect(saved, props.dock, container) : undefined;
+    const size = rect || clampPluginChatOverlaySize(saved);
+    const stopBubble = (event: React.SyntheticEvent): void => { event.stopPropagation(); };
+    const begin = (kind: 'move' | PluginChatResizeEdge, event: React.PointerEvent<HTMLElement>): void => {
+        if (!rect || !root.current) return;
         event.preventDefault();
-        event.stopPropagation();
-        dragRef.current = {
-            edge,
-            pointerId: event.pointerId,
-            startX: event.clientX,
-            startY: event.clientY,
-            startWidth: clamped.width,
-            startHeight: clamped.height
-        };
-        try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* ignore */ }
+        gesture.current = { kind, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, rect, latest: rect };
+        setGestureKind(kind === 'move' ? 'dragging' : 'resizing');
+        // The console itself takes the pointer, so one handler follows every gesture, even outside the picture.
+        try { root.current.setPointerCapture(event.pointerId); } catch { /* not capturable */ }
     };
-
-    const onResizePointerMove = (event: React.PointerEvent<HTMLDivElement>): void => {
+    const onPointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
         event.stopPropagation();
-        const active = dragRef.current;
-        if (!active || active.pointerId !== event.pointerId) return;
+        const target = event.target as Element | null;
+        if (event.button !== 0 || typeof target?.closest !== 'function' || !target.closest('.nmx-plugin-chat-header') || target.closest(PLUGIN_CHAT_DRAG_IGNORE)) return;
+        begin('move', event);
+    };
+    const follow = (event: React.PointerEvent<HTMLDivElement>): void => {
+        event.stopPropagation();
+        const active = gesture.current;
+        if (!active || active.pointerId !== event.pointerId || !container) return;
         event.preventDefault();
-        const nextWidth = active.edge === 'left' || active.edge === 'corner'
-            ? active.startWidth + (active.startX - event.clientX)
-            : active.startWidth;
-        const nextHeight = active.edge === 'bottom' || active.edge === 'corner'
-            ? active.startHeight + (event.clientY - active.startY)
-            : active.startHeight;
-        const next = clampPluginChatOverlaySize({ width: nextWidth, height: nextHeight }, props.containerSize);
-        setSavedSize(next);
+        const dx = event.clientX - active.startX, dy = event.clientY - active.startY;
+        active.latest = active.kind === 'move'
+            ? clampPluginChatRect({ ...active.rect, x: active.rect.x + dx, y: active.rect.y + dy }, container)
+            : resizePluginChatRect(active.rect, active.kind, dx, dy, container);
+        setSaved(active.latest);
     };
-
-    const onResizePointerUp = (event: React.PointerEvent<HTMLDivElement>): void => {
+    const finish = (event: React.PointerEvent<HTMLDivElement>): void => {
         event.stopPropagation();
-        const active = dragRef.current;
+        const active = gesture.current;
         if (!active || active.pointerId !== event.pointerId) return;
-        dragRef.current = undefined;
-        try {
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                event.currentTarget.releasePointerCapture(event.pointerId);
-            }
-        } catch { /* ignore */ }
-        const nextWidth = active.edge === 'left' || active.edge === 'corner'
-            ? active.startWidth + (active.startX - event.clientX)
-            : active.startWidth;
-        const nextHeight = active.edge === 'bottom' || active.edge === 'corner'
-            ? active.startHeight + (event.clientY - active.startY)
-            : active.startHeight;
-        const next = clampPluginChatOverlaySize({ width: nextWidth, height: nextHeight }, props.containerSize);
-        setSavedSize(next);
-        persistSize(next);
+        gesture.current = undefined;
+        setGestureKind(undefined);
+        try { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* released */ }
+        // A press that moved nothing (a plain click on the title) saves no place, so it keeps opening beside its launcher.
+        const { latest, rect } = active;
+        if (latest.x === rect.x && latest.y === rect.y && latest.width === rect.width && latest.height === rect.height) return;
+        // It stays where it was let go: no snapping while open.
+        setSaved(latest);
+        writePluginChatStorage(PLUGIN_CHAT_RECT_STORAGE_KEY, latest);
+        writePluginChatStorage(PLUGIN_CHAT_SIZE_STORAGE_KEY, { width: latest.width, height: latest.height });
     };
-
-    const stopBubble = (event: React.SyntheticEvent): void => {
-        event.stopPropagation();
-    };
-
+    const style: React.CSSProperties = rect
+        ? { left: `${rect.x}px`, top: `${rect.y}px`, right: 'auto', bottom: 'auto', width: `${rect.width}px`, height: `${rect.height}px` }
+        : { width: `${size.width}px`, height: `${size.height}px` };
     return (
-        <div
-            className='nmx-plugin-chat-overlay'
-            style={{ width: `${clamped.width}px`, height: `${clamped.height}px` }}
-            onPointerDown={stopBubble}
-            onPointerMove={stopBubble}
-            onPointerUp={stopBubble}
-            onMouseDown={stopBubble}
-            onClick={stopBubble}
-            onDoubleClick={stopBubble}
-            onAuxClick={stopBubble}
-            onContextMenu={stopBubble}
-            onWheel={stopBubble}
-        >
-            <div
-                className='nmx-plugin-chat-resize-left'
-                role='separator'
-                aria-orientation='vertical'
-                onPointerDown={onResizePointerDown('left')}
-                onPointerMove={onResizePointerMove}
-                onPointerUp={onResizePointerUp}
-                onPointerCancel={onResizePointerUp}
-            />
-            <div
-                className='nmx-plugin-chat-resize-bottom'
-                role='separator'
-                aria-orientation='horizontal'
-                onPointerDown={onResizePointerDown('bottom')}
-                onPointerMove={onResizePointerMove}
-                onPointerUp={onResizePointerUp}
-                onPointerCancel={onResizePointerUp}
-            />
-            <div
-                className='nmx-plugin-chat-resize-corner'
-                role='presentation'
-                onPointerDown={onResizePointerDown('corner')}
-                onPointerMove={onResizePointerMove}
-                onPointerUp={onResizePointerUp}
-                onPointerCancel={onResizePointerUp}
-            />
+        <div ref={root} className={`nmx-plugin-chat-overlay${gestureKind ? ` is-${gestureKind}` : ''}`} style={style}
+            onPointerDown={onPointerDown} onPointerMove={follow} onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish}
+            onMouseDown={stopBubble} onClick={stopBubble} onDoubleClick={stopBubble} onAuxClick={stopBubble} onContextMenu={stopBubble} onWheel={stopBubble}>
+            {PLUGIN_CHAT_RESIZE_EDGES.map(edge => <div key={edge} className={`nmx-plugin-chat-resize is-${edge}`} aria-hidden='true'
+                onPointerDown={event => { event.stopPropagation(); if (event.button === 0) begin(edge, event); }} />)}
             <div className='nmx-plugin-chat-overlay-body'>
                 {props.children}
             </div>
         </div>
     );
+}
+
+/**
+ * The closed AI Console: a launcher resting on an edge of the picture. Dragged, it follows the pointer anywhere in the
+ * picture and, let go, glides to the nearest edge; clicked (moved no more than PLUGIN_CHAT_DRAG_THRESHOLD), it opens
+ * the console. Arrow keys move it to another edge.
+ */
+function PluginChatDockLauncher(props: {
+    readonly containerSize: PluginChatArea; readonly dock: PluginChatDock; readonly label: string; readonly streaming?: boolean;
+    onDock(dock: PluginChatDock): void; onOpen(): void;
+}): React.ReactElement {
+    const [dragAt, setDragAt] = React.useState<{ readonly left: number; readonly top: number }>();
+    const press = React.useRef<{ readonly pointerId: number; readonly startX: number; readonly startY: number; readonly left: number; readonly top: number;
+        moved: boolean; at?: { left: number; top: number } }>();
+    const swallowClickUntil = React.useRef(0);
+    const rest = pluginChatDockPosition(props.dock, props.containerSize);
+    const place = dragAt || rest;
+    const within = (left: number, top: number): { left: number; top: number } => ({
+        left: Math.round(Math.min(Math.max(0, props.containerSize.width - PLUGIN_CHAT_DOCK_SIZE), Math.max(0, left))),
+        top: Math.round(Math.min(Math.max(0, props.containerSize.height - PLUGIN_CHAT_DOCK_SIZE), Math.max(0, top)))
+    });
+    const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>): void => {
+        event.stopPropagation();
+        if (event.button !== 0) return;
+        press.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, left: rest.left, top: rest.top, moved: false };
+        try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* not capturable */ }
+    };
+    const onPointerMove = (event: React.PointerEvent<HTMLButtonElement>): void => {
+        event.stopPropagation();
+        const active = press.current;
+        if (!active || active.pointerId !== event.pointerId) return;
+        const dx = event.clientX - active.startX, dy = event.clientY - active.startY;
+        if (!active.moved && Math.hypot(dx, dy) <= PLUGIN_CHAT_DRAG_THRESHOLD) return;
+        active.moved = true;
+        active.at = within(active.left + dx, active.top + dy);
+        setDragAt(active.at);
+    };
+    const onPointerEnd = (event: React.PointerEvent<HTMLButtonElement>): void => {
+        event.stopPropagation();
+        const active = press.current;
+        if (!active || active.pointerId !== event.pointerId) return;
+        press.current = undefined;
+        try { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); } catch { /* released */ }
+        setDragAt(undefined);
+        if (!active.moved || !active.at) return;
+        // A drag ends here; the click the browser sends after it must not open the console.
+        swallowClickUntil.current = Date.now() + 400;
+        props.onDock(nearestPluginChatDockEdge({ x: active.at.left + PLUGIN_CHAT_DOCK_SIZE / 2, y: active.at.top + PLUGIN_CHAT_DOCK_SIZE / 2 }, props.containerSize));
+    };
+    const onClick = (event: React.MouseEvent<HTMLButtonElement>): void => {
+        event.stopPropagation();
+        if (Date.now() < swallowClickUntil.current) { swallowClickUntil.current = 0; return; }
+        props.onOpen();
+    };
+    const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
+        const edge = ({ ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'top', ArrowDown: 'bottom' } as const)[event.key as 'ArrowLeft'];
+        if (!edge || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (edge !== props.dock.edge) props.onDock({ edge, offsetRatio: props.dock.offsetRatio });
+    };
+    return <button type='button' className={`nmx-plugin-chat-dock-icon${dragAt ? ' is-dragging' : ''}${props.streaming ? ' is-streaming' : ''}`}
+        data-edge={props.dock.edge} aria-label={props.label} title={props.label} aria-haspopup='dialog'
+        style={{ left: `${place.left}px`, top: `${place.top}px` }}
+        onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerEnd} onPointerCancel={onPointerEnd} onLostPointerCapture={onPointerEnd}
+        onMouseDown={event => event.stopPropagation()} onClick={onClick} onKeyDown={onKeyDown}>
+        <i className='nmx-plugin-chat-dock-pill' aria-hidden='true'></i>
+        <ConversationTabGlyph name='console' size={22} />
+        {props.streaming && <i className='nmx-plugin-chat-dock-pulse' aria-hidden='true'></i>}
+    </button>;
+}
+
+/** A plan a tab's header lists: the widget decides which belong to the conversation and words their time. */
+export interface ConversationTabScheduledTask {
+    readonly id: string;
+    readonly title: string;
+    /** When it runs, as the scheduled page words it ("每天 09:00", a date and time …). */
+    readonly when: string;
+    readonly enabled: boolean;
+    /** A one-time plan that already ran: switching it on again needs a new time, set on the scheduled page. */
+    readonly locked?: boolean;
+}
+
+/**
+ * The header's plans: a clock with their count, and on hover (or focus, or a click that pins it) a drawer listing each
+ * plan with an on/off switch and a delete button. The drawer opens beneath the clock, and a bridge over the gap keeps
+ * it open while the pointer travels down to it. It is a disclosure, not a dialog: open, it never pauses the keys and
+ * clicks the tab passes to its app (hasOpenOverlayOrModal). Deleting takes two clicks, as on the scheduled page: the
+ * first arms the button for a few seconds.
+ */
+function TabScheduleControl(props: {
+    readonly locale: NextMuxDesktopLocale; readonly tasks: readonly ConversationTabScheduledTask[];
+    onToggle?(taskId: string): void; onDelete?(taskId: string): void;
+}): React.ReactElement | null {
+    const { locale, tasks } = props;
+    const [open, setOpen] = React.useState(false);
+    // A switch flips at once; the plan's saved state takes over when it arrives (or after a few seconds, if it never does).
+    const [flipped, setFlipped] = React.useState<Readonly<Record<string, boolean>>>({});
+    const root = React.useRef<HTMLDivElement>(null);
+    const trigger = React.useRef<HTMLButtonElement>(null);
+    const pinned = React.useRef(false);
+    const [armed, setArmed] = React.useState('');
+    // Escape hands the focus back to the clock without opening the drawer again.
+    const quietFocus = React.useRef(false);
+    const closeTimer = React.useRef<ReturnType<typeof setTimeout>>();
+    const drawerId = `nmx-visual-tab-schedule-${React.useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+    const cancelClose = (): void => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = undefined; } };
+    const show = (): void => { cancelClose(); setOpen(true); };
+    const close = (): void => { cancelClose(); pinned.current = false; setOpen(false); };
+    // Hover opens after a short intent delay, so sweeping across the header to 键鼠 or sound does not flash the drawer;
+    // leaving closes after a grace, so the pointer can cross the gap into it.
+    const showSoon = (): void => {
+        cancelClose();
+        if (open) return;
+        closeTimer.current = setTimeout(() => { closeTimer.current = undefined; setOpen(true); }, 120);
+    };
+    const closeSoon = (): void => {
+        cancelClose();
+        if (pinned.current || !open) return;
+        closeTimer.current = setTimeout(() => { closeTimer.current = undefined; setOpen(false); }, 180);
+    };
+    React.useEffect(() => cancelClose, []);
+    // An armed delete disarms after 4 seconds, and whenever the drawer closes.
+    React.useEffect(() => {
+        if (!armed) return undefined;
+        if (!open) { setArmed(''); return undefined; }
+        const timer = setTimeout(() => setArmed(''), 4000);
+        return () => clearTimeout(timer);
+    }, [armed, open]);
+    React.useEffect(() => {
+        setFlipped(current => {
+            const kept = Object.entries(current).filter(([id, enabled]) => tasks.some(task => task.id === id && task.enabled !== enabled));
+            return kept.length === Object.keys(current).length ? current : Object.fromEntries(kept);
+        });
+    }, [tasks]);
+    React.useEffect(() => {
+        if (!Object.keys(flipped).length) return undefined;
+        const timer = setTimeout(() => setFlipped({}), 4000);
+        return () => clearTimeout(timer);
+    }, [flipped]);
+    React.useEffect(() => {
+        if (!open) return undefined;
+        const onPointerDown = (event: PointerEvent): void => { if (!root.current?.contains(event.target as Node | null)) close(); };
+        const onKeyDown = (event: KeyboardEvent): void => {
+            if (event.key !== 'Escape') return;
+            // Only an Escape meant for the drawer: one opened by a hover leaves the app's, the console's and pickers' Escape alone.
+            const inside = Boolean(root.current?.contains(document.activeElement));
+            if (!inside && !pinned.current) return;
+            event.preventDefault();
+            event.stopPropagation();
+            close();
+            quietFocus.current = true;
+            trigger.current?.focus({ preventScroll: true });
+            quietFocus.current = false;
+        };
+        document.addEventListener('pointerdown', onPointerDown, true);
+        document.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            document.removeEventListener('pointerdown', onPointerDown, true);
+            document.removeEventListener('keydown', onKeyDown, true);
+        };
+    }, [open]);
+    if (!tasks.length) return null;
+    const enabledOf = (task: ConversationTabScheduledTask): boolean => flipped[task.id] ?? task.enabled;
+    const active = tasks.filter(enabledOf).length;
+    const title = conversationWindowText(locale, 'schedules');
+    const summary = conversationWindowText(locale, 'scheduleSummary', { count: String(tasks.length), on: String(active) });
+    const deleteLabel = conversationWindowText(locale, 'scheduleDelete');
+    const confirmLabel = conversationWindowText(locale, 'scheduleDeleteConfirm');
+    return <div ref={root} className={`nmx-visual-tab-schedule${open ? ' is-open' : ''}${active ? ' has-active' : ''}`}
+        onMouseEnter={showSoon} onMouseLeave={closeSoon} onFocus={() => { if (!quietFocus.current) show(); }}
+        onBlur={event => {
+            const next = event.relatedTarget as Node | null;
+            // Focus moving inside, or dropped by a click on the drawer's own text, keeps it open.
+            if (next ? event.currentTarget.contains(next) : event.currentTarget.matches?.(':hover')) return;
+            close();
+        }}>
+        <button ref={trigger} type='button' className='nmx-visual-tab-icon-btn nmx-visual-tab-schedule-trigger'
+            aria-expanded={open} aria-controls={open ? drawerId : undefined} aria-label={`${title} · ${summary}`}
+            onClick={() => { if (open && pinned.current) close(); else { pinned.current = true; show(); } }}>
+            <ConversationTabGlyph name='schedule' />
+            <b className='nmx-visual-tab-schedule-count'>{tasks.length > 99 ? '99+' : tasks.length}</b>
+        </button>
+        {open && <div id={drawerId} className='nmx-visual-tab-schedule-drawer' role='group' aria-label={title}>
+            <div className='nmx-visual-tab-schedule-head'>
+                <strong>{title}</strong>
+                <small>{summary}</small>
+            </div>
+            <ul className='nmx-visual-tab-schedule-list'>
+                {tasks.map(task => {
+                    const enabled = enabledOf(task);
+                    const toggleLabel = goalScheduleText(locale, enabled ? 'disable' : 'enable');
+                    return <li key={task.id} className={`nmx-visual-tab-schedule-item${enabled ? ' is-enabled' : ''}`}>
+                        <div className='nmx-visual-tab-schedule-text'>
+                            <strong data-nmx-literal title={task.title}>{task.title}</strong>
+                            <small data-nmx-literal title={task.when}>{task.when}</small>
+                        </div>
+                        <button type='button' role='switch' aria-checked={enabled} className='nmx-apple-switch'
+                            aria-label={`${toggleLabel} · ${task.title}`} title={task.locked ? goalScheduleText(locale, 'onceHint') : toggleLabel}
+                            disabled={task.locked || !props.onToggle}
+                            onClick={() => {
+                                // One change at a time: a second click before the plan is saved would race the first.
+                                if (task.id in flipped) return;
+                                setFlipped(current => ({ ...current, [task.id]: !enabled }));
+                                props.onToggle?.(task.id);
+                            }}>
+                            <i className='nmx-apple-switch-thumb' aria-hidden='true'></i>
+                        </button>
+                        {props.onDelete && (() => {
+                            const isArmed = armed === task.id;
+                            const label = isArmed ? confirmLabel : deleteLabel;
+                            return <button type='button' className={`nmx-visual-tab-schedule-delete${isArmed ? ' is-armed' : ''}`}
+                                aria-label={`${label} · ${task.title}`} title={label}
+                                onClick={() => {
+                                    if (!isArmed) { setArmed(task.id); return; }
+                                    setArmed('');
+                                    props.onDelete?.(task.id);
+                                }}>
+                                <ConversationTabGlyph name='trash' size={16} />
+                            </button>;
+                        })()}
+                    </li>;
+                })}
+            </ul>
+        </div>}
+    </div>;
 }
 
 const round4 = (value: number): number => Math.round(Math.max(0, Math.min(1, value)) * 10000) / 10000;
@@ -897,10 +1318,14 @@ export function claimAppTabLiveHint(app: string, storage?: Pick<Storage, 'getIte
     return show;
 }
 
-export function ConversationVisualTabView(props: { readonly locale: NextMuxDesktopLocale; readonly tab: ConversationVisualTab; readonly controls?: ConversationWindowControls;
+export function ConversationVisualTabView(props: { readonly locale: NextMuxDesktopLocale; readonly tab: ConversationVisualTab; readonly active?: boolean; readonly controls?: ConversationWindowControls;
     readonly plugin?: ConversationTabPluginParts; readonly announcement?: { readonly id: number; readonly text: string };
     readonly onSelectWindow?: (pid: number, windowId: number) => void;
-    readonly onReopenApp?: (mode: 'check_or_open' | 'restart') => Promise<'opened' | 'running' | 'failed'> }): React.ReactElement {
+    readonly onReopenApp?: (mode: 'check_or_open' | 'restart') => Promise<'opened' | 'running' | 'failed'>;
+    /** The conversation's plans, listed by the clock in front of 键鼠 (hidden while there are none). */
+    readonly scheduledTasks?: readonly ConversationTabScheduledTask[];
+    readonly onToggleScheduledTask?: (taskId: string) => void;
+    readonly onDeleteScheduledTask?: (taskId: string) => void }): React.ReactElement {
     const [selectedWindow, setSelectedWindow] = typeof React.useState === 'function'
         ? React.useState<{ readonly tabId: string; readonly pid: number; readonly windowId: number }>()
         : [undefined, () => undefined];
@@ -977,11 +1402,128 @@ export function hasOpenOverlayOrModal(sectionEl?: HTMLElement | null, localOverl
     return false;
 }
 
-function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly tab: ConversationVisualTab; readonly controls?: ConversationWindowControls;
+/**
+ * "Reopen in real-time mode" (Windows): browsers and Electron, CEF and WebView2 apps stop drawing while their window is
+ * hidden, so a tab-only window of one that NextMux could not start with its realtime switches may freeze. The prompt
+ * shows once per tab session, after the tab's first live frame; dismissing it keeps it away for that app for 30 days.
+ */
+export const REALTIME_PROMPT_STORAGE_KEY = 'nextmux.realtimePrompt.v1';
+const REALTIME_PROMPT_QUIET_MS = 30 * 24 * 60 * 60 * 1000, REALTIME_PROMPT_MAX_APPS = 200;
+let realtimePromptMemo: Record<string, number> | undefined;
+function realtimePromptRecords(now = Date.now()): Record<string, number> {
+    if (realtimePromptMemo) return realtimePromptMemo;
+    const records: Record<string, number> = {};
+    try {
+        const saved = JSON.parse(typeof localStorage === 'undefined' ? 'null' : localStorage.getItem(REALTIME_PROMPT_STORAGE_KEY) || 'null');
+        if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
+            for (const [app, at] of Object.entries(saved)) if (typeof at === 'number' && now - at < REALTIME_PROMPT_QUIET_MS && at <= now + 60_000) records[app] = at;
+        }
+    } catch { /* nothing dismissed */ }
+    return realtimePromptMemo = records;
+}
+/** Whether the user dismissed the realtime prompt for this app in the last 30 days. */
+export function realtimePromptDismissed(app: string, now = Date.now()): boolean {
+    const at = app ? realtimePromptRecords(now)[app] : undefined;
+    return at !== undefined && now - at < REALTIME_PROMPT_QUIET_MS;
+}
+/** Keeps the prompt away from this app for 30 days (the 200 most recent apps are remembered). */
+export function dismissRealtimePrompt(app: string, now = Date.now()): void {
+    if (!app) return;
+    const entries = Object.entries({ ...realtimePromptRecords(now), [app]: now }).filter(([, at]) => now - at < REALTIME_PROMPT_QUIET_MS)
+        .sort((left, right) => right[1] - left[1]).slice(0, REALTIME_PROMPT_MAX_APPS);
+    realtimePromptMemo = Object.fromEntries(entries);
+    try { localStorage.setItem(REALTIME_PROMPT_STORAGE_KEY, JSON.stringify(realtimePromptMemo)); } catch { /* this session only */ }
+}
+/** Tabs (by id) whose prompt was answered in this app session (dismissed, shown on the desktop or reopened), and tabs that were live once. */
+const realtimePromptAnswered = new Set<string>();
+const realtimePromptLiveTabs = new Set<string>();
+/** Forget what this session remembered (tests). */
+export function resetRealtimePromptSession(): void { realtimePromptAnswered.clear(); realtimePromptLiveTabs.clear(); realtimePromptMemo = undefined; }
+export function answerRealtimePrompt(tabId: string): void { if (tabId) realtimePromptAnswered.add(tabId); }
+
+/**
+ * When the realtime prompt shows (see REALTIME_PROMPT_STORAGE_KEY above). Only on the open result's word that NextMux
+ * did not start the app in real-time mode: a window known only by its class (a tab reattached after a restart) may
+ * well be real-time already, and the user's own switches (NEXTMUX_REALTIME_LAUNCH=0, an excluded program) are respected.
+ */
+export function realtimePromptVisible(input: {
+    readonly tabId: string; readonly app: string; readonly windows: boolean; readonly placement?: ConversationWindowPlacement;
+    readonly selfThrottles?: boolean; readonly realtimeLaunch?: boolean; readonly realtimeLaunchReason?: string; readonly tether?: string; readonly live: boolean;
+    /** Something else owns the tab right now (plugin control, a reopen in progress). */
+    readonly busy?: boolean; readonly now?: number
+}): boolean {
+    if (input.live && input.tabId) realtimePromptLiveTabs.add(input.tabId);
+    return input.windows && input.placement === 'tab' && input.selfThrottles === true && input.realtimeLaunch === false
+        && input.realtimeLaunchReason !== 'disabled' && input.realtimeLaunchReason !== 'excluded'
+        && input.tether !== 'behind' && !input.busy && realtimePromptLiveTabs.has(input.tabId)
+        && !realtimePromptAnswered.has(input.tabId) && !realtimePromptDismissed(input.app, input.now);
+}
+
+/**
+ * The prompt itself: an infobar between the tab's header and its picture (as Chromium's infobars and VS Code's editor
+ * banners), so it never covers the app's own controls. Reopening asks once more, inline, because the app closes first;
+ * Esc steps back, then dismisses, unless the tab's keyboard switch sends keys to the app.
+ */
+function RealtimeLaunchPrompt(props: { readonly locale: NextMuxDesktopLocale; readonly app: string; readonly relaunchable: boolean;
+    readonly keyboardCapture: boolean; readonly busy: boolean;
+    readonly onReopen: () => void; readonly onShowOnDesktop: () => void; readonly onDismiss: () => void }): React.ReactElement {
+    const { locale } = props;
+    const [confirming, setConfirming] = React.useState(false);
+    const titleId = `nmx-visual-tab-realtime-${React.useId().replace(/[^\w-]/g, '')}`;
+    const confirmRef = React.useRef<HTMLButtonElement>(null);
+    const reopenRef = React.useRef<HTMLButtonElement>(null);
+    const stepped = React.useRef(false);
+    // The confirming step replaces the button that was pressed: the focus moves with it (and back when stepping back).
+    React.useEffect(() => {
+        if (confirming) { stepped.current = true; confirmRef.current?.focus({ preventScroll: true }); }
+        else if (stepped.current) { stepped.current = false; reopenRef.current?.focus({ preventScroll: true }); }
+    }, [confirming]);
+    const onKeyDown = (event: React.KeyboardEvent<HTMLElement>): void => {
+        if (event.key !== 'Escape' || props.keyboardCapture || event.defaultPrevented || event.nativeEvent?.isComposing) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (confirming) setConfirming(false); else props.onDismiss();
+    };
+    // Clicks inside the bar stay in it: nothing reaches the tab around it.
+    const keep = (event: React.SyntheticEvent): void => event.stopPropagation();
+    return <section className='nmx-visual-tab-realtime' role='status' aria-live='polite' aria-labelledby={titleId} onKeyDown={onKeyDown}
+        onPointerDown={keep} onMouseDown={keep} onClick={keep} onDoubleClick={keep} onContextMenu={keep} onWheel={keep}>
+        <i className='codicon codicon-pulse' aria-hidden='true'></i>
+        <div className='nmx-visual-tab-realtime-copy'>
+            <strong id={titleId} data-nmx-literal>{conversationWindowText(locale, 'realtimeTitle', { app: props.app })}</strong>
+            {confirming
+                ? <span className='is-warning' data-nmx-literal>{conversationWindowText(locale, 'realtimeConfirm', { app: props.app })}</span>
+                : <span>{conversationWindowText(locale, props.relaunchable ? 'realtimeBody' : 'realtimeUnavailable')}</span>}
+        </div>
+        <div className='nmx-visual-tab-realtime-actions'>
+            {props.relaunchable && !confirming && <button ref={reopenRef} type='button' className='is-primary' disabled={props.busy}
+                onClick={() => setConfirming(true)}>{conversationWindowText(locale, 'realtimeReopen')}</button>}
+            {props.relaunchable && confirming && <button ref={confirmRef} type='button' className='is-primary' disabled={props.busy}
+                onClick={() => { setConfirming(false); stepped.current = false; props.onReopen(); }}>{conversationWindowText(locale, 'reopenRunningConfirm')}</button>}
+            {confirming
+                ? <button type='button' disabled={props.busy} onClick={() => setConfirming(false)}>{conversationWindowText(locale, 'terminateCancel')}</button>
+                : <button type='button' disabled={props.busy} onClick={props.onShowOnDesktop}>{conversationWindowText(locale, 'alsoOnDesktop')}</button>}
+        </div>
+        <button type='button' className='nmx-visual-tab-realtime-close' aria-label={conversationWindowText(locale, 'dismissNotice')} title={conversationWindowText(locale, 'dismissNotice')}
+            onClick={props.onDismiss}><i className='codicon codicon-close' aria-hidden='true'></i></button>
+    </section>;
+}
+
+/**
+ * The body of an AI-opened tab: the live window (else its last frame, else a waiting state) under a slim toolbar.
+ * The tab strip already names the tab, so the body does not repeat it.
+ */
+function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly tab: ConversationVisualTab; readonly active?: boolean; readonly controls?: ConversationWindowControls;
     readonly plugin?: ConversationTabPluginParts; readonly announcement?: { readonly id: number; readonly text: string };
     readonly onSelectWindow?: (pid: number, windowId: number) => void;
-    readonly onReopenApp?: (mode: 'check_or_open' | 'restart') => Promise<'opened' | 'running' | 'failed'> }): React.ReactElement {
+    readonly onReopenApp?: (mode: 'check_or_open' | 'restart') => Promise<'opened' | 'running' | 'failed'>;
+    readonly scheduledTasks?: readonly ConversationTabScheduledTask[];
+    readonly onToggleScheduledTask?: (taskId: string) => void;
+    readonly onDeleteScheduledTask?: (taskId: string) => void }): React.ReactElement {
     const { locale, tab, controls } = props;
+    // False while the tab is kept warm behind the conversation or another tab (renderCodingWorkbench): it keeps its
+    // picture, but shows nothing, takes no input and holds none of the page's keys or focus.
+    const tabActive = props.active !== false;
     const kind = tab.kind === 'virtual-machine' ? 'virtualMachine' : tab.kind === 'local-desktop' ? 'localDesktop' : 'remoteDesktop';
     const sectionRef = React.useRef<HTMLElement>(null);
     const video = React.useRef<HTMLVideoElement>(null);
@@ -1019,7 +1561,8 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     };
     const handleReopenClick = (): void => reopenApp('check_or_open');
     React.useEffect(() => {
-        if (!reopenModalOpen) return undefined;
+        // Its key and focus traps are document-wide: a parked tab's dialog waits, open, until the tab is on show again.
+        if (!reopenModalOpen || !tabActive) return undefined;
         const previous = document.activeElement as HTMLElement | null;
         const dialog = reopenDialog.current;
         const focusable = (): HTMLElement[] => Array.from(dialog?.querySelectorAll<HTMLElement>('button:not(:disabled), [tabindex="0"]') || []);
@@ -1048,7 +1591,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             document.removeEventListener('focusin', onFocus);
             if (previous?.isConnected) previous.focus({ preventScroll: true });
         };
-    }, [reopenModalOpen]);
+    }, [reopenModalOpen, tabActive]);
 
     // A move restarts the capture, so the view follows the window across displays.
     const [generation, setGeneration] = React.useState(0);
@@ -1107,37 +1650,69 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     const placementRef = React.useRef(placement);
     placementRef.current = placement;
     const snapshotStreamRef = React.useRef(false);
-    // Nobody sees the picture while NextMux is minimised or fully covered (Chromium reports that as hidden): the
-    // capture stops then, and starts again when the window shows, so an open tab costs nothing in the background.
-    const [visible, setVisible] = React.useState(() => document.visibilityState !== 'hidden');
+    // The capture runs while NextMux is on screen, for a parked tab too; the picture's checks (health, stall watchdog,
+    // snapshot bridge), the keyboard and the window's "seen" state (setVisible, which also decides its sound) follow
+    // whether this tab is the one on show. Nobody sees the picture while NextMux is minimised or hidden (the main process
+    // says so, watchWindowShown; the page itself stays "visible" with background throttling off): the capture stops then,
+    // and starts again when the window shows, the tab on show first, so an open tab costs nothing in the background.
+    const [pageVisible, setPageVisible] = React.useState(() => document.visibilityState !== 'hidden');
+    const [windowShown, setWindowShown] = React.useState(() => typeof isWindowShown !== 'function' || isWindowShown());
     React.useEffect(() => {
-        const update = (): void => setVisible(document.visibilityState !== 'hidden');
+        const update = (): void => setPageVisible(document.visibilityState !== 'hidden');
         document.addEventListener('visibilitychange', update);
-        return () => document.removeEventListener('visibilitychange', update);
+        const stopWindow = typeof watchWindowShown === 'function' ? watchWindowShown(() => setWindowShown(isWindowShown())) : undefined;
+        return () => { document.removeEventListener('visibilitychange', update); stopWindow?.(); };
     }, []);
+    const docVisible = pageVisible && windowShown;
+    const visible = docVisible && tabActive;
+    const visibleRef = React.useRef(visible);
+    visibleRef.current = visible;
+    const returnHealthRef = React.useRef<(() => void) | undefined>(undefined);
+    React.useEffect(() => {
+        if (sectionRef.current) (sectionRef.current as HTMLElement & { inert?: boolean }).inert = !tabActive;
+    }, [tabActive]);
     React.useEffect(() => {
         const target = latest.current;
         void target?.setVisible?.(visible);
+        if (visible) {
+            const element = video.current;
+            if (element?.srcObject && element.paused) void element.play().catch(() => undefined);
+            // The snapshot bridge is created again for the tab on show and looks at the window then (its effect below).
+            returnHealthRef.current?.();
+        }
         return () => { void target?.setVisible?.(false); };
     }, [streamKey, visible]);
     React.useEffect(() => {
         setLive(false);
         snapshotStreamRef.current = false;
-        if (!streamKey || !visible) return undefined;
+        returnHealthRef.current = undefined;
+        if (!streamKey || !docVisible) return undefined;
         let stream: MediaStream | undefined;
         let disposed = false;
         let fallbackUsed = false;
-        let loadWatchdogTimer: ReturnType<typeof setTimeout> | undefined;
-        let blackWatchdogTimer: ReturnType<typeof setTimeout> | undefined;
+        let usingSnapshotStream = false;
+        let attached = false;
+        let attachStartedAt = 0;
+        let blackTicks = 0;
+        // How long after a capture is attached (or its tab shows again) the tab itself looks for an all-black picture.
+        const blackWatchMs = 4_000;
+        // A black picture whose window is black too (a terminal, a film's dark scene, a loading screen) is right: checked
+        // once per attach or return, with the window's own snapshot.
+        let blackChecked = false;
+        let blackChecking = false;
+        let healthTimer: ReturnType<typeof setInterval> | undefined;
+        let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
         let activeLoadedListener: (() => void) | undefined;
         const element = video.current;
         let measuredWidth = 0, measuredHeight = 0, measuredScale = 0;
-        const clearWatchdogs = (): void => {
-            if (loadWatchdogTimer) { clearTimeout(loadWatchdogTimer); loadWatchdogTimer = undefined; }
-            if (blackWatchdogTimer) { clearTimeout(blackWatchdogTimer); blackWatchdogTimer = undefined; }
+        const clearAttachHandlers = (): void => {
             if (activeLoadedListener && element) {
                 element.removeEventListener('loadeddata', activeLoadedListener);
                 activeLoadedListener = undefined;
+            }
+            if (recoveryTimer) {
+                clearTimeout(recoveryTimer);
+                recoveryTimer = undefined;
             }
         };
         const measure = (): void => {
@@ -1157,53 +1732,113 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         const reveal = (): void => { if (!disposed) { measure(); setLive(true); } };
         element?.addEventListener('resize', measure);
 
-        const attachStream = (preferSnapshot: boolean): void => {
+        let attachStream: (preferSnapshot: boolean) => void;
+        const triggerSnapshotFallback = (): void => {
+            if (disposed || usingSnapshotStream || fallbackUsed) return;
+            fallbackUsed = true;
+            blackTicks = 0;
+            clearAttachHandlers();
+            attachStream(true);
+        };
+        const checkActiveHealth = (): void => {
+            if (disposed || !visibleRef.current || !element || !attached || !stream) return;
+            const tracks = stream.getVideoTracks?.() || [];
+            const hasLiveTrack = tracks.length > 0 && tracks.some(track => track.readyState !== 'ended');
+            if (!hasLiveTrack) {
+                if (!usingSnapshotStream && !fallbackUsed) {
+                    triggerSnapshotFallback();
+                } else if (!recoveryTimer && latest.current) {
+                    const delay = typeof liveStallRestartDelay === 'function' ? liveStallRestartDelay(latest.current) : 1_000;
+                    recoveryTimer = setTimeout(() => {
+                        recoveryTimer = undefined;
+                        if (!disposed) bumpStreamGeneration();
+                    }, delay);
+                }
+                return;
+            }
+            if (element.srcObject !== stream) element.srcObject = stream;
+            if (element.paused) void element.play().catch(() => undefined);
+            if (element.readyState < 2) {
+                if (!usingSnapshotStream && !fallbackUsed && attachStartedAt > 0 && Date.now() - attachStartedAt >= 1500) {
+                    triggerSnapshotFallback();
+                }
+                return;
+            }
+            reveal();
+            if (usingSnapshotStream || fallbackUsed) { blackTicks = 0; return; }
+            if (typeof liveBridgeShown === 'function' && liveBridgeShown(element)) { blackTicks = 0; return; }
+            // A capture that starts (or comes back into view) black gives way to snapshots. Past that, the snapshot bridge
+            // watches the picture: reading a frame back from the GPU every tick for good would cost, and a film's black
+            // scene must not switch a working capture to snapshots.
+            if (blackChecked || blackChecking || Date.now() - attachStartedAt > blackWatchMs) { blackTicks = 0; return; }
+            if (typeof isBlankOrPureBlackVideoFrame === 'function' && isBlankOrPureBlackVideoFrame(element)) {
+                blackTicks += 1;
+                if (blackTicks < 2) return;
+                // Snapshots stand in only when the window shows what the picture does not (and the system can picture it at
+                // all). A working capture of a terminal or a film's dark scene is black where the window is, with the same
+                // title bar: the two pictures are compared, not the window with black.
+                blackChecking = true;
+                const checkedStream = stream;
+                void Promise.resolve(latest.current?.snapshot?.(256, { binary: true })).catch(() => undefined)
+                    .then(shot => typeof snapshotFingerprint === 'function' ? snapshotFingerprint(shot) : undefined)
+                    .then(windowCells => {
+                        blackChecking = false;
+                        blackTicks = 0;
+                        if (disposed || stream !== checkedStream) return;
+                        blackChecked = true;
+                        // The picture as it is now: a capture that came to life while the snapshot was taken keeps going.
+                        if (!windowCells || typeof isBlankOrPureBlackVideoFrame === 'function' && !isBlankOrPureBlackVideoFrame(element)) return;
+                        const shownCells = (typeof frameFingerprint === 'function' ? frameFingerprint(element, element.videoWidth, element.videoHeight) : undefined)
+                            ?? new Uint8Array(windowCells.length);
+                        // Apart somewhere by more than the noise between two pictures of one window (windowIsChanging's allowance).
+                        if (windowCells.some((cell, index) => Math.abs(cell - (shownCells[index] ?? 0)) > 24)) triggerSnapshotFallback();
+                    });
+            } else {
+                blackTicks = 0;
+            }
+        };
+        returnHealthRef.current = () => {
+            if (disposed) return;
+            blackTicks = 0;
+            blackChecked = false;
+            attachStartedAt = Date.now();
+            checkActiveHealth();
+        };
+        if (typeof setInterval === 'function') {
+            healthTimer = setInterval(checkActiveHealth, 450);
+        }
+
+        attachStream = (preferSnapshot: boolean): void => {
+            usingSnapshotStream = preferSnapshot;
+            attached = false;
+            blackTicks = 0;
             if (!preferSnapshot) snapshotStreamRef.current = false;
-            void latest.current?.start(preferSnapshot ? { preferSnapshot: true } : undefined).then(result => {
+            void latest.current?.start({ ...(preferSnapshot ? { preferSnapshot: true } : {}), shown: () => visibleRef.current, current: () => !disposed }).then(result => {
                 if (disposed) { result?.stream?.getTracks().forEach(track => track.stop()); return; }
-                snapshotStreamRef.current = Boolean(result?.snapshotStream || preferSnapshot);
+                usingSnapshotStream = Boolean(result?.snapshotStream || preferSnapshot);
+                snapshotStreamRef.current = usingSnapshotStream;
                 if (result?.placement) { placementRef.current = result.placement; setPlacement(result.placement); }
                 if (result?.sound !== undefined) setSound(result.sound);
                 const nextStream = result?.stream;
-                const triggerSnapshotFallback = (): void => {
-                    if (disposed || preferSnapshot || fallbackUsed) return;
-                    fallbackUsed = true;
-                    clearWatchdogs();
-                    attachStream(true);
-                };
                 if (!nextStream || !element) {
                     if (!preferSnapshot && !fallbackUsed) triggerSnapshotFallback();
                     return;
                 }
-                clearWatchdogs();
+                clearAttachHandlers();
                 const previousStream = stream;
                 stream = nextStream;
+                attached = true;
+                attachStartedAt = Date.now();
+                blackChecked = false;
                 element.srcObject = nextStream;
                 if (previousStream && previousStream !== nextStream) {
                     previousStream.getTracks().forEach(track => track.stop());
                 }
                 const onReady = (): void => {
                     if (disposed || stream !== nextStream) return;
-                    if (loadWatchdogTimer) { clearTimeout(loadWatchdogTimer); loadWatchdogTimer = undefined; }
                     activeLoadedListener = undefined;
                     reveal();
-                    if (!preferSnapshot && !fallbackUsed) {
-                        blackWatchdogTimer = setTimeout(() => {
-                            blackWatchdogTimer = undefined;
-                            if (!disposed && !fallbackUsed && stream === nextStream && element && isBlankOrPureBlackVideoFrame(element)) {
-                                triggerSnapshotFallback();
-                            }
-                        }, 900);
-                    }
                 };
-                if (!preferSnapshot && !fallbackUsed) {
-                    loadWatchdogTimer = setTimeout(() => {
-                        loadWatchdogTimer = undefined;
-                        if (!disposed && !fallbackUsed && stream === nextStream && element.readyState < 2) {
-                            triggerSnapshotFallback();
-                        }
-                    }, 1500);
-                }
                 if (element.readyState >= 2) {
                     onReady();
                 } else {
@@ -1214,7 +1849,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                 // The app closed the window (or WGC revoked the source): try snapshot fallback once, else fall back to last frame.
                 nextStream.getVideoTracks()[0]?.addEventListener('ended', () => {
                     if (disposed || stream !== nextStream) return;
-                    if (!preferSnapshot && !fallbackUsed) {
+                    if (!usingSnapshotStream && !fallbackUsed) {
                         triggerSnapshotFallback();
                     } else {
                         setLive(false);
@@ -1223,7 +1858,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             }).catch(() => {
                 if (!disposed && !preferSnapshot && !fallbackUsed) {
                     fallbackUsed = true;
-                    clearWatchdogs();
+                    clearAttachHandlers();
                     attachStream(true);
                 }
             });
@@ -1234,12 +1869,14 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         attachStream(preferSnapshots);
         return () => {
             disposed = true;
-            clearWatchdogs();
+            returnHealthRef.current = undefined;
+            if (healthTimer) clearInterval(healthTimer);
+            clearAttachHandlers();
             element?.removeEventListener('resize', measure);
             stream?.getTracks().forEach(track => track.stop());
             if (element) element.srcObject = null;
         };
-    }, [streamKey, generation, visible]);
+    }, [streamKey, generation, docVisible]);
     // What the AI just did to this tab ("already open", "muted the sound" …), for a few seconds.
     const [announced, setAnnounced] = React.useState<string>();
     // Each source owns its fade state so an older announcement cannot fade a newer notice.
@@ -1313,6 +1950,8 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     React.useEffect(() => controls?.subscribe?.(() => {
         const state = latest.current?.state;
         if (!state) return;
+        // The realtime prompt reads selfThrottles and tether straight from the state: draw again when they arrive.
+        setRealtimeFacts(`${state.selfThrottles === true}:${state.tether || ''}`);
         setParkReason(state.parkReason);
         setMouse(state.userInput);
         if (!state.userInput) {
@@ -1363,6 +2002,9 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     };
     // A batch belongs to the window it was typed for: switching tabs before it is sent never redirects it.
     const pendingText = React.useRef<{ text: string; timer?: ReturnType<typeof setTimeout>; generation?: number; target?: ConversationWindowControls }>({ text: '' });
+    const nudgeLivePicture = (ok: unknown): void => {
+        if (ok && typeof nudgeLiveVideoBridge === 'function') nudgeLiveVideoBridge(video.current);
+    };
     const drainPendingText = (): void => {
         const pending = pendingText.current;
         if (pending.timer) { clearTimeout(pending.timer); pending.timer = undefined; }
@@ -1370,7 +2012,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         const batch = pending.text, target = pending.target, generation = pending.generation;
         pending.text = ''; pending.target = undefined;
         if (!target?.keys) return;
-        void inputQueue.current.text(batch, text => target.keys!({ text }), generation);
+        void inputQueue.current.text(batch, text => target.keys!({ text }).then(ok => { nudgeLivePicture(ok); return ok; }), generation);
     };
     const flushPendingText = (): void => {
         drainPendingText();
@@ -1407,7 +2049,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         flushPendingText();
         drainWheel();
         const target = latest.current;
-        if (target?.keys) void inputQueue.current.enqueue(() => target.keys!({ key: chord.key, ...(chord.modifiers.length ? { modifiers: chord.modifiers } : {}) }));
+        if (target?.keys) void inputQueue.current.enqueue(() => target.keys!({ key: chord.key, ...(chord.modifiers.length ? { modifiers: chord.modifiers } : {}) }).then(ok => { nudgeLivePicture(ok); return ok; }));
     };
     const onKeyboardInput = (event: React.FormEvent<HTMLTextAreaElement>): void => {
         if ((event.nativeEvent as InputEvent).isComposing) return;
@@ -1438,11 +2080,11 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         if (!target) return;
         if (Math.abs(deltaY) >= 4) {
             const amountY = Math.min(10, Math.max(1, Math.round(Math.abs(deltaY) / 40)));
-            void inputQueue.current.enqueue(() => target.pointer({ kind: 'scroll', x, y, direction: deltaY > 0 ? 'down' : 'up', amount: amountY }), gen);
+            void inputQueue.current.enqueue(() => target.pointer({ kind: 'scroll', x, y, direction: deltaY > 0 ? 'down' : 'up', amount: amountY }).then(ok => { nudgeLivePicture(ok); return ok; }), gen);
         }
         if (Math.abs(deltaX) >= 4) {
             const amountX = Math.min(10, Math.max(1, Math.round(Math.abs(deltaX) / 40)));
-            void inputQueue.current.enqueue(() => target.pointer({ kind: 'scroll', x, y, direction: deltaX > 0 ? 'right' : 'left', amount: amountX }), gen);
+            void inputQueue.current.enqueue(() => target.pointer({ kind: 'scroll', x, y, direction: deltaX > 0 ? 'right' : 'left', amount: amountX }).then(ok => { nudgeLivePicture(ok); return ok; }), gen);
         }
     };
     const onWheel = (event: React.WheelEvent<HTMLVideoElement>): void => {
@@ -1487,7 +2129,9 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         state.y = next.y;
         state.lastAt = now;
         state.inFlight = true;
-        void Promise.resolve(target.pointer({ kind: 'move', x: next.x, y: next.y })).catch(() => false).finally(() => {
+        void Promise.resolve(target.pointer({ kind: 'move', x: next.x, y: next.y })).catch(() => false).then(ok => {
+            if (ok && typeof nudgeLiveVideoBridge === 'function') nudgeLiveVideoBridge(video.current);
+        }).finally(() => {
             state.inFlight = false;
             if (state.pending) flushHoverMove();
         });
@@ -1552,7 +2196,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                 durationMs: 250,
                 ...(start.button !== 'left' ? { button: start.button } : {}),
                 ...(mods.length ? { modifiers: mods } : {})
-            }));
+            }).then(ok => { nudgeLivePicture(ok); return ok; }));
         }
     };
     const onPointerUp = (event: React.PointerEvent<HTMLVideoElement>): void => finishPointerDrag(event, false);
@@ -1578,7 +2222,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                 ...(double ? { whole: true } : {}),
                 ...(mods.length ? { modifiers: mods } : {}),
                 ...at
-            }));
+            }).then(ok => { nudgeLivePicture(ok); return ok; }));
         }
     };
     const onAuxClick = (event: React.MouseEvent<HTMLVideoElement>): void => {
@@ -1599,7 +2243,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                 button: 'middle',
                 ...(mods.length ? { modifiers: mods } : {}),
                 ...at
-            }));
+            }).then(ok => { nudgeLivePicture(ok); return ok; }));
         }
     };
     const onContextMenu = (event: React.MouseEvent<HTMLVideoElement>): void => {
@@ -1620,7 +2264,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                 button: 'right',
                 ...(mods.length ? { modifiers: mods } : {}),
                 ...at
-            }));
+            }).then(ok => { nudgeLivePicture(ok); return ok; }));
         }
     };
     const statusText = live ? conversationWindowText(locale, 'live')
@@ -1643,6 +2287,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             document.removeEventListener('keydown', onKeyDown);
         };
     }, [windowMenuOpen]);
+    React.useEffect(() => { if (!tabActive) setWindowMenuOpen(false); }, [tabActive]);
     const canTerminate = Boolean(streamKey && (live || tab.status === 'connected') && typeof controls?.terminateProcess === 'function');
     const [liveBubbleState, setLiveBubbleState] = React.useState<'hidden' | 'visible' | 'fading'>('hidden');
     const [terminating, setTerminating] = React.useState(false);
@@ -1650,6 +2295,11 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         if (!canTerminate) {
             setLiveBubbleState('hidden');
             setTerminateModalOpen(false);
+            return undefined;
+        }
+        // The one-time hint waits for the tab to be on show (a tab kept warm behind the conversation would spend it unseen).
+        if (!tabActive) {
+            setLiveBubbleState('hidden');
             return undefined;
         }
         let storage: Storage | undefined;
@@ -1665,15 +2315,15 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             clearTimeout(fadeTimer);
             clearTimeout(hideTimer);
         };
-    }, [canTerminate, tab.id]);
+    }, [canTerminate, tab.id, tabActive]);
     React.useEffect(() => {
-        if (!terminateModalOpen) return undefined;
+        if (!terminateModalOpen || !tabActive) return undefined;
         const onKeyDown = (event: KeyboardEvent): void => {
             if (event.key === 'Escape' && !terminating) setTerminateModalOpen(false);
         };
         document.addEventListener('keydown', onKeyDown);
         return () => document.removeEventListener('keydown', onKeyDown);
-    }, [terminateModalOpen, terminating]);
+    }, [terminateModalOpen, terminating, tabActive]);
     const openTerminateModal = (): void => {
         if (!canTerminate) return;
         setLiveBubbleState('hidden');
@@ -1726,7 +2376,9 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             return false;
         };
         const active = typeof document !== 'undefined' ? document.activeElement as HTMLElement | null : null;
-        if (!hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen) && !isTextEntryNode(active) && latest.current?.keys) {
+        // The plans drawer is no overlay (it never pauses 键鼠), but a capture restart must not pull the focus out of it either.
+        if (!hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen) && !isTextEntryNode(active) && !active?.closest?.('.nmx-visual-tab-schedule')
+            && latest.current?.keys) {
             keyboard.current?.focus({ preventScroll: true });
         }
         const onWindowKeyDownCapture = (event: KeyboardEvent): void => {
@@ -1772,23 +2424,83 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     }, [visible, live, mouse, localOverlayOpen]);
     // Mid-session frame-stall watchdog (watchLiveVideoFrames): a picture that stops while its window keeps changing
     // restarts the capture (at once, then with backoff); a capture that keeps freezing gives way to window snapshots.
+    // In front of it, the snapshot bridge (nextmux-live-frame-bridge.ts) keeps the picture moving within 600 ms of a
+    // stall or a repeated frame by drawing the window's own snapshots over the video until real frames come back; a
+    // bridge that has to keep going for 4 s restarts the capture the same way (once per stall, with the same backoff).
     React.useEffect(() => {
         const element = video.current, owner = latest.current;
         if (!live || !visible || !element || !owner?.snapshot || typeof watchLiveVideoFrames !== 'function') return undefined;
         let restart: ReturnType<typeof setTimeout> | undefined;
         const stop = watchLiveVideoFrames(element, {
-            windowFingerprint: async () => snapshotFingerprint(await owner.snapshot!(256).catch(() => undefined)),
+            windowFingerprint: async () => snapshotFingerprint(await owner.snapshot!(256, { binary: true }).catch(() => undefined)),
             shownFingerprint: () => frameFingerprint(element, element.videoWidth, element.videoHeight),
             onStall: () => { restart = setTimeout(bumpStreamGeneration, liveStallRestartDelay(owner)); }
         });
-        return () => { stop(); if (restart) clearTimeout(restart); };
+        // A picture made of snapshots already (snapshotWindowStream) has nothing to bridge.
+        const canvas = screen.current?.querySelector?.('canvas.nmx-visual-tab-bridge') as HTMLCanvasElement | null | undefined;
+        const stopBridge = canvas && !snapshotStreamRef.current && typeof bridgeLiveVideo === 'function' ? bridgeLiveVideo(element, canvas, {
+            snapshot: async maxSize => {
+                const shot = await owner.snapshot!(maxSize, { binary: true }).catch(() => undefined);
+                return !shot ? undefined : 'error' in shot ? { ok: false, error: shot.error } : { ok: true, ...shot };
+            },
+            maxSize: () => {
+                const box = screen.current?.getBoundingClientRect?.();
+                const scale = Math.max(1, (typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1);
+                return box && (box.width > 0 || box.height > 0) ? Math.round(Math.min(2048, Math.max(1280, Math.max(box.width, box.height) * scale))) : 1280;
+            },
+            onLongStall: () => {
+                if (restart) return;
+                stop();
+                restart = setTimeout(bumpStreamGeneration, liveStallRestartDelay(owner));
+            },
+            // The black-frame fallback can switch this stream to snapshots without a new effect run.
+            enabled: () => !snapshotStreamRef.current
+        }) : undefined;
+        // Shown again (or freshly attached): the window may have changed while nobody looked, so a still picture gets a
+        // prompt look at the window itself instead of waiting for the slow probe.
+        if (stopBridge && typeof nudgeLiveVideoBridge === 'function') nudgeLiveVideoBridge(element);
+        return () => { stop(); stopBridge?.(); if (restart) clearTimeout(restart); };
     }, [live, visible, streamKey, generation]);
+    // The closed AI Console's launcher: which edge of the picture it rests on (shared by every tab, kept across restarts).
+    const [chatDock, setChatDock] = React.useState<PluginChatDock>(() => typeof readStoredPluginChatDock === 'function' ? readStoredPluginChatDock() : { edge: 'right', offsetRatio: 0.5 });
+    const dockChat = (dock: PluginChatDock): void => {
+        setChatDock(dock);
+        if (typeof storePluginChatDock === 'function') storePluginChatDock(dock);
+    };
+    // The realtime prompt (Windows): what the open result said about this window, and what the app side says now.
+    const [, setRealtimeFacts] = React.useState('');
+    const realtimeWindow = windows.find(item => tab.windowRef && item.pid === tab.windowRef.pid && item.windowId === tab.windowRef.windowId);
+    const realtimeFacts = realtimeWindow && typeof realtimeWindow.realtimeLaunch === 'boolean' ? realtimeWindow
+        : windows.find(item => tab.windowRef && item.pid === tab.windowRef.pid && typeof item.realtimeLaunch === 'boolean') || realtimeWindow;
+    const realtimeApp = (tab.appId || tab.title || tab.target || '').trim().toLowerCase();
+    const realtimeShown = typeof realtimePromptVisible === 'function' && Boolean(streamKey) && realtimePromptVisible({
+        tabId: tab.id, app: realtimeApp, windows: tab.platform === 'windows', placement,
+        selfThrottles: realtimeFacts?.selfThrottles === true || controls?.state?.selfThrottles === true,
+        realtimeLaunch: realtimeFacts?.realtimeLaunch, realtimeLaunchReason: realtimeFacts?.realtimeLaunchReason,
+        tether: controls?.state?.tether, live, busy: pluginEscActive || reopening
+    });
+    // Answered: the bar closes. Keyboard focus inside it moves to the tab's placement switch instead of falling to the page.
+    const answerRealtime = (focus: 'pressed' | 'desktop' = 'pressed'): void => {
+        const active = typeof document !== 'undefined' ? document.activeElement as HTMLElement | null : null;
+        if (active?.closest?.('.nmx-visual-tab-realtime')) {
+            // The placement buttons are disabled while the window moves: wait for them (up to a second).
+            const land = (attempt: number): void => {
+                const target = sectionRef.current?.querySelector?.(focus === 'desktop' ? '.nmx-visual-tab-place-btn.is-desktop'
+                    : '.nmx-visual-tab-place-btn[aria-pressed="true"]') as HTMLButtonElement | null;
+                if (target && !target.disabled) target.focus({ preventScroll: true });
+                else if (attempt < 20) setTimeout(() => land(attempt + 1), 50);
+            };
+            requestAnimationFrame(() => land(0));
+        }
+        if (typeof answerRealtimePrompt === 'function') answerRealtimePrompt(tab.id);
+        setRealtimeFacts(`answered:${Date.now()}`);
+    };
     const onSectionKeyDownCapture = (event: React.KeyboardEvent<HTMLElement>): void => {
         if (!live || !mouse || !latest.current?.keys) return;
         if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen)) return;
         const targetNode = event.target as HTMLElement | null;
         if (targetNode === keyboard.current) return;
-        if (targetNode?.closest?.('.nmx-app-plugin-bar, .nmx-plugin-runbar, .nmx-plugin-chat-panel, .nmx-plugin-chat-overlay, .nmx-visual-tab-windows, .nmx-visual-tab-terminate-modal')) return;
+        if (targetNode?.closest?.('.nmx-app-plugin-bar, .nmx-plugin-runbar, .nmx-plugin-chat-panel, .nmx-plugin-chat-overlay, .nmx-visual-tab-windows, .nmx-visual-tab-terminate-modal, .nmx-visual-tab-schedule-drawer')) return;
         const tag = targetNode?.tagName;
         const isTextInput = tag === 'INPUT' && !['checkbox', 'radio'].includes(((targetNode as HTMLInputElement).type || 'text').toLowerCase());
         if (isTextInput || tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'BUTTON' && event.key !== 'Escape') || targetNode?.isContentEditable) return;
@@ -1804,8 +2516,12 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         }
     };
     const appDisplayName = tab.title || tab.target;
-    return <section ref={sectionRef} className={`nmx-visual-tab is-${tab.status}${live ? ' is-live' : ''}${mouse ? ' is-pointer' : ''}`} aria-label={tab.title} onKeyDownCapture={onSectionKeyDownCapture}>
-        <header>
+    // Several tabs can be mounted at once (kept warm): each dialog labels itself by its own ids.
+    const dialogIds = `nmx-visual-tab-${(typeof React.useId === 'function' ? React.useId() : tab.id).replace(/[^\w-]/g, '')}`;
+    const glyph = (name: ConversationTabGlyphName, size?: number): React.ReactNode => typeof ConversationTabGlyph === 'function' ? <ConversationTabGlyph name={name} size={size} /> : null;
+    return <section ref={sectionRef} className={`nmx-visual-tab is-${tab.status}${live ? ' is-live' : ''}${mouse ? ' is-pointer' : ''}${tabActive ? '' : ' is-parked'}`}
+        aria-label={tab.title} aria-hidden={!tabActive || undefined} onKeyDownCapture={onSectionKeyDownCapture}>
+        <header className='nmx-visual-tab-bar'>
             <button type='button' className={`${live ? 'nmx-visual-tab-live' : `is-${tab.status}`}${canTerminate ? ' nmx-visual-tab-live is-interactive' : ''}`}
                 title={`${conversationTabsText(locale, kind)} · ${tab.target}${canTerminate ? ` · ${conversationWindowText(locale, 'terminateBubble')}` : ''}`}
                 disabled={!canTerminate} onClick={openTerminateModal}>
@@ -1850,41 +2566,61 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                 }}>
                 {conversationWindowText(locale, 'terminateBubble')}
             </span>}
-            {streamKey && controls?.canPoint && <label className={`nmx-visual-tab-switch ${mouse ? 'is-on' : 'is-off'}`}
-                data-state={conversationWindowText(locale, mouse ? 'switchOn' : 'switchOff')} title={conversationWindowText(locale, 'mouseHint')}>
-                <input type='checkbox' checked={mouse} onChange={event => toggleMouse(event.currentTarget.checked)} />
-                <i className='codicon codicon-keyboard' aria-hidden='true'></i>{conversationWindowText(locale, 'mouse')}
-            </label>}
-            {streamKey && controls?.canMute && sound !== undefined && <label className={`nmx-visual-tab-switch is-sound ${sound ? 'is-on' : 'is-off'}`}
-                data-state={conversationWindowText(locale, sound ? 'switchOn' : 'soundOff')} title={conversationWindowText(locale, 'soundHint')}>
-                <input type='checkbox' checked={sound} onChange={event => toggleSound(event.currentTarget.checked)} />
-                <i className={`codicon codicon-${sound ? 'unmute' : 'mute'}`} aria-hidden='true'></i>{conversationWindowText(locale, 'sound')}
-            </label>}
+            {/* The conversation's plans sit right before 键鼠: a clock and their count, the list in a drawer on hover. */}
+            {typeof TabScheduleControl === 'function' && props.scheduledTasks?.length ? <TabScheduleControl locale={locale} tasks={props.scheduledTasks}
+                onToggle={props.onToggleScheduledTask} onDelete={props.onDeleteScheduledTask} /> : null}
+            {streamKey && controls?.canPoint && <button type='button' role='switch' aria-checked={mouse}
+                className={`nmx-visual-tab-icon-btn nmx-visual-tab-switch is-input ${mouse ? 'is-on' : 'is-off'}`}
+                aria-label={`${conversationWindowText(locale, 'mouse')} · ${conversationWindowText(locale, mouse ? 'switchOn' : 'switchOff')}`}
+                title={`${conversationWindowText(locale, 'mouse')} · ${conversationWindowText(locale, mouse ? 'switchOn' : 'switchOff')}\n${conversationWindowText(locale, 'mouseHint')}`}
+                onClick={() => toggleMouse(!mouse)}>
+                {glyph(mouse ? 'input' : 'input-off')}
+            </button>}
+            {streamKey && controls?.canMute && sound !== undefined && <button type='button' role='switch' aria-checked={sound}
+                className={`nmx-visual-tab-icon-btn nmx-visual-tab-switch is-sound ${sound ? 'is-on' : 'is-off'}`}
+                aria-label={`${conversationWindowText(locale, 'sound')} · ${conversationWindowText(locale, sound ? 'switchOn' : 'soundOff')}`}
+                title={`${conversationWindowText(locale, 'sound')} · ${conversationWindowText(locale, sound ? 'switchOn' : 'soundOff')}\n${conversationWindowText(locale, 'soundHint')}`}
+                onClick={() => toggleSound(!sound)}>
+                {glyph(sound ? 'sound' : 'sound-off')}
+            </button>}
             {streamKey && controls?.canPark && placement && <div className='nmx-visual-tab-place' role='group' aria-label={conversationWindowText(locale, 'placement')}>
-                {(['tab', 'desktop'] as const).map(value => <button key={value} type='button' aria-pressed={placement === value} disabled={moving}
-                    onClick={() => { if (placement !== value) move(value); }}>
-                    <i className={`codicon codicon-${value === 'tab' ? 'window' : 'screen-normal'}`} aria-hidden='true'></i>
-                    {conversationWindowText(locale, value === 'tab' ? 'onlyInTab' : 'alsoOnDesktop')}
-                </button>)}
+                {(['tab', 'desktop'] as const).map(value => {
+                    const label = conversationWindowText(locale, value === 'tab' ? 'onlyInTab' : 'alsoOnDesktop');
+                    return <button key={value} type='button' className={`nmx-visual-tab-place-btn is-${value}`} aria-pressed={placement === value} disabled={moving}
+                        aria-label={label} title={value === 'tab' ? `${label}\n${conversationWindowText(locale, 'inTabHint')}` : label}
+                        onClick={() => { if (placement !== value) move(value); }}>
+                        {glyph(value === 'tab' ? 'in-tab' : 'on-desktop', 17)}
+                    </button>;
+                })}
             </div>}
             {/* Windows keeps the window on the desktop: clicking "tab only" explains why, and "also on desktop" brings the window to the front. */}
             {streamKey && controls && !controls.canPark && <div className='nmx-visual-tab-place' role='group' aria-label={conversationWindowText(locale, 'placement')}>
-                <button type='button' aria-pressed='false' aria-disabled='true' title={conversationWindowText(locale, PARK_REASON_TEXT[parkReason || ''] || 'parkForeground')}
+                <button type='button' className='nmx-visual-tab-place-btn is-tab' aria-pressed='false' aria-disabled='true'
+                    aria-label={conversationWindowText(locale, 'onlyInTab')} title={conversationWindowText(locale, PARK_REASON_TEXT[parkReason || ''] || 'parkForeground')}
                     onClick={() => setNotice(PARK_REASON_TEXT[parkReason || ''] || 'parkForeground')}>
-                    <i className='codicon codicon-window' aria-hidden='true'></i>{conversationWindowText(locale, 'onlyInTab')}
+                    {glyph('in-tab', 17)}
                 </button>
-                <button type='button' aria-pressed='true' disabled={moving} title={conversationWindowText(locale, 'switchToWindow')} onClick={() => move('desktop')}>
-                    <i className='codicon codicon-screen-normal' aria-hidden='true'></i>{conversationWindowText(locale, 'alsoOnDesktop')}
+                <button type='button' className='nmx-visual-tab-place-btn is-desktop' aria-pressed='true' disabled={moving}
+                    aria-label={conversationWindowText(locale, 'alsoOnDesktop')} title={`${conversationWindowText(locale, 'alsoOnDesktop')} · ${conversationWindowText(locale, 'switchToWindow')}`}
+                    onClick={() => move('desktop')}>
+                    {glyph('on-desktop', 17)}
                 </button>
             </div>}
             {props.plugin?.headerExtra}
         </header>
         {props.plugin?.bar}
+        {realtimeShown && typeof RealtimeLaunchPrompt === 'function' && <RealtimeLaunchPrompt locale={locale} app={appDisplayName}
+            relaunchable={realtimeFacts?.realtimeRelaunchAvailable === true && Boolean(props.onReopenApp)} keyboardCapture={mouse} busy={reopening}
+            onReopen={() => { answerRealtime(); reopenApp('restart'); }}
+            onShowOnDesktop={() => { answerRealtime('desktop'); move('desktop'); }}
+            onDismiss={() => { if (typeof dismissRealtimePrompt === 'function') dismissRealtimePrompt(realtimeApp); answerRealtime(); }} />}
         <div className='nmx-visual-tab-screen' ref={screen}>
             <video ref={video} muted playsInline aria-label={tab.title} aria-hidden={!live} className={live ? 'is-ready' : undefined} data-window-key={streamKey || undefined}
                 style={pictureStyle} onMouseDown={onMouseDown} onClick={onClick} onAuxClick={onAuxClick} onContextMenu={onContextMenu}
                 onPointerMove={onPointerMove} onPointerDown={onPointerDown} onPointerUp={onPointerUp}
                 onPointerCancel={onPointerCancel} onPointerLeave={resetHoverMove} onWheel={onWheel}></video>
+            {/* The snapshot bridge's picture, over the video in the same box; pointer input still goes to the video. */}
+            <canvas className='nmx-visual-tab-bridge' aria-hidden='true' hidden style={pictureStyle}></canvas>
             {!live && (tab.frameUrl
                 ? <img src={tab.frameUrl} alt={tab.title} draggable={false} />
                 : <div className='nmx-visual-tab-empty'>
@@ -1895,7 +2631,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                 </div>)}
             {live && mouse && controls?.keys && <textarea ref={keyboard} className='nmx-visual-tab-keys' aria-label={conversationWindowText(locale, 'mouse')} tabIndex={-1}
                 autoCapitalize='off' autoCorrect='off' spellCheck={false} onKeyDownCapture={onKeyboardDown} onKeyDown={onKeyboardDown} onInput={onKeyboardInput} onCompositionEnd={onKeyboardCompositionEnd}></textarea>}
-            {live && (pluginEscActive || (!mouse && placement === 'tab')) && <p className='nmx-visual-tab-note'><i className='codicon codicon-eye-closed' aria-hidden='true'></i>{conversationWindowText(locale, pluginEscActive ? 'controlHint' : 'inTabHint')}</p>}
+            {live && !realtimeShown && (pluginEscActive || (!mouse && placement === 'tab')) && <p className='nmx-visual-tab-note'><i className='codicon codicon-eye-closed' aria-hidden='true'></i>{conversationWindowText(locale, pluginEscActive ? 'controlHint' : 'inTabHint')}</p>}
             {(notice || announced) && <div
                 className={`nmx-visual-tab-toast ${notice ? 'is-error' : 'is-info'}${toastFading ? ' is-fading-out is-leaving' : ''}`}
                 role='status'
@@ -1920,18 +2656,22 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             </div>}
             {live && props.plugin?.overlay && pictureBox && <div className='nmx-visual-tab-overlay' style={pictureBox}>{props.plugin.overlay}</div>}
             {live && props.plugin?.studio && pictureBox && <PluginStudio video={video} box={pictureBox} studio={props.plugin.studio} />}
-            {props.plugin?.floatingChat && <FloatingPluginChatOverlay containerSize={screenSize}>{props.plugin.floatingChat}</FloatingPluginChatOverlay>}
+            {props.plugin?.floatingChat && <FloatingPluginChatOverlay containerSize={screenSize} dock={chatDock}>{props.plugin.floatingChat}</FloatingPluginChatOverlay>}
+            {/* Closed, the AI Console waits as a launcher on an edge of the picture (never in the header). */}
+            {!props.plugin?.floatingChat && !props.plugin?.chatOpen && props.plugin?.onToggleChat && !props.plugin.studio && screenSize
+                && typeof PluginChatDockLauncher === 'function' && <PluginChatDockLauncher containerSize={screenSize} dock={chatDock}
+                    label={props.plugin.chatLabel || 'AI Console'} streaming={props.plugin.chatStreaming} onDock={dockChat} onOpen={props.plugin.onToggleChat} />}
         </div>
         {reopenModalOpen && <div className='nmx-visual-tab-terminate-modal-backdrop' role='presentation'
             onClick={() => { if (!reopenBusy.current) setReopenModalOpen(false); }}>
             <div className='nmx-visual-tab-terminate-modal' role='dialog' aria-modal='true' tabIndex={-1} ref={reopenDialog}
-                aria-labelledby='nmx-visual-tab-reopen-title' aria-describedby='nmx-visual-tab-reopen-body'
+                aria-labelledby={`${dialogIds}-reopen-title`} aria-describedby={`${dialogIds}-reopen-body`}
                 onClick={event => event.stopPropagation()}>
                 <div className='nmx-visual-tab-terminate-modal-head'>
                     <span className='nmx-visual-tab-terminate-icon' aria-hidden='true'><i className='codicon codicon-warning'></i></span>
                     <div className='nmx-visual-tab-terminate-copy'>
-                        <strong id='nmx-visual-tab-reopen-title'>{conversationWindowText(locale, 'reopenRunningTitle')}</strong>
-                        <p id='nmx-visual-tab-reopen-body'>{conversationWindowText(locale, 'reopenRunningBody', { app: appDisplayName })}</p>
+                        <strong id={`${dialogIds}-reopen-title`}>{conversationWindowText(locale, 'reopenRunningTitle')}</strong>
+                        <p id={`${dialogIds}-reopen-body`}>{conversationWindowText(locale, 'reopenRunningBody', { app: appDisplayName })}</p>
                     </div>
                 </div>
                 <div className='nmx-visual-tab-terminate-actions'>
@@ -1945,14 +2685,14 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         {terminateModalOpen && <div className='nmx-visual-tab-terminate-modal-backdrop' role='presentation'
             onClick={() => { if (!terminating) setTerminateModalOpen(false); }}>
             <div className='nmx-visual-tab-terminate-modal' role='dialog' aria-modal='true'
-                aria-labelledby='nmx-visual-tab-terminate-title'
+                aria-labelledby={`${dialogIds}-terminate-title`}
                 onClick={event => event.stopPropagation()}>
                 <div className='nmx-visual-tab-terminate-modal-head'>
                     <span className='nmx-visual-tab-terminate-icon' aria-hidden='true'>
                         <i className='codicon codicon-warning' aria-hidden='true'></i>
                     </span>
                     <div className='nmx-visual-tab-terminate-copy'>
-                        <strong id='nmx-visual-tab-terminate-title'>
+                        <strong id={`${dialogIds}-terminate-title`}>
                             {conversationWindowText(locale, 'terminateTitle', { app: appDisplayName })}
                         </strong>
                         <p>{conversationWindowText(locale, 'terminateBody', { app: appDisplayName })}</p>
@@ -1970,6 +2710,9 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                 </div>
             </div>
         </div>}
+        {/* The header's icon controls (the plans clock has its own drawer) and the console launcher explain themselves on hover. */}
+        {/* Document-wide, like every SurfaceTooltips: only the tab on show has one, or each tab kept warm would add its own bubble. */}
+        {tabActive && typeof SurfaceTooltips === 'function' && <SurfaceTooltips scope='.nmx-visual-tab-bar > :not(.nmx-visual-tab-schedule), .nmx-plugin-chat-dock-icon' />}
     </section>;
 }
 

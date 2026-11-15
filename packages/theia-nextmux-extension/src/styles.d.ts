@@ -81,12 +81,14 @@ interface NextMuxDesktopBridge {
     performBrowserAction?(guestId: number, request: import('./common/nextmux-platform-protocol').DesktopBrowserToolRequest): Promise<import('./common/nextmux-platform-protocol').DesktopBrowserToolResult>;
     cancelBrowserAction?(guestId: number, requestId: string): Promise<boolean>;
     releaseBrowserAutomation?(conversationId: string): Promise<boolean>;
-    getComputerCapability?(): Promise<import('./common/nextmux-computer-automation').DesktopComputerCapability>;
-    requestComputerPermission?(): Promise<import('./common/nextmux-computer-automation').DesktopComputerCapability>;
+    /** With reason 'permission_required' the result also lists what is missing (macOS: Accessibility, Screen Recording). */
+    getComputerCapability?(): Promise<import('./common/nextmux-computer-automation').DesktopComputerCapability & { readonly missing?: readonly ('accessibility' | 'screen')[] }>;
+    requestComputerPermission?(): Promise<import('./common/nextmux-computer-automation').DesktopComputerCapability & { readonly missing?: readonly ('accessibility' | 'screen')[] }>;
     performComputerAction?(request: import('./common/nextmux-computer-automation').DesktopComputerToolRequest): Promise<import('./common/nextmux-computer-automation').DesktopComputerToolResult>;
     cancelComputerAction?(conversationId: string, requestId: string): Promise<boolean>;
     releaseComputerSession?(conversationId: string): Promise<boolean>;
-    getComputerViewCapability?(): Promise<import('./browser/nextmux-conversation-tabs-view').ComputerViewCapability>;
+    /** Windows also reports desktopFollow (parked windows follow virtual-desktop switches), tabBehind (experiment) and parkThumbnail (diagnostics). */
+    getComputerViewCapability?(): Promise<import('./browser/nextmux-conversation-tabs-view').ComputerViewCapability & { readonly desktopFollow?: boolean; readonly tabBehind?: boolean; readonly parkThumbnail?: boolean }>;
     setComputerViewPreference?(value: 'tab' | 'desktop'): Promise<import('./browser/nextmux-conversation-tabs-view').ComputerViewCapability>;
     startComputerWindowView?(conversationId: string, pid: number, windowId: number): Promise<{ readonly ok: boolean; readonly placement?: 'tab' | 'desktop'; readonly sound?: boolean; readonly snapshotOnly?: boolean; readonly error?: string }>;
     openComputerTabWindow?(request: { readonly conversationId: string; readonly tabId: string; readonly pid: number; readonly windowId: number; readonly title: string;
@@ -98,8 +100,29 @@ interface NextMuxDesktopBridge {
         readonly root?: number; readonly familyId?: string; readonly role?: 'launcher' | 'client' | 'game' | 'app'; readonly windows?: readonly import('./browser/nextmux-conversation-tabs').ConversationTabWindowItem[]; readonly title?: string; readonly app?: string; readonly placement?: 'tab' | 'desktop'; readonly sound?: boolean; readonly keyboardMouse?: boolean }) => void): () => void;
     openAppInTab?(conversationId: string, selector: string, options?: { readonly onlyIfRunning?: boolean; readonly probeOnly?: boolean; readonly checkOrOpen?: boolean; readonly restartIfRunning?: boolean;
         /** Who opens it: only 'agent' and 'plugin' light the "controlling the computer" frame (and are refused after Esc). */
-        readonly source?: 'agent' | 'plugin' | 'user' | 'passive' }): Promise<{ readonly ok: boolean; readonly running?: boolean; readonly requiresRestart?: boolean; readonly root?: number; readonly familyId?: string; readonly role?: 'launcher' | 'client' | 'game' | 'app'; readonly windows?: readonly import('./browser/nextmux-conversation-tabs').ConversationTabWindowItem[]; readonly pid?: number; readonly windowId?: number; readonly app?: string; readonly appId?: string; readonly programs?: readonly string[]; readonly launched?: boolean; readonly wasRunningInOs?: boolean; readonly canView?: boolean; readonly canPark?: boolean; readonly parkReason?: string; readonly title?: string; readonly placement?: 'tab' | 'desktop'; readonly error?: string }>;
-    computerWindowSnapshot?(conversationId: string, pid: number, windowId: number, maxSize?: number, options?: { readonly source?: 'agent' | 'user' }): Promise<{ readonly ok: boolean; readonly mimeType?: string; readonly data?: string; readonly width?: number; readonly height?: number; readonly error?: string; readonly userInterrupted?: boolean }>;
+        readonly source?: 'agent' | 'plugin' | 'user' | 'passive';
+        /** 2: every failure carries `launched` (always), `wasRunningInOs`, `phase`, and `reopened` / `missing` where they apply. */
+        readonly resultVersion?: 2 }): Promise<{ readonly ok: boolean; readonly running?: boolean; readonly requiresRestart?: boolean; readonly root?: number; readonly familyId?: string; readonly role?: 'launcher' | 'client' | 'game' | 'app'; readonly windows?: readonly import('./browser/nextmux-conversation-tabs').ConversationTabWindowItem[]; readonly pid?: number; readonly windowId?: number; readonly app?: string; readonly appId?: string; readonly programs?: readonly string[]; readonly launched?: boolean; readonly wasRunningInOs?: boolean; readonly canView?: boolean; readonly canPark?: boolean; readonly parkReason?: string; readonly title?: string; readonly placement?: 'tab' | 'desktop'; readonly error?: string;
+        /** The stage that failed (failures only). */
+        readonly phase?: 'permission' | 'launch' | 'window' | 'claim';
+        /** This call asked the user's running, windowless macOS app for a window. */
+        readonly reopened?: boolean;
+        /** With permission_required: the macOS permissions still missing. */
+        readonly missing?: readonly ('accessibility' | 'screen')[];
+        readonly userInterrupted?: boolean;
+        /** Windows: a Chromium-family app (browsers, Electron, CEF, WebView2) that stops drawing while its window is hidden. */
+        readonly selfThrottles?: boolean;
+        readonly chromiumFamily?: 'electron' | 'cef' | 'chrome' | 'webview2';
+        /** NextMux started it with the switches that keep it drawing while hidden. */
+        readonly realtimeLaunch?: boolean;
+        readonly realtimeLaunchReason?: 'already_running' | 'packaged' | 'excluded' | 'disabled' | 'unsupported';
+        /** A restart through restartIfRunning would come back with those switches. */
+        readonly realtimeRelaunchAvailable?: boolean;
+        readonly desktopFollow?: boolean;
+        /** The tab-behind experiment: the window waits behind NextMux ('behind') or at a screen corner. */
+        readonly tether?: 'behind' | 'corner' }>;
+    /** binary: the picture comes back as `bytes` (no base64 `data`); errors keep their shape. */
+    computerWindowSnapshot?(conversationId: string, pid: number, windowId: number, maxSize?: number, options?: { readonly source?: 'agent' | 'user'; readonly binary?: boolean }): Promise<{ readonly ok: boolean; readonly mimeType?: string; readonly data?: string; readonly bytes?: Uint8Array; readonly width?: number; readonly height?: number; readonly error?: string; readonly userInterrupted?: boolean }>;
     computerWindowKeys?(conversationId: string, input: { readonly pid: number; readonly windowId: number; readonly text?: string; readonly key?: string; readonly keys?: readonly string[]; readonly modifiers?: readonly string[]; readonly holdMs?: number; readonly restore?: boolean; readonly delivery?: 'auto' | 'background' | 'foreground'; readonly source?: 'agent' | 'user' }): Promise<{ readonly ok: boolean; readonly delivery?: 'background' | 'foreground'; readonly error?: string }>;
     /** delivery: the AI's and plugins' input goes to the window in the background first ('auto'); the user's own clicks omit it (foreground). */
     computerWindowPointer?(conversationId: string, input: { readonly pid: number; readonly windowId: number; readonly restore?: boolean; readonly delivery?: 'auto' | 'background' | 'foreground'; readonly source?: 'agent' | 'user' } & (
@@ -113,8 +136,10 @@ interface NextMuxDesktopBridge {
     chooseDataLocation?(): Promise<string | undefined>;
     moveDataLocation?(target: string, locale: string): Promise<{ readonly ok: boolean; readonly error?: string; readonly bytes?: number }>;
     revealDataLocation?(): Promise<boolean>;
-    computerWindowState?(conversationId: string, pid: number, windowId: number): Promise<{ readonly ok: boolean; readonly alive?: boolean; readonly placement?: 'tab' | 'desktop'; readonly sound?: boolean; readonly keyboardMouse?: boolean; readonly canPark?: boolean; readonly parkReason?: string; readonly lock?: boolean; readonly soundScope?: 'process'; readonly error?: string }>;
-    placeComputerWindow?(conversationId: string, pid: number, windowId: number, placement: 'tab' | 'desktop', activate: boolean): Promise<{ readonly ok: boolean; readonly placement?: 'tab' | 'desktop'; readonly error?: string }>;
+    computerWindowState?(conversationId: string, pid: number, windowId: number): Promise<{ readonly ok: boolean; readonly alive?: boolean; readonly placement?: 'tab' | 'desktop'; readonly sound?: boolean; readonly keyboardMouse?: boolean; readonly canPark?: boolean; readonly parkReason?: string; readonly lock?: boolean; readonly soundScope?: 'process'; readonly error?: string;
+        readonly selfThrottles?: boolean; readonly desktopFollow?: boolean; readonly tether?: 'behind' | 'corner' }>;
+    placeComputerWindow?(conversationId: string, pid: number, windowId: number, placement: 'tab' | 'desktop', activate: boolean): Promise<{ readonly ok: boolean; readonly placement?: 'tab' | 'desktop'; readonly error?: string;
+        readonly selfThrottles?: boolean; readonly desktopFollow?: boolean; readonly tether?: 'behind' | 'corner' }>;
     forgetComputerWindow?(conversationId: string, pid?: number, windowId?: number, close?: boolean): Promise<boolean>;
     terminateComputerWindow?(conversationId: string, pid: number, windowId: number): Promise<{ readonly ok: boolean; readonly error?: string }>;
     systemNotificationsSupported?(): Promise<boolean>;
@@ -128,6 +153,9 @@ interface NextMuxDesktopBridge {
     pickApplication?(title?: string | { readonly title?: string; readonly browse?: boolean }, options?: { readonly browse?: boolean }): Promise<{ name: string; id: string; path: string; icon: string } | undefined>;
     /** The in-app picker's list: installed apps with their icons, running ones first ([] where apps cannot be listed). */
     listApplications?: () => Promise<readonly { readonly name: string; readonly id: string; readonly path?: string; readonly icon?: string; readonly packaged?: boolean; readonly running?: boolean }[]>;
+    /** The same list, or why it could not be read (a stable snake_case code such as app_list_failed, never exception text). */
+    listApplicationsDetailed?: () => Promise<{ readonly ok: true; readonly apps: readonly { readonly name: string; readonly id: string; readonly path?: string; readonly icon?: string; readonly packaged?: boolean; readonly running?: boolean }[] }
+        | { readonly ok: false; readonly error: string; readonly apps: readonly [] }>;
     /** The in-app picker's "Browse other apps…": an app chosen in a file dialog (.app on macOS; .exe/.lnk on Windows), or undefined. */
     browseApplication?: (title?: string) => Promise<{ readonly name: string; readonly id: string; readonly path?: string; readonly icon?: string; readonly packaged?: boolean; readonly running?: boolean } | undefined>;
     /** An app dragged in (.app on macOS; .exe/.lnk on Windows), described like a picked one; undefined when the path is not an app. */

@@ -1,13 +1,46 @@
-import { knownDesktopDomainText, desktopDomainFailure } from './nextmux-domain-error-locale';
+import { desktopDomainFailure, extractDesktopErrorCode, knownDesktopDomainText } from './nextmux-domain-error-locale';
 import { formatModelError, MODEL_ERROR_KINDS } from '@nextmux/model-runtime/errors';
 import type { NextMuxDesktopLocale } from './nextmux-locale';
 import { runningTaskText } from './nextmux-running-task-locale';
+import { billingShortfall, providerQuotaText } from './nextmux-billing-shortfall';
+
+const OWN_API_CONNECTION_ERROR_CODES = new Set([
+    'INVALID_CONNECTION',
+    'INVALID_PROVIDER',
+    'INVALID_CONNECTION_LABEL',
+    'INVALID_BASE_URL',
+    'INSECURE_BASE_URL',
+    'PRIVATE_BASE_URL',
+    'LOCAL_MODEL_URL_REQUIRED',
+    'BASE_URL_NOT_ALLOWED',
+    'INVALID_MODEL',
+    'API_KEY_REQUIRED',
+    'API_KEY_NOT_ALLOWED',
+    'CONNECTION_NOT_FOUND',
+    'PROVIDER_CHANGE_NOT_ALLOWED',
+    'CONNECTION_LIMIT',
+    'CONNECTION_CHANGED',
+    'CONNECTION_STORE_CORRUPT',
+    'CONNECTION_STORE_TOO_LARGE',
+    'CONNECTION_STORE_UNAVAILABLE',
+    'INVALID_CANVAS_CAPABILITY'
+]);
 
 export type ScenarioModelErrorOptions = NonNullable<Parameters<typeof formatModelError>[2]> & {
     readonly hasSelectedRelay?: boolean;
     readonly hasSelectedRoute?: boolean;
     readonly surface?: 'thread' | 'my_api_card';
+    /** The own API connection's name (its label in My APIs): a provider's empty balance says whose it is. */
+    readonly providerName?: string;
 };
+
+/** A provider's empty balance on the person's own key names that provider, by the same rule as the wallet notice (billingShortfall). */
+function namedProviderQuota(locale: NextMuxDesktopLocale, value: unknown, failure: ReturnType<typeof formatModelError>, context?: ScenarioModelErrorOptions): string | undefined {
+    const provider = context?.providerName?.trim();
+    const source = failure.source ?? context?.source;
+    if (!provider || failure.kind !== 'provider_quota_exhausted' || source === 'relay') return undefined;
+    return billingShortfall(value, source) === 'provider' ? providerQuotaText(locale, provider) : undefined;
+}
 
 function compactOwnApiNetworkText(
     locale: NextMuxDesktopLocale,
@@ -136,6 +169,12 @@ function canvasTimelineErrorText(
 
 /** Preserve structured metadata and diagnostic detail; locale is never inferred from Unicode script. */
 export function modelFailure(locale: NextMuxDesktopLocale, value: unknown, context?: ScenarioModelErrorOptions): ReturnType<typeof formatModelError> {
+    const failure = unnamedModelFailure(locale, value, context);
+    const named = namedProviderQuota(locale, value, failure, context);
+    return named ? { ...failure, text: named } : failure;
+}
+
+function unnamedModelFailure(locale: NextMuxDesktopLocale, value: unknown, context?: ScenarioModelErrorOptions): ReturnType<typeof formatModelError> {
     const baseFailure = formatModelError(value, locale, context);
     const scenarioOverride = applyRouteSelectionScenario(locale, value, baseFailure, context);
     if (scenarioOverride) return scenarioOverride;
@@ -144,6 +183,25 @@ export function modelFailure(locale: NextMuxDesktopLocale, value: unknown, conte
     const data = record?.data;
     const hasMetadata = record?.readableError || typeof record?.kind === 'string' && MODEL_ERROR_KINDS.includes(record.kind as typeof MODEL_ERROR_KINDS[number])
         || data && typeof data === 'object' && 'readableError' in data && data.readableError;
+    const localValidationCode = extractDesktopErrorCode(value)
+        ?? (typeof failure.code === 'string' ? failure.code.trim() || undefined : undefined);
+    if (failure.httpStatus === undefined && localValidationCode && OWN_API_CONNECTION_ERROR_CODES.has(localValidationCode)) {
+        const text = knownDesktopDomainText(locale, value) ?? knownDesktopDomainText(locale, { code: localValidationCode });
+        if (text !== undefined) {
+            const desktop = desktopDomainFailure(locale, value);
+            return {
+                ...failure,
+                domain: 'operation',
+                kind: 'unknown',
+                text,
+                detail: desktop.detail || failure.detail,
+                code: desktop.code ?? localValidationCode,
+                action: 'none',
+                actionLabel: '',
+                retryable: false
+            };
+        }
+    }
     // Explicit model/media/comic message identities beat legacy desktop code aliases.
     if (failure.domain && failure.messageKey) return failure;
     const canvasText = canvasTimelineErrorText(locale, value, failure);
@@ -169,7 +227,7 @@ export function modelFailure(locale: NextMuxDesktopLocale, value: unknown, conte
         }
     }
     if (failure.kind === 'network' || failure.domain || failure.httpStatus !== undefined || failure.source || hasMetadata
-        || context && Object.entries(context).some(([key, item]) => key !== 'surface' && key !== 'hasSelectedRelay' && key !== 'hasSelectedRoute' && item !== undefined)) return failure;
+        || context && Object.entries(context).some(([key, item]) => key !== 'surface' && key !== 'hasSelectedRelay' && key !== 'hasSelectedRoute' && key !== 'providerName' && item !== undefined)) return failure;
     // Untyped mixed-operation errors have no reliable language or model provenance.
     // Keep their redacted original only in detail and present stable localized copy.
     return compactOwnApiNetworkText(locale, formatModelError({ ...failure, domain: 'operation' }, locale, context), context?.surface);
@@ -177,6 +235,8 @@ export function modelFailure(locale: NextMuxDesktopLocale, value: unknown, conte
 
 export function modelFailureText(locale: NextMuxDesktopLocale, value: unknown, context?: ScenarioModelErrorOptions): string {
     const failure = modelFailure(locale, value, context);
+    const named = namedProviderQuota(locale, value, failure, context);
+    if (named) return named;
     const scenarioOverride = applyRouteSelectionScenario(locale, value, failure, context);
     if (scenarioOverride) return scenarioOverride.text;
     const canvasText = !failure.messageKey ? canvasTimelineErrorText(locale, value, failure) : undefined;

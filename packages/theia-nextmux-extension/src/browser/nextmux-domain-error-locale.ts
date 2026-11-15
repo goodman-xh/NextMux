@@ -29,22 +29,41 @@ function translated(locale: NextMuxDesktopLocale, message: DomainMessage): strin
         ? desktopStatusMessage(locale, desktopStatus('DESKTOP_OPERATION_FAILED')) : text;
 }
 
+export function extractDesktopErrorCode(value: unknown): string | undefined {
+    if (!value || typeof value !== 'object') return undefined;
+    const record = value as { code?: unknown; data?: unknown; readableError?: unknown };
+    const data = record.data && typeof record.data === 'object'
+        ? record.data as { code?: unknown; readableError?: unknown } : undefined;
+    const readableError = record.readableError && typeof record.readableError === 'object'
+        ? record.readableError as { code?: unknown } : undefined;
+    const dataReadableError = data?.readableError && typeof data.readableError === 'object'
+        ? data.readableError as { code?: unknown } : undefined;
+    for (const candidate of [record.code, data?.code, readableError?.code, dataReadableError?.code]) {
+        if (typeof candidate === 'string') {
+            const trimmed = candidate.trim();
+            if (trimmed) return trimmed;
+        }
+    }
+    return undefined;
+}
+
 export function knownDesktopDomainText(locale: NextMuxDesktopLocale, value: unknown): string | undefined {
     const message = domainMessageFromError(value);
     if (message) return desktopDomainMessage(locale, message);
-    // Older RPC senders may retain only the top-level code. Unknown messages never select a translation.
-    const record = value && typeof value === 'object' ? value as { code?: unknown } : undefined;
-    return typeof record?.code === 'string' ? translated(locale, { code: record.code, fallbackEnglish: '' }) : undefined;
+    // Older RPC senders or serialized PlatformRequestError wrappers may retain string codes in data/readableError
+    // even when JSON-RPC sets top-level code to a numeric error like -32000. Unknown messages never select a translation.
+    const code = extractDesktopErrorCode(value);
+    return code ? translated(locale, { code, fallbackEnglish: '' }) : undefined;
 }
 
 export function desktopDomainFailure(locale: NextMuxDesktopLocale, value: unknown): { text: string; detail: string; code?: string } {
     const message = domainMessageFromError(value);
-    const record = value && typeof value === 'object' ? value as { message?: unknown; code?: unknown } : undefined;
+    const record = value && typeof value === 'object' ? value as { message?: unknown } : undefined;
     const raw = message?.technicalDetails || (typeof record?.message === 'string' ? record.message : typeof value === 'string' ? value : '');
     return {
         text: knownDesktopDomainText(locale, value) ?? desktopDomainMessage(locale, desktopStatus('DESKTOP_OPERATION_FAILED')),
         detail: redactModelErrorDetail(raw),
-        code: message?.code || (typeof record?.code === 'string' ? record.code : undefined)
+        code: message?.code || extractDesktopErrorCode(value)
     };
 }
 

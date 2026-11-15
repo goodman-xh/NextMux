@@ -162,7 +162,7 @@ function diagnosticSnapshot(
         ? 'interrupted'
         : child.status === 'failed' ? 'error' : child.status;
     const count = Math.min(MAX_EVENTS, Math.max(0, child.eventCount));
-    const failure = childFailure(child, status);
+    const failure = status === 'cancelled' ? undefined : childFailure(child, status);
     return {
         childRunId: child.childRunId,
         parentRunId: child.parentRunId,
@@ -186,8 +186,9 @@ function diagnosticSnapshot(
         ...(child.invocationKey ? { invocationKey: child.invocationKey } : {}),
         ...(child.checkpointError ? { checkpointError: { ...child.checkpointError } } : {}),
         ...(failure ? { error: failure } : {}),
-        // Paused or stopped at a limit is not a failure, but it can still continue (audit A09-06).
-        ...(!failure && child.resumeCheckpointId && (status === 'paused' || status === 'limit_reached') ? { resumeCheckpointId: child.resumeCheckpointId } : {})
+        // Paused, cancelled, or stopped at a limit can still resume from its checkpoint.
+        ...(!failure && child.resumeCheckpointId && (status === 'paused' || status === 'limit_reached' || status === 'cancelled')
+            ? { resumeCheckpointId: child.resumeCheckpointId } : {})
     };
 }
 
@@ -248,7 +249,7 @@ export function hydrateAgentDelegationLedger<T extends AgentDelegationHydrationT
     const next = turns.map(turn => ({ ...turn })) as Array<T & { childAgents?: readonly DesktopAgentChildSnapshot[] }>;
     let changed = false;
 
-    for (const ledgerChild of ledger.children.slice(0, MAX_CHILDREN)) {
+    for (const ledgerChild of ledger.children) {
         if (ledgerChild.rootRunId !== ledger.rootRunId) continue;
         const incoming = diagnosticSnapshot(ledgerChild, options);
         let ownerIndex = next.findIndex(turn => (turn.childAgents || []).some(child => child.childRunId === incoming.childRunId));
@@ -266,7 +267,8 @@ export function hydrateAgentDelegationLedger<T extends AgentDelegationHydrationT
             }
             continue;
         }
-        if (children.length >= MAX_CHILDREN) continue;
+        // A running child always comes back; a finished one only while the turn has room (as the ledger keeps them).
+        if (ledgerChild.status !== 'running' && children.length >= MAX_CHILDREN) continue;
         children.push(incoming);
         next[ownerIndex] = { ...owner, childAgents: children };
         changed = true;

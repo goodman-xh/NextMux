@@ -7,6 +7,9 @@ import type { AgentRuntimeFinalMessage } from '@nextmux/agent-runtime';
 import type { NextMuxDesktopLocale } from './nextmux-locale';
 import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
 import { isMerchantApiDeletedFailure } from '../common/nextmux-merchant-api-deleted';
+import { type BillingFailureSource, billingShortfall, isInsufficientBalanceFailure } from './nextmux-billing-shortfall';
+
+export { isInsufficientBalanceFailure };
 
 export { isMerchantApiDeletedFailure };
 
@@ -406,16 +409,20 @@ function failureMessage(value: unknown): string {
     return typeof value === 'string' ? value : value instanceof Error ? value.message : String(value || '');
 }
 
-export function agentFailureTitle(locale: NextMuxDesktopLocale, failure: DesktopAgentRunFailure | undefined): string {
+export function agentFailureTitle(
+    locale: NextMuxDesktopLocale,
+    failure: DesktopAgentRunFailure | undefined,
+    source?: BillingFailureSource
+): string {
     if (isMerchantApiDeletedFailure(failure)) {
         return agentOutcomeText(locale, 'merchant_api_deleted');
     }
-    if (isInsufficientBalanceFailure(failure)) {
+    if (isInsufficientBalanceFailure(failure, source)) {
         return agentOutcomeText(locale, 'insufficient_balance');
     }
     if (failure && isModelSwitchPolicyFailure(failure)) return agentOutcomeText(locale, 'switch_policy_invalid');
-    if (failure && desktopFailureMessage(locale, failure) !== failure.message) {
-        const known = desktopFailureMessage(locale, failure);
+    if (failure && desktopFailureMessage(locale, failure, source) !== failure.message) {
+        const known = desktopFailureMessage(locale, failure, source);
         if (known !== failure.message || failure.kind === 'failed') return known;
     }
     const kind: DesktopAgentRunFailureKind = failure?.kind || 'failed';
@@ -427,8 +434,10 @@ export function agentFailureTitle(locale: NextMuxDesktopLocale, failure: Desktop
  * provider strings are retained only for genuinely unknown failures; known
  * protocol/configuration errors must never leak an internal action such as
  * “go to model center” or an implementation code into the conversation.
+ * `source` is the route the run took when the caller knows it (the wallet rule and the quota wording depend on it); a
+ * failure that records its own source is read by that.
  */
-export function desktopFailureMessage(locale: NextMuxDesktopLocale, value: unknown): string {
+export function desktopFailureMessage(locale: NextMuxDesktopLocale, value: unknown, source?: BillingFailureSource): string {
     if (isMerchantApiDeletedFailure(value)) {
         return agentOutcomeText(locale, 'merchant_api_deleted');
     }
@@ -444,16 +453,16 @@ export function desktopFailureMessage(locale: NextMuxDesktopLocale, value: unkno
     const metadata = failureRecords(value).some(record => Boolean(record.readableError)
         || Boolean(record.data && typeof record.data === 'object' && (record.data as Record<string, unknown>).readableError));
     if (metadata) {
-        const formatted = formatModelError(value, locale);
+        const formatted = formatModelError(value, locale, source ? { source } : {});
         if (formatted.kind !== 'unknown' || formatted.messageKey || formatted.domain || formatted.walletAdmission) return formatted.text;
     }
     const status = failureStatus(value);
     const raw = failureMessage(value);
     const normalized = raw.replace(/[\u0000\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
-    if (code === 'WALLET_BALANCE_INSUFFICIENT' || code === 'INSUFFICIENT_BALANCE' || status === 402
-        || /(?:insufficient\s+balance|余额不足|余额不够|잔액이 부족|saldo insuficiente)/i.test(normalized)) {
-        return agentOutcomeText(locale, 'insufficient_balance');
-    }
+    // 充值 only for NextMux's wallet; another provider's 402 or quota says to check that provider's account.
+    const shortfall = billingShortfall(value, source);
+    if (shortfall === 'wallet') return agentOutcomeText(locale, 'insufficient_balance');
+    if (shortfall === 'provider') return formatModelError({ kind: 'provider_quota_exhausted', source: source ?? classifyModelError(value).source }, locale).text;
     if (['MODEL_SWITCH_POLICY_INVALID', 'SWITCH_POLICY_INVALID', 'MODEL_SWITCH_OWNER_MISMATCH', 'MODEL_SWITCH_REVISION_CONFLICT'].includes(code)
         || /invalid model[- ]switch policy|model switching is only available/i.test(normalized)) {
         return agentOutcomeText(locale, 'switch_policy_invalid');
@@ -501,11 +510,14 @@ export function normalizePendingManagedReceipt(value: unknown): DesktopAgentRunF
         conversationId: item.conversationId as string, runId: item.runId as string };
 }
 
-/** Normalize an Error/HTTP payload so persisted and live turns share one shape. */
-export function normalizeDesktopFailure(locale: NextMuxDesktopLocale, value: unknown): DesktopAgentRunFailure {
+/**
+ * Normalize an Error/HTTP payload so persisted and live turns share one shape. `source` is the run's route when known: its
+ * message and saved diagnosis then say whose account ran out even when the failure does not record it.
+ */
+export function normalizeDesktopFailure(locale: NextMuxDesktopLocale, value: unknown, source?: BillingFailureSource): DesktopAgentRunFailure {
     const records = failureRecords(value);
     const code = failureCode(value).slice(0, 200) || 'AGENT_RUN_FAILED';
-    const message = desktopFailureMessage(locale, value);
+    const message = desktopFailureMessage(locale, value, source);
     const upper = code.toUpperCase();
     const status = failureStatus(value);
     const existingKind = records.map(candidate => candidate.kind).find(kind => typeof kind === 'string'
@@ -538,7 +550,7 @@ export function normalizeDesktopFailure(locale: NextMuxDesktopLocale, value: unk
         ...(pendingManagedReceipt ? { pendingManagedReceipt } : {}),
         code,
         message,
-        readableError: classifyModelError(value),
+        readableError: classifyModelError(value, source ? { source } : {}),
         ...(requestIds.length ? { requestIds } : {}),
         ...(billing ? { billing: { kind: 'platform' as const, currency: billing.currency, chargedMicros: billing.chargedMicros, requestCount: billing.requestCount } } : {}),
         kind,
@@ -552,16 +564,6 @@ export function normalizeDesktopFailure(locale: NextMuxDesktopLocale, value: unk
         ...(typeof retryAfterMs === 'number' ? { retryAfterMs: Math.max(0, Math.floor(retryAfterMs)) } : {}),
         ...(typeof resumeCheckpointId === 'string' ? { resumeCheckpointId: resumeCheckpointId.slice(0, 200) } : {})
     };
-}
-
-export function isInsufficientBalanceFailure(value: unknown): boolean {
-    const mapped = classifyModelError(value);
-    if (mapped.kind !== 'unknown') return mapped.kind === 'balance_insufficient';
-    const code = failureCode(value).toLocaleLowerCase();
-    const kind = failureRecords(value).some(record => String(record.kind || '').trim().toLocaleLowerCase() === 'insufficient_balance');
-    const message = failureMessage(value);
-    return code === 'wallet_balance_insufficient' || code === 'insufficient_balance' || kind || failureStatus(value) === 402
-        || /(?:insufficient\s+balance|余额不足|余额不够|잔액이 부족|saldo insuficiente)/i.test(message);
 }
 
 export function isModelSwitchPolicyFailure(value: unknown): boolean {

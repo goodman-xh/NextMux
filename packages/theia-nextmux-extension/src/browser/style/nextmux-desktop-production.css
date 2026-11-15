@@ -2691,6 +2691,7 @@ body:is(.windows, :has(#window-controls)) .nmx-shell.is-detached-conversation .n
 
     /* Let the window switcher menu and the terminate bubble escape the header. */
     .nmx-shell .nmx-visual-tab > header:has(.nmx-visual-tab-windows.is-open),
+    .nmx-shell .nmx-visual-tab > header:has(.nmx-visual-tab-schedule.is-open),
     .nmx-shell .nmx-visual-tab > header:has(.nmx-visual-tab-live-bubble) {
         overflow: visible !important;
     }

@@ -1,4 +1,5 @@
 import { decisionPluginCompatibility, isTevDecisionModel } from '@nextmux/model-runtime/decision-adapter';
+import { decodeTextBytes } from '@nextmux/model-runtime/text-encoding';
 import { appPluginDiagnostics as originalAppPluginDiagnostics, appPluginReplayName } from './nextmux-app-plugin-diagnostics-locale';
 import { modelFailure } from './nextmux-model-errors';
 import * as React from '@theia/core/shared/react';
@@ -19,6 +20,9 @@ import { APP_PLUGIN_PRICE } from '../common/nextmux-app-plugins';
 import { ConversationMarkdown } from './nextmux-conversation-markdown';
 import { StreamText } from './nextmux-conversation-stream';
 import { normalizeConversationMarkdown } from './nextmux-markdown';
+import { AttachmentChip, ComposerDropOverlay, fileTypeInfo, fileTypeExtensions, fileExtension, formatAttachmentSize } from './nextmux-composer-attachments';
+import { modelPickerListText, RELAY_DRAWER_WIDTH } from './nextmux-relay-picker';
+import { placeAnchoredFloatingPanel } from './nextmux-floating-panel';
 
 function appPluginDiagnostics(locale: NextMuxDesktopLocale, value: Parameters<typeof originalAppPluginDiagnostics>[1]): readonly string[] {
     if (value.diagnostics?.length) return value.diagnostics.map(item => appPluginPackageError(locale, item.code)
@@ -1486,6 +1490,86 @@ export function safePluginChatAttachmentHref(att: AppPluginChatAttachment): stri
     return '';
 }
 
+/**
+ * Files waiting in the console's composer, within what one agent run accepts (agent-runtime's attachment check: a picture
+ * the model sees as one at most 10 MB, any other file 24 MB, text 120,000 characters, all together 32 MB with the frame).
+ * More, larger or empty ones are refused with a note naming why.
+ */
+const PLUGIN_CHAT_MAX_ATTACHMENTS = 6;
+const PLUGIN_CHAT_MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const PLUGIN_CHAT_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+/** All files together, leaving room in the run for the live frame. */
+const PLUGIN_CHAT_MAX_TOTAL_BYTES = 24 * 1024 * 1024;
+/** Pictures the model sees as pictures (any other image type goes as a file). */
+const PLUGIN_CHAT_MODEL_IMAGES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+/** Read as text (the model then reads the words, not an opaque file): source code, markup, plain text and text data. */
+const PLUGIN_CHAT_TEXT_DATA = new Set(['json', 'jsonc', 'json5', 'jsonl', 'ndjson', 'geojson', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'env', 'properties',
+    'csv', 'tsv', 'sql', 'graphql', 'gql', 'proto', 'diff', 'patch', 'lock']);
+/** A text attachment holds at most 120,000 characters (the run refuses more); a longer text keeps this many. */
+const PLUGIN_CHAT_TEXT_CHARACTERS = 120_000;
+const PLUGIN_CHAT_TEXT_KEPT = 110_000;
+/** A longer file is decoded from its first MiB only: at most 4 bytes a character, that is over 260,000 characters. */
+const PLUGIN_CHAT_TEXT_HEAD_BYTES = 1024 * 1024;
+
+/**
+ * The first MiB of a large text file, ending after a line break, or in a file with none in its second half (minified
+ * JSON or JS, a one-line CSV or log) after a space or ASCII punctuation: a byte from 0x01 to 0x2f ends a character in
+ * UTF-8, GB18030, Big5 and Shift_JIS (their trail bytes are 0x30 and up), and in UTF-16 the cut keeps both bytes of an
+ * ASCII character. Whatever is still cut (UTF-16 text in other scripts, a half MiB with nothing to cut after) is left
+ * out by the decoder (see pluginChatFileText).
+ */
+export function pluginChatTextHead(bytes: Uint8Array): Uint8Array {
+    if (bytes.length <= PLUGIN_CHAT_TEXT_HEAD_BYTES) return bytes;
+    const floor = PLUGIN_CHAT_TEXT_HEAD_BYTES / 2;
+    let end = bytes.lastIndexOf(0x0a, PLUGIN_CHAT_TEXT_HEAD_BYTES - 2) + 1;
+    if (end <= floor) {
+        end = PLUGIN_CHAT_TEXT_HEAD_BYTES;
+        for (let index = PLUGIN_CHAT_TEXT_HEAD_BYTES - 2; index >= floor; index--) {
+            if (bytes[index] >= 0x01 && bytes[index] <= 0x2f) { end = index + 1; break; }
+        }
+    }
+    if (end % 2 && bytes[end] === 0) end += 1;
+    return bytes.subarray(0, end);
+}
+
+/**
+ * A text-like file's words by the shared detector (the reader's language breaking ties), decoded from its head only
+ * when it is large (decoding megabytes would hold the window still, and the text is cut far below its first MiB anyway).
+ * A character the head cut in two is left out rather than making the whole file binary; `head` says the file was cut.
+ * Undefined when it is binary after all: NUL characters, or no encoding that fits.
+ */
+export function pluginChatFileText(bytes: Uint8Array, locale: string): { readonly text: string; readonly head: boolean } | undefined {
+    const head = pluginChatTextHead(bytes);
+    const decoded = decodeTextBytes(head, locale, head === bytes ? undefined : { truncated: true });
+    if (!decoded || decoded.text.includes('\0')) return undefined;
+    return { text: decoded.text.replace(/^\ufeff/, ''), head: head !== bytes };
+}
+/** The + picker offers what a drop takes as text, as well as media and PDF. */
+const PLUGIN_CHAT_PICKER_ACCEPT = ['image/*', 'video/*', 'audio/*', 'text/*', 'application/pdf', 'application/json', '.pdf',
+    ...fileTypeExtensions(['code', 'markup', 'text']).map(extension => `.${extension}`),
+    ...[...PLUGIN_CHAT_TEXT_DATA].map(extension => `.${extension}`)].join(',');
+/**
+ * A text too long for one attachment keeps its beginning, cut at a line break near PLUGIN_CHAT_TEXT_KEPT characters, and
+ * tells the model what it did not get; `kept` is then the characters kept (the person is told as well, on the card).
+ */
+function pluginChatFitText(name: string, text: string, headOnly = false): { readonly content: string; readonly kept?: number } {
+    if (text.length <= PLUGIN_CHAT_TEXT_CHARACTERS && !headOnly) return { content: text };
+    let kept = text.slice(0, PLUGIN_CHAT_TEXT_KEPT);
+    if (/[\ud800-\udbff]$/.test(kept)) kept = kept.slice(0, -1);
+    const lineBreak = kept.lastIndexOf('\n');
+    if (lineBreak > kept.length - 2_000 && lineBreak > 0) kept = kept.slice(0, lineBreak);
+    const whole = headOnly ? 'is longer than 260,000 characters' : `has ${text.length.toLocaleString('en-US')} characters`;
+    return { content: `${kept}\n\n[NextMux: "${name}" ${whole}; only the first ${kept.length.toLocaleString('en-US')} were attached. Tell the user if the rest matters.]`, kept: kept.length };
+}
+function pluginChatTextFile(file: Pick<File, 'name' | 'type'>): boolean {
+    const mime = (file.type || '').toLowerCase();
+    const family = fileTypeInfo(file.name, mime).family;
+    return family === 'code' || family === 'markup' || family === 'text' || mime.startsWith('text/')
+        || /^application\/(?:json|xml|x-yaml|yaml|toml|javascript|x-sh)$/.test(mime)
+        // By extension alone: .csv is a spreadsheet to the type table, and Windows with Excel calls it application/vnd.ms-excel.
+        || PLUGIN_CHAT_TEXT_DATA.has(fileExtension(file.name));
+}
+
 const pluginChatMarkdownRenderers = new Map<string, (text: string, key: string) => React.ReactNode>();
 function pluginChatMarkdown(locale: Locale, className = 'nmx-assistant-markdown'): (text: string, key: string) => React.ReactNode {
     const cacheKey = `${locale}\n${className}`;
@@ -1505,10 +1589,9 @@ function pluginChatMarkdown(locale: Locale, className = 'nmx-assistant-markdown'
  */
 export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactElement {
     const { locale, plugin, run } = props;
-    const zh = locale.startsWith('zh');
     const defaultModel = props.selectedModel || plugin?.model || (plugin?.vision ? { ...plugin.vision, images: true } : null);
     const availableModels = appPluginInlineModels(props.choices, defaultModel, { allModels: true, extraModels: props.extraModels });
-    const fallbackModel: AppPluginModel = defaultModel || availableModels[0] || { source: 'nextmux', model: '~typesafe/jev-latest', label: 'Platform AI (Multimodal)', images: true };
+    const fallbackModel: AppPluginModel = defaultModel || availableModels[0] || { source: 'nextmux', model: '~typesafe/jev-latest', label: t(locale, 'consolePlatformModel'), images: true };
     const models = availableModels.length ? availableModels : [fallbackModel];
     const [activeKey, setActiveKey] = React.useState<string>(() => inlineModelKey(defaultModel || models[0]));
     React.useEffect(() => {
@@ -1522,8 +1605,15 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
     const [fallbackPicker, setFallbackPicker] = React.useState<{ readonly kind: 'relay' | 'model'; readonly rect: DOMRect } | undefined>();
     const [fallbackSourceKey, setFallbackSourceKey] = React.useState<string>('');
     const [fallbackModelQuery, setFallbackModelQuery] = React.useState<string>('');
+    // Files dragged over the console (counted, as dragenter/dragleave also fire for its children) and the note for refused files.
+    const [dragOver, setDragOver] = React.useState(false);
+    const [attachNotice, setAttachNotice] = React.useState('');
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+    const dragDepth = React.useRef(0);
+    // Files still being read count against the limits too, so two quick drops can never overshoot them.
+    const pendingReads = React.useRef(0);
+    const pendingBytes = React.useRef(0);
 
     const messages = props.messages || [];
     const lastMsgSignature = messages.map(m => `${m.id}:${m.text.length}:${m.toolCalls?.length || 0}:${Boolean(m.streaming || m.pending)}`).join('|');
@@ -1553,7 +1643,7 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
     }, [Boolean(fallbackPicker)]);
 
     const activeRun = run && !run.ended ? run : undefined;
-    const appTitle = props.appName || activeRun?.name || plugin?.summary?.name || (zh ? '当前应用' : 'Current App');
+    const appTitle = props.appName || activeRun?.name || plugin?.summary?.name || t(locale, 'consoleCurrentApp');
 
     const submit = (textValue: string): void => {
         const clean = textValue.trim();
@@ -1562,7 +1652,7 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
             ? activeRun.pluginId
             : (props.plugins && props.plugins.length > 1 ? undefined : plugin?.id);
         props.onSend({
-            text: clean || (zh ? '请处理附带的文件与当前画面' : 'Process the attached files and live screen'),
+            text: clean || t(locale, 'consoleFilesPrompt'),
             ...(props.composerModelControls ? {} : { model: chosenModel }),
             modality: 'auto',
             includeScreenshot: true,
@@ -1576,29 +1666,145 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
         if (textareaRef.current) textareaRef.current.style.height = '';
     };
 
+    React.useEffect(() => {
+        if (!attachNotice) return undefined;
+        const timer = setTimeout(() => setAttachNotice(''), 4000);
+        return () => clearTimeout(timer);
+    }, [attachNotice]);
+
+    /**
+     * The + picker, a drop and a paste all end here. Text-like files are decoded to text (the shared detector, the reader's
+     * language breaking ties) and a text longer than one attachment keeps its beginning, said on its card; everything else,
+     * and "text" that is binary after all, goes as data. Folders are named, not read. Files still being read count against
+     * the limits, so two quick drops never overshoot them.
+     */
+    const addFiles = (files: readonly File[], folders: readonly string[] = []): void => {
+        if (!files.length && !folders.length) return;
+        let count = attachments.length + pendingReads.current;
+        let bytes = attachments.reduce((sum, att) => sum + (att.sizeBytes || 0), 0) + pendingBytes.current;
+        // The first reason something is not added is the one the note gives; the other files are added all the same.
+        let refusal = folders.length ? t(locale, 'attachFolder', { name: folders[0] }) : '';
+        const megabytes = (value: number): string => `${Math.round(value / 1024 / 1024)} MB`;
+        const characters = (value: number): string => value.toLocaleString(locale);
+        for (const file of files) {
+            const family = fileTypeInfo(file.name, file.type).family;
+            const kind: AppPluginChatAttachment['kind'] = family === 'image' && file.type.startsWith('image/') ? 'image'
+                : family === 'video' ? 'video' : family === 'audio' ? 'audio' : 'file';
+            const cap = kind === 'image' && PLUGIN_CHAT_MODEL_IMAGES.has(file.type.toLowerCase()) ? PLUGIN_CHAT_MAX_IMAGE_BYTES : PLUGIN_CHAT_MAX_ATTACHMENT_BYTES;
+            const reason = count >= PLUGIN_CHAT_MAX_ATTACHMENTS ? t(locale, 'attachCount', { count: PLUGIN_CHAT_MAX_ATTACHMENTS })
+                : file.size > cap ? t(locale, 'attachTooLarge', { name: file.name, size: megabytes(cap) })
+                    : bytes + file.size > PLUGIN_CHAT_MAX_TOTAL_BYTES ? t(locale, 'attachTotal', { size: megabytes(PLUGIN_CHAT_MAX_TOTAL_BYTES) }) : '';
+            if (reason) { refusal ||= reason; continue; }
+            count += 1;
+            bytes += file.size;
+            pendingReads.current += 1;
+            pendingBytes.current += file.size;
+            const settle = (): void => {
+                pendingReads.current = Math.max(0, pendingReads.current - 1);
+                pendingBytes.current = Math.max(0, pendingBytes.current - file.size);
+            };
+            // A name the run would refuse (line breaks, over 240 characters) is tidied, not a reason to fail the message.
+            const name = file.name.replace(/[\r\n\0]+/g, ' ').trim().slice(0, 200) || 'file';
+            const textLike = kind === 'file' && pluginChatTextFile({ name: file.name, type: file.type });
+            const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}-${name}`;
+            const read = (asText: boolean, binary = false): void => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    if (asText) {
+                        const decoded = reader.result instanceof ArrayBuffer ? pluginChatFileText(new Uint8Array(reader.result), locale) : undefined;
+                        // Binary after all: its bytes go, typed as what they are.
+                        if (!decoded) { read(false, true); return; }
+                        settle();
+                        const text = decoded.text;
+                        if (!text) { setAttachNotice(t(locale, 'attachEmpty', { name })); return; }
+                        const fitted = pluginChatFitText(name, text, decoded.head);
+                        const total = decoded.head ? undefined : text.length;
+                        if (fitted.kept !== undefined) {
+                            const kept = fitted.kept;
+                            setAttachNotice(previous => previous || (total === undefined
+                                ? t(locale, 'attachCutLarge', { name, size: formatAttachmentSize(file.size), kept: characters(kept) })
+                                : t(locale, 'attachCut', { name, total: characters(total), kept: characters(kept) })));
+                        }
+                        setAttachments(prev => prev.length >= PLUGIN_CHAT_MAX_ATTACHMENTS ? prev : [...prev, {
+                            id, kind, name, mimeType: file.type.startsWith('text/') || file.type === 'application/json' ? file.type : 'text/plain', content: fitted.content,
+                            sizeBytes: file.size, ...(fitted.kept !== undefined ? { keptCharacters: fitted.kept, ...(total !== undefined ? { totalCharacters: total } : {}) } : {})
+                        }]);
+                        return;
+                    }
+                    const result = typeof reader.result === 'string' ? reader.result : '';
+                    settle();
+                    if (!result) { setAttachNotice(t(locale, 'attachUnreadable', { name })); return; }
+                    // Bytes that turned out binary say so (the widget takes the type from the data URL).
+                    const dataUrl = binary ? result.replace(/^data:[^;,]*/, 'data:application/octet-stream') : result;
+                    setAttachments(prev => prev.length >= PLUGIN_CHAT_MAX_ATTACHMENTS ? prev : [...prev,
+                        { id, kind, name, mimeType: binary ? 'application/octet-stream' : file.type || 'application/octet-stream', dataUrl, sizeBytes: file.size }]);
+                };
+                // A folder that came as a file (a paste, or a drop without folder entries), or a file that went away.
+                reader.onerror = () => {
+                    settle();
+                    setAttachNotice(t(locale, 'attachUnreadable', { name }));
+                };
+                if (asText) reader.readAsArrayBuffer(file); else reader.readAsDataURL(file);
+            };
+            // An empty file is read as well: an empty one says so, one that cannot be read at all (a folder) says that.
+            read(textLike || !file.size);
+        }
+        if (refusal) setAttachNotice(refusal);
+    };
     const onSelectFiles = (event: React.ChangeEvent<HTMLInputElement>): void => {
         const files = Array.from(event.currentTarget.files || []);
         event.currentTarget.value = '';
-        if (!files.length) return;
-        for (const file of files.slice(0, 4)) {
-            const kind: AppPluginChatAttachment['kind'] = file.type.startsWith('image/') ? 'image'
-                : file.type.startsWith('video/') ? 'video'
-                : file.type.startsWith('audio/') ? 'audio' : 'file';
-            const reader = new FileReader();
-            reader.onload = () => {
-                const dataUrl = typeof reader.result === 'string' ? reader.result : '';
-                if (!dataUrl) return;
-                setAttachments(prev => [...prev, {
-                    id: `${file.name}-${Date.now()}`,
-                    kind,
-                    name: file.name,
-                    mimeType: file.type || 'application/octet-stream',
-                    dataUrl,
-                    sizeBytes: file.size
-                }]);
-            };
-            reader.readAsDataURL(file);
+        addFiles(files);
+    };
+    // Files dropped on the console stay here: the tab underneath never takes them. Enter, over and leave still bubble, so
+    // the conversation behind (handleCodingStageDragOver) sees the pointer reach the console and puts its own drop card away.
+    const carriesFiles = (event: React.DragEvent<HTMLElement>): boolean => Array.from(event.dataTransfer?.types || []).includes('Files');
+    const onDragEnter = (event: React.DragEvent<HTMLDivElement>): void => {
+        if (!carriesFiles(event)) return;
+        event.preventDefault();
+        dragDepth.current += 1;
+        setDragOver(true);
+    };
+    const onDragOver = (event: React.DragEvent<HTMLDivElement>): void => {
+        if (!carriesFiles(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        if (!dragOver) setDragOver(true);
+    };
+    const onDragLeave = (event: React.DragEvent<HTMLDivElement>): void => {
+        if (!carriesFiles(event)) return;
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (!dragDepth.current) setDragOver(false);
+    };
+    const onDrop = (event: React.DragEvent<HTMLDivElement>): void => {
+        if (!carriesFiles(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        dragDepth.current = 0;
+        setDragOver(false);
+        // Entries are read during the drop itself (the DataTransfer empties afterwards). As MDN advises and VS Code does, the
+        // entry says what is a folder, whatever its File looks like (on Windows: 0 bytes, no type), so it is named, not read.
+        const folders: string[] = [];
+        const files: File[] = [];
+        const items = Array.from(event.dataTransfer.items || []).filter(item => item.kind === 'file');
+        for (const item of items) {
+            const entry = typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null;
+            const file = item.getAsFile();
+            if (entry?.isDirectory) folders.push(entry.name || file?.name || '');
+            else if (file) files.push(file);
         }
+        addFiles(items.length ? files : Array.from(event.dataTransfer.files || []), folders);
+    };
+    const onPaste = (event: React.ClipboardEvent<HTMLTextAreaElement>): void => {
+        const data = event.clipboardData;
+        const files = Array.from(data?.files || []);
+        if (!files.length) return;
+        // A spreadsheet copy also carries a picture of its cells: its text is what was meant (as in the conversation composer).
+        const lines = (data.getData?.('text/plain') || '').trim().split(/\r?\n/).filter(Boolean);
+        const table = /<table[\s>]/i.test(data.getData?.('text/html') || '') || lines.length >= 2 && lines.every(line => line.includes('\t'));
+        if (files.length === 1 && (files[0].type || '').startsWith('image/') && table) return;
+        event.preventDefault();
+        addFiles(files);
     };
 
     const sourceKeyForModel = (item: AppPluginModel): string => item.source === 'connection'
@@ -1626,7 +1832,7 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
 
     const renderedModelControls = props.composerModelControls ?? <>
         <button type='button' className='nmx-composer-relay-button nmx-plugin-chat-relay-trigger'
-            aria-haspopup='dialog' aria-expanded={fallbackPicker?.kind === 'relay'}
+            aria-haspopup='dialog' aria-expanded={fallbackPicker?.kind === 'relay'} title={sourceLabelForModel(chosenModel)}
             onClick={event => {
                 const rect = event.currentTarget.getBoundingClientRect();
                 setFallbackPicker(prev => prev?.kind === 'relay' ? undefined : { kind: 'relay', rect });
@@ -1635,7 +1841,7 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
             <i className='codicon codicon-chevron-down' aria-hidden='true' />
         </button>
         <button type='button' className='nmx-route-button nmx-composer-model-button nmx-plugin-chat-model-trigger'
-            aria-haspopup='dialog' aria-expanded={fallbackPicker?.kind === 'model'}
+            aria-haspopup='dialog' aria-expanded={fallbackPicker?.kind === 'model'} title={chosenModel.label || chosenModel.model}
             onClick={event => {
                 const rect = event.currentTarget.getBoundingClientRect();
                 setFallbackModelQuery('');
@@ -1645,67 +1851,80 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
             <i className='codicon codicon-chevron-down' aria-hidden='true' />
         </button>
         {fallbackPicker && typeof document !== 'undefined' && (() => {
-            const floatingStyle: React.CSSProperties = {
+            const relay = fallbackPicker.kind === 'relay';
+            const sourceModelCount = fallbackSources.length > 1
+                ? models.filter(item => sourceKeyForModel(item) === activeFallbackSource).length
+                : models.length;
+            const searchable = !relay && (sourceModelCount > 5 || Boolean(fallbackModelQuery.trim()));
+            // The console drawers' own measures (renderAppPluginChatPickerPortal): 264px wide, a header, the search when
+            // there are more than five models, 32px rows; placed by the trigger and kept inside the window.
+            const desiredHeight = relay
+                ? 52 + Math.max(2, fallbackSources.length) * 32
+                : Math.max(220, 96 + (searchable ? 36 : 0) + Math.max(2, fallbackModelsForSource.length) * 32);
+            const viewport = { width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) };
+            const placement = placeAnchoredFloatingPanel(fallbackPicker.rect, viewport, RELAY_DRAWER_WIDTH, desiredHeight,
+                { edge: 8, gap: 10, minHeight: Math.min(desiredHeight, 150) });
+            const floatingStyle = {
+                '--nmx-model-picker-max-height': `${placement.maxHeight}px`,
                 position: 'fixed',
-                left: Math.max(12, Math.min(fallbackPicker.rect.left, (typeof window !== 'undefined' ? window.innerWidth : 1024) - 340)),
-                top: Math.max(12, fallbackPicker.rect.top - 260),
+                top: `${placement.top}px`,
+                left: `${placement.left}px`,
+                width: `${placement.width}px`,
+                height: `${placement.height}px`,
+                maxHeight: `${placement.maxHeight}px`,
                 zIndex: 10040
-            };
-            const dialogLabel = fallbackPicker.kind === 'relay'
-                ? (zh ? '选择中转商或自有 API' : 'Choose Relay or Own API')
-                : (zh ? '选择对话模型' : 'Choose Model');
+            } as React.CSSProperties;
+            const dialogLabel = relay ? t(locale, 'consoleChooseRelay') : t(locale, 'consoleChooseModel');
+            const option = (key: string, label: string, selected: boolean, choose: () => void): React.ReactElement => (
+                <div key={key} className={`nmx-model-option${selected ? ' is-selected' : ''}`}>
+                    <button type='button' role='option' aria-selected={selected} onClick={choose}>
+                        <span><strong data-nmx-literal>{label}</strong></span>
+                        {selected && <i className='codicon codicon-check' aria-hidden='true' />}
+                    </button>
+                </div>
+            );
             return createPortal(
-                <div className='nmx-model-picker-portal nmx-desktop-widget'>
+                <div className='nmx-model-picker-portal nmx-desktop-widget' dir={locale === 'ar' ? 'rtl' : 'ltr'} lang={locale}>
                     <div className={`nmx-model-picker-surface nmx-shell ${document.querySelector('.nmx-shell.nmx-theme-light') ? 'nmx-theme-light' : 'nmx-theme-dark'}`}>
-                        {fallbackPicker.kind === 'relay' ? (
-                            <div role='dialog' aria-label={dialogLabel} style={floatingStyle}
-                                className='nmx-composer-popover nmx-route-popover nmx-relay-popover nmx-relay-picker-popover'>
-                                <div className='nmx-relay-popover-header'><strong>{zh ? '中转商 / 自有 API' : 'Relays & Own APIs'}</strong></div>
-                                <div className='nmx-relay-source-list' role='listbox'>
-                                    {fallbackSources.map(source => {
-                                        const selected = source.key === activeFallbackSource;
-                                        return <button key={source.key} type='button' role='option' aria-selected={selected}
-                                            className={`nmx-relay-option-select${selected ? ' is-selected' : ''}`}
-                                            onClick={() => {
-                                                setFallbackSourceKey(source.key);
-                                                const first = models.find(item => sourceKeyForModel(item) === source.key);
-                                                if (first) {
-                                                    setActiveKey(inlineModelKey(first));
-                                                    props.onSelectModel?.(first);
-                                                }
-                                                setFallbackPicker(undefined);
-                                            }}>
-                                            <span className='nmx-relay-option-name'><strong>{source.label}</strong></span>
-                                        </button>;
-                                    })}
+                        <section role='dialog' aria-label={dialogLabel} data-side={placement.side} style={floatingStyle}
+                            className='nmx-composer-popover nmx-route-popover nmx-model-picker-popover nmx-model-only-popover'>
+                            <header><strong>{relay ? t(locale, 'consoleSources') : dialogLabel}</strong></header>
+                            {relay ? (
+                                <div className='nmx-model-picker-list' role='listbox' aria-label={t(locale, 'consoleSources')}>
+                                    {fallbackSources.map(source => option(source.key, source.label, source.key === activeFallbackSource, () => {
+                                        setFallbackSourceKey(source.key);
+                                        const first = models.find(item => sourceKeyForModel(item) === source.key);
+                                        if (first) {
+                                            setActiveKey(inlineModelKey(first));
+                                            props.onSelectModel?.(first);
+                                        }
+                                        setFallbackPicker(undefined);
+                                    }))}
                                 </div>
-                            </div>
-                        ) : (
-                            <div role='dialog' aria-label={dialogLabel} style={floatingStyle}
-                                className='nmx-composer-popover nmx-model-picker-popover'>
-                                <div className='nmx-model-picker-search'>
+                            ) : <>
+                                {searchable && <div className='nmx-model-picker-search'>
                                     <i className='codicon codicon-search' aria-hidden='true' />
-                                    <ImeInput value={fallbackModelQuery} placeholder={zh ? '搜索模型…' : 'Search models…'}
+                                    <ImeInput value={fallbackModelQuery} placeholder={t(locale, 'consoleSearchModels')} aria-label={t(locale, 'consoleSearchModels')}
                                         onChange={event => setFallbackModelQuery(event.currentTarget.value)} />
-                                </div>
-                                <div className='nmx-model-picker-list' role='listbox'>
-                                    {fallbackModelsForSource.map(item => {
-                                        const itemKey = inlineModelKey(item);
-                                        const selected = itemKey === inlineModelKey(chosenModel);
-                                        return <button key={itemKey} type='button' role='option' aria-selected={selected}
-                                            className={`nmx-model-picker-option${selected ? ' is-selected' : ''}`}
-                                            onClick={() => {
+                                </div>}
+                                {fallbackModelsForSource.length > 0 ? (
+                                    <div className='nmx-model-picker-list' role='listbox' aria-label={dialogLabel}>
+                                        {fallbackModelsForSource.map(item => {
+                                            const itemKey = inlineModelKey(item);
+                                            return option(itemKey, item.label || item.model, itemKey === inlineModelKey(chosenModel), () => {
                                                 setActiveKey(itemKey);
                                                 props.onSelectModel?.(item);
                                                 setFallbackPicker(undefined);
-                                            }}>
-                                            <strong>{item.label || item.model}</strong>
-                                            <small>{sourceLabelForModel(item)}</small>
-                                        </button>;
-                                    })}
-                                </div>
-                            </div>
-                        )}
+                                            });
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className='nmx-model-picker-list nmx-model-picker-empty-list'>
+                                        <div className='nmx-route-empty' role='status'><span>{modelPickerListText(locale, 'noMatch')}</span></div>
+                                    </div>
+                                )}
+                            </>}
+                        </section>
                     </div>
                 </div>,
                 document.body
@@ -1746,7 +1965,7 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
                         {href && <img src={href} alt={att.name} />}
                         <div className='nmx-plugin-chat-media-bar'>
                             <span data-nmx-literal>{att.name}</span>
-                            {href && <a href={href} download={att.name}>{zh ? '下载图片' : 'Download'}</a>}
+                            {href && <a href={href} download={att.name}>{t(locale, 'consoleDownloadImage')}</a>}
                         </div>
                     </div>;
                 }
@@ -1755,7 +1974,7 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
                         {href && <video src={href} controls playsInline preload='metadata'></video>}
                         <div className='nmx-plugin-chat-media-bar'>
                             <span data-nmx-literal>{att.name}</span>
-                            {href && <a href={href} download={att.name}>{zh ? '下载视频' : 'Download'}</a>}
+                            {href && <a href={href} download={att.name}>{t(locale, 'consoleDownloadVideo')}</a>}
                         </div>
                     </div>;
                 }
@@ -1764,7 +1983,7 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
                         {href && <audio src={href} controls preload='metadata'></audio>}
                         <div className='nmx-plugin-chat-media-bar'>
                             <span data-nmx-literal>{att.name}</span>
-                            {href && <a href={href} download={att.name}>{zh ? '下载音频' : 'Download'}</a>}
+                            {href && <a href={href} download={att.name}>{t(locale, 'consoleDownloadAudio')}</a>}
                         </div>
                     </div>;
                 }
@@ -1773,10 +1992,7 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
                         <i className='codicon codicon-file-code' aria-hidden='true'></i>
                         <strong data-nmx-literal>{att.name}</strong>
                         {att.mimeType && <small data-nmx-literal>{att.mimeType}</small>}
-                        {href && <a href={href} download={att.name}>{zh ? '下载文件' : 'Download'}</a>}
-                        {!isUser && att.content && props.onApplyToApp && <button type='button' onClick={() => props.onApplyToApp?.(att.content!)}>
-                            {zh ? '发送到应用' : 'Send to App'}
-                        </button>}
+                        {href && <a href={href} download={att.name}>{t(locale, 'consoleDownloadFile')}</a>}
                     </div>
                     {att.content && <pre data-nmx-literal>{att.content.slice(0, 600)}</pre>}
                 </div>;
@@ -1784,7 +2000,11 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
         </div>
     );
 
-    return <div className='nmx-plugin-chat-panel' role='region' aria-label={t(locale, 'aiConsole')}>
+    // The reply still arriving takes the send button's place as 停止 (as in the conversation composer) until something new is typed.
+    const streamingReply = [...messages].reverse().find(message => message.role === 'assistant' && Boolean(message.streaming || message.pending));
+    const showStop = Boolean(streamingReply && props.onStopMessage && !draft.trim() && !attachments.length);
+    return <div className={`nmx-plugin-chat-panel${dragOver ? ' is-drag-over' : ''}`} role='region' aria-label={t(locale, 'aiConsole')}
+        onDragEnter={onDragEnter} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
         <div className='nmx-plugin-chat-header'>
             <div className='nmx-plugin-chat-title-row'>
                 <span className='nmx-plugin-chat-title'>
@@ -1793,8 +2013,8 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
                     <small className='nmx-plugin-chat-subtitle' data-nmx-literal title={appTitle}>{appTitle}</small>
                 </span>
                 <span className='nmx-plugin-chat-header-actions'>
-                    {props.onClear && messages.length > 0 && <button type='button' className='nmx-plugin-chat-clear' onClick={props.onClear} title={zh ? '清空对话' : 'Clear'}>
-                        <i className='codicon codicon-clear-all' aria-hidden='true'></i>{zh ? '清空' : 'Clear'}
+                    {props.onClear && messages.length > 0 && <button type='button' className='nmx-plugin-chat-clear' onClick={props.onClear} title={t(locale, 'consoleClearTitle')}>
+                        <i className='codicon codicon-clear-all' aria-hidden='true'></i>{t(locale, 'consoleClear')}
                     </button>}
                     {props.onClose && <button type='button' className='nmx-plugin-chat-close' aria-label={t(locale, 'close')} title={t(locale, 'close')} onClick={props.onClose}>
                         <i className='codicon codicon-close' aria-hidden='true'></i>
@@ -1806,9 +2026,7 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
             {messages.length === 0 ? <div className='nmx-plugin-chat-empty'>
                 <i className='codicon codicon-sparkle' aria-hidden='true'></i>
                 <span data-nmx-literal>
-                    {zh
-                        ? `「${appTitle}」AI 控制台已就绪，可直接读取实时画面并操控当前窗口。`
-                        : `AI Console ready for "${appTitle}". Directly inspect live frames and control this window.`}
+                    {t(locale, 'consoleReady', { app: appTitle })}
                 </span>
             </div> : messages.map(msg => msg.role === 'user' ? (
                 <div key={msg.id} className='nmx-plugin-chat-turn nmx-plugin-chat-msg is-user'>
@@ -1824,13 +2042,9 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
                     <div className='nmx-plugin-chat-assistant-meta'>
                         <span className='nmx-plugin-chat-assistant-model' data-nmx-literal>{msg.model || 'AI'}</span>
                         {msg.routeLabel && msg.routeLabel !== (msg.model || 'AI') && <span className='nmx-plugin-chat-assistant-route' data-nmx-literal>{msg.routeLabel}</span>}
-                        {isStreaming && props.onStopMessage && <button type='button' className='nmx-plugin-chat-stop-msg' data-stop-message-id={msg.id}
-                            onClick={() => props.onStopMessage?.(msg.id)}>
-                            <i className='codicon codicon-debug-stop' aria-hidden='true'></i>{zh ? '停止' : 'Stop'}
-                        </button>}
                     </div>
                     {msg.thinking && <details className='nmx-plugin-chat-thinking'>
-                        <summary>{zh ? '思考过程' : 'Thinking'}</summary>
+                        <summary>{t(locale, 'consoleThinking')}</summary>
                         <pre data-nmx-literal>{msg.thinking}</pre>
                     </details>}
                     {msg.toolCalls && msg.toolCalls.length > 0 && <div className='nmx-plugin-chat-tools'>
@@ -1848,7 +2062,7 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
                                 renderMarkdown={props.renderMarkdown || pluginChatMarkdown(locale)} />
                         </div>
                     ) : isStreaming ? (
-                        <div className='nmx-plugin-chat-pending' role='status' aria-label={zh ? '正在生成回复' : 'Generating reply'}>
+                        <div className='nmx-plugin-chat-pending' role='status' aria-label={t(locale, 'consoleGenerating')}>
                             <span className='nmx-plugin-chat-dot' />
                             <span className='nmx-plugin-chat-dot' />
                             <span className='nmx-plugin-chat-dot' />
@@ -1857,34 +2071,34 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
                     {isStreaming && msg.text && <span className='nmx-plugin-chat-stream-caret' aria-hidden='true' />}
                     {msg.error && <div className='nmx-plugin-muted is-error nmx-plugin-chat-error' data-nmx-literal>{msg.error}</div>}
                     {msg.attachments && msg.attachments.length > 0 && renderAttachmentsBlock(msg.attachments, false)}
-                    {!isStreaming && msg.text && <div className='nmx-plugin-chat-msg-actions'>
-                        <button type='button' onClick={() => void navigator.clipboard?.writeText?.(msg.text)}>
-                            <i className='codicon codicon-copy' aria-hidden='true'></i>{t(locale, 'copy')}
-                        </button>
-                        {props.onApplyToApp && <button type='button' onClick={() => props.onApplyToApp?.(msg.text)}>
-                            <i className='codicon codicon-terminal' aria-hidden='true'></i>{zh ? '键入应用' : 'Send to App'}
-                        </button>}
-                    </div>}
                 </div>
                 );
             })())}
             <div ref={messagesEndRef} />
         </div>
         <form className='nmx-composer nmx-plugin-chat-composer-card' onSubmit={event => { event.preventDefault(); submit(draft); }}>
-            {attachments.length > 0 && <div className='nmx-plugin-chat-pending-files'>
-                {attachments.map((att, idx) => <span key={att.id || idx} className='nmx-plugin-cap-badge' data-nmx-literal>
-                    <i className={`codicon codicon-${att.kind === 'image' ? 'file-media' : 'file'}`} aria-hidden='true'></i>{att.name}
-                    <button type='button' aria-label={t(locale, 'close')} onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}>×</button>
-                </span>)}
+            {/* The conversation composer's file cards, sized down for the console. */}
+            {attachments.length > 0 && <div className='nmx-attachment-chips nmx-plugin-chat-pending-files'>
+                {attachments.map((att, idx) => <AttachmentChip key={att.id || idx} locale={locale} name={att.name}
+                    kind={att.kind === 'image' ? 'image' : att.kind === 'file' && /^text\//.test(att.mimeType || '') ? 'text' : 'file'}
+                    mimeType={att.mimeType}
+                    meta={[formatAttachmentSize(att.sizeBytes), att.keptCharacters !== undefined ? t(locale, 'attachCutMeta', { kept: att.keptCharacters.toLocaleString(locale) }) : ''].filter(Boolean).join(' · ')}
+                    hint={att.keptCharacters === undefined ? undefined : att.totalCharacters === undefined
+                        ? t(locale, 'attachCutLarge', { name: att.name, size: formatAttachmentSize(att.sizeBytes), kept: att.keptCharacters.toLocaleString(locale) })
+                        : t(locale, 'attachCut', { name: att.name, total: att.totalCharacters.toLocaleString(locale), kept: att.keptCharacters.toLocaleString(locale) })}
+                    thumbnail={att.kind === 'image' ? safePluginChatAttachmentHref(att) || undefined : undefined}
+                    onRemove={() => setAttachments(prev => prev.filter((_, i) => i !== idx))} />)}
             </div>}
+            {attachNotice && <p className='nmx-plugin-chat-attach-note' role='status' data-nmx-literal>{attachNotice}</p>}
             <ImeTextarea ref={textareaRef} className='nmx-composer-input nmx-plugin-chat-textarea' rows={1} value={draft} maxLength={8000}
-                placeholder={zh ? '输入指令或问题（Enter 发送，Shift+Enter 换行）…' : 'Ask or instruct the app (Enter to send, Shift+Enter for newline)…'}
+                placeholder={t(locale, 'consolePlaceholder')}
                 onChange={event => {
                     const el = event.currentTarget;
                     setDraft(el.value);
                     el.style.height = 'auto';
-                    el.style.height = `${Math.min(110, Math.max(32, el.scrollHeight))}px`;
+                    el.style.height = `${Math.min(88, Math.max(24, el.scrollHeight))}px`;
                 }}
+                onPaste={onPaste}
                 onKeyDown={event => {
                     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
                     if (event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
@@ -1894,20 +2108,27 @@ export function AppPluginChatPanel(props: AppPluginChatPanelProps): React.ReactE
                 }} />
             <div className='nmx-composer-footer nmx-plugin-chat-composer-bar'>
                 <div className='nmx-plugin-chat-composer-tools'>
-                    <label className='nmx-composer-tool nmx-plugin-chat-attach' title={zh ? '添加图片/视频/音频/文件附件' : 'Attach image/video/audio/file'}>
-                        <input type='file' multiple accept='image/*,video/*,audio/*,.txt,.md,.json,.csv,.js,.ts,.py' onChange={onSelectFiles} />
+                    <label className='nmx-composer-tool nmx-plugin-chat-attach' title={t(locale, 'attachHint')}>
+                        <input type='file' multiple accept={PLUGIN_CHAT_PICKER_ACCEPT} onChange={onSelectFiles} />
                         <i className='codicon codicon-add' aria-hidden='true'></i>
                     </label>
                     {renderedModelControls}
                 </div>
-                <button type='submit' className='nmx-send-button nmx-plugin-chat-send-btn'
-                    aria-label={zh ? '立即发送' : 'Send immediately'}
-                    title={zh ? '立即发送（不进入排队队列）' : 'Send immediately without queueing'}
+                {showStop && streamingReply ? <button type='button' className='nmx-send-button nmx-plugin-chat-send-btn is-stop'
+                    data-stop-message-id={streamingReply.id}
+                    aria-label={t(locale, 'consoleStop')}
+                    title={t(locale, 'consoleStop')}
+                    onClick={() => props.onStopMessage?.(streamingReply.id)}>
+                    <span className='nmx-stop-glyph' aria-hidden='true' />
+                </button> : <button type='submit' className='nmx-send-button nmx-plugin-chat-send-btn'
+                    aria-label={t(locale, 'consoleSend')}
+                    title={t(locale, 'consoleSend')}
                     disabled={!draft.trim() && !attachments.length}>
                     <i className='codicon codicon-arrow-up' aria-hidden='true'></i>
-                </button>
+                </button>}
             </div>
         </form>
+        {dragOver && <ComposerDropOverlay locale={locale} />}
     </div>;
 }
 

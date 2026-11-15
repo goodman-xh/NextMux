@@ -67,7 +67,7 @@ import { localScheduleDateTime, SCHEDULE_PROMPT_MAX_CHARACTERS, scheduledOccurre
 import { contextWindowChoices, contextWindowTokenLabel, effectiveContextWindowTokens, modelContextWindowTokens, normalizeContextWindowTokens } from '../common/nextmux-context-budget';
 import { goalEditorText, goalScheduleText, scheduleWeekdayLabel, scheduleWeekdayName, scheduleWeekdayOrder } from './nextmux-goal-schedule-locale';
 import { attachmentDelivery, routeSupportsModelAttachment } from '../common/nextmux-attachment-support';
-import { AttachmentChip, ComposerDropOverlay, CONVERTIBLE_IMAGE_MIME, FOLDER_SNAPSHOT_SUFFIX, TextDropIndicator, attachmentAnchorMarker, attachmentDisplayName, buildFolderSnapshot, composerAttachmentUiText, convertImageForModels, shrinkImageForModels, FileTypeIcon, folderPathInsertion, placeAnchorMarkers, rebaseTextAnchors, textareaDropCaret, type FolderDirectoryEntryLike, type FolderFileEntryLike, type TextareaDropCaret } from './nextmux-composer-attachments';
+import { AttachmentChip, ComposerDropOverlay, CONVERTIBLE_IMAGE_MIME, FOLDER_SNAPSHOT_SUFFIX, TextDropIndicator, attachmentAnchorMarker, attachmentDisplayName, buildFolderSnapshot, composerAttachmentUiText, composerTextCutNotice, convertImageForModels, shrinkImageForModels, FileTypeIcon, folderPathInsertion, placeAnchorMarkers, rebaseTextAnchors, textareaDropCaret, type FolderDirectoryEntryLike, type FolderFileEntryLike, type TextareaDropCaret } from './nextmux-composer-attachments';
 import { contextBudgetText } from './nextmux-context-budget-locale';
 import { applyConversationWindowDelta, buildDetachedConversationSearch, conversationWindowDelta, ConversationWindowPublisher, type ConversationWindowEvent, type ConversationSyncDiagnosticEvent } from '../common/nextmux-conversation-window';
 import { conversationWindowText } from './nextmux-conversation-window-locale';
@@ -82,13 +82,14 @@ import {
     activeTabFor, attachTabWindow, closeVisualTab, CONVERSATION_TAB_ID, CONVERSATION_TABS_STORAGE_KEY, emptyConversationTabs,
     findConversationTabByTarget, isFormalTabWindow, openVisualTab, parseConversationTabs, pruneConversationTabs, removeTabWindow,
     selectTab, selectTabWindow, serializeConversationTabs, tabWindows, updateVisualTab, visualTabsFor, appWindowTab,
-    appTabKind, computerTabRefresh, appTabIdentity, isSameTabAppFamily, type ConversationTabsState, type ConversationVisualTab
+    appTabKind, computerTabRefresh, appTabIdentity, isSameTabAppFamily, tabRealtimeFacts, type ConversationTabsState, type ConversationVisualTab
 } from './nextmux-conversation-tabs';
+import { decodeWindowPicture } from './nextmux-live-frame-bridge';
 import { isDecisionModel } from '../common/nextmux-decision-models';
 import {
     AppControlGlyph, AppControlPickerPopover, ComposerAppChip, MAX_COMPOSER_APPS, TurnAppChip,
-    appControlText, composerAppList, droppedApplicationPath, parseAppControlMarker, withAppControlMarker,
-    type AppControlPickerApp, type ComposerApp
+    appControlText, appOpenFailureCopy, appOpenFailureForModel, composerAppList, droppedApplicationPath, parseAppControlMarker, withAppControlMarker,
+    type AppControlPickerApp, type AppOpenOutcome, type ComposerApp
 } from './nextmux-app-control';
 import { PanelBoundary } from './nextmux-panel-boundary';
 import { AppPluginBuyDialog, AppPluginChatPanel, AppPluginInstallDialog, AppPluginLoadDialog, AppPluginMarketUploadDialog, AppPluginModelDialog, AppPluginOverlay, AppPluginRunBar, AppPluginStartDialog, AppPluginHubDialog, AppPluginUninstallDialog, AppPluginsSettings,
@@ -124,13 +125,20 @@ const MERCHANT_CONSOLE_HINTS: Readonly<Record<NextMuxDesktopLocale, string>> = {
 };
 /** Where developers upload plugins for review (the website's plugin pages). */
 import { DataLocationSection } from './nextmux-data-location';
-import { ConversationTabStrip, ConversationVisualTabView, conversationTabsText, LIVE_FRAME_FRESH_MS, liveVideoFrameAgeMs, type ConversationTabPluginParts, conversationWindowText as tabWindowText, type ComputerViewCapability, type ConversationWindowControls, type ConversationWindowPlacement, type ConversationWindowTextKey } from './nextmux-conversation-tabs-view';
+import { ConversationTabGlyph, ConversationTabStrip, ConversationVisualTabView, conversationTabsText, LIVE_FRAME_FRESH_MS, liveVideoFrameAgeMs, type ConversationTabPluginParts, type ConversationTabScheduledTask, conversationWindowText as tabWindowText, type ComputerViewCapability, type ConversationWindowControls, type ConversationWindowPlacement, type ConversationWindowStartOptions, type ConversationWindowTextKey } from './nextmux-conversation-tabs-view';
 import { SystemPermissionsSettings, systemPermissionsText, type SystemPermissionsBridge } from './nextmux-system-permissions-panel';
 import { ComputerPermissionWait, computerPermissionNames, type ComputerPermissionKind } from './nextmux-computer-permission-wait';
 import { deskInputDigest, stableUuid } from '../common/nextmux-stable-id';
 import { FileTabMenu, fileTabMenuText } from './nextmux-file-tab-menu';
 import { OwnModelsDrawer } from './nextmux-own-models-drawer';
-import { ConfirmDialog } from '@theia/core/lib/browser/dialogs';
+import { AbstractDialog, ConfirmDialog } from '@theia/core/lib/browser/dialogs';
+import type { Message as TheiaMessage } from '@theia/core/lib/common/message-service-protocol';
+import {
+    THEIA_CONFIRMATION_EVENT,
+    THEIA_MESSAGE_EVENT,
+    type TheiaConfirmationEventDetail,
+    theiaMessageNotificationKind
+} from './nextmux-filesystem-watcher-error-handler';
 import { ContextFileMenu, ContextFileNameDialog, contextFileText } from './nextmux-context-file-menu';
 import { ContextFileActionError, contextFileActionItems, validContextFileName, type ContextFileAction } from './nextmux-context-file-actions';
 import { ChatContextMenu, chatContextTarget, chatContextAppendText, appendChatContextToInput, type ChatContextAction, type ChatContextTarget, type ChatMenuBounds } from './nextmux-chat-context-menu';
@@ -176,6 +184,7 @@ import { mediaTierInputRates } from '../common/nextmux-media-price-tiers';
 import { activityToolVisual, conversationErrorText, projectConversationStream } from './nextmux-conversation-stream-model';
 import { conversationStreamText } from './nextmux-conversation-stream-locale';
 import { modelFailure, modelFailureText, modelFailureSource } from './nextmux-model-errors';
+import { BillingFailureSource, billingShortfall, isInsufficientBalanceFailure, providerQuotaText } from './nextmux-billing-shortfall';
 import { CommunitySkillCard } from './nextmux-community-skill-card';
 import { ProjectMemoryPanel } from './nextmux-project-memory-panel';
 import { installModalChrome } from './nextmux-modal-chrome';
@@ -191,6 +200,7 @@ import { matchCatalogModel } from './nextmux-own-model-match';
 import { groupModelsByName } from '../common/nextmux-model-name';
 import { ownModelCategories, ownModelKind, ownModelMediaFacts } from './nextmux-own-model-kind';
 import { officialDiscoveryText } from './nextmux-official-discovery-locale';
+import { isOfficialPickerCredentialFailure } from './nextmux-official-picker-validation';
 import { officialProviderLogoAsset } from './nextmux-provider-logos';
 import { closePersistenceText } from './nextmux-close-persistence-locale';
 import { DesktopUpdateAction, desktopUpdateProgressPercent, desktopUpdateText, isUpdateDownloadErrorCode, updateAppearsInDock } from './nextmux-update-action';
@@ -351,7 +361,8 @@ import {
 import type { DesktopComicProjectDiskStatus } from '../common/nextmux-platform-protocol';
 import { STOCK_MEDIA_SITES, stockQueryFromShot, type StockMediaProvider, type StockMediaState } from '../common/nextmux-stock-media';
 import type { MediaJob, MediaJobKind, MediaVideoJobInput } from '@nextmux/media-core';
-import { inferModelCapabilityEvidence, mergeModelCapabilityEvidence, modelCapabilitySupport, protocolSupportsReasoningEffort } from '@nextmux/model-runtime/capabilities';
+import { inferModelCapabilityEvidence, isPlainTextAttachmentMime, mergeModelCapabilityEvidence, modelCapabilitySupport, protocolSupportsReasoningEffort } from '@nextmux/model-runtime/capabilities';
+import { decodeTextBytes, isUtf16TextBytes } from '@nextmux/model-runtime/text-encoding';
 import { OFFICIAL_PROVIDER_PRESETS, isOfficialMediaProtocol, officialMediaCapabilities, officialProviderSupportsCredentialSource } from '@nextmux/model-runtime/presets';
 import type { OfficialProviderPreset, OfficialProviderSettings } from '@nextmux/model-runtime';
 import * as React from 'react';
@@ -626,6 +637,7 @@ import {
     relayDrawerChromeHeight,
     RELAY_DRAWER_WIDTH,
     serializeRelayFavoriteMerchants,
+    sortOfficialConnectionsNewestFirst,
     usableRelaysFirst,
     RelaySourceTab
 } from './nextmux-relay-picker';
@@ -922,28 +934,6 @@ const DESKTOP_AGENT_FAILURE_KINDS: ReadonlySet<string> = new Set([
     'model_timeout', 'rate_limited', 'model_unavailable', 'model_auth', 'tool_failed', 'waiting_user', 'insufficient_balance', 'failed'
 ]);
 
-/** Accept both the gateway's stable code and older/newer runtime category shapes. */
-export function isInsufficientBalanceFailure(value: unknown): boolean {
-    const mapped = modelFailure('en', value);
-    if (mapped.kind !== 'unknown') return mapped.kind === 'balance_insufficient';
-    const records: Readonly<Record<string, unknown>>[] = [];
-    if (value instanceof Error) records.push({ message: value.message, name: value.name });
-    else if (value && typeof value === 'object' && !Array.isArray(value)) {
-        const root = value as Readonly<Record<string, unknown>>;
-        records.push(root);
-        for (const key of ['error', 'failure', 'details', 'cause']) {
-            const nested = root[key];
-            if (nested && typeof nested === 'object' && !Array.isArray(nested)) records.push(nested as Readonly<Record<string, unknown>>);
-        }
-    }
-    const code = records.map(record => typeof record.code === 'string' ? record.code.trim().toLocaleLowerCase() : '').find(Boolean) || '';
-    const kind = records.some(record => typeof record.kind === 'string' && record.kind.trim().toLocaleLowerCase() === 'insufficient_balance');
-    const status = records.map(record => Number(record.status ?? record.httpStatus)).find(candidate => Number.isSafeInteger(candidate) && candidate === 402);
-    const message = records.map(record => typeof record.message === 'string' ? record.message : '').find(Boolean) || (typeof value === 'string' ? value : '');
-    return code === 'wallet_balance_insufficient' || code === 'insufficient_balance' || kind || status === 402
-        || /(?:insufficient\s+balance|余额不足|余额不够|잔액이 부족|saldo insuficiente)/i.test(message);
-}
-
 const NON_CHAT_IMPORTED_MODEL_RE = /(?:^|[/._-])(?:embedding|embeddings|embed|moderation|rerank|reranker|guard|whisper|transcribe|asr|tts|dall[-_]?e|gpt-image|flux|stable-diffusion|sdxl|midjourney|sora|veo|seedance|hailuo|vidu|kling|runway|suno|udio)(?:$|[/._-\d])/i;
 
 /**
@@ -975,6 +965,11 @@ export function pickDefaultImportedChatModel(
     const preferred = valid.find(entry => entry.toolsSupported === true
         || (entry.capabilities || []).some((cap: string) => /^(?:tools|function_calling|coding|chat)$/i.test(String(cap))));
     return (preferred || valid[0]).id.trim();
+}
+
+/** The whole message for an empty wallet (relay, own /v1 key or AI Console alike): formatV1GatewayFailure's wording. */
+export function walletBalanceInsufficientText(locale: NextMuxDesktopLocale): string {
+    return formatV1GatewayFailure(locale, { code: 'wallet_balance_insufficient' })!.text;
 }
 
 /**
@@ -1035,24 +1030,22 @@ export function formatV1GatewayFailure(
         .trim()
         .slice(0, 400);
 
-    const isBalance402 = code === 'wallet_balance_insufficient'
-        || (status === 402 && (source === 'own_api' || code === 'insufficient_balance' || /wallet|nextmux|top[\s-]*up|充值|余额/i.test(rawDetail)));
+    // The wallet only on NextMux's own word (billingShortfall, the rule every wallet notice shares). Any other provider's
+    // 402, even one about its own "wallet", is that provider's balance or quota, which the generic model failure text words.
+    const isBalance402 = billingShortfall(value, source) === 'wallet';
     const isAuth401 = code === 'api_key_invalid' || code === 'invalid_api_key' || code === 'api_key_revoked' || code === 'api_key_expired'
         || (status === 401 && (source === 'own_api' || /api[_ -]?key|sk-nmx|bearer|密钥/i.test(rawDetail)));
 
     if (!isBalance402 && !isAuth401) return undefined;
 
+    // An empty wallet says only that: no status code, error code or upstream English detail.
     if (isBalance402) {
-        const base = locale === 'zh-TW'
-            ? '錢包餘額不足（HTTP 402 · wallet_balance_insufficient），請前往錢包儲值後繼續。'
-            : locale.startsWith('zh')
-                ? '钱包余额不足（HTTP 402 · wallet_balance_insufficient），请前往钱包充值后继续。'
-                : 'Insufficient wallet balance (HTTP 402 · wallet_balance_insufficient). Please top up your wallet to continue.';
-        const includeDetail = Boolean(rawDetail && rawDetail !== 'wallet_balance_insufficient' && !base.includes(rawDetail));
-        const text = includeDetail
-            ? (locale.startsWith('zh') ? `${base} 详情：${rawDetail}` : `${base} Detail: ${rawDetail}`)
-            : base;
-        return { text, detail: rawDetail || 'wallet_balance_insufficient', isBalance402: true, isAuth401: false };
+        const wallet: Readonly<Record<NextMuxDesktopLocale, string>> = {
+            'zh-CN': '钱包余额不足', 'zh-TW': '錢包餘額不足', en: 'Insufficient wallet balance', ja: 'ウォレットの残高が不足しています',
+            ko: '지갑 잔액이 부족합니다', es: 'Saldo insuficiente en la billetera', fr: 'Solde du portefeuille insuffisant', de: 'Wallet-Guthaben reicht nicht aus',
+            'pt-BR': 'Saldo insuficiente na carteira', ru: 'Недостаточно средств в кошельке', ar: 'رصيد المحفظة غير كافٍ', hi: 'वॉलेट में पर्याप्त शेष राशि नहीं है'
+        };
+        return { text: wallet[locale] || (locale.startsWith('zh') ? wallet['zh-CN'] : wallet.en), detail: rawDetail || 'wallet_balance_insufficient', isBalance402: true, isAuth401: false };
     }
 
     const base = locale === 'zh-TW'
@@ -1158,7 +1151,7 @@ function settleSavedAgentChildren(children: readonly DesktopAgentChildSnapshot[]
 
 function normalizeAgentChildSnapshots(value: unknown): readonly DesktopAgentChildSnapshot[] {
     if (!Array.isArray(value)) return [];
-    const candidates = value.filter((candidate): candidate is Record<string, unknown> => Boolean(
+    const unique = value.filter((candidate): candidate is Record<string, unknown> => Boolean(
         candidate && typeof candidate === 'object' && !Array.isArray(candidate)
         && typeof candidate.childRunId === 'string' && typeof candidate.parentRunId === 'string'
         && typeof candidate.rootRunId === 'string' && typeof candidate.task === 'string'
@@ -1169,7 +1162,14 @@ function normalizeAgentChildSnapshots(value: unknown): readonly DesktopAgentChil
         return Boolean(childRunId) && all.findIndex(other =>
             typeof other.childRunId === 'string' && other.childRunId.trim().slice(0, 200) === childRunId
         ) === _index;
-    }).slice(0, MAX_PERSISTED_AGENT_CHILDREN);
+    }).slice(-MAX_PERSISTED_AGENT_CHILDREN * 4);
+    // As in the delegation ledger: children saved while running (cut off, so they can resume) always stay, and finished
+    // ones fill the rest of MAX_PERSISTED_AGENT_CHILDREN, the newest kept (saved oldest first).
+    const unfinished = (candidate: Record<string, unknown>): boolean =>
+        candidate.status === 'running' || candidate.status === 'interrupted' || candidate.status === 'waiting_user';
+    const finished = unique.filter(candidate => !unfinished(candidate));
+    const keptFinished = new Set(finished.slice(Math.max(0, finished.length - Math.max(0, MAX_PERSISTED_AGENT_CHILDREN - (unique.length - finished.length)))));
+    const candidates = unique.filter(candidate => unfinished(candidate) || keptFinished.has(candidate));
     return candidates.map(candidate => {
         const rawContext = candidate.taskContext as Record<string, unknown>;
         const childRunId = typeof candidate.childRunId === 'string' ? candidate.childRunId.trim().slice(0, 200) : '';
@@ -1509,6 +1509,66 @@ interface WorkspaceRestorePlan {
     readonly workspaceRoot: string;
     readonly checkpointIds: readonly string[];
     readonly changes: readonly AgentCheckpointDiff[];
+}
+
+const THEIA_NOTIFICATION_HEADINGS: Readonly<Record<NextMuxDesktopLocale, readonly [info: string, warning: string, error: string]>> = {
+    'zh-CN': ['提示', '警告', '错误提示'], 'zh-TW': ['提示', '警告', '錯誤提示'], en: ['Notice', 'Warning', 'Error'],
+    ja: ['お知らせ', '警告', 'エラー'], ko: ['알림', '경고', '오류'], es: ['Aviso', 'Advertencia', 'Error'],
+    fr: ['Information', 'Avertissement', 'Erreur'], de: ['Hinweis', 'Warnung', 'Fehler'], 'pt-BR': ['Aviso', 'Atenção', 'Erro'],
+    ru: ['Уведомление', 'Предупреждение', 'Ошибка'], ar: ['تنبيه', 'تحذير', 'خطأ'], hi: ['सूचना', 'चेतावनी', 'त्रुटि']
+};
+function theiaNotificationHeading(locale: NextMuxDesktopLocale, kind: 'info' | 'warning' | 'error'): string {
+    return (THEIA_NOTIFICATION_HEADINGS[locale] ?? THEIA_NOTIFICATION_HEADINGS.en)[kind === 'error' ? 2 : kind === 'warning' ? 1 : 0];
+}
+
+/** Action labels that only step away (they answer the question with "no", never with a choice to carry out). */
+const THEIA_DISMISS_ACTION = new RegExp('^(?:' + [
+    'cancel', 'close', 'dismiss', 'ignore', 'later', 'not now', 'no', // en
+    '取消', '關閉', '关闭', '稍后', '稍後', '否', 'キャンセル', '閉じる', '後で', 'いいえ', '취소', '닫기', '나중에', '아니요', // zh, ja, ko
+    'cancelar', 'cerrar', 'ignorar', 'más tarde', 'fechar', 'mais tarde', 'não', // es, pt-BR
+    'annuler', 'fermer', 'ignorer', 'plus tard', 'non', 'abbrechen', 'schließen', 'ignorieren', 'später', 'nein', // fr, de
+    'отмена', 'закрыть', 'игнорировать', 'позже', 'нет', 'إلغاء', 'إغلاق', 'تجاهل', 'لاحقًا', 'لا', // ru, ar
+    'रद्द करें', 'बंद करें', 'अनदेखा करें', 'बाद में', 'नहीं' // hi
+].join('|') + ')$', 'iu');
+
+/**
+ * A Theia confirmation (a message with actions) as a NextMux dialog, in the order of Theia's own ConfirmDialog: ways out
+ * on the left, the main action on the right, focused and taken by Enter. Esc, ✕ and the added Cancel answer nothing.
+ */
+class TheiaConfirmationActionDialog extends AbstractDialog<string | undefined> {
+    protected selectedAction: string | undefined;
+
+    constructor(options: { readonly title: string; readonly message: string; readonly actions: readonly string[]; readonly cancel: string }) {
+        super({ title: options.title, maxWidth: 520 });
+        this.addClass('nmx-theia-confirm');
+        const messageNode = document.createElement('div');
+        messageNode.className = 'nmx-theia-confirm-message';
+        messageNode.textContent = options.message;
+        this.contentNode.appendChild(messageNode);
+        const actions = options.actions;
+        const dismisses = actions.map(action => THEIA_DISMISS_ACTION.test(action.trim()));
+        const primaryIndex = Math.max(0, dismisses.indexOf(false));
+        if (!dismisses.includes(true)) this.appendCloseButton(options.cancel);
+        const order = actions.map((_, index) => index).filter(index => index !== primaryIndex)
+            .sort((left, right) => Number(dismisses[right]) - Number(dismisses[left]));
+        for (const index of [...order, primaryIndex]) {
+            const action = actions[index];
+            const primary = index === primaryIndex;
+            const button = this.appendButton(action, primary);
+            if (primary) {
+                this.acceptButton = button;
+                this.selectedAction = action;
+            }
+            this.addAction(button, () => {
+                this.selectedAction = action;
+                void this.accept();
+            }, 'click');
+        }
+    }
+
+    override get value(): string | undefined {
+        return this.selectedAction;
+    }
 }
 
 interface DesktopNotificationRecord {
@@ -3976,8 +4036,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected conversationDirectoriesBusy = false;
     protected conversationDirectoriesError = '';
     protected modelPickerRelayOpen = false;
+    /** Background model-list reads of own APIs (ensureOfficialConnectionModelsLoaded), one per connection. */
     protected readonly officialPickerValidations = new Map<string, Promise<void>>();
+    /** The connection version (updatedAt) each read started from: 仅保存 of new settings reads again after it. */
+    protected readonly officialPickerValidationVersions = new Map<string, string | undefined>();
     protected readonly officialPickerValidationFailures = new Set<string>();
+    /** When each connection's last background read ended (passive triggers wait 15 s after it). */
+    protected readonly officialPickerValidationAttempts = new Map<string, number>();
     protected modelCenterView: ModelCenterView = 'all';
     protected officialApiKeyFocused = false;
     protected modelCenterMerchantCount: number | undefined;
@@ -4009,6 +4074,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected codingSearchTimer: number | undefined;
     protected codingSearchRequestToken = 0;
     protected conversationHistoryPersistTimer: number | undefined;
+    protected conversationHistoryPersistMaxWaitTimer: number | undefined;
+    protected theiaConfirmationQueue: Promise<unknown> = Promise.resolve();
+    protected readonly recentTheiaMessageAt = new Map<string, number>();
     protected conversationHistoryPersistDirty = false;
     protected applicationExitPreparing = false;
     protected applicationExitGeneration = 0;
@@ -4840,7 +4908,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected conversationNotice(sessionId: string, latest: Parameters<ConversationReadTracker['notice']>[1]): ConversationAttention | undefined {
         const notice = this.conversationReads.notice(sessionId, latest);
         const wait = this.computerPermissionWaits?.get(sessionId);
-        if (notice || !wait || latest?.stage !== 'running') return notice;
+        // The user's own pick waiting for a permission is in front of them already: no attention mark for it.
+        if (notice || !wait || wait.appName || latest?.stage !== 'running') return notice;
         return { sessionId, noticeId: `system-permission:${wait.requestId}`, noticedAt: wait.since, kind: 'permission' };
     }
     /**
@@ -5543,7 +5612,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.node.addEventListener('click', this.noteMediaGalleryClick, true);
         this.toDispose.push({ dispose: () => this.node.removeEventListener('click', this.noteMediaGalleryClick, true) });
         const modelListInterval = window.setInterval(() => this.scheduleOwnApiModelListRefresh(), MODEL_LIST_RETRY_MS);
-        this.toDispose.push({ dispose: () => { window.clearInterval(modelListInterval); window.clearTimeout(this.modelListRefreshTimer); } });
+        this.toDispose.push({ dispose: () => { window.clearInterval(modelListInterval); window.clearTimeout(this.modelListRefreshTimer); this.ownApiRefreshState = undefined; } });
         // The cloud model list and prices: ask a tiny edge-cached version every ~30 minutes (with jitter,
         // so millions of clients never arrive together) and download again only when it changed.
         // One timer handle for the whole chain; a check that finishes after the widget is gone schedules nothing (audit A21-06).
@@ -5649,7 +5718,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 void this.checkActiveProjectWorkspaceHealth(false);
             }
         };
+        const onTheiaMessage = (event: Event): void => {
+            this.handleTheiaMessage((event as CustomEvent<TheiaMessage | undefined>).detail);
+        };
+        const onTheiaConfirmation = (event: Event): void => {
+            const detail = (event as CustomEvent<TheiaConfirmationEventDetail | undefined>).detail;
+            if (!detail || !Array.isArray(detail.actions) || detail.actions.length === 0 || typeof detail.message?.text !== 'string') {
+                return;
+            }
+            event.preventDefault();
+            detail.handled = true;
+            detail.promise = this.openTheiaConfirmationDialog(detail.message, detail.actions);
+        };
         window.addEventListener('nextmux:filesystem-watcher-error', onWatcherError);
+        window.addEventListener(THEIA_MESSAGE_EVENT, onTheiaMessage);
+        window.addEventListener(THEIA_CONFIRMATION_EVENT, onTheiaConfirmation);
         window.addEventListener('focus', onWindowFocusWorkspaceCheck);
         const workspaceHealthTimer = window.setInterval(() => {
             if (document.visibilityState === 'visible' && this.missingProjectWorkspacePaths.size > 0) {
@@ -5659,6 +5742,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.toDispose.push({
             dispose: () => {
                 window.removeEventListener('nextmux:filesystem-watcher-error', onWatcherError);
+                window.removeEventListener(THEIA_MESSAGE_EVENT, onTheiaMessage);
+                window.removeEventListener(THEIA_CONFIRMATION_EVENT, onTheiaConfirmation);
                 window.removeEventListener('focus', onWindowFocusWorkspaceCheck);
                 window.clearInterval(workspaceHealthTimer);
             }
@@ -6002,7 +6087,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.threadReadingAnchorLockFrame = 0;
             this.threadReadingAnchorHeld = false;
             if (this.conversationHistoryPersistTimer !== undefined) window.clearTimeout(this.conversationHistoryPersistTimer);
-            this.conversationHistoryPersistTimer = undefined;
+            if (this.conversationHistoryPersistMaxWaitTimer !== undefined) window.clearTimeout(this.conversationHistoryPersistMaxWaitTimer);
+            this.conversationHistoryPersistTimer = this.conversationHistoryPersistMaxWaitTimer = undefined;
             if (this.conversationHistoryPersistDirty && this.conversationHistoryPersistenceReady) {
                 void this.flushConversationHistory();
             }
@@ -6760,7 +6846,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.activeThreadTurnId = latest?.id || '';
         this.submittedPrompt = latest?.prompt || '';
         this.agentError = latest?.failure || latest?.error
-            ? desktopFailureMessage(this.desktopLocale, latest.failure || latest.error)
+            ? desktopFailureMessage(this.desktopLocale, latest.failure || latest.error, this.routeBillingSource?.(latest.routeId))
             : '';
         this.agentStage = latest?.stage || 'idle';
         this.permissionMode = savedSession.permissionMode || latest?.permissionMode || this.defaultPermissionMode;
@@ -7092,9 +7178,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
         } });
     }
 
-    /** The conversation whose computer tool call is waiting for a system permission, and which ones are missing. */
-    protected readonly computerPermissionWaits = new Map<string, { readonly conversationId: string; readonly requestId: string; readonly since: number; readonly missing: readonly ComputerPermissionKind[] }>();
+    /**
+     * The conversation whose computer tool call is waiting for a system permission, and which ones are missing. An app
+     * the user picked waits here too (`appName` set, request id `picker:<app id>`): the same card, naming the app.
+     */
+    protected readonly computerPermissionWaits = new Map<string, { readonly conversationId: string; readonly requestId: string; readonly since: number; readonly missing: readonly ComputerPermissionKind[]; readonly appName?: string; readonly appId?: string }>();
+    /**
+     * When a picked app last asked macOS for the permissions. Asking resets the computer driver (every conversation's
+     * computer session starts over), so picks ask at most once every 10 minutes; the card's buttons open the settings.
+     */
+    protected pickerPermissionAskedAt = 0;
+    /** The start of the latest picker wait: strictly increasing, so two waits never share an id or a resume record. */
+    protected pickerWaitClock = 0;
     protected static readonly COMPUTER_PERMISSION_RESUME_KEY = 'nextmux.desktop.computerPermissionResume.v1';
+    /** The app whose pick waits for a permission, kept while the wait is open, so it opens after NextMux reopens for Screen Recording. */
+    protected static readonly COMPUTER_PICKER_RESUME_KEY = 'nextmux.computerPickerResume.v1';
 
     protected async missingComputerPermissions(): Promise<readonly ComputerPermissionKind[]> {
         const bridge = window.nextmuxDesktop as SystemPermissionsBridge | undefined;
@@ -7128,8 +7226,119 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     /** The system-permission wait of the conversation on screen, if any. */
-    protected get computerPermissionWait(): { readonly conversationId: string; readonly requestId: string; readonly since: number; readonly missing: readonly ComputerPermissionKind[] } | undefined {
+    protected get computerPermissionWait(): { readonly conversationId: string; readonly requestId: string; readonly since: number; readonly missing: readonly ComputerPermissionKind[]; readonly appName?: string; readonly appId?: string } | undefined {
         return this.computerPermissionWaits.get(this.activeCodingSessionId);
+    }
+
+    /**
+     * An app the user picked on macOS while NextMux lacks Accessibility or Screen Recording: ask the system once, show
+     * the permission card naming the app, and wait (checked every 1.5 s, at most 10 minutes) while its chip stays busy
+     * under the composer. True once the permission is there; false when the user cancels (the card's Cancel, or the
+     * chip's ×), the conversation goes, or the wait runs out. Screen Recording needs NextMux reopened: the pick is kept
+     * meanwhile and opens by itself after the restart (resumeAfterComputerPermission).
+     */
+    protected async waitForPickerPermission(sessionId: string, picked: { readonly name: string; readonly id: string },
+        capability: DesktopComputerCapability & { readonly missing?: readonly ComputerPermissionKind[] }): Promise<boolean> {
+        const bridge = window.nextmuxDesktop;
+        if (!bridge?.getComputerCapability) return false;
+        // The pick's own busy chip: gone (its ×, Cancel, or a new pick of the same app) ends this wait.
+        const tracked = this.composerOpeningAppItems(sessionId).includes(picked as ComposerApp);
+        const waiting = (): boolean => tracked ? this.composerOpeningAppItems(sessionId).includes(picked as ComposerApp)
+            : this.composerOpeningAppItems(sessionId).some(item => item.id === picked.id);
+        // The request's answer, keeping what the caller already knew is missing when the answer does not say.
+        let requested: Awaited<ReturnType<NonNullable<typeof bridge.requestComputerPermission>>> | undefined;
+        if (Date.now() - (this.pickerPermissionAskedAt ?? 0) >= 10 * 60_000) {
+            this.pickerPermissionAskedAt = Date.now();
+            requested = await bridge.requestComputerPermission?.().catch(() => undefined);
+        }
+        let current: typeof capability = requested ? { ...capability, ...requested, ...(requested.missing ? {} : { missing: capability.missing }) } : capability;
+        if (current.available) return true;
+        if (current.reason !== 'permission_required') return false;
+        // One id per wait: a pick cancelled and made again at once is a new wait, which the old one never ends.
+        const since = Math.max(Date.now(), (this.pickerWaitClock ?? 0) + 1);
+        this.pickerWaitClock = since;
+        const requestId = `picker:${picked.id}:${since}`;
+        const missingOf = async (value: typeof capability): Promise<readonly ComputerPermissionKind[]> =>
+            value.missing?.length ? value.missing.filter(kind => kind === 'accessibility' || kind === 'screen') : await this.missingComputerPermissions();
+        const record = { conversationId: sessionId, requestId, since, missing: await missingOf(current), appName: picked.name, appId: picked.id };
+        // Cancelled while the system was asked: no card at all.
+        if (!waiting()) return false;
+        let latest = record;
+        // A computer tool call of the AI that already waits keeps its card; this wait shows once that one ends.
+        const claim = (): void => { if (!this.computerPermissionWaits.has(sessionId)) this.computerPermissionWaits.set(sessionId, latest); };
+        claim();
+        this.writePickerPermissionResume?.({ sessionId, app: { name: picked.name, id: picked.id }, at: record.since });
+        this.update();
+        // NextMux closing (to reopen for Screen Recording) keeps the pick for the restart; any other end forgets it.
+        let checks = 0, granted = false, closing = false;
+        try {
+            while (Date.now() - record.since < 10 * 60_000) {
+                if (!this.node.isConnected) { closing = true; break; }
+                await new Promise(resolve => window.setTimeout(resolve, 1_500));
+                if (!this.node.isConnected) { closing = true; break; }
+                if (!waiting() || !this.codingSessions.some(session => session.id === sessionId)) break;
+                current = await bridge.getComputerCapability().catch(() => current);
+                // Cancelled while the check was out: it stays cancelled.
+                if (current.available) { granted = waiting(); break; }
+                if (current.reason !== 'permission_required') break;
+                if (++checks % 4 === 0) {
+                    const missing = await missingOf(current);
+                    if (missing.join() !== latest.missing.join()) {
+                        latest = { ...latest, missing };
+                        if (this.computerPermissionWaits.get(sessionId)?.requestId === requestId) this.computerPermissionWaits.set(sessionId, latest);
+                    }
+                }
+                if (waiting() && !this.computerPermissionWaits.has(sessionId)) { claim(); this.update(); }
+            }
+        } finally {
+            if (this.computerPermissionWaits.get(sessionId)?.requestId === requestId) this.computerPermissionWaits.delete(sessionId);
+            if (!closing) this.writePickerPermissionResume?.(undefined, sessionId, picked.id, record.since);
+            this.update();
+        }
+        return granted;
+    }
+
+    /** The card's Cancel for a picked app: the wait ends at once, and the app's busy chip goes with it, without a notice. */
+    protected cancelPickerPermissionWait(sessionId: string): void {
+        const wait = this.computerPermissionWaits.get(sessionId);
+        if (!wait?.appName || !wait.appId) return;
+        const appId = wait.appId;
+        this.computerPermissionWaits.delete(sessionId);
+        for (const key of [sessionId, '']) {
+            const pending = this.composerOpeningApps.get(key) || [];
+            const remaining = pending.filter(item => item.id !== appId);
+            if (remaining.length) this.composerOpeningApps.set(key, remaining);
+            else this.composerOpeningApps.delete(key);
+        }
+        this.writePickerPermissionResume?.(undefined, sessionId, appId, wait.since);
+        this.update();
+        requestAnimationFrame(() => this.composerTextareaRef.current?.focus());
+    }
+
+    /** The open picker wait (one at a time is kept: the latest), or undefined; records older than 10 minutes are dropped. */
+    protected readPickerPermissionResume(): { readonly sessionId: string; readonly app: { readonly name: string; readonly id: string }; readonly at: number } | undefined {
+        try {
+            const saved = JSON.parse(window.localStorage.getItem(NextMuxDesktopWidget.COMPUTER_PICKER_RESUME_KEY) || 'null');
+            if (!saved || typeof saved.sessionId !== 'string' || typeof saved.at !== 'number' || typeof saved.app?.name !== 'string' || typeof saved.app?.id !== 'string'
+                || !saved.app.name || !saved.app.id || Date.now() - saved.at > 10 * 60_000 || saved.at > Date.now() + 60_000) return undefined;
+            return { sessionId: saved.sessionId, app: { name: saved.app.name.slice(0, 120), id: saved.app.id.slice(0, 260) }, at: saved.at };
+        } catch { return undefined; }
+    }
+
+    /** Writes the open picker wait, or removes it (only when it is still the given session's, app's and wait's). */
+    protected writePickerPermissionResume(value: { readonly sessionId: string; readonly app: { readonly name: string; readonly id: string }; readonly at: number } | undefined,
+        sessionId?: string, appId?: string, at?: number): void {
+        try {
+            if (value) {
+                // A private conversation leaves nothing behind on disk.
+                if (this.codingSessions?.some(session => session.id === value.sessionId && session.incognito)) return;
+                window.localStorage.setItem(NextMuxDesktopWidget.COMPUTER_PICKER_RESUME_KEY, JSON.stringify(value));
+                return;
+            }
+            const saved = this.readPickerPermissionResume();
+            if (saved && (sessionId !== undefined && saved.sessionId !== sessionId || appId !== undefined && saved.app.id !== appId || at !== undefined && saved.at !== at)) return;
+            window.localStorage.removeItem(NextMuxDesktopWidget.COMPUTER_PICKER_RESUME_KEY);
+        } catch { /* no resume after a restart */ }
     }
 
     /**
@@ -7173,6 +7382,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     /** After NextMux reopens for Screen Recording, each conversation that was still waiting continues by itself. */
     protected resumeAfterComputerPermission(): void {
+        this.resumePickerAfterComputerPermission?.();
         const saved = this.readComputerPermissionResumes();
         try { window.localStorage.removeItem(NextMuxDesktopWidget.COMPUTER_PERMISSION_RESUME_KEY); } catch { return; }
         if (!Object.keys(saved).length) return;
@@ -7190,6 +7400,24 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     void this.resumePausedTurn(sessionId, currentTurn.id, false);
                 }, 1_500);
             }
+        }).catch(() => undefined);
+    }
+
+    /**
+     * The app picked before NextMux reopened for Screen Recording opens once, in the conversation it was picked for,
+     * when that conversation is the one on screen and the permission is there now. Otherwise the pick is simply dropped:
+     * nothing opens somewhere the user is not looking, and nothing asks for the permission again by itself.
+     */
+    protected resumePickerAfterComputerPermission(): void {
+        const saved = this.readPickerPermissionResume?.();
+        try { window.localStorage.removeItem(NextMuxDesktopWidget.COMPUTER_PICKER_RESUME_KEY); } catch { return; }
+        if (!saved) return;
+        void window.nextmuxDesktop?.getComputerCapability?.().then(capability => {
+            if (!capability.available) return;
+            window.setTimeout(() => {
+                if (this.isDisposed || this.activeCodingSessionId !== saved.sessionId || !this.codingSessions.some(session => session.id === saved.sessionId)) return;
+                void this.selectComposerApp({ name: saved.app.name, id: saved.app.id });
+            }, 1_500);
         }).catch(() => undefined);
     }
 
@@ -7683,14 +7911,22 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const existingLeadRelayKey = existing?.slots?.find(slot => slot.roles?.includes('lead'))?.relayKey || existing?.slots?.[0]?.relayKey || '';
         const defaultRelayKey = existing ? existing.relayKey || existing.sourceKey || existingLeadRelayKey || legacyRelayKey() : '';
         this.councilModalRelayKey = defaultRelayKey;
-        const managedRelaysToLoad = new Set<string>(
-            [defaultRelayKey, ...(existing?.slots?.map(slot => slot.relayKey || '').filter(Boolean) || [])]
-                .filter(key => key.startsWith('managed:'))
-        );
+        const councilRelaysToLoad = [defaultRelayKey, ...(existing?.slots?.map(slot => slot.relayKey || '').filter(Boolean) || [])];
+        const managedRelaysToLoad = new Set<string>(councilRelaysToLoad.filter(key => key.startsWith('managed:')));
         for (const managedKey of managedRelaysToLoad) {
             void this.loadSelectedMerchantCatalog(managedKey.slice('managed:'.length)).then(() => {
                 if (this.councilConfigModalOpen) {
                     this.syncCouncilModalSlotsWithRelay(managedKey);
+                    this.update();
+                }
+            });
+        }
+        const officialRelaysToLoad = new Set<string>(councilRelaysToLoad.filter(key => key.startsWith('official:')));
+        for (const officialKey of officialRelaysToLoad) {
+            void this.ensureOfficialConnectionModelsLoaded?.(officialKey)?.then(() => {
+                // Only the source still browsed: a late list must not fill slots left empty for another source meanwhile.
+                if (this.councilConfigModalOpen && this.councilModalRelayKey === officialKey) {
+                    this.syncCouncilModalSlotsWithRelay(officialKey);
                     this.update();
                 }
             });
@@ -7762,13 +7998,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.councilModalRelayDrawerOpen = false;
         this.councilModalModelPickerSlotId = '';
         this.councilModalRolePickerSlotId = '';
+        const syncModalAfterLoad = (): void => {
+            if (this.councilConfigModalOpen && this.councilModalRelayKey === relayKey) {
+                this.syncCouncilModalSlotsWithRelay(relayKey);
+                this.update();
+            }
+        };
         if (relayKey.startsWith('managed:')) {
-            void this.loadSelectedMerchantCatalog(relayKey.slice('managed:'.length)).then(() => {
-                if (this.councilConfigModalOpen && this.councilModalRelayKey === relayKey) {
-                    this.syncCouncilModalSlotsWithRelay(relayKey);
-                    this.update();
-                }
-            });
+            void this.loadSelectedMerchantCatalog(relayKey.slice('managed:'.length)).then(syncModalAfterLoad);
+        } else if (relayKey.startsWith('official:')) {
+            void this.ensureOfficialConnectionModelsLoaded?.(relayKey)?.then(syncModalAfterLoad);
         }
         this.syncCouncilModalSlotsWithRelay(relayKey);
         this.update();
@@ -8305,6 +8544,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const relayKey = this.councilModalRelayKey;
         const relayOption = this.relayPickerOptions().find(option => option.key === relayKey) || this.relayOption(relayKey);
         const candidates = this.councilCandidateModelsForRelay(relayKey);
+        const officialState = relayKey.startsWith('official:') ? this.officialPickerConnectionState?.(relayKey) : undefined;
         return <>
             {this.councilConfigModalOpen && <CouncilConfigModal
                 locale={this.desktopLocale}
@@ -8399,6 +8639,24 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 closing={this.councilConfigModalClosing}
                 onClose={() => this.closeCouncilConfigModal()}
                 agentRunning={this.isCodingSessionRunning(this.activeCodingSessionId)}
+                officialModelsLoading={Boolean(officialState?.loading)}
+                officialModelsFailed={Boolean(officialState?.failed)}
+                officialModelsAuthFailed={Boolean(officialState?.authFailed)}
+                {...(relayKey.startsWith('official:') ? {
+                    onRetryOfficialRelay: () => {
+                        const targetRelay = this.councilModalRelayKey || relayKey;
+                        void this.ensureOfficialConnectionModelsLoaded?.(targetRelay, { force: true, userInitiated: true })?.then(() => {
+                            if (this.councilConfigModalOpen && this.councilModalRelayKey === targetRelay) {
+                                this.syncCouncilModalSlotsWithRelay(targetRelay);
+                                this.update();
+                            }
+                        });
+                    },
+                    onOpenModelCenter: () => {
+                        this.closeCouncilConfigModal();
+                        this.selectModelCenterView('official');
+                    }
+                } : {})}
                 configWarning={this.councilModalConfigWarning || (!this.platformSession?.linked && relayKey.startsWith('managed:') ? relayText(this.desktopLocale, 'signInNotice') : undefined)}
                 errorMessage={!this.councilModalRouteError ? undefined : this.councilModalRelayFullError
                     ? relayOption && this.relayOptionIsFull(relayOption, 'coding') ? relayText(this.desktopLocale, 'relayFull') : undefined
@@ -8422,21 +8680,62 @@ export class NextMuxDesktopWidget extends ReactWidget {
      */
     protected computerViewCapability: ComputerViewCapability | undefined;
     protected computerViewInit: Promise<void> | undefined;
-    protected computerViewArmQueue: Promise<unknown> = Promise.resolve();
+    /**
+     * Live-view starts, one at a time (the app side holds one capture grant per page): the tab on show goes first, before
+     * the tabs kept warm behind it, so a conversation with several app tabs shows its picture as soon as one start allows.
+     */
+    protected computerViewStarts?: { readonly urgent: () => boolean; readonly run: () => Promise<void> }[];
+    protected computerViewStarting?: boolean;
+    protected computerViewPumpQueued?: boolean;
+    protected queueComputerViewStart<T>(urgent: () => boolean, job: () => Promise<T>): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+            (this.computerViewStarts ??= []).push({ urgent, run: () => Promise.resolve().then(job).then(resolve, reject) });
+            // Picked once the other starts of this pass are queued too: React runs every tab view's effect in one pass, in
+            // tab-strip order, so the tab on show is seldom the first to ask.
+            if (this.computerViewPumpQueued) return;
+            this.computerViewPumpQueued = true;
+            void Promise.resolve().then(() => { this.computerViewPumpQueued = false; this.pumpComputerViewStarts(); });
+        });
+    }
+    protected pumpComputerViewStarts(): void {
+        const starts = this.computerViewStarts;
+        if (this.computerViewStarting || !starts?.length) return;
+        const index = starts.findIndex(item => { try { return item.urgent(); } catch { return false; } });
+        const [next] = starts.splice(Math.max(0, index), 1);
+        this.computerViewStarting = true;
+        void next.run().finally(() => { this.computerViewStarting = false; this.pumpComputerViewStarts(); });
+    }
     protected readonly computerWindowControls = new Map<string, ConversationWindowControls>();
     /** User preference is separate from the temporary OS unmute while a tab is hidden. */
     protected readonly computerWindowSoundPreferences = new Map<string, boolean>();
     protected readonly computerTabSoundPreferences = new Map<string, boolean>();
     protected readonly computerWindowVisibility = new Map<string, boolean>();
     protected readonly computerWindowSoundQueues = new Map<string, Promise<void>>();
+    protected isWindowInDetachedTab(conversationId: string, pid: number, windowId: number): boolean {
+        if (!this.detachedComputerTabs.size) return false;
+        for (const tab of visualTabsFor(this.conversationTabs, conversationId)) {
+            if (!this.detachedComputerTabs.has(`${conversationId}\n${tab.id}`)) continue;
+            if (tabWindows(tab).some(ref => ref.pid === pid && ref.windowId === windowId)) return true;
+        }
+        return false;
+    }
     protected setConversationWindowVisible(conversationId: string, pid: number, windowId: number, visible: boolean): Promise<void> {
         const key = `${conversationId}:${pid}:${windowId}`;
         this.computerWindowVisibility.set(key, visible);
         if (!this.computerWindowSoundPreferences.has(key)) {
             this.computerWindowSoundPreferences.set(key, this.computerWindowControls.get(key)?.state?.sound ?? false);
         }
+        if (visible) {
+            this.nudgeSnapshotStream?.(conversationId, pid, windowId, false);
+        }
         const apply = (this.computerWindowSoundQueues.get(key) || Promise.resolve()).then(async () => {
+            if (this.computerWindowVisibility.get(key) === false && this.isWindowInDetachedTab?.(conversationId, pid, windowId)) {
+                return;
+            }
             const sound = this.computerWindowVisibility.get(key) === false ? true : this.computerWindowSoundPreferences.get(key) ?? false;
+            if (this.computerWindowVisibility.get(key) !== false) {
+                this.computerWindowStateSync?.get(key)?.({ sound });
+            }
             await window.nextmuxDesktop?.setComputerWindowSound?.(conversationId, pid, windowId, sound).catch(() => undefined);
         });
         this.computerWindowSoundQueues.set(key, apply);
@@ -8486,26 +8785,29 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         if (!context || typeof canvas.captureStream !== 'function') return undefined;
-        const decodeShot = async (): Promise<ImageBitmap | undefined> => {
-            const shot = await snapshot(conversationId, pid, windowId, 1600).catch(() => undefined);
-            if (!shot?.ok || !shot.data) return undefined;
-            const bytes = Uint8Array.from(atob(shot.data), character => character.charCodeAt(0));
-            return await createImageBitmap(new Blob([bytes], { type: shot.mimeType || 'image/jpeg' })).catch(() => undefined);
+        // Pictures come as JPEG bytes (no base64 round trip), decoded off the main thread; an older host's base64 still works.
+        // A busy capture (the host shares one per window) is "no new picture yet", never a failure.
+        const decodeShot = async (): Promise<Awaited<ReturnType<typeof decodeWindowPicture>> | 'busy'> => {
+            const shot = await snapshot(conversationId, pid, windowId, 1600, { binary: true }).catch(() => undefined);
+            if (shot?.ok === false && shot.error === 'capture_busy') return 'busy';
+            if (!shot?.ok) return undefined;
+            return decodeWindowPicture(shot);
         };
-        // First capture and validate the initial bitmap, size canvas, create captureStream(0), THEN draw & requestFrame
+        // First capture and validate the initial picture, size canvas, create captureStream(0), THEN draw & requestFrame
         // so detached off-DOM <canvas> capture never stalls after Frame #1 in Blink.
-        const firstBitmap = await decodeShot();
-        if (!firstBitmap) return undefined;
-        canvas.width = firstBitmap.width;
-        canvas.height = firstBitmap.height;
+        let firstPicture = await decodeShot();
+        if (firstPicture === 'busy') firstPicture = await decodeShot();
+        if (!firstPicture || firstPicture === 'busy') return undefined;
+        canvas.width = firstPicture.width;
+        canvas.height = firstPicture.height;
         const stream = canvas.captureStream(0);
         const track = stream.getVideoTracks()[0];
         if (!track) {
-            firstBitmap.close();
+            firstPicture.release();
             return undefined;
         }
-        context.drawImage(firstBitmap, 0, 0);
-        firstBitmap.close();
+        context.drawImage(firstPicture.image, 0, 0, firstPicture.width, firstPicture.height);
+        firstPicture.release();
         (track as unknown as { requestFrame?: () => void })?.requestFrame?.();
 
         let drawing = false;
@@ -8513,14 +8815,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (drawing) return true;
             drawing = true;
             try {
-                const bitmap = await decodeShot();
-                if (!bitmap) return false;
-                if (canvas.width !== bitmap.width || canvas.height !== bitmap.height) {
-                    canvas.width = bitmap.width;
-                    canvas.height = bitmap.height;
+                const picture = await decodeShot();
+                if (picture === 'busy') return true;
+                if (!picture) return false;
+                if (canvas.width !== picture.width || canvas.height !== picture.height) {
+                    canvas.width = picture.width;
+                    canvas.height = picture.height;
                 }
-                context.drawImage(bitmap, 0, 0);
-                bitmap.close();
+                context.drawImage(picture.image, 0, 0, picture.width, picture.height);
+                picture.release();
                 (track as unknown as { requestFrame?: () => void })?.requestFrame?.();
                 return true;
             } finally {
@@ -8585,7 +8888,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!controls) {
             const widget = this;
             // One record of the tab's switches, shared by its header and the AI's tabs.set (listeners follow changes).
-            const state: { placement?: ConversationWindowPlacement; sound?: boolean; userInput: boolean; parkReason?: string } = { userInput: false, sound: preferredSound ?? false };
+            const state: { placement?: ConversationWindowPlacement; sound?: boolean; userInput: boolean; parkReason?: string;
+                selfThrottles?: boolean; desktopFollow?: boolean; tether?: 'behind' | 'corner' } = { userInput: false, sound: preferredSound ?? false };
+            // Windows facts the tab's realtime prompt reads (only what the app side reported).
+            const windowFacts = (current: { readonly selfThrottles?: boolean; readonly desktopFollow?: boolean; readonly tether?: string } | undefined):
+                { selfThrottles?: boolean; desktopFollow?: boolean; tether?: 'behind' | 'corner' } => {
+                const tether = current?.tether === 'behind' || current?.tether === 'corner' ? current.tether : undefined;
+                return {
+                    ...(current?.selfThrottles === true ? { selfThrottles: true } : {}),
+                    ...(typeof current?.desktopFollow === 'boolean' ? { desktopFollow: current.desktopFollow } : {}),
+                    ...(tether ? { tether } : {})
+                };
+            };
             const listeners = new Set<() => void>();
             const changed = (patch: Partial<typeof state>): void => {
                 let dirty = false;
@@ -8607,7 +8921,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     ...(current.placement === 'tab' || current.placement === 'desktop' ? { placement: current.placement } : {}),
                     ...(typeof current.sound === 'boolean' ? { sound: widget.computerWindowSoundPreferences.get(key) ?? current.sound } : {}),
                     userInput: current.keyboardMouse === true,
-                    ...(typeof current.parkReason === 'string' ? { parkReason: current.parkReason } : {})
+                    ...(typeof current.parkReason === 'string' ? { parkReason: current.parkReason } : {}),
+                    ...windowFacts(current)
                 });
             }).catch(() => undefined);
             controls = {
@@ -8618,8 +8933,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 get canPoint() { return widget.computerViewCapability?.pointer === true && Boolean(bridge.computerWindowPointer); },
                 get canMute() { return widget.computerViewCapability?.sound === true && Boolean(bridge.setComputerWindowSound); },
                 get canLock() { return widget.computerViewCapability?.lock !== false; },
-                start: (options?: { readonly preferSnapshot?: boolean }) => {
-                    const run = widget.computerViewArmQueue.then(async () => {
+                start: (options?: ConversationWindowStartOptions) => widget.queueComputerViewStart(() => options?.shown?.() === true, async () => {
+                        // A view that went away while waiting (its tab closed, or switched past) needs no capture.
+                        if (options?.current?.() === false) return {};
                         const armed = await bridge.startComputerWindowView!(conversationId, ref.pid, ref.windowId);
                         if (!armed?.ok) {
                             const current = await bridge.computerWindowState?.(conversationId, ref.pid, ref.windowId).catch(() => undefined);
@@ -8654,6 +8970,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         // fall back seamlessly to the snapshot stream.
                         let stream: MediaStream | undefined;
                         let snapshotStream = false;
+                        if (options?.current?.() === false) return { placement: armed.placement, sound: state.sound };
                         if (!options?.preferSnapshot && !armed.snapshotOnly && typeof navigator.mediaDevices?.getDisplayMedia === 'function') {
                             try {
                                 const candidate = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 24, max: 30 } }, audio: false });
@@ -8674,15 +8991,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         // Adopt the switches as the app side has them (the AI may have changed them while the tab was hidden), then
                         // register the window's 键鼠 switch there.
                         const current = await bridge.computerWindowState?.(conversationId, ref.pid, ref.windowId).catch(() => undefined);
-                        changed({ placement: armed.placement, sound: widget.computerWindowSoundPreferences.get(key) ?? armed.sound, ...(current?.ok ? { userInput: current.keyboardMouse === true } : {}),
+                        changed({ placement: armed.placement, sound: widget.computerWindowSoundPreferences.get(key) ?? armed.sound, ...(current?.ok ? { userInput: current.keyboardMouse === true, ...windowFacts(current) } : {}),
                             ...(typeof current?.parkReason === 'string' ? { parkReason: current.parkReason } : {}) });
                         void bridge.setComputerWindowUserInput?.(conversationId, ref.pid, ref.windowId, state.userInput).catch(() => undefined);
                         await widget.setConversationWindowVisible(conversationId, ref.pid, ref.windowId, widget.computerWindowVisibility.get(key) !== false);
                         return { ...(stream ? { stream, ...(snapshotStream ? { snapshotStream: true } : {}) } : {}), placement: armed.placement, sound: state.sound };
-                    });
-                    widget.computerViewArmQueue = run.catch(() => undefined);
-                    return run;
-                },
+                    }),
                 // The user's own clicks through the tab (键鼠 on): background first, like the AI's, so the app does not jump in
                 // front of NextMux and other conversations' tabs keep working; windows that ignore it get real input (put back after).
                 pointer: async input => {
@@ -8725,12 +9039,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     if (ok) widget.nudgeSnapshotStream(conversationId, ref.pid, ref.windowId, false);
                     return ok;
                 } } : {}),
-                // The tab's frame-stall watchdog compares the live picture with the window as the system captures it now.
-                ...(bridge.computerWindowSnapshot ? { snapshot: async (maxSize?: number) => {
-                    const shot = await bridge.computerWindowSnapshot!(conversationId, ref.pid, ref.windowId,
-                        Math.max(64, Math.min(2048, Math.round(maxSize || 256)))).catch(() => undefined);
-                    return shot?.ok && shot.data && shot.width && shot.height
-                        ? { data: shot.data, mimeType: shot.mimeType || 'image/jpeg', width: shot.width, height: shot.height } : undefined;
+                // The tab's frame-stall watchdog and snapshot bridge compare the live picture with the window as the system
+                // captures it now. `binary`: JPEG bytes instead of base64; a failure keeps its code (capture_busy is no new picture).
+                ...(bridge.computerWindowSnapshot ? { snapshot: async (maxSize?: number, options?: { readonly binary?: boolean }) => {
+                    const size = Math.max(64, Math.min(2048, Math.round(maxSize || 256)));
+                    const shot = await (options?.binary
+                        ? bridge.computerWindowSnapshot!(conversationId, ref.pid, ref.windowId, size, { binary: true })
+                        : bridge.computerWindowSnapshot!(conversationId, ref.pid, ref.windowId, size)).catch(() => undefined);
+                    const bytes = shot?.bytes && shot.bytes.byteLength > 0 ? shot.bytes : undefined;
+                    if (shot?.ok && (bytes || shot.data) && shot.width && shot.height) {
+                        return { ...(bytes ? { bytes } : { data: shot.data! }), mimeType: shot.mimeType || 'image/jpeg', width: shot.width, height: shot.height };
+                    }
+                    return shot?.ok === false && typeof shot.error === 'string' && shot.error ? { error: shot.error } : undefined;
                 } } : {}),
                 place: async placement => {
                     widget.loadConversationTabs();
@@ -8740,7 +9060,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     const list = targets.some(w => w.pid === activeRef.pid && w.windowId === activeRef.windowId)
                         ? targets
                         : [{ pid: activeRef.pid, windowId: activeRef.windowId, title: currentTab.target }];
-                    let result: { ok?: boolean; placement?: ConversationWindowPlacement } | undefined;
+                    let result: { ok?: boolean; placement?: ConversationWindowPlacement; selfThrottles?: boolean; desktopFollow?: boolean; tether?: string } | undefined;
                     for (const w of list) {
                         const isActive = w.pid === activeRef.pid && w.windowId === activeRef.windowId;
                         const r = await bridge.placeComputerWindow!(conversationId, w.pid, w.windowId, placement, placement === 'desktop' && isActive);
@@ -8749,7 +9069,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     }
                     if (!result?.ok || !result.placement) return undefined;
                     if (widget.computerViewCapability?.park) widget.rememberComputerWindowPlacement(placement);
-                    changed({ placement: result.placement });
+                    changed({ placement: result.placement, ...windowFacts(result) });
                     return result.placement;
                 },
                 terminateProcess: async () => {
@@ -9521,9 +9841,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const onlyIfRunning = request.input?.onlyIfRunning === true;
         // Only the model's tabs.open_app is the AI acting; the user's Reopen (and any check) never lights the frame.
         const source = internalUiRequest ? 'user' as const : 'agent' as const;
+        // resultVersion 2: a failure says which stage failed and whether this call launched the app (see appOpenFailureForModel).
         const opened = await bridge.openAppInTab(conversationId, app, explicitReopen
-            ? { onlyIfRunning: false, checkOrOpen: request.input?.checkOrOpen === true, restartIfRunning: request.input?.restartIfRunning === true, source }
-            : onlyIfRunning ? { onlyIfRunning: true, source } : { source });
+            ? { onlyIfRunning: false, checkOrOpen: request.input?.checkOrOpen === true, restartIfRunning: request.input?.restartIfRunning === true, source, resultVersion: 2 }
+            : onlyIfRunning ? { onlyIfRunning: true, source, resultVersion: 2 } : { source, resultVersion: 2 });
         if (explicitReopen && opened?.ok && opened.requiresRestart) return done({ requiresRestart: true });
         if (!opened?.ok && opened?.error === 'computer_window_owned') {
             const message = tabWindowText(this.desktopLocale, 'windowOwned');
@@ -9535,11 +9856,22 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.announceTab(conversationId, refused.id, message);
             return failed(message);
         }
-        if (!opened?.ok || !opened.pid || !opened.windowId) return failed(opened?.error === 'app_window_unavailable'
-            ? `${app} is running but shows no window. Ask the user to open its main window, then try again.`
-            : `Could not open ${app} in a tab (${opened?.error || 'failed'}). Check the app's name, or ask the user which app they mean.`);
+        if (!opened?.ok || !opened.pid || !opened.windowId) {
+            // The user's own Reopen shows the reason in the tab, in their language; the model gets one sentence it can act on.
+            const userCopy = explicitReopen && opened ? this.appOpenFailureCopy?.(opened, { name: tabsNow().find(item => item.id === tabId)?.title || app }) : undefined;
+            if (userCopy) return failed(userCopy.title);
+            if (opened?.error === 'interrupted_by_user_esc') return failed(COMPUTER_USER_ESC_OBSERVATION);
+            return failed(typeof appOpenFailureForModel === 'function' ? appOpenFailureForModel(opened, app)
+                : opened?.error === 'app_window_unavailable' ? `${app} is running but shows no window. Ask the user to open its main window, then try again.`
+                    : `Could not open ${app} in a tab (${opened?.error || 'failed'}). Check the app's name, or ask the user which app they mean.`);
+        }
+        const realtime = typeof tabRealtimeFacts === 'function' ? tabRealtimeFacts(opened) : {};
+        // Windows: a browser or Electron app NextMux could not start in real-time mode may freeze its own picture in the
+        // tab; the model should not mistake that for a failure.
+        const throttleHint = realtime.selfThrottles === true && realtime.realtimeLaunch !== true
+            ? { note: 'This app pauses drawing while its window is hidden; ask the user to reopen it in real-time mode or show it on the desktop if the picture stops changing.' } : {};
         const tab = appWindowTab({ pid: opened.pid, windowId: opened.windowId, app: opened.app || app, title: opened.title, appId: opened.appId, familyId: opened.familyId, role: opened.role, windows: opened.windows,
-            ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}) }, platform);
+            ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}), ...realtime }, platform);
         if (explicitReopen && (!this.codingSessions.some(session => session.id === conversationId)
             || !visualTabsFor(this.conversationTabs, conversationId).some(item => item.id === tabId))) {
             this.forgetConversationWindows(conversationId, [{ ...tab, createdAt: Date.now() }], false);
@@ -9548,7 +9880,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const same = !explicitReopen && await liveTabFor(item => item.id === tab.id || Boolean(tab.appId && item.appId === tab.appId));
         if (same) {
             const attachedSame = attachTabWindow(same, { pid: opened.pid, windowId: opened.windowId, app: opened.app || app, title: opened.title, appId: opened.appId, familyId: opened.familyId, role: opened.role, windows: opened.windows,
-                ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}) }, true);
+                ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}), ...realtime }, true);
             const shouldSelectSame = !isReconnect || activeTabFor(this.conversationTabs, conversationId) === same.id;
             this.setConversationTabs(openVisualTab(this.conversationTabs, conversationId, attachedSame, shouldSelectSame));
             return alreadyOpen(attachedSame);
@@ -9577,22 +9909,22 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 : (hostTab.id.startsWith('window:0:0:') || !hostTab.windowRef || hostTab.status === 'disconnected')
                 ? { ...hostTab, id: tab.id } : hostTab;
             const attached = attachTabWindow(upgradedHost, { pid: opened.pid, windowId: opened.windowId, app: opened.app || app, title: opened.title, appId: opened.appId, familyId: opened.familyId, role: opened.role, windows: opened.windows,
-                ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}) }, true);
+                ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}), ...realtime }, true);
             const shouldSelectHost = !isReconnect || activeTabFor(state, conversationId) === hostTab.id;
             const baseState = hostTab.id !== attached.id ? closeVisualTab(state, conversationId, hostTab.id) : state;
             this.setConversationTabs(openVisualTab(baseState, conversationId, attached, shouldSelectHost));
             return done({ tabId: attached.id, pid: opened.pid, windowId: opened.windowId, app: attached.title, window: attached.target,
                 ...(attached.appId ? { appId: attached.appId } : {}), placement: opened.placement === 'tab' ? 'tab' : 'desktop', sound: false, keyboardMouse: false,
                 tell: 'Tell the user in their language that the app is now open in a tab of this conversation (the tab bar above the conversation).',
-                next: 'Take tabs.screenshot of this tab to see the app, then act with tabs.click / tabs.type / tabs.key (or computer.* on this pid and windowId).' });
+                next: 'Take tabs.screenshot of this tab to see the app, then act with tabs.click / tabs.type / tabs.key (or computer.* on this pid and windowId).', ...throttleHint });
         }
         const createdTab = attachTabWindow({ ...tab, createdAt: Date.now() }, { pid: opened.pid, windowId: opened.windowId, app: opened.app || app, title: opened.title, appId: opened.appId, familyId: opened.familyId, role: opened.role, windows: opened.windows,
-            ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}) }, true);
+            ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}), ...realtime }, true);
         this.setConversationTabs(openVisualTab(state, conversationId, createdTab, !isReconnect));
         return done({ tabId: createdTab.id, pid: opened.pid, windowId: opened.windowId, app: createdTab.title, window: createdTab.target,
             ...(createdTab.appId ? { appId: createdTab.appId } : {}), placement: opened.placement === 'tab' ? 'tab' : 'desktop', sound: false, keyboardMouse: false,
             tell: 'Tell the user in their language that the app is now open in a tab of this conversation (the tab bar above the conversation).',
-            next: 'Take tabs.screenshot of this tab to see the app, then act with tabs.click / tabs.type / tabs.key (or computer.* on this pid and windowId).' });
+            next: 'Take tabs.screenshot of this tab to see the app, then act with tabs.click / tabs.type / tabs.key (or computer.* on this pid and windowId).', ...throttleHint });
     }
 
 
@@ -11444,8 +11776,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
             } catch {
                 isText = false;
             }
+            // UTF-16 without a byte-order mark (as Windows tools write it): its NUL bytes are not binary.
+            if (!isText) isText = this.utf16Text?.(bytes) === true;
         }
         return { kind: isText ? 'text' : 'file', mimeType: isText && mimeType === 'application/octet-stream' ? 'text/plain' : mimeType };
+    }
+
+    /**
+     * UTF-16 text by the shared detector (its NUL-byte pattern, or a byte-order mark), with no binary control characters;
+     * any other file is answered after one pass over its bytes, without scoring GBK, Big5 and Shift_JIS readings.
+     */
+    protected utf16Text(bytes: Uint8Array): boolean {
+        return isUtf16TextBytes(bytes);
     }
 
     protected attachmentRecordFromBytes(nameValue: string, uri: string, bytes: Uint8Array, declaredMime = '', id: string = crypto.randomUUID(), workspaceRelativePath?: string, ordinal?: number): DesktopAttachmentRecord {
@@ -12180,6 +12522,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!files.length || this.applicationExitPreparing) return;
         const attachmentPopover = this.codingPopover === 'attachments', navigation = this.navigationBackStack;
         this.attachmentError = '';
+        const unreadable: string[] = [];
+        let folderCount = 0;
         const session = this.activeCodingSession() || this.ensureCodingSession(files[0]?.name || '');
         // A drop into the message text remembers its position; typing during the import keeps it in step.
         const pendingAnchor = textOffset === undefined ? '' : `pending:${crypto.randomUUID()}`;
@@ -12191,9 +12535,27 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 || files.reduce((total, file) => total + file.size, 0) > MAX_ATTACHMENT_TOTAL_BYTES) {
                 throw new Error('ATTACHMENT_IMPORT_TOO_LARGE');
             }
+            // A folder can arrive as a File (pasted from the file manager, or a Windows drop without directory entries). It is
+            // added as the folder it is, like a dropped one, at once and as its own tracked import (a send or a quit waits for
+            // it), where the drop was: the anchor follows any typing since.
+            const addFolder = (folder: { readonly entry: FolderDirectoryEntryLike; readonly file: File; readonly path: string }): void => {
+                folderCount++;
+                if (this.activeCodingSessionId !== session.id) return;
+                const offset = pendingAnchor ? this.composerAnchors.get(pendingAnchor)?.offset ?? textOffset : textOffset;
+                void this.addComposerFolders([folder], offset, { asProject: false });
+            };
             for (const file of files) {
                 if (!retained()) return;
-                let name = file.name, bytes: Uint8Array = new Uint8Array(await file.arrayBuffer());
+                const folder = await this.folderFromFile?.(file);
+                if (folder) { addFolder(folder); continue; }
+                let name = file.name, bytes: Uint8Array;
+                // One file that went away (or cannot be read) is skipped and named; the others are still added. A typed name
+                // can still be a folder ("site.html"): its path says so once reading fails.
+                try { bytes = new Uint8Array(await file.arrayBuffer()); } catch {
+                    const typedFolder = file.type ? await this.folderFromFile?.(file, true) : undefined;
+                    if (typedFolder) addFolder(typedFolder); else unreadable.push(file.name);
+                    continue;
+                }
                 let mimeType = this.attachmentMimeType(name, file.type, bytes);
                 const converted = await this.convertImportedImage?.(name, bytes, mimeType);
                 if (converted) ({ name, bytes, mimeType } = converted);
@@ -12202,6 +12564,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (attachmentPopover && this.codingPopover === 'attachments' && this.navigationBackStack === navigation
                 && !this.pendingTurnEdit && this.activeCodingSessionId === session.id) this.completeNavigationSurface();
         });
+        if (unreadable.length && this.activeCodingSessionId === session.id) {
+            // "Your other files were added" only when something else from the drop was.
+            const others = files.length > unreadable.length || folderCount > 0;
+            this.attachmentError = [composerAttachmentUiText(this.desktopLocale, unreadable.length > 1 ? 'unreadableSkippedMany' : 'unreadableSkipped',
+                { name: unreadable[0], count: String(unreadable.length) }), others ? composerAttachmentUiText(this.desktopLocale, 'othersAdded') : '']
+                .filter(Boolean).join(/^(?:zh|ja)/.test(this.desktopLocale) ? '' : ' ');
+            this.update();
+        }
         if (pendingAnchor) {
             const anchor = this.composerAnchors.get(pendingAnchor);
             this.composerAnchors.delete(pendingAnchor);
@@ -12948,9 +13318,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** Track which drop target a drag is over and, over the message text, the caret it would insert at. */
     protected handleCodingStageDragOver(event: React.DragEvent<HTMLElement>): void {
         if (this.codingPanel !== 'thread' || this.activeCouncilChildId || !event.dataTransfer.types.includes('Files')) return;
+        const target = event.target instanceof Element ? event.target : undefined;
+        // An app tab's AI Console takes its own drops: over it (or its resize edges) the conversation's drop card goes away.
+        if (target?.closest('.nmx-plugin-chat-overlay, .nmx-plugin-chat-panel')) { this.clearComposerDropState(); return; }
         event.preventDefault();
         event.dataTransfer.dropEffect = 'copy';
-        const target = event.target instanceof Element ? event.target : undefined;
         const textarea = this.composerTextareaRef?.current;
         const inComposer = Boolean(target?.closest('.nmx-composer-wrap'));
         const overText = Boolean(textarea && inComposer && target?.closest('.nmx-composer-input') && textarea.value.trim());
@@ -13128,6 +13500,20 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!resources.length || this.applicationExitPreparing) return;
         await this.addComposerFolders(resources.map(uri => ({ entry: this.fileSystemFolderEntry(uri), path: uri.path.fsPath() })), undefined,
             { ...(anchorOffset !== undefined ? { anchorOffset } : {}), asProject: false });
+    }
+
+    /**
+     * The folder a File stands for, if it is one: no type and a path on disk that is a directory (a Windows folder File has
+     * size 0, a macOS one its directory size). As VS Code resolves a dropped path through the file system (fileService.stat
+     * after webUtils.getPathForFile), the path decides, not the File's size or type.
+     */
+    protected async folderFromFile(file: File, anyType = false): Promise<{ readonly entry: FolderDirectoryEntryLike; readonly file: File; readonly path: string } | undefined> {
+        if (file.type && !anyType) return undefined;
+        const path = window.nextmuxDesktop?.getPathForFile?.(file) || (file as File & { readonly path?: string }).path || '';
+        if (!path) return undefined;
+        const uri = URI.fromFilePath(path);
+        const stat = await this.fileService.resolve(uri).catch(() => undefined);
+        return stat?.isDirectory ? { entry: this.fileSystemFolderEntry(uri, file.name || uri.path.base), file, path } : undefined;
     }
 
     /** A folder on disk seen through the drag-and-drop Entries API the folder snapshot reads. */
@@ -14217,6 +14603,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 if (!this.merchantPickerSnapshots.has(merchantId)) {
                     void this.loadComicChatRelayCatalog(merchantId);
                 }
+            } else if (relayKey.startsWith('official:')) {
+                void this.ensureOfficialConnectionModelsLoaded?.(relayKey);
             }
         }
         this.update();
@@ -14365,6 +14753,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const layout = placeModelPickerPanels(basePlacement, viewport);
         const placement = layout.picker;
         const detailGeometry = layout.detail;
+        const {
+            connection: pickerConnection,
+            loading: officialLoading,
+            failed: officialFailed,
+            authFailed: officialAuthFailed
+        } = this.officialPickerConnectionState(activeRelayKey);
         const relayLoading = Boolean(
             studioMerchantId
             && (this as unknown as { comicChatRelayLoading?: Set<string> }).comicChatRelayLoading?.has(studioMerchantId)
@@ -14411,12 +14805,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             <strong>{comicStepName(this.desktopLocale, capability)}</strong>
                             <button
                                 type='button'
-                                disabled={this.catalogLoading || relayLoading}
+                                disabled={this.catalogLoading || relayLoading || officialLoading}
                                 aria-label={localizeDesktopSurface(this.desktopLocale, '刷新')}
                                 title={localizeDesktopSurface(this.desktopLocale, '刷新')}
-                                onClick={() => void (activeRelayKey.startsWith('managed:')
-                                    ? this.loadComicChatRelayCatalog(activeRelayKey.slice('managed:'.length))
-                                    : this.loadCatalog())}
+                                onClick={() => void (pickerConnection
+                                    ? this.ensureOfficialConnectionModelsLoaded(pickerConnection, { userInitiated: true, force: true })
+                                    : activeRelayKey.startsWith('managed:')
+                                        ? this.loadComicChatRelayCatalog(activeRelayKey.slice('managed:'.length))
+                                        : this.loadCatalog())}
                             >
                                 <i className='codicon codicon-refresh' />
                             </button>
@@ -14575,11 +14971,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             </div>
                         ) : (
                             <div className='nmx-model-picker-list nmx-model-picker-empty-list'>
-                                {relayLoading ? (
+                                {(relayLoading || officialLoading) ? (
                                     <div className='nmx-merchant-catalog-status is-centered' role='status'>
                                         <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />
                                         <span>{relayText(this.desktopLocale, 'modelsLoading')}</span>
                                     </div>
+                                ) : officialFailed && !this.comicStudioModelQuery.trim() && pickerConnection ? (
+                                    this.renderOfficialPickerFailedState(
+                                        pickerConnection,
+                                        officialAuthFailed,
+                                        () => this.closeComicStudioIsolatedPicker?.(false)
+                                    )
                                 ) : (() => {
                                     const pickerRelayFull = !this.comicStudioModelQuery.trim()
                                         && activeRelayKey.startsWith('managed:')
@@ -15314,7 +15716,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     conversationId,
                     workbench: 'comic',
                     ...this.reasoningSettingsForRoute(textChoice.route, false),
-                    toolScope: 'comic',
+                    toolScope: 'comic-shots',
                     ...(reasoningEffort ? { reasoningEffort } : {}),
                     prompt: adaptPrompt,
                     comicMaximumOutputTokens: 16_384,
@@ -17276,6 +17678,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.comicModelsSheetOpen = true;
             this.comicModelSetupIntro = false;
             for (const step of this.comicModelSetupSteps()) void this.loadComicStepDirectory(step.capability);
+            this.preloadComicSetupOfficialSource?.(undefined, capability);
         }
         this.update();
     }
@@ -17400,6 +17803,22 @@ export class NextMuxDesktopWidget extends ReactWidget {
         });
     }
 
+    protected preloadComicSetupOfficialSource(kind: ComicProjectKind = this.comicModelKind?.() ?? 'novel', capability?: ComicStepCapability): void {
+        const prefs = this.comicStepPrefsFor?.(kind);
+        const relayKeys = new Set<string>(
+            [prefs?.global || '', capability ? prefs?.relays?.[capability] || '' : '']
+                .filter(key => key.startsWith('official:'))
+        );
+        for (const relayKey of relayKeys) {
+            void this.ensureOfficialConnectionModelsLoaded?.(relayKey)?.then(() => {
+                if (this.comicModelsSheetOpen && !this.isDisposed) {
+                    for (const step of ['image', 'video', 'speech', 'music'] as const) this.syncMediaSheetToStep?.(step);
+                    this.update();
+                }
+            });
+        }
+    }
+
     protected openComicModelSetup(intro = false): void {
         if (this.comicModelsSheetOpen) return;
         this.rememberNavigation();
@@ -17408,6 +17827,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.comicModelSetupIntro = intro;
         // Relays that can do a step appear in the source list once their directory entry is known.
         for (const step of this.comicModelSetupSteps()) void this.loadComicStepDirectory(step.capability);
+        this.preloadComicSetupOfficialSource?.();
         this.update();
     }
 
@@ -17475,23 +17895,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (best) this.setComicTextRouteForKind(kind, best.routeId);
             else this.forgetComicTextRouteForKind(kind);
         }
+        const syncDiscoveredComicStepChoice = (): void => {
+            const refreshedPrefs = this.comicStepPrefsFor(kind);
+            if (refreshedPrefs.relays?.[capability] !== relayKey) return;
+            const refreshed = this.comicStepCandidatesForKind(kind, capability)
+                .filter(item => item.source.key === relayKey)
+                .sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label))[0];
+            if (refreshed && !refreshedPrefs.choices[capability]) {
+                this.saveComicStepPrefs({
+                    choices: { ...refreshedPrefs.choices, [capability]: refreshed.key },
+                    auto: false
+                }, kind);
+                if (capability === 'text') this.setComicTextRouteForKind(kind, refreshed.routeId);
+                this.update();
+            }
+        };
         if (relayKey.startsWith('managed:')) {
-            const merchantId = relayKey.slice('managed:'.length);
-            void this.loadComicChatRelayCatalog(merchantId).then(() => {
-                const refreshedPrefs = this.comicStepPrefsFor(kind);
-                if (refreshedPrefs.relays?.[capability] !== relayKey) return;
-                const refreshed = this.comicStepCandidatesForKind(kind, capability)
-                    .filter(item => item.source.key === relayKey)
-                    .sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label))[0];
-                if (refreshed && !refreshedPrefs.choices[capability]) {
-                    this.saveComicStepPrefs({
-                        choices: { ...refreshedPrefs.choices, [capability]: refreshed.key },
-                        auto: false
-                    }, kind);
-                    if (capability === 'text') this.setComicTextRouteForKind(kind, refreshed.routeId);
-                    this.update();
-                }
-            });
+            void this.loadComicChatRelayCatalog(relayKey.slice('managed:'.length)).then(syncDiscoveredComicStepChoice);
+        } else if (relayKey.startsWith('official:')) {
+            void this.ensureOfficialConnectionModelsLoaded?.(relayKey)?.then(syncDiscoveredComicStepChoice);
         }
         this.syncMediaSheetToStep(capability);
         this.update();
@@ -17566,7 +17988,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.saveComicStepPrefs({ global: key, choices, relays, auto: false }, kind);
         for (const capability of ['image', 'video', 'speech', 'music'] as const) this.syncMediaSheetToStep(capability);
         const merchantId = key.startsWith('managed:') ? key.slice('managed:'.length) : '';
-        if (merchantId && !this.merchantPickerSnapshots.has(merchantId)) void this.loadComicSetupSource(merchantId, choices, kind);
+        if (merchantId && !this.merchantPickerSnapshots.has(merchantId)) {
+            void this.loadComicSetupSource(merchantId, choices, kind);
+        } else if (key.startsWith('official:')) {
+            void this.ensureOfficialConnectionModelsLoaded?.(key)?.then(() => {
+                if (!this.isDisposed && this.comicStepPrefsFor?.(kind)?.global === key) {
+                    for (const capability of ['image', 'video', 'speech', 'music'] as const) this.syncMediaSheetToStep?.(capability);
+                    this.update();
+                }
+            });
+        }
         this.update();
     }
 
@@ -17929,7 +18360,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     /** Runs a comic-tools agent with the selected text model and waits for it. */
-    protected async runComicTextAgent(workspaceRoot: string, purpose: 'adapt' | 'edit', prompt: string, toolScope?: 'comic' | 'comic-scripts' | 'comic-shots' | 'comic-lyrics'): Promise<{ readonly ok: boolean; readonly text: string; readonly tools: readonly string[] }> {
+    protected async runComicTextAgent(workspaceRoot: string, purpose: 'adapt' | 'edit', prompt: string, toolScope?: 'comic' | 'comic-scripts' | 'comic-shots' | 'comic-lyrics' | 'comic-edit' | 'comic-adapt'): Promise<{ readonly ok: boolean; readonly text: string; readonly tools: readonly string[] }> {
         const choice = this.comicTextRoute();
         if (!choice) throw new Error(this.ct('noTextModel'));
         // Conversation ids are UUIDs; the run is private to this comic action.
@@ -18002,7 +18433,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** Runs an adaptation brief (novel or topic) and loads the storyboard it wrote. */
     protected async runComicAdaptationPrompt(workspaceRoot: string, prompt: string): Promise<void> {
         try {
-            const result = await this.runComicTextAgent(workspaceRoot, 'adapt', prompt);
+            const result = await this.runComicTextAgent(workspaceRoot, 'adapt', prompt, 'comic-adapt');
             // It is a conversation with a built-in brief: the model may write the storyboard in one
             // comic.apply_adaptation call or scene by scene. Success is what the project now holds.
             const wroteStoryboard = result.tools.includes('comic.apply_adaptation')
@@ -23722,6 +24153,57 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.update();
     }
 
+    protected handleTheiaMessage(message: TheiaMessage | undefined): void {
+        const text = typeof message?.text === 'string' ? message.text.trim() : '';
+        if (!text) return;
+        const kind = theiaMessageNotificationKind(message?.type);
+        if (!kind) return;
+        const source = typeof message?.source === 'string' ? message.source.trim() : '';
+        const title = source || (text.length <= 120 && !text.includes('\n') ? text : theiaNotificationHeading(this.desktopLocale, kind));
+        const body = title === text ? '' : text;
+        const dedupeKey = `${kind}:${title}:${body}`;
+        const now = Date.now();
+        const previousAt = this.recentTheiaMessageAt.get(dedupeKey);
+        if (previousAt !== undefined && now - previousAt < 10_000) return;
+        this.recentTheiaMessageAt.set(dedupeKey, now);
+        if (this.recentTheiaMessageAt.size > 100) {
+            const oldestKey = this.recentTheiaMessageAt.keys().next().value;
+            if (oldestKey !== undefined) this.recentTheiaMessageAt.delete(oldestKey);
+        }
+        this.addNotification(kind, title, body);
+    }
+
+    protected openTheiaConfirmationDialog(message: TheiaMessage, actions: readonly string[]): Promise<string | undefined> {
+        const text = typeof message.text === 'string' ? message.text.trim() : '';
+        if (!text || actions.length === 0) return Promise.resolve(undefined);
+        const kind = theiaMessageNotificationKind(message.type) ?? 'info';
+        const source = typeof message.source === 'string' ? message.source.trim() : '';
+        const title = source || theiaNotificationHeading(this.desktopLocale, kind);
+        const runDialog = async (): Promise<string | undefined> => {
+            try {
+                return await new TheiaConfirmationActionDialog({ title, message: text, actions, cancel: contextFileText(this.desktopLocale, 'cancel') }).open();
+            } catch {
+                return undefined;
+            }
+        };
+        const resultPromise = this.theiaConfirmationQueue.then(runDialog, runDialog);
+        this.theiaConfirmationQueue = resultPromise.catch(() => undefined);
+        return resultPromise;
+    }
+
+    /** The notice under the composer held right now (pointer or focus on it), if any. */
+    protected composerNotificationHeldId = '';
+    /** A notice under the composer stays while held (pointer or focus on it) and closes a few seconds after it is let go. */
+    protected holdComposerNotification(id: string, held: boolean): void {
+        const timer = this.composerNotificationTimers.get(id);
+        if (timer !== undefined) window.clearTimeout(timer);
+        this.composerNotificationTimers.delete(id);
+        if (held) { this.composerNotificationHeldId = id; return; }
+        if (this.composerNotificationHeldId === id) this.composerNotificationHeldId = '';
+        if (!this.composerNotifications.some(item => item.id === id)) return;
+        this.composerNotificationTimers.set(id, window.setTimeout(() => { this.dismissComposerNotification(id); this.update(); }, 4_000));
+    }
+
     protected dismissComposerNotification(id: string): void {
         const timer = this.composerNotificationTimers.get(id);
         if (timer !== undefined) window.clearTimeout(timer);
@@ -24263,10 +24745,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected scheduleConversationHistoryPersist(delay = 750): void {
         if (!this.conversationHistoryPersistenceReady || !this.privacySettings.saveConversationHistory) return;
         if (this.conversationHistoryPersistTimer !== undefined) window.clearTimeout(this.conversationHistoryPersistTimer);
-        this.conversationHistoryPersistTimer = window.setTimeout(() => {
-            this.conversationHistoryPersistTimer = undefined;
+        const fire = (): void => {
+            if (this.conversationHistoryPersistTimer !== undefined) window.clearTimeout(this.conversationHistoryPersistTimer);
+            if (this.conversationHistoryPersistMaxWaitTimer !== undefined) window.clearTimeout(this.conversationHistoryPersistMaxWaitTimer);
+            this.conversationHistoryPersistTimer = this.conversationHistoryPersistMaxWaitTimer = undefined;
             void this.flushConversationHistory();
-        }, delay);
+        };
+        this.conversationHistoryPersistTimer = window.setTimeout(fire, delay);
+        // A bounded wait (Lodash debounce's maxWait): changes that keep coming (a streaming reply) are still saved at
+        // most 4 s after the first one, so a crash mid-stream loses at most those seconds.
+        if (delay > 0 && this.conversationHistoryPersistMaxWaitTimer === undefined) {
+            this.conversationHistoryPersistMaxWaitTimer = window.setTimeout(fire, Math.max(delay, 4_000));
+        }
     }
 
     protected async flushConversationHistory(): Promise<void> {
@@ -25240,7 +25730,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 && !(turn.events || []).some(existing => existing.type === 'tool_completed' && existing.callId === event.callId));
             unread = snapshot.pendingMessages || [];
             failure = snapshot.error
-                ? normalizeDesktopFailure(this.desktopLocale, snapshot.error)
+                ? normalizeDesktopFailure(this.desktopLocale, snapshot.error, this.routeBillingSource?.(turn.routeId))
                 : normalizeDesktopFailure(this.desktopLocale, {
                     code: 'AGENT_RUN_INTERRUPTED',
                     message: '上次任务在应用关闭前尚未完成，可以重新发送。',
@@ -25288,7 +25778,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.activeCodingSessionId === sessionId && this.activeThreadTurnId === turn.id
             && !this.conversationHasActiveRun?.(sessionId) && this.activeAgentTurnId !== turn.id) {
             this.agentStage = 'error';
-            this.agentError = desktopFailureMessage(this.desktopLocale, failure);
+            this.agentError = desktopFailureMessage(this.desktopLocale, failure, this.routeBillingSource?.(turn.routeId));
             this.update();
         }
     }
@@ -25747,6 +26237,47 @@ export class NextMuxDesktopWidget extends ReactWidget {
             : visualTabsFor(this.conversationTabs, this.activeCodingSessionId).find(item => item.id === id);
         const running = (session?.turns.at(-1) || session?.latestTurn)?.stage === 'running';
         return tab && !running && tab.kind === 'local-desktop' && tab.status === 'connected' && !tab.windowRef ? { ...tab, status: 'disconnected' } : tab;
+    }
+
+    /** Per conversation, its app tabs by when they were last on show (newest first); see warmVisualTabs. */
+    protected recentVisualTabIds?: Map<string, readonly string[]>;
+    /**
+     * The tab on show, and the connected app tabs kept warm behind it (not torn off): their captures keep running so a
+     * switch back shows the live window at once. Only the three shown most recently are kept (a tab never shown yet
+     * counts by when it opened): each warm tab is a running capture, and an older one starts again when opened.
+     */
+    protected warmVisualTabs(): readonly ConversationVisualTab[] {
+        const sessionId = this.activeCodingSessionId;
+        if (!sessionId) return [];
+        if (!this.detachedConversationId && this.tiledCodingSessionIds.has(sessionId)) return [];
+        this.loadConversationTabs();
+        const session = this.activeCodingSession();
+        if (session) this.ensureConversationAppMarkerTabs(session);
+        const running = (session?.turns.at(-1) || session?.latestTurn)?.stage === 'running';
+        const activeTab = this.activeVisualTab();
+        const sessionTabs = visualTabsFor(this.conversationTabs, sessionId)
+            .filter(tab => !this.detachedComputerTabs.has(`${sessionId}\n${tab.id}`))
+            .map(tab => !running && tab.kind === 'local-desktop' && tab.status === 'connected' && !tab.windowRef
+                ? { ...tab, status: 'disconnected' as const }
+                : tab);
+        const recent = this.recentVisualTabIds ??= new Map<string, readonly string[]>();
+        let order = recent.get(sessionId) || [];
+        if (activeTab && order[0] !== activeTab.id) {
+            order = [activeTab.id, ...order.filter(id => id !== activeTab.id)].slice(0, 16);
+            recent.delete(sessionId);
+            recent.set(sessionId, order);
+            if (recent.size > 64) recent.delete(recent.keys().next().value!);
+        }
+        const rank = (tab: ConversationVisualTab): number => {
+            const shown = order.indexOf(tab.id);
+            return shown >= 0 ? shown : order.length + 1 / Math.max(1, tab.createdAt || 1);
+        };
+        const kept = new Set(sessionTabs
+            .filter(tab => activeTab?.id !== tab.id && tab.kind === 'local-desktop' && tab.status !== 'disconnected' && Boolean(tab.windowRef))
+            .sort((left, right) => rank(left) - rank(right))
+            .slice(0, 3)
+            .map(tab => tab.id));
+        return sessionTabs.filter(tab => activeTab?.id === tab.id || kept.has(tab.id));
     }
 
     protected workspaceRootIsOpen(workspacePath: string): boolean {
@@ -26529,7 +27060,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const normalizedFailure = this.normalizeTurnFailureForDisplay?.(turn.failure || rawError, turn.routeId) ?? (turn.failure || rawError);
         const displayError = rawError || turn.failure
             ? conversationErrorText(this.desktopLocale, normalizedFailure, {
-                source: modelFailureSource(turn.routeId),
+                source: modelFailureSource(turn.routeId), providerName: this.routeProviderName?.(turn.routeId),
                 retryCount: (turn.events || []).filter(event => event.type === 'model_retry_scheduled').length,
                 relaySwitchCount: turn.failoverCount || (turn.events || []).filter(event => event.type === 'backend_fallback').length
             })
@@ -29058,7 +29589,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.submittedPrompt = latest?.prompt || '';
             this.agentResult = undefined;
             this.agentError = latest?.failure || latest?.error
-                ? desktopFailureMessage(this.desktopLocale, latest.failure || latest.error)
+                ? desktopFailureMessage(this.desktopLocale, latest.failure || latest.error, this.routeBillingSource?.(latest.routeId))
                 : '';
             this.agentStage = latest?.stage || 'idle';
         }
@@ -34708,10 +35239,23 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return routes.find(route => route.id === draft.routeId);
     }
 
-    protected async loadScheduleModels(): Promise<void> {
+    protected async loadScheduleModels(userInitiated = false): Promise<void> {
         const request = ++this.scheduleCatalogRequest;
         const revision = this.catalogSnapshotRevision;
         const relay = this.scheduleDraft.relayKey;
+        if (relay?.startsWith('official:')) {
+            this.scheduleCatalogLoading = true;
+            this.update();
+            try {
+                await this.ensureOfficialConnectionModelsLoaded?.(relay, { userInitiated });
+            } finally {
+                if (request === this.scheduleCatalogRequest) {
+                    this.scheduleCatalogLoading = false;
+                    this.update();
+                }
+            }
+            return;
+        }
         const merchantId = relay?.startsWith('managed:') ? relay.slice(8) : undefined;
         this.scheduleCatalogLoading = false;
         if (!merchantId || this.catalogRemovedMerchants?.has(merchantId)) return;
@@ -34980,6 +35524,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (task.cadence === 'weekly') return `${scheduleWeekdayLabel(this.desktopLocale, scheduleWeekday(task))} ${task.runAt}`;
         const date = new Date(task.runAt);
         return Number.isNaN(date.getTime()) ? task.runAt : date.toLocaleString(this.desktopLocale);
+    }
+
+    /**
+     * The plans an app tab's header lists for its conversation: made in it (in the conversation or its tabs' AI Console),
+     * run in it, or saved for the folder it works in.
+     */
+    protected conversationTabScheduledTasks(conversationId: string): readonly ConversationTabScheduledTask[] {
+        if (!conversationId || !this.scheduledTasks.length) return [];
+        const session = this.codingSessions.find(candidate => candidate.id === conversationId);
+        const folder = (path: string | undefined): string => (path || '').replace(/[\\/]+$/, '');
+        const folders = new Set([folder(session?.workspacePath), folder(session ? this.codingSessionWorkspaceRoot(session) : '')].filter(Boolean));
+        return this.scheduledTasks
+            .filter(task => task.originConversationId === conversationId || task.sessionId === conversationId || folders.has(folder(task.workspacePath)))
+            .map(task => ({
+                id: task.id,
+                title: task.title.trim() || task.prompt.trim().slice(0, 80),
+                when: this.scheduledTaskTimeLabel(task),
+                enabled: task.enabled,
+                locked: task.cadence === 'once' && Boolean(task.lastRunAt || task.lastOccurrenceAt)
+            }));
     }
 
     protected scheduledTaskStatusLabel(task: ScheduledTaskRecord): string {
@@ -35632,7 +36196,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (!agentTaskActive) {
                 this.submittedPrompt = latest?.prompt || '';
                 this.agentError = latest?.failure || latest?.error
-                    ? desktopFailureMessage(this.desktopLocale, latest.failure || latest.error)
+                    ? desktopFailureMessage(this.desktopLocale, latest.failure || latest.error, this.routeBillingSource?.(latest.routeId))
                     : '';
                 this.agentStage = latest?.stage || 'idle';
             }
@@ -36276,9 +36840,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.update();
             return;
         }
-        if (popover === 'routes' && (this.codingPopover !== 'routes' || this.modelPickerRelayOpen)
-            && this.activeRelayKey.startsWith('managed:')) {
-            void this.loadSelectedMerchantCatalog(this.activeRelayKey.slice('managed:'.length));
+        if (popover === 'routes' && (this.codingPopover !== 'routes' || this.modelPickerRelayOpen)) {
+            if (this.activeRelayKey?.startsWith('managed:')) {
+                void this.loadSelectedMerchantCatalog(this.activeRelayKey.slice('managed:'.length));
+            } else if (this.activeRelayKey?.startsWith('official:')) {
+                void this.ensureOfficialConnectionModelsLoaded?.(this.activeRelayKey);
+            }
         }
         if (this.codingPopover === popover) {
             if (popover === 'routes' && this.modelPickerRelayOpen) {
@@ -37924,6 +38491,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }
                 if (this.activeRelayKey?.startsWith('managed:')) {
                     void this.loadSelectedMerchantCatalog?.(this.activeRelayKey.slice('managed:'.length));
+                } else if (this.activeRelayKey?.startsWith('official:')) {
+                    void this.ensureOfficialConnectionModelsLoaded?.(this.activeRelayKey);
                 }
                 this.clearNavigationSurfaces();
                 this.modelPickerRelayOpen = false;
@@ -38592,7 +39161,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             enabled: settings.saveFileEditorRecovery !== false, settingsRevision: settings.fileEditorRecoveryRevision || 0 };
         if (!settings.saveConversationHistory) {
             if (this.conversationHistoryPersistTimer !== undefined) window.clearTimeout(this.conversationHistoryPersistTimer);
-            this.conversationHistoryPersistTimer = undefined;
+            if (this.conversationHistoryPersistMaxWaitTimer !== undefined) window.clearTimeout(this.conversationHistoryPersistMaxWaitTimer);
+            this.conversationHistoryPersistTimer = this.conversationHistoryPersistMaxWaitTimer = undefined;
             this.conversationHistoryPersistDirty = false;
         }
         if (historyChanged) {
@@ -39168,6 +39738,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.officialModelsLoadedOnce = true;
             // A new or removed own API changes every comic step's model list right away.
             this.comicRouteCache = undefined;
+            this.pruneOfficialPickerFailures?.();
         } catch (error) {
             if (requestToken !== this.officialModelsRequestToken) return;
             this.officialModelsError = error instanceof Error ? error.message : '无法读取本机官方模型连接';
@@ -39588,7 +40159,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const failedRoute = failedTurn?.routeId?.startsWith('managed:')
                 ? this.allModelRoutes('coding').find(route => route.id === failedTurn.routeId) : undefined;
             if (failedTurn && shouldClearBalanceNotice({
-                insufficient: isInsufficientBalanceFailure(failedTurn.failure),
+                insufficient: isInsufficientBalanceFailure(failedTurn.failure, this.routeBillingSource?.(failedTurn.routeId)),
                 failedAt: failedTurn.completedAt,
                 currency: failedTurn.failure?.billing?.currency
                     || (failedRoute?.kind === 'managed_gateway' ? failedRoute.offering.price.currency : undefined),
@@ -40636,7 +41207,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     directoryStatus: 'unavailable' as const, directoryOnly: true, unavailableReason: 'unavailable' as const
                 } : {}) });
         }
-        for (const connection of this.officialModels.connections) {
+        // Newest first, as sortOfficialConnectionsNewestFirst (written out: the relay test harnesses copy this method alone).
+        const connections = [...this.officialModels.connections].sort((left, right) => {
+            const leftParsed = Date.parse(left.createdAt || '');
+            const rightParsed = Date.parse(right.createdAt || '');
+            const diff = (Number.isFinite(rightParsed) ? rightParsed : Number.NEGATIVE_INFINITY)
+                - (Number.isFinite(leftParsed) ? leftParsed : Number.NEGATIVE_INFINITY);
+            return Number.isNaN(diff) ? 0 : diff;
+        });
+        for (const connection of connections) {
             if (workbench === 'coding' && (isOfficialMediaProtocol(connection.protocol) || this.officialConnectionMakesNoText?.(connection))) continue;
             options.push({
                 key: officialConnectionRelayKey(connection.id),
@@ -40659,8 +41238,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             price: (left, right) => (left.multiplierBps ?? Number.MAX_SAFE_INTEGER)
                 - (right.multiplierBps ?? Number.MAX_SAFE_INTEGER)
         };
-        return options.sort((left, right) => Number(right.kind === 'automatic') - Number(left.kind === 'automatic')
-            || compareMetric[this.relaySortMode](left, right) || left.label.localeCompare(right.label));
+        const automatic = options.filter(option => option.kind === 'automatic');
+        const managed = options
+            .filter(option => option.kind === 'managed')
+            .sort((left, right) => compareMetric[this.relaySortMode](left, right) || left.label.localeCompare(right.label));
+        const official = options.filter(option => option.kind === 'official');
+        return [...automatic, ...managed, ...official];
     }
 
     protected relayOption(key = this.activeRelayKey, workbench: 'coding' | 'comic' = this.activeSection === 'comic' ? 'comic' : 'coding'): RelayOption | undefined {
@@ -41913,6 +42496,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.codingPopover = '';
         this.persistActiveRouteSelection();
         if (option.merchantId) void this.loadSelectedMerchantCatalog(option.merchantId);
+        else if (option.kind === 'official' || option.key.startsWith('official:')) {
+            void this.ensureOfficialConnectionModelsLoaded?.(option.key);
+        }
         this.update();
     }
 
@@ -41948,6 +42534,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.modelPickerRelayOpen = false;
             this.codingPopover = '';
             if (option.merchantId) void this.loadSelectedMerchantCatalog(option.merchantId);
+            else if (option.kind === 'official' || option.key.startsWith('official:')) {
+                void this.ensureOfficialConnectionModelsLoaded?.(option.key);
+            }
             this.update();
             return true;
         }
@@ -41955,10 +42544,31 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const candidates = this.routesForRelay(option.key, workbench);
         const matched = current ? this.matchingModelRoute(current, candidates) : undefined;
         const targetSnapshot = option.merchantId ? this.merchantPickerSnapshots.get(option.merchantId) : undefined;
+        const targetOfficialConnection = option.key.startsWith('official:')
+            ? this.officialModels?.connections?.find(conn => (
+                typeof officialConnectionRelayKey === 'function'
+                    ? officialConnectionRelayKey(conn.id) === option.key
+                    : `official:${conn.id}` === option.key
+            ))
+            : undefined;
+        const targetOfficialPending = Boolean(
+            targetOfficialConnection
+            && targetOfficialConnection.discoveredModels.length === 0
+            && !targetOfficialConnection.model
+            && targetOfficialConnection.providerId !== 'custom_media'
+            && !(typeof isCatalogOnlyOfficialProvider === 'function' && isCatalogOnlyOfficialProvider(targetOfficialConnection.providerId))
+            && !(typeof isOfficialMediaProtocol === 'function' && isOfficialMediaProtocol(targetOfficialConnection.protocol))
+            && targetOfficialConnection.protocol !== 'async_media_template'
+            && !this.officialPickerValidationFailures?.has(targetOfficialConnection.id)
+        );
         // A cache miss or unfinished discovery cannot prove that the target lacks this model.
-        const targetCatalogKnown = option.kind !== 'managed' || Boolean(targetSnapshot
-            && targetSnapshot.catalog.merchantId === option.merchantId && targetSnapshot.catalog.online !== false
-            && !targetSnapshot.catalog.nextCursor && Date.now() - targetSnapshot.updatedAt < 30_000);
+        const targetCatalogKnown = option.kind === 'managed'
+            ? Boolean(targetSnapshot
+                && targetSnapshot.catalog.merchantId === option.merchantId && targetSnapshot.catalog.online !== false
+                && !targetSnapshot.catalog.nextCursor && Date.now() - targetSnapshot.updatedAt < 30_000)
+            : option.kind === 'official'
+                ? !targetOfficialPending
+                : true;
         if (current && !matched && targetCatalogKnown) {
             this.pendingRelaySwitch = { option, conversationId: this.activeCodingSessionId,
                 modelLabel: this.modelDisplayName(this.modelKeyForRoute(current), current.kind === 'managed_gateway' ? current.offering.displayName || current.offering.providerModelCode : current.connection.modelFamily) };
@@ -42018,13 +42628,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
             preferredModelId: session?.modelId || councilLead?.modelId || this.selectedModelIds[workbench]
         }), workbench, preferredRouteId);
         const officialCatalogPending = this.officialModelsLoading || Boolean(this.officialModelsError);
+        const officialRelayPending = (key: string): boolean => {
+            if (officialCatalogPending) return true;
+            const connId = key.slice('official:'.length);
+            return Boolean(this.officialPickerValidations?.has(connId)
+                || (this.officialBusyConnectionId === connId && this.officialConnectionStage !== 'idle'));
+        };
         const sessionRelayLoading = Boolean(sessionRelayKey && (
-            sessionRelayKey.startsWith('official:') ? officialCatalogPending
+            sessionRelayKey.startsWith('official:') ? officialRelayPending(sessionRelayKey)
                 : sessionRelayKey === 'auto' || sessionRelayKey.startsWith('managed:') ? this.catalogLoading
                     : false
         ));
         const activeRelayLoading = Boolean(activeRelayKey && (
-            activeRelayKey.startsWith('official:') ? officialCatalogPending
+            activeRelayKey.startsWith('official:') ? officialRelayPending(activeRelayKey)
                 : activeRelayKey === 'auto' || activeRelayKey.startsWith('managed:') ? this.catalogLoading
                     : false
         ));
@@ -42154,16 +42770,23 @@ export class NextMuxDesktopWidget extends ReactWidget {
      * take. Extraction results are cached per attachment. With `documents`, a
      * text too long to send with every request is saved for the agent to read
      * in parts (Cherry Studio #12) and listed in `documents.saved` for the turn.
+     * Text the AI receives only in part is said to the person at once, or with
+     * `deferredCut` collected there for the caller to say once the run starts.
      */
     protected async deliverableAttachments(records: readonly DesktopAttachmentRecord[], route: DesktopModelRoute | undefined,
-        documents?: AttachmentDocumentContext): Promise<AgentMessageAttachment[]> {
+        documents?: AttachmentDocumentContext, deferredCut?: { readonly name: string; readonly kept: number }[]): Promise<AgentMessageAttachment[]> {
         const delivered: AgentMessageAttachment[] = [];
+        // Text the AI did not receive in full, said to the person once the message is on its way (never silently).
+        const cut: { readonly name: string; readonly kept: number }[] = [];
         let nativeBytes = 0;
         // Reading in parts needs the file tools: a connection whose tool calls failed gets the text whole.
         const readsInParts = Boolean(documents?.conversationId) && !(route?.kind === 'official_connection' && route.connection.toolCapability === 'failed');
         for (const record of records) {
-            const attachment = record.attachment;
+            let attachment = record.attachment;
             let delivery = attachmentDelivery(attachment, route);
+            // A text file the model reads itself goes as UTF-8: providers read file bytes as UTF-8, so GBK, Big5, Shift_JIS
+            // or UTF-16 bytes would arrive garbled.
+            if (delivery === 'native' && attachment.kind === 'file') attachment = this.utf8TextAttachment?.(attachment) ?? attachment;
             // Pictures and documents share the runner's 32 MB per-request ceiling (and its 10 MB/24 MB per-item
             // limits): what does not fit is sent as text or described, never refused after it was accepted (audit B13-01).
             const payloadBytes = attachment.kind === 'image' || attachment.kind === 'file' ? Math.floor(attachment.dataBase64.length * 3 / 4) : 0;
@@ -42190,7 +42813,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 const key = `${record.uri}#${record.size}#${maxCharacters}`;
                 let result = this.extractedAttachmentText.get(key);
                 if (!result) {
-                    result = await this.platformService.extractAttachmentText({ name: attachment.name, mimeType: attachment.mimeType, dataBase64: attachment.dataBase64, maxCharacters })
+                    result = await this.platformService.extractAttachmentText({ name: attachment.name, mimeType: attachment.mimeType, dataBase64: attachment.dataBase64, maxCharacters, locale: this.desktopLocale })
                         .catch(() => ({ ok: false as const, code: 'invalid' as const, message: 'The file could not be read' }));
                     this.extractedAttachmentText.set(key, result);
                 }
@@ -42200,8 +42823,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         ? await this.saveAttachmentForReadingInParts(record.id, attachment.name, result.text, size,
                             `${kind}${result.truncated ? `, cut at ${LARGE_DOCUMENT_MAX_CHARACTERS.toLocaleString('en-US')} characters` : ''}`, documents!)
                         : undefined;
-                    if (descriptor) { delivered.push(withReference(descriptor)); continue; }
+                    if (descriptor) {
+                        if (result.truncated) cut.push({ name: attachment.name, kept: maxCharacters });
+                        delivered.push(withReference(descriptor));
+                        continue;
+                    }
                     const text = result.text.length > INLINE_DOCUMENT_MAX_CHARACTERS ? `${result.text.slice(0, INLINE_DOCUMENT_MAX_CHARACTERS)}\n… (truncated)` : result.text;
+                    if (text !== result.text || result.truncated) cut.push({ name: attachment.name, kept: Math.min(maxCharacters, INLINE_DOCUMENT_MAX_CHARACTERS) });
                     const details = [kind, result.truncated || text !== result.text ? 'truncated' : ''].filter(Boolean).join(', ');
                     const reason = attachment.kind === 'image' ? ' because the selected model does not accept image input' : '';
                     delivered.push(withReference(`[Attachment "${attachment.name}" (${size}); its text was extracted by the app (${details})${reason}.]\n\n${text}`));
@@ -42219,7 +42847,29 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             delivered.push(withReference(`[Attachment "${attachment.name}" (${attachment.mimeType}, ${size}). The selected model does not accept ${family} input, so only this description was sent. If the content matters, say so and suggest a model that accepts ${family} input.]`));
         }
+        if (cut.length && deferredCut) deferredCut.push(...cut);
+        else if (cut.length) this.noteCutAttachments?.(cut);
         return delivered;
+    }
+
+    /**
+     * A text file a model reads itself, re-encoded to UTF-8 when the shared detector reads it in another encoding (GBK,
+     * Big5, Shift_JIS, UTF-16, the reader's language's own legacy encoding) or as UTF-8 with a few bad bytes (sent with
+     * U+FFFD in their place, so the provider gets valid UTF-8); undefined when it is clean UTF-8 or not text after all.
+     */
+    protected utf8TextAttachment(attachment: Extract<AgentMessageAttachment, { readonly kind: 'file' }>): Extract<AgentMessageAttachment, { readonly kind: 'file' }> | undefined {
+        if (!isPlainTextAttachmentMime(attachment.mimeType)) return undefined;
+        const decoded = decodeTextBytes(this.base64ToBytes(attachment.dataBase64), this.desktopLocale);
+        if (!decoded || decoded.encoding === 'utf-8' && !decoded.lossy || decoded.text.includes('\0')) return undefined;
+        return { ...attachment, dataBase64: this.bytesToBase64(new TextEncoder().encode(decoded.text.replace(/^\ufeff/, ''))) };
+    }
+
+    /** As Copilot Chat says a file was only partly sent: which file, and how much of it the AI received (in `conversationId`'s notices). */
+    protected noteCutAttachments(cut: readonly { readonly name: string; readonly kept: number }[], conversationId?: string): void {
+        for (const item of cut) {
+            const notice = composerTextCutNotice(this.desktopLocale, item.name, item.kept);
+            this.addNotification('info', notice.title, notice.body, conversationId);
+        }
     }
 
     /** Saves a text too long to send whole and returns the description the model gets instead; undefined sends it whole. */
@@ -42564,7 +43214,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected officialConnectionsFor(providerId: string): readonly OfficialModelConnection[] {
-        return this.officialModels.connections.filter(connection => connection.providerId === providerId);
+        return sortOfficialConnectionsNewestFirst(this.officialModels.connections.filter(connection => connection.providerId === providerId));
     }
 
     protected renderOfficialProviderLogo(provider: OfficialProviderPreset): React.ReactNode {
@@ -42750,7 +43400,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected myApiRows(): MyApiRow[] {
-        return this.officialModels.connections.map(connection => {
+        return sortOfficialConnectionsNewestFirst(this.officialModels.connections).map(connection => {
             const provider = this.officialProviderPresets().find(item => item.id === connection.providerId);
             const host = (() => { try { return new URL(connection.baseUrl).host; } catch { return ''; } })();
             // Generation APIs (video, image, music) are checked by their key and format; tool calls do not apply to them.
@@ -42764,21 +43414,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 providerName: media && connection.providerId === 'custom_media' ? myApisText(this.desktopLocale, 'mediaTitle')
                     : connection.providerId === 'custom_openai' ? myApisText(this.desktopLocale, 'compatibleTitle') : connection.providerName,
                 host,
-                summary: connection.modelDiscoveryError ? '' : officialDiscoverySummary(this.desktopLocale, connection),
+                // 仅保存 reads the list in the background: say so instead of stale/empty failure text while reading.
+                summary: this.officialPickerValidations?.has(connection.id)
+                    ? ownModelListText(this.desktopLocale, 'loading')
+                    : connection.modelDiscoveryError ? '' : officialDiscoverySummary(this.desktopLocale, connection),
                 status: connection.status === 'unverified' ? 'unverified' as const : media ? 'ready' as const
                     : connection.toolCapability === 'verified' ? 'verified' as const : 'reachable' as const,
                 ...(connection.lastLatencyMs ? { latencyMs: connection.lastLatencyMs } : {}),
                 modelCount: ownModelListModels(connection).length,
                 ...(provider ? { logo: this.renderOfficialProviderLogo(provider) } : {})
             };
-        }).sort((left, right) => left.name.localeCompare(right.name, this.desktopLocale));
+        });
     }
 
     protected renderMyApis(): React.ReactNode {
         const connection = (id: string) => this.officialModels.connections.find(item => item.id === id);
         const provider = (id: string) => this.officialProviderPresets().find(item => item.id === id);
         const local = provider('ollama');
-        const activeError = this.officialConnectionError;
+        // The model list drawer above shows its own failure: no second copy as a toast beside it.
+        const activeError = this.officialModelListOpenId ? '' : this.officialConnectionError;
         return <MyApisDialog locale={this.desktopLocale} rows={this.myApiRows()} busy={this.officialConnectionStage !== 'idle'}
             busyId={this.officialBusyConnectionId} busyStage={this.officialConnectionStage} confirmRemoveId={this.officialDeleteConfirmId}
             highlightId={this.myApisHighlight} message={this.officialConnectionMessage} error={activeError}
@@ -42899,6 +43553,29 @@ export class NextMuxDesktopWidget extends ReactWidget {
             takePendingDeepLinks: async () => (await bridge.takePendingDeepLinks()).filter(url => !importLink(url)),
             onDeepLink: (callback: (url: string) => void) => bridge.onDeepLink(url => { if (!importLink(url)) callback(url); })
         };
+    }
+
+    /** The side a route bills, for the wallet rule (billingShortfall): the NextMux relay's wallet, or the person's own key. */
+    protected routeBillingSource(routeId: string | undefined): BillingFailureSource | undefined {
+        return modelFailureSource(routeId);
+    }
+
+    /**
+     * The provider behind an own API route id (`official:<id>` or `official:<id>:<model>`): a known provider by its own name
+     * ("DeepSeek", for "请到 DeepSeek 充值"), a custom endpoint by its My APIs label.
+     */
+    protected routeProviderName(routeId: string | undefined): string | undefined {
+        if (!routeId?.startsWith('official:')) return undefined;
+        const connection = this.officialModels?.connections?.find(item => routeId === `official:${item.id}` || routeId.startsWith(`official:${item.id}:`));
+        if (!connection) return undefined;
+        const preset = this.officialModels.providers?.find(item => item.id === connection.providerId);
+        return (preset?.source === 'official' ? preset.name.trim() : '') || connection.label?.trim() || undefined;
+    }
+
+    /** A provider's empty balance on the person's own key, in words naming that provider; undefined for anything else. */
+    protected providerShortfallText(failure: unknown, routeId: string | undefined): string | undefined {
+        const provider = this.routeProviderName(routeId);
+        return provider && billingShortfall(failure, modelFailureSource(routeId)) === 'provider' ? providerQuotaText(this.desktopLocale, provider) : undefined;
     }
 
     protected describeV1GatewayFailure(
@@ -43156,6 +43833,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // A new or removed own API changes every comic step's model list right away.
             this.comicRouteCache = undefined;
             this.officialModelsError = '';
+            this.pruneOfficialPickerFailures?.();
             this.syncModelRoute();
         } finally {
             if (requestToken === this.officialModelsRequestToken) this.officialModelsLoading = false;
@@ -43182,6 +43860,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.update();
         // Own APIs live in 我的 API: a saved compatible/local API (or one edited from the list) is shown there.
         let savedToList = '';
+        let savedConnection: OfficialModelConnection | undefined;
         try {
             let result = await this.platformService.saveOfficialModelConnection({
                 ...(draft.connectionId ? { connectionId: draft.connectionId } : {}),
@@ -43193,12 +43872,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 ...(draft.providerSettings ? { providerSettings: draft.providerSettings } : {}),
                 ...(provider.id !== 'ollama' && provider.id !== 'custom_media' && !isOfficialMediaProtocol(provider.protocol) && provider.protocol !== 'async_media_template'
                     ? { nativeWebResearch: draft.nativeWebResearch === undefined ? 'automatic' : draft.nativeWebResearch } : {}),
-                validate
+                validate,
+                ...(validate ? {} : { skipDiscovery: true })
             });
             if (wasProviderImport && !draft.model.trim() && this.resolveImportedOfficialDefaultModel) {
                 result = await this.resolveImportedOfficialDefaultModel(result, draft.apiKey);
             }
-            await this.refreshOfficialModelsAfterMutation();
+            await this.refreshOfficialModelsAfterMutation().catch(() => undefined);
             if (!this.officialConnectionRequestIsCurrent(requestToken)) return;
             if (wasProviderImport) {
                 this.activateImportedOfficialModelRoute?.(result.connection);
@@ -43209,7 +43889,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.officialConnectionMessage = result.connection.ollamaStatus ? officialDiscoverySummary(this.desktopLocale, result.connection)
                 : generationApi && validate ? connectionCheckText(this.desktopLocale, mediaChecked ? 'mediaReachable' : 'notChecked', result.connection.label)
                 : this.ownApiSaveMessage?.(result, validate, startedAt) ?? localizeDesktopSurface(this.desktopLocale, '已保存模型');
-            const v1DiscoveryFailure = result.connection.modelDiscoveryError
+            const v1DiscoveryFailure = validate && result.connection.modelDiscoveryError
                 ? this.describeV1GatewayFailure?.(result.connection.modelDiscoveryError, provider.id === 'ollama' ? 'local' : 'own_api')
                 : undefined;
             if (v1DiscoveryFailure) {
@@ -43217,6 +43897,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.officialConnectionErrorDetail = v1DiscoveryFailure.detail;
             }
             savedToList = result.connection.id;
+            savedConnection = result.connection;
+            // A changed key or address starts over: no earlier failed or refused list read is shown for it.
+            this.officialPickerValidationFailures?.delete(savedToList);
+            this.officialPickerAuthFailures?.delete(savedToList);
+            this.officialPickerValidationAttempts?.delete(savedToList);
             this.officialConnectionEditorOpen = false;
             this.officialImportSource = undefined;
             this.officialDraft = {
@@ -43249,6 +43934,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.officialConnectionError = errorText;
                 this.officialConnectionErrorDetail = errorDetail;
             }
+        }
+        // 仅保存 made no request: the model list is read now, in the background, for the pickers and 我的 API. Models typed
+        // into the field (several, comma-separated) are kept and the API's own list is added to them; an unchanged address
+        // and key whose list was already read is not read again.
+        if (!validate && savedConnection) {
+            void this.ensureOfficialConnectionModelsLoaded?.(savedConnection, { userInitiated: true });
         }
         this.update();
     }
@@ -43314,7 +44005,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const v1Failure = this.describeV1GatewayFailure?.(error, source);
             this.officialConnectionError = v1Failure?.text || modelFailureText(this.desktopLocale, error, { source });
             this.officialConnectionErrorDetail = v1Failure?.detail || modelFailure(this.desktopLocale, error).detail;
-            this.addNotification('error', '直连测速失败', this.officialConnectionError);
+            this.addNotification('error', localizeDesktopSurface(this.desktopLocale, '直连测速失败'), this.officialConnectionError);
         } finally {
             if (this.officialConnectionRequestIsCurrent(requestToken)) {
                 this.officialConnectionStage = 'idle';
@@ -43325,7 +44016,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected async refreshOfficialConnectionModels(connection: OfficialModelConnection): Promise<void> {
+        const inFlight = this.officialPickerValidations?.get(connection.id);
+        if (inFlight) return inFlight;
         if (this.officialConnectionStage !== 'idle') return;
+        this.officialPickerValidationFailures?.delete(connection.id);
+        this.officialPickerAuthFailures?.delete(connection.id);
         const requestToken = ++this.officialConnectionRequestToken;
         this.officialConnectionStage = 'discovering';
         this.officialBusyConnectionId = connection.id;
@@ -43360,6 +44055,212 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.update();
     }
 
+    /**
+     * Reads an own API's model list in the background when a picker, a drawer or 仅保存 needs one and none has been read
+     * from the API yet (仅保存 itself makes no request, so saving never waits). Every surface joins the one read per
+     * connection; its outcome shows where models are chosen (loading, a list that could not be read with 重试, a refused
+     * key with 前往模型中心) and never takes the Model Center's busy state or banner, so the connection sheet and 我的 API
+     * stay usable meanwhile.
+     * Opening or choosing the source again does not repeat a read that ended under 15 s ago or whose key was refused;
+     * 仅保存 and 重试 (userInitiated) always read, and the drawers' refresh (force) reads even when a list is stored.
+     */
+    protected ensureOfficialConnectionModelsLoaded(
+        target: string | OfficialModelConnection | undefined,
+        options?: { readonly userInitiated?: boolean; readonly force?: boolean }
+    ): Promise<void> {
+        const connections = this.officialModels?.connections || [];
+        let connection: OfficialModelConnection | undefined;
+        if (typeof target === 'string') {
+            const raw = target.trim();
+            if (!raw) return Promise.resolve();
+            const id = raw.startsWith('official:') ? raw.slice('official:'.length) : raw;
+            if (!id) return Promise.resolve();
+            connection = connections.find(item => item.id === id);
+            if (!connection) {
+                const byProvider = connections.filter(item => item.providerId === id);
+                if (byProvider.length === 1) connection = byProvider[0];
+            }
+        } else if (target) {
+            // The copy a save just returned is newer than a list still being reloaded: the read is versioned by it.
+            const listed = connections.find(item => item.id === target.id);
+            connection = listed && !(Date.parse(target.updatedAt) > Date.parse(listed.updatedAt)) ? listed : target;
+        }
+        if (!connection || this.isDisposed) return Promise.resolve();
+        if (typeof isCatalogOnlyOfficialProvider === 'function' && isCatalogOnlyOfficialProvider(connection.providerId)) {
+            return Promise.resolve();
+        }
+        if (connection.providerId === 'custom_media'
+            || (typeof isOfficialMediaProtocol === 'function' && isOfficialMediaProtocol(connection.protocol))
+            || connection.protocol === 'async_media_template') {
+            return Promise.resolve();
+        }
+        // A list only typed into 仅保存 (comma-separated models, never read from the API) still gets the API's own list;
+        // the first read adds to the typed models (readAndPersistOfficialModelDiscovery).
+        if (connection.discoveredModels.length > 0 && connection.lastModelDiscoveryAt && !options?.force) return Promise.resolve();
+        if (typeof this.platformService?.refreshOfficialModelDiscovery !== 'function') return Promise.resolve();
+        // The Model Center's own refresh or test of this connection reads the list itself.
+        if (this.officialBusyConnectionId === connection.id && this.officialConnectionStage !== 'idle') {
+            return Promise.resolve();
+        }
+        const connectionId = connection.id;
+        const existing = this.officialPickerValidations?.get(connectionId);
+        if (existing) {
+            // 仅保存 of another address or key while the old one is still being read: read the new one after it.
+            return options?.userInitiated && this.officialPickerValidationVersions?.get(connectionId) !== connection.updatedAt
+                ? existing.then(() => this.ensureOfficialConnectionModelsLoaded(connectionId, { userInitiated: true, ...(options?.force ? { force: true } : {}) }))
+                : existing;
+        }
+        if (!options?.userInitiated) {
+            // A refused key stays refused until the API is saved again or 重试 is pressed.
+            if (this.officialPickerAuthFailures?.has(connectionId)) return Promise.resolve();
+            const lastAttempt = this.officialPickerValidationAttempts?.get(connectionId) || 0;
+            if (Date.now() - lastAttempt < 15_000) return Promise.resolve();
+        }
+        const relayKey = typeof officialConnectionRelayKey === 'function'
+            ? officialConnectionRelayKey(connectionId)
+            : `official:${connectionId}`;
+        this.officialPickerValidationFailures?.delete(connectionId);
+        this.officialPickerAuthFailures?.delete(connectionId);
+        let settled = false;
+        let run!: Promise<void>;
+        run = (async (): Promise<void> => {
+            try {
+                let updated: OfficialModelConnection | undefined;
+                let caught: unknown;
+                try {
+                    updated = await this.platformService.refreshOfficialModelDiscovery(connectionId);
+                    await this.refreshOfficialModelsAfterMutation?.().catch(() => undefined);
+                } catch (error) {
+                    caught = error;
+                }
+                // Answered: from here on the pickers, and syncModelRoute below, no longer treat this connection as loading.
+                if (this.officialPickerValidations?.get(connectionId) === run) {
+                    this.officialPickerValidations.delete(connectionId);
+                    this.officialPickerValidationVersions?.delete(connectionId);
+                }
+                if (this.isDisposed) return;
+                let latest = this.officialModels?.connections?.find(item => item.id === connectionId);
+                // A newer read of the API list may have overtaken the one above: fill in this answer's models, but never
+                // bring back an API removed meanwhile or put an older copy over a newer one.
+                if (latest && updated?.id === connectionId && (!latest.discoveredModels.length || !latest.lastModelDiscoveryAt || options?.force)
+                    && updated.discoveredModels?.length
+                    && !(Date.parse(updated.updatedAt) < Date.parse(latest.updatedAt))) {
+                    const answered = updated;
+                    this.officialModels = {
+                        ...this.officialModels,
+                        connections: this.officialModels.connections.map(item => (item.id === connectionId ? answered : item))
+                    };
+                    this.comicRouteCache = undefined;
+                    latest = answered;
+                }
+                if (!latest) return;
+                // The composer waited on this read (syncModelRoute keeps a loading source as it is): settle it either way.
+                if (this.activeRelayKey === relayKey || this.comicChatRelayKey?.() === relayKey) {
+                    this.syncModelRoute?.(false);
+                }
+                if (latest.discoveredModels.length > 0) {
+                    // AI Console tabs on this API with no model yet take its first one, as choosing the API does.
+                    const firstRoute = this.appPluginChatRelays?.size ? this.councilRoutesForRelay?.(relayKey, true)?.[0] : undefined;
+                    if (firstRoute) {
+                        for (const [tabKey, tabRelay] of this.appPluginChatRelays.entries()) {
+                            if (tabRelay === relayKey && !this.appPluginChatRoutes?.get(tabKey)) {
+                                this.appPluginChatRoutes?.set(tabKey, firstRoute.id);
+                            }
+                        }
+                    }
+                    if (this.councilConfigModalOpen && this.councilModalRelayKey === relayKey) {
+                        this.syncCouncilModalSlotsWithRelay?.(relayKey);
+                    }
+                    return;
+                }
+                const code = caught && typeof caught === 'object' ? (caught as { code?: unknown }).code : undefined;
+                // Removed, or saved with another address or key meanwhile: the save reads its own list.
+                if (code === 'CONNECTION_CHANGED' || code === 'CONNECTION_NOT_FOUND') return;
+                const failure = caught ?? (updated ? updated.modelDiscoveryError : latest.modelDiscoveryError);
+                if (!failure) return;
+                this.officialPickerValidationFailures?.add(connectionId);
+                // Only a refused or missing key: a 403 for one model, a used-up balance or a rate limit is not the key.
+                if (typeof isOfficialPickerCredentialFailure === 'function' && isOfficialPickerCredentialFailure(failure)) {
+                    this.officialPickerAuthFailures?.add(connectionId);
+                }
+            } finally {
+                settled = true;
+                if (this.officialPickerValidations?.get(connectionId) === run) {
+                    this.officialPickerValidations.delete(connectionId);
+                    this.officialPickerValidationVersions?.delete(connectionId);
+                }
+                // The 15 s pause counts from the answer, so a read that timed out is not started again by the next click.
+                this.officialPickerValidationAttempts?.set(connectionId, Date.now());
+                if (!this.isDisposed) this.update();
+            }
+        })();
+        // A transport that fails at once has already finished: nothing is left in flight for the next request to join.
+        if (!settled) {
+            this.officialPickerValidations?.set(connectionId, run);
+            this.officialPickerValidationVersions?.set(connectionId, connection.updatedAt);
+            if (!this.isDisposed) this.update();
+        }
+        return run;
+    }
+
+    protected officialPickerConnectionState(relayKey: string): {
+        readonly connection: OfficialModelConnection | undefined;
+        readonly loading: boolean;
+        readonly failed: boolean;
+        readonly authFailed: boolean;
+    } {
+        const connection = relayKey.startsWith('official:')
+            ? this.officialModels?.connections?.find(conn => (
+                typeof officialConnectionRelayKey === 'function'
+                    ? officialConnectionRelayKey(conn.id) === relayKey
+                    : `official:${conn.id}` === relayKey
+            ))
+            : undefined;
+        const loading = Boolean(
+            connection && (
+                this.officialPickerValidations?.has(connection.id)
+                || (this.officialBusyConnectionId === connection.id && this.officialConnectionStage !== 'idle')
+            )
+        );
+        const failed = Boolean(connection && !loading && this.officialPickerValidationFailures?.has(connection.id));
+        const authFailed = Boolean(failed && connection && this.officialPickerAuthFailures?.has(connection.id));
+        return { connection, loading, failed, authFailed };
+    }
+
+    /** An own API whose list could not be read, shown in place of the empty list: 重试, or the Model Center for a refused key. */
+    protected renderOfficialPickerFailedState(
+        connection: OfficialModelConnection,
+        authFailed: boolean,
+        onBeforeOpenModelCenter: () => void
+    ): React.ReactNode {
+        return (
+            <div className='nmx-route-empty' role='status'>
+                <span>{authFailed ? agentOutcomeText(this.desktopLocale, 'api_key_rejected') : relayText(this.desktopLocale, 'modelsFailed')}</span>
+                {authFailed ? (
+                    <button type='button' onClick={() => {
+                        onBeforeOpenModelCenter();
+                        this.selectModelCenterView('official');
+                    }}>
+                        {relayText(this.desktopLocale, 'openModelCenter')}
+                    </button>
+                ) : (
+                    <button type='button' onClick={() => void this.ensureOfficialConnectionModelsLoaded(connection, { userInitiated: true, force: true })}>
+                        {this.tx('retry')}
+                    </button>
+                )}
+            </div>
+        );
+    }
+
+    /** A failed or refused list read is forgotten once its API is removed or lists models again (a later read, 测速). */
+    protected pruneOfficialPickerFailures(): void {
+        const unlisted = new Set((this.officialModels?.connections || [])
+            .filter(connection => !connection.discoveredModels.length).map(connection => connection.id));
+        for (const failures of [this.officialPickerValidationFailures, this.officialPickerAuthFailures]) {
+            for (const id of [...failures || []]) if (!unlisted.has(id)) failures.delete(id);
+        }
+    }
+
     /** The global catalog gained models: every own API's list becomes due (see nextmux-model-list-refresh.ts). */
     protected noteModelCatalogForListRefresh(ids: readonly string[]): void {
         const key = 'nextmux.desktop.modelListWatermark.v1';
@@ -43378,10 +44279,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
      * and every own API's model list. The same lists also refresh on their own schedules.
      */
     protected modelListsRefreshing?: boolean;
+    protected ownApiRefreshState?: { readonly promise: Promise<void>; completed: number; flushed: number; done: boolean };
     protected async refreshAllModelLists(): Promise<void> {
         if (this.modelListsRefreshing) return;
         this.modelListsRefreshing = true;
         this.update();
+        let raceTimer: number | undefined;
+        const flushOwnApiUpdates = async (state: { completed: number; flushed: number }): Promise<void> => {
+            while (state.completed > state.flushed && !this.isDisposed && this.officialConnectionStage === 'idle') {
+                const targetVersion = state.completed;
+                state.flushed = targetVersion;
+                await this.refreshOfficialModelsAfterMutation().catch(() => undefined);
+            }
+        };
         try {
             const merchants = this.catalogMerchantSources();
             this.catalogSnapshotRevision++;
@@ -43389,21 +44299,73 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.modelCenterRefreshToken++;
             this.catalogRemovedMerchants.clear();
             this.comicStepDirectory = new Map();
-            // Own APIs are read in parallel; a slow provider updates its list when it answers but
-            // never keeps the button spinning (at most 15 s).
-            const ownApis = Promise.allSettled(this.officialModels.connections.map(connection =>
-                this.officialConnectionStage === 'idle' && !this.isDisposed ? this.platformService.refreshOfficialModelDiscovery(connection.id) : Promise.reject(new Error('busy'))))
-                .then(results => results.some(result => result.status === 'fulfilled') && this.officialConnectionStage === 'idle'
-                    ? this.refreshOfficialModelsAfterMutation().catch(() => undefined) : undefined);
+            // Own APIs are refreshed with bounded concurrency; media protocols do not expose a
+            // text-model /models list, and slow providers never keep the button spinning (> 15 s).
+            let refreshState = this.ownApiRefreshState;
+            if (!refreshState) {
+                const OWN_API_REFRESH_CONCURRENCY = 6;
+                const refreshableOwnConnections = this.officialModels.connections
+                    .filter(connection => !isOfficialMediaProtocol(connection.protocol));
+                const nextState = {
+                    completed: 0,
+                    flushed: 0,
+                    done: false,
+                    promise: Promise.resolve()
+                };
+                nextState.promise = (async (): Promise<void> => {
+                    if (!refreshableOwnConnections.length) return;
+                    let nextIndex = 0;
+                    const worker = async (): Promise<void> => {
+                        while (nextIndex < refreshableOwnConnections.length && !this.isDisposed && this.officialConnectionStage === 'idle') {
+                            const connection = refreshableOwnConnections[nextIndex++];
+                            try {
+                                await this.platformService.refreshOfficialModelDiscovery(connection.id);
+                                nextState.completed++;
+                            } catch {
+                                // Slow or offline own-API discovery failures never block other model lists.
+                            }
+                        }
+                    };
+                    const workerCount = Math.min(OWN_API_REFRESH_CONCURRENCY, refreshableOwnConnections.length);
+                    await Promise.allSettled(Array.from({ length: workerCount }, () => worker()));
+                    nextState.done = true;
+                    await flushOwnApiUpdates(nextState);
+                })().finally(() => {
+                    nextState.done = true;
+                    if (this.ownApiRefreshState === nextState) {
+                        this.ownApiRefreshState = undefined;
+                    }
+                });
+                this.ownApiRefreshState = nextState;
+                refreshState = nextState;
+            }
             const lists = Promise.allSettled([
                 this.loadCatalog(true),
                 this.loadVideoProfiles(true),
                 ...merchants.flatMap(merchant => [this.reloadMerchantCatalogSnapshot(merchant), this.reloadMerchantDiscoverySnapshot(merchant)]),
                 ...(['text', 'image', 'video', 'speech'] as const).map(capability => this.loadComicStepDirectory(capability)),
-                ownApis
+                refreshState.promise
             ]);
-            await Promise.race([lists, new Promise(resolve => window.setTimeout(resolve, 15_000))]);
+            let timedOut = false;
+            await Promise.race([
+                lists,
+                new Promise<void>(resolve => {
+                    raceTimer = window.setTimeout(() => {
+                        timedOut = true;
+                        resolve();
+                    }, 15_000);
+                })
+            ]);
+            // At 15 s the button stops: the lists read so far show now, the rest when the last one answers.
+            if (timedOut && !refreshState.done && refreshState.completed > refreshState.flushed) {
+                refreshState.flushed = refreshState.completed;
+                void this.refreshOfficialModelsAfterMutation().catch(() => undefined);
+            }
         } finally {
+            if (raceTimer !== undefined) {
+                if (typeof window.clearTimeout === 'function') window.clearTimeout(raceTimer);
+                raceTimer = undefined;
+            }
             this.modelListsRefreshing = false;
             this.update();
         }
@@ -45196,7 +46158,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.notifyThreadContentChanged(run.activeAgentSessionId);
                 this.update();
             }
-            if (isInsufficientBalanceFailure(snapshot.error)) {
+            const activeTurn = snapshot.error && run.activeAgentSessionId && run.activeAgentTurnId
+                ? this.codingSessions.find(session => session.id === run.activeAgentSessionId)?.turns.find(turn => turn.id === run.activeAgentTurnId)
+                : undefined;
+            if (snapshot.error && isInsufficientBalanceFailure(snapshot.error, this.routeBillingSource?.(activeTurn?.routeId))) {
                 // Stop consuming an upstream stream as soon as the platform's
                 // prepaid fuse trips. Preserve the failing snapshot so the
                 // conversation records the actionable reason instead of a
@@ -46484,10 +47449,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             // Documents a model cannot read natively are sent as extracted text, and a text too long to send with every
             // request is saved for reading in parts (see deliverableAttachments); later turns are told where it is.
+            // Text sent only in part is said once the run is accepted: a message that never left received nothing.
+            const deferredCut: { readonly name: string; readonly kept: number }[] = [];
             if (taskAttachments.length && typeof this.deliverableAttachments === 'function') {
                 const documents: AttachmentDocumentContext | undefined = workbench === 'coding' && codingSession
                     ? { conversationId: codingSession.id, contextWindowTokens: runContextWindowTokens, saved: [] } : undefined;
-                (startRequest as { attachments?: readonly AgentMessageAttachment[] }).attachments = await this.deliverableAttachments(taskAttachments, route, documents);
+                (startRequest as { attachments?: readonly AgentMessageAttachment[] }).attachments = await this.deliverableAttachments(taskAttachments, route, documents, deferredCut);
                 if (documents?.saved.length && codingSession && codingTurn) {
                     this.updateCodingTurn(codingSession.id, codingTurn.id, { attachmentDocuments: documents.saved });
                 }
@@ -46555,7 +47522,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         }
                         if (noteRecords.length) {
                             const delivered = typeof this.deliverableAttachments === 'function'
-                                ? await this.deliverableAttachments(noteRecords, route) : noteRecords.map(record => record.attachment);
+                                ? await this.deliverableAttachments(noteRecords, route, undefined, deferredCut) : noteRecords.map(record => record.attachment);
                             (startRequest as { attachments?: readonly AgentMessageAttachment[] }).attachments = [...(startRequest.attachments || []), ...delivered];
                         }
                         const resumeSkippedImages = Boolean(resumedExecution && candidateNoteImages.length > 0);
@@ -46605,6 +47572,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }
             }
             submissionAccepted = true;
+            if (deferredCut.length) this.noteCutAttachments?.(deferredCut, codingSession?.id);
             if (queuedExecution && codingSession && codingTurn) {
                 // The turn identity and queue removal share the next history
                 // commit. An older on-disk pending item can only look up its
@@ -46677,14 +47645,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }
                 this.updateFollowUpQueue(codingSession.id, restored);
             }
-            if (isInsufficientBalanceFailure(snapshot.error)) {
+            if (isInsufficientBalanceFailure(snapshot.error, this.routeBillingSource?.(route?.id))) {
                 terminalFailure = snapshot.error;
                 throw new Error(runningTaskText(this.desktopLocale, 'insufficientBalance'));
             }
             if (snapshot.status !== 'completed' && snapshot.status !== 'limit_reached'
                 && snapshot.status !== 'cancelled' && snapshot.status !== 'paused') {
                 terminalFailure = snapshot.error
-                    ? normalizeDesktopFailure(this.desktopLocale, snapshot.error)
+                    ? normalizeDesktopFailure(this.desktopLocale, snapshot.error, this.routeBillingSource?.(route?.id))
                     : normalizeDesktopFailure(this.desktopLocale, {
                         code: 'AGENT_RUN_FAILED',
                         message: 'Agent 任务执行失败',
@@ -46871,13 +47839,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 if (codingSession && this.activeCodingSessionId === codingSession.id) this.agentStage = 'cancelled';
                 return submissionAccepted;
             }
-            const normalizedError = normalizeDesktopFailure(this.desktopLocale, error);
-            const balanceInsufficient = isInsufficientBalanceFailure(terminalFailure)
-                || isInsufficientBalanceFailure(error)
-                || isInsufficientBalanceFailure(normalizedError);
+            const normalizedError = normalizeDesktopFailure(this.desktopLocale, error, this.routeBillingSource?.(route?.id));
+            // The wallet only on NextMux's word: another provider's 402 on the person's own key is that provider's account.
+            const billingSource = this.routeBillingSource?.(route?.id);
+            const balanceInsufficient = isInsufficientBalanceFailure(terminalFailure, billingSource)
+                || isInsufficientBalanceFailure(error, billingSource)
+                || isInsufficientBalanceFailure(normalizedError, billingSource);
             if (!terminalFailure) terminalFailure = normalizedError;
             if (balanceInsufficient) {
-                terminalFailure = normalizeDesktopFailure(this.desktopLocale, terminalFailure || error);
+                terminalFailure = normalizeDesktopFailure(this.desktopLocale, terminalFailure || error, billingSource);
             }
             const v1Failure = route?.kind === 'official_connection'
                 ? this.describeV1GatewayFailure?.(error || terminalFailure, 'own_api')
@@ -46894,7 +47864,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 };
             }
             run.agentStage = 'error';
-            run.agentError = v1Failure?.text || desktopFailureMessage(this.desktopLocale, terminalFailure || error);
+            run.agentError = balanceInsufficient && typeof walletBalanceInsufficientText === 'function'
+                ? walletBalanceInsufficientText(this.desktopLocale)
+                : this.providerShortfallText?.(terminalFailure || error, route?.id) || v1Failure?.text || desktopFailureMessage(this.desktopLocale, terminalFailure || error, billingSource);
             this.syncUnlinkedSessionFromFailure(terminalFailure || error);
             // The run already stopped; say why in the composer's corner (the thread keeps the full failure).
             if (typeof isMerchantApiDeletedFailure === 'function' && (isMerchantApiDeletedFailure(terminalFailure) || isMerchantApiDeletedFailure(error))) {
@@ -46947,7 +47919,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 void window.nextmuxDesktop?.releaseComputerSession?.(finishedSessionId).catch(() => undefined);
                 void window.nextmuxDesktop?.releaseBrowserAutomation?.(finishedSessionId).catch(() => undefined);
             }
-            const balanceInsufficient = isInsufficientBalanceFailure(terminalFailure);
+            const balanceInsufficient = isInsufficientBalanceFailure(terminalFailure, this.routeBillingSource?.(route?.id));
             if (queuedExecution && queuedSubmissionRejected && codingSession) {
                 const owner = this.codingSessions.find(candidate => candidate.id === codingSession!.id);
                 if (owner) this.updateFollowUpQueue(codingSession.id, restoreFollowUpTask(owner.followUpQueue || [], {
@@ -49146,18 +50118,37 @@ export class NextMuxDesktopWidget extends ReactWidget {
         </>;
     }
 
+    protected maybeRefreshOfficialConnectionModelsOnOpen(connection: OfficialModelConnection): void {
+        const isMediaOnly = connection.providerId === 'custom_media'
+            || (typeof isOfficialMediaProtocol === 'function' && isOfficialMediaProtocol(connection.protocol))
+            || ['async_media_template', 'elevenlabs_music', 'elevenlabs_sound_effect', 'minimax_music'].includes(String(connection.protocol || ''));
+        const isCatalogOnly = typeof isCatalogOnlyOfficialProvider === 'function' && isCatalogOnlyOfficialProvider(connection.providerId);
+        if (this.officialPickerValidations?.has(connection.id)) return;
+        if (!isMediaOnly && !isCatalogOnly && !connection.discoveredModels.length
+            && this.officialConnectionStage === 'idle' && typeof this.refreshOfficialConnectionModels === 'function') {
+            void this.refreshOfficialConnectionModels(connection);
+        }
+    }
+
     protected toggleOwnModelList(connectionId: string, trigger: HTMLElement): void {
         if (this.officialModelListOpenId === connectionId) { this.closeOwnModelList(); return; }
-        if (!this.officialModels.connections.some(connection => connection.id === connectionId)) return;
+        const connection = this.officialModels.connections.find(item => item.id === connectionId);
+        if (!connection) return;
         this.ownModelListFocusToken += 1;
         this.ownModelListTrigger = trigger;
         this.officialModelListOpenId = connectionId;
         if (!this.globalModels.length) void this.loadGlobalModels();
         this.update();
+        this.maybeRefreshOfficialConnectionModelsOnOpen?.(connection);
     }
 
     protected closeOwnModelList(): void {
         const trigger = this.ownModelListTrigger, token = ++this.ownModelListFocusToken;
+        // The drawer showed its list's failure in place; it does not come back as a toast in 我的 API.
+        if (this.officialConnectionFeedbackId === this.officialModelListOpenId && this.officialConnectionStage === 'idle') {
+            this.officialConnectionError = '';
+            this.officialConnectionErrorDetail = '';
+        }
         this.officialModelListOpenId = '';
         this.ownModelListTrigger = undefined;
         this.update();
@@ -49173,8 +50164,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const connection = this.officialModels.connections.find(item => item.id === this.officialModelListOpenId);
         if (!connection) return null;
         const row = this.myApiRows().find(item => item.id === connection.id);
-        const busy = this.officialConnectionStage !== 'idle';
-        const refreshing = this.officialBusyConnectionId === connection.id && this.officialConnectionStage === 'discovering';
+        const backgroundLoading = Boolean(this.officialPickerValidations?.has(connection.id));
+        const busy = this.officialConnectionStage !== 'idle' || backgroundLoading;
+        const refreshing = (this.officialBusyConnectionId === connection.id && this.officialConnectionStage === 'discovering') || backgroundLoading;
         const showFeedback = this.officialConnectionFeedbackId === connection.id;
         const close = () => this.closeOwnModelList();
         return <OwnModelsDrawer key={connection.id} label={`${row?.name || connection.label || connection.providerName} · ${ownModelListText(this.desktopLocale, 'button')}`}
@@ -49183,7 +50175,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     <div>
                         <span>{row?.providerName || connection.providerName}{row?.host ? ` · ${row.host}` : ''}</span>
                         <h2>{row?.name || connection.label || connection.providerName}</h2>
-                        <p>{officialDiscoverySummary(this.desktopLocale, connection)}</p>
+                        <p>{refreshing ? ownModelListText(this.desktopLocale, 'loading')
+                            : !connection.modelDiscoveryError && this.officialPickerValidationFailures?.has(connection.id) && typeof relayText === 'function'
+                                ? (this.officialPickerAuthFailures?.has(connection.id) && typeof agentOutcomeText === 'function'
+                                    ? agentOutcomeText(this.desktopLocale, 'api_key_rejected')
+                                    : relayText(this.desktopLocale, 'modelsFailed'))
+                                : officialDiscoverySummary(this.desktopLocale, connection)}</p>
                     </div>
                     <div className='nmx-own-models-drawer-actions'>
                         <button type='button' className='nmx-secondary-button' disabled={busy} onClick={() => void this.refreshOfficialConnectionModels(connection)}>
@@ -49196,7 +50193,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 <div className='nmx-own-models-drawer-body'>
                     {showFeedback && this.officialConnectionMessage && <div className='nmx-connection-message' role='status' aria-live='polite'>{this.officialConnectionMessage}</div>}
                     {showFeedback && this.officialConnectionError && <div className='nmx-purchase-error' title={this.officialConnectionErrorDetail} role='alert' aria-live='assertive'>{this.officialConnectionError}</div>}
-                    <OwnModelList key={`${connection.id}:${connection.lastModelDiscoveryAt || ''}`} locale={this.desktopLocale} connection={connection} catalog={this.globalModels} />
+                    <OwnModelList key={`${connection.id}:${connection.lastModelDiscoveryAt || ''}`} locale={this.desktopLocale} connection={connection} catalog={this.globalModels} loading={refreshing} />
                 </div>
         </OwnModelsDrawer>;
     }
@@ -49268,13 +50265,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         <span className={`nmx-connection-dot is-${connection.status}`}></span>
                         <div><strong>{connection.label}</strong><small>{connection.model} · {officialCredentialHint(this.desktopLocale, connection)}</small><p>{connection.status === 'unverified' ? '尚未检测' : connection.toolCapability === 'verified' ? `工具调用已通过 · ${connection.lastLatencyMs ?? 0} ms` : 'API 可连接 · 工具调用未通过'} · {officialDiscoverySummary(this.desktopLocale, connection)}</p><OfficialCatalogDetails locale={this.desktopLocale} connection={connection} /></div>
                         <div className='nmx-connection-actions'>
-                            <button data-official-action='model-list' aria-expanded={this.officialModelListOpenId === connection.id} onClick={() => { this.officialModelListOpenId = this.officialModelListOpenId === connection.id ? '' : connection.id; this.update(); }}>{ownModelListText(this.desktopLocale, 'button')}</button>
+                            <button data-official-action='model-list' aria-expanded={this.officialModelListOpenId === connection.id} onClick={() => {
+                                const opening = this.officialModelListOpenId !== connection.id;
+                                this.officialModelListOpenId = opening ? connection.id : '';
+                                this.update();
+                                if (opening) this.maybeRefreshOfficialConnectionModelsOnOpen?.(connection);
+                            }}>{ownModelListText(this.desktopLocale, 'button')}</button>
                             <button data-official-action='configure' disabled={busy} onClick={() => this.openOfficialProvider(provider, connection, true)}>重新配置</button>
                             <button data-official-action='refresh-models' disabled={busy} onClick={() => void this.refreshOfficialConnectionModels(connection)}>{this.officialBusyConnectionId === connection.id && this.officialConnectionStage === 'discovering' ? '刷新中' : '刷新模型'}</button>
                             <button data-official-action='speed-test' disabled={busy} onClick={() => void this.validateExistingOfficialConnection(connection)}>{this.officialBusyConnectionId === connection.id && this.officialConnectionStage === 'testing' ? '测速中' : '测速'}</button>
                             <button data-official-action='disconnect' className={this.officialDeleteConfirmId === connection.id ? 'is-danger' : ''} disabled={busy} onClick={() => void this.removeOfficialConnection(connection.id)}>{this.officialBusyConnectionId === connection.id && this.officialConnectionStage === 'removing' ? '断开中' : this.officialDeleteConfirmId === connection.id ? '确认断开' : '断开'}</button>
                         </div>
-                        {this.officialModelListOpenId === connection.id && <OwnModelList locale={this.desktopLocale} connection={connection} catalog={this.globalModels} />}
+                        {this.officialModelListOpenId === connection.id && <OwnModelList locale={this.desktopLocale} connection={connection} loading={(this.officialBusyConnectionId === connection.id && this.officialConnectionStage === 'discovering') || Boolean(this.officialPickerValidations?.has(connection.id))} catalog={this.globalModels} />}
                     </article>)}
                 </section>}
                 {(this.officialConnectionEditorOpen || !showSaved) && <section className='nmx-official-form'>
@@ -50753,6 +51755,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (!this.merchantPickerSnapshots?.has(merchantId)) {
                 void this.loadAppPluginChatRelayCatalog(merchantId, false);
             }
+        } else if (kind === 'model' && relayKey.startsWith('official:')) {
+            void this.ensureOfficialConnectionModelsLoaded?.(relayKey);
         }
         this.appPluginChatModelQuery = '';
         this.appPluginChatPicker = { tabKey, kind, anchorSelector };
@@ -50782,6 +51786,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
             else this.appPluginChatRoutes.delete(tabKey);
         };
         applyFirstRoute();
+        if (nextRelayKey.startsWith('official:')) {
+            void this.ensureOfficialConnectionModelsLoaded?.(nextRelayKey)?.then(() => {
+                if (this.appPluginChatRelays?.get(tabKey) === nextRelayKey && !this.appPluginChatRoutes?.get(tabKey)) {
+                    applyFirstRoute();
+                    this.update();
+                }
+            });
+        }
         if (nextRelayKey.startsWith('managed:')) {
             const merchantId = nextRelayKey.slice('managed:'.length);
             void this.loadAppPluginChatRelayCatalog(merchantId, false).then(() => {
@@ -50827,7 +51839,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const renderRelayBtn = (anchor?: DepositVerifiedHintAnchor): React.ReactElement => (
             <button
                 type='button'
-                className={`nmx-composer-relay-button${relayPickerOpen ? ' is-active' : ''}${relayUnavailable ? ' is-unavailable' : ''}`}
+                className={`nmx-composer-relay-button nmx-plugin-chat-relay-trigger${relayPickerOpen ? ' is-active' : ''}${relayUnavailable ? ' is-unavailable' : ''}`}
                 data-relay-trigger='plugin-chat'
                 data-plugin-chat-picker-anchor={relayAnchorAttr}
                 {...anchor}
@@ -50845,10 +51857,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
             {relayHint ? <DepositVerifiedHint locale={this.desktopLocale} text={relayHint}>{renderRelayBtn}</DepositVerifiedHint> : renderRelayBtn()}
             <button
                 type='button'
-                className={`nmx-route-button${modelPickerOpen ? ' is-active' : ''}`}
+                className={`nmx-route-button nmx-plugin-chat-model-trigger${modelPickerOpen ? ' is-active' : ''}`}
                 data-plugin-chat-picker-anchor={modelAnchorAttr}
                 data-route-id={route?.id || ''}
                 aria-expanded={modelPickerOpen}
+                title={routeLabel}
                 onClick={() => this.toggleAppPluginChatPicker(tabKey, 'model', modelAnchorSelector)}
             >
                 <i className='codicon codicon-zap' aria-hidden='true'></i>
@@ -50864,7 +51877,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const { tabKey, kind, anchorSelector } = picker;
         const activeRelayKey = this.appPluginChatRelayKey(tabKey);
         if (kind === 'relay') {
-            const placement = this.calculateModelPickerPlacement(420, 440, anchorSelector);
+            // Sized as the coding composer's drawer (renderRelayPickerPortal): a short list leaves no tall empty sheet.
+            const rows = Math.max(2, this.relayPickerOptions('coding').length);
+            const directoryPage = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage;
+            const loading = this.relaySourceTab !== 'my-api' && (this.publicMerchantPageLoading || !directoryPage || this.publicMerchantPageError);
+            const chromeHeight = relayDrawerChromeHeight(this.relaySourceTab, Boolean(this.platformSession?.linked), this.desktopLocale);
+            const footerHeight = loading || this.relaySourceTab === 'merchant' && this.publicMerchantPage?.nextCursor ? 30 : 0;
+            const placement = this.calculateModelPickerPlacement(Math.max(300, chromeHeight + rows * 32 + footerHeight), RELAY_DRAWER_WIDTH, anchorSelector);
             return ReactDOM.createPortal(
                 <div
                     className='nmx-model-picker-portal nmx-desktop-widget nmx-plugin-chat-picker-portal'
@@ -50925,12 +51944,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const autoSwitchChecked = this.appPluginChatAutoRouting.get(tabKey) ?? this.automaticRouting;
         const switchHint = relaySwitchCopy(this.desktopLocale, activeRoute?.kind === 'managed_gateway' ? activeRoute.offering.displayName : '').hint;
         const desiredHeight = Math.max(220, 96 + (candidates.length > 5 ? 36 : 0) + Math.max(2, filtered.length) * 32);
-        const placement = this.calculateModelPickerPlacement(desiredHeight, 280, anchorSelector);
-        const pickerConnection = activeRelayKey.startsWith('official:')
-            ? this.officialModels?.connections?.find(conn => officialConnectionRelayKey(conn.id) === activeRelayKey)
-            : undefined;
+        const placement = this.calculateModelPickerPlacement(desiredHeight, RELAY_DRAWER_WIDTH, anchorSelector);
         const relayLoading = Boolean(merchantId && (this.appPluginChatLoadingMerchants.has(merchantId)
             || (activeRelayKey === this.activeRelayKey && this.merchantCatalogStatus === 'loading')));
+        const {
+            connection: pickerConnection,
+            loading: officialLoading,
+            failed: officialFailed,
+            authFailed: officialAuthFailed
+        } = this.officialPickerConnectionState(activeRelayKey);
 
         return ReactDOM.createPortal(
             <div
@@ -50983,11 +52005,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             </label>}
                             <button
                                 type='button'
-                                disabled={relayLoading || this.catalogLoading}
+                                disabled={relayLoading || officialLoading || this.catalogLoading}
                                 aria-label={localizeDesktopSurface(this.desktopLocale, '刷新')}
                                 title={localizeDesktopSurface(this.desktopLocale, '刷新')}
                                 onClick={() => void (pickerConnection
-                                    ? this.refreshOfficialConnectionModels(pickerConnection)
+                                    ? this.ensureOfficialConnectionModelsLoaded(pickerConnection, { userInitiated: true, force: true })
                                     : merchantId
                                         ? this.loadAppPluginChatRelayCatalog(merchantId, true)
                                         : this.loadCatalog())}
@@ -51032,11 +52054,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             </div>
                         ) : (
                             <div className='nmx-model-picker-list nmx-model-picker-empty-list'>
-                                {relayLoading ? (
+                                {(relayLoading || officialLoading) ? (
                                     <div className='nmx-merchant-catalog-status is-centered' role='status'>
                                         <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />
                                         <span>{relayText(this.desktopLocale, 'modelsLoading')}</span>
                                     </div>
+                                ) : officialFailed && !query && pickerConnection ? (
+                                    this.renderOfficialPickerFailedState(pickerConnection, officialAuthFailed, () => this.closeAppPluginChatPicker(false))
                                 ) : (() => {
                                     const pickerRelayFull = !query
                                         && Boolean(merchantId)
@@ -51191,9 +52215,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const priorMessages = this.appPluginChatMessages.get(key) || [];
         const history: { readonly role: 'user' | 'assistant'; readonly content: string }[] = [];
         const consumedAssistantIds = new Set<string>();
+        const settledUserTurn = (msg: typeof priorMessages[number]) => msg.role === 'user' && Boolean(msg.text.trim()) && !msg.streaming && !msg.pending && !msg.error;
+        let lastSettledUserTurn = -1;
+        for (let i = priorMessages.length - 1; i >= 0 && lastSettledUserTurn < 0; i--) if (settledUserTurn(priorMessages[i])) lastSettledUserTurn = i;
         for (let i = 0; i < priorMessages.length; i++) {
             const msg = priorMessages[i];
-            if (msg.role !== 'user' || !msg.text.trim() || msg.streaming || msg.pending || msg.error) continue;
+            if (!settledUserTurn(msg)) continue;
             const pairedAssistant = priorMessages.find(candidate =>
                 candidate.role === 'assistant' && !consumedAssistantIds.has(candidate.id) && candidate.replyToId === msg.id
             ) || (priorMessages[i + 1]?.role === 'assistant'
@@ -51201,12 +52228,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 && !consumedAssistantIds.has(priorMessages[i + 1].id)
                 ? priorMessages[i + 1]
                 : undefined);
-            if (!pairedAssistant || pairedAssistant.streaming || pairedAssistant.pending || pairedAssistant.error || !pairedAssistant.text.trim()) {
+            if (pairedAssistant?.streaming || pairedAssistant?.pending) {
                 continue;
             }
-            consumedAssistantIds.add(pairedAssistant.id);
+            const answered = Boolean(pairedAssistant && !pairedAssistant.error && pairedAssistant.text.trim());
+            // Only the latest unanswered turn stays (a "retry" or "submit it" needs it), marked as ended: a new request is
+            // never read as more of it, and one failure (a refused paste, a half-done click) never rides along with every
+            // later message.
+            if (!answered && i !== lastSettledUserTurn) continue;
             history.push({ role: 'user', content: msg.text });
-            history.push({ role: 'assistant', content: pairedAssistant.text });
+            if (pairedAssistant && !pairedAssistant.error && pairedAssistant.text.trim()) {
+                consumedAssistantIds.add(pairedAssistant.id);
+                history.push({ role: 'assistant', content: pairedAssistant.text });
+            } else {
+                history.push({ role: 'assistant', content: '(No reply: this request ended with an error.)' });
+            }
         }
 
         if (request.model) this.appPluginChatModels.set(key, request.model);
@@ -51313,7 +52349,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 || (run ? boundPlugins.find(p => p.id === run.pluginId) : undefined)
                 || boundPlugins[0];
             const fallbackModel = request.model || this.appPluginChatModels.get(key) || run?.model || plugin?.model
-                || { source: 'nextmux' as const, model: '~typesafe/jev-latest', label: 'Platform AI', images: true };
+                || { source: 'nextmux' as const, model: '~typesafe/jev-latest',
+                    label: typeof appPluginText === 'function' ? appPluginText(this.desktopLocale, 'consolePlatformModel') : '', images: true };
 
             const chatSessionUuid = initialChatSessionUuid;
 
@@ -51439,6 +52476,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         : `- Attached Live Screenshot: not captured yet (call \`tabs.screenshot\` first to observe live frame and pixel dimensions)`
                 ].join('\n');
 
+                // Plans made here belong to the tab's conversation: its project (or private) folder and its permission. An incognito
+                // conversation keeps no plans, and one gone from the list (deleted meanwhile) gets none: no plan tools then.
+                const planParent = this.codingSessions?.find?.(session => session.id === conversationId);
+                const planScope = planParent && !planParent.incognito ? (() => {
+                    const parentRoot = typeof this.codingSessionWorkspaceRoot === 'function' ? this.codingSessionWorkspaceRoot(planParent) : '';
+                    const parentPermission = typeof this.sessionPermissionMode === 'function' ? this.sessionPermissionMode(planParent) : undefined;
+                    return { ...(parentRoot ? { workspaceRoot: parentRoot } : {}), ...(parentPermission ? { permissionMode: parentPermission } : {}) };
+                })() : undefined;
                 const toolsSection = [
                     '## 2. Full Window Observation & Input Control Capabilities (Hard-Pinned to This Tab)',
                     `All window and plugin tools in this AI Console are strictly pinned to tabId="${currentTab.id}" (pid=${currentTab.windowRef?.pid ?? 0}, windowId=${currentTab.windowRef?.windowId ?? 0}):`,
@@ -51450,8 +52495,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     activeJevRunning
                         ? `- JEV Skill Plugin Coordination (ACTIVE RUN): Skill plugin run "${run!.runId}" is actively running right now! Coordinate via \`plugins.status\`, \`plugins.command\` (update goal / pause / resume), or \`plugins.stop\` rather than fighting its reflex inputs, unless the user explicitly asks you to click or type directly.`
                         : `- JEV Skill Plugin Coordination: Whenever a JEV skill plugin is actively running (not paused/ended), coordinate via \`plugins.status\` / \`plugins.command\` / \`plugins.stop\` rather than competing with its reflex inputs unless the user explicitly asks for direct input.`,
-                    `- Plugin MCP Tools: \`plugins.mcp_call\` ({ plugin?, server?, tool?, arguments? }) calls an MCP tool of this tab's plugin (section 3); omit tool to list a server's tools. \`plugins.list\` shows only this tab's plugins. Other tabs, windows and plugins are outside this console.`
-                ].join('\n');
+                    `- Plugin MCP Tools: \`plugins.mcp_call\` ({ plugin?, server?, tool?, arguments? }) calls an MCP tool of this tab's plugin (section 3); omit tool to list a server's tools. \`plugins.list\` shows only this tab's plugins. Other tabs, windows and plugins are outside this console.`,
+                    planScope ? `- Scheduled Tasks: when the user asks for a timed or recurring task (cadence "once" at a local YYYY-MM-DDTHH:mm, or "daily" / "weekly" at HH:mm), create it with \`nextmux.update_schedule\` (action "create", a short title, a self-contained prompt that names this app, an idempotencyKey); list plans with \`nextmux.list_schedules\`, and pause, resume, change or delete one with \`nextmux.update_schedule\` (action "update" / "remove" with its id). A plan runs later on its own, as a separate scheduled conversation in this tab's project with the current model and without this console's context, so its prompt must say everything needed; the tab's header lists the plans.` : ''
+                ].filter(Boolean).join('\n');
 
                 const pluginLines: string[] = ['## 3. Plugin Connection Status & Manifest Capabilities'];
                 if (run && !run.ended) {
@@ -51608,6 +52654,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         }
                     } : {}),
                     pluginChatInstructions: instructionLines.join('\n\n'),
+                    ...(planScope ? { pluginChatScheduleScope: planScope } : {}),
                     prompt: request.text || (zh ? '请结合当前应用画面与状态进行分析。' : 'Analyze the current application window and state.'),
                     history,
                     ...(agentAttachments.length ? { attachments: agentAttachments } : {}),
@@ -51617,6 +52664,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 });
                 streamDone = true;
                 await streamPromise.catch(() => undefined);
+                // A plan the console created, changed or removed shows in the tab's header at once.
+                if (Array.isArray(result.events) && result.events.some(event => event.type === 'tool_completed' && event.toolName === 'nextmux.update_schedule' && event.ok)) {
+                    if (!this.detachedConversationId) void this.syncSavedScheduledTasks?.()?.catch?.(() => undefined);
+                    // A detached window never syncs the plan store (the main window owns it): read it once, read-only.
+                    else void this.platformService?.loadDesktopScheduledTasks?.()?.then?.(tasks => { this.scheduledTasks = tasks; this.update(); }, () => undefined);
+                }
 
                 if (controller.signal.aborted) return;
 
@@ -51783,8 +52836,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 const relayRoute = activeRoute ? activeRoute.kind === 'managed_gateway' : chosenRelayKey.startsWith('managed:');
                 const signIn = !diagnostic && relayRoute && this.platformSession && !this.platformSession.linked && typeof agentOutcomeText === 'function'
                     ? agentOutcomeText(this.desktopLocale, 'sign_in_required') : '';
-                const v1Err = diagnostic || signIn ? undefined : this.describeV1GatewayFailure?.(error, activeRoute?.kind === 'official_connection' ? 'own_api' : 'relay');
-                const errText = diagnostic || signIn || v1Err?.text
+                const v1Err = diagnostic || signIn ? undefined : this.describeV1GatewayFailure?.(error, relayRoute ? 'relay' : 'own_api');
+                // An empty wallet reads as just that, without codes or upstream English. The wallet only on NextMux's word
+                // (billingShortfall, via v1Err): another provider's empty account keeps its own wording.
+                const balance = !diagnostic && !signIn && v1Err?.isBalance402
+                    && typeof walletBalanceInsufficientText === 'function' ? walletBalanceInsufficientText(this.desktopLocale) : '';
+                const providerBalance = !diagnostic && !signIn && !balance && activeRoute?.kind === 'official_connection'
+                    ? this.providerShortfallText?.(error, activeRoute.id) : undefined;
+                const errText = diagnostic || signIn || balance || providerBalance || v1Err?.text
                     || (typeof desktopFailureMessage === 'function' ? desktopFailureMessage(this.desktopLocale, error) : '')
                     || (typeof modelFailureText === 'function' ? modelFailureText(this.desktopLocale, error) : '')
                     || (error instanceof Error ? error.message : String(error));
@@ -51827,21 +52886,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const chatMessages = this.appPluginChatMessages.get(key) || [];
         const chatModel = this.appPluginChatModels.get(key) || null;
         const extraModels = this.appPluginExtraModels();
-        const headerExtra = <>
-            <button type='button' className={`nmx-visual-tab-action nmx-plugin-tab-chat ${chatOpen ? 'is-active' : ''}`}
-                aria-pressed={chatOpen}
-                title={appPluginText(this.desktopLocale, 'aiConsoleTitle')}
-                onClick={() => this.toggleAppPluginChat(key)}>
-                <i className='codicon codicon-comment-discussion' aria-hidden='true'></i>
-                {appPluginText(this.desktopLocale, 'aiConsole')}
-            </button>
-            <button type='button' className={`nmx-visual-tab-action nmx-plugin-tab-market ${this.appPluginHub?.key === key ? 'is-active' : ''}`} aria-haspopup='dialog'
-                title={appPluginText(this.desktopLocale, 'tabMarket')}
-                onClick={() => void this.openAppPluginHub({ key, conversationId, tabId: currentTab.id, appId: currentTab.appId || '', programs: appTabIdentity(currentTab), appName: currentTab.target || currentTab.title,
-                    pid: currentTab.windowRef!.pid, windowId: currentTab.windowRef!.windowId, title: currentTab.title,
-                    windowTitle: currentTab.windows?.find(item => item.alive !== false && item.windowId === currentTab.windowRef!.windowId && item.pid === currentTab.windowRef!.pid)?.title || currentTab.target })}>
-                <i className='codicon codicon-extensions' aria-hidden='true'></i>{appPluginText(this.desktopLocale, 'tabMarket')}</button>
-        </>;
+        // The header keeps only the marketplace, as an icon (a dot while a plugin runs on this tab); the AI Console lives
+        // on the picture as a launcher (LiveTabView).
+        const marketLabel = appPluginText(this.desktopLocale, 'tabMarket');
+        const hubOpen = this.appPluginHub?.key === key;
+        const headerExtra = <button type='button' className={`nmx-visual-tab-icon-btn nmx-plugin-tab-market${hubOpen ? ' is-active' : ''}${active ? ' has-run' : ''}`}
+            aria-haspopup='dialog' aria-expanded={hubOpen} aria-label={marketLabel} title={marketLabel}
+            onClick={() => void this.openAppPluginHub({ key, conversationId, tabId: currentTab.id, appId: currentTab.appId || '', programs: appTabIdentity(currentTab), appName: currentTab.target || currentTab.title,
+                pid: currentTab.windowRef!.pid, windowId: currentTab.windowRef!.windowId, title: currentTab.title,
+                windowTitle: currentTab.windows?.find(item => item.alive !== false && item.windowId === currentTab.windowRef!.windowId && item.pid === currentTab.windowRef!.pid)?.title || currentTab.target })}>
+            {typeof ConversationTabGlyph === 'function' ? <ConversationTabGlyph name='market' /> : <i className='codicon codicon-extensions' aria-hidden='true'></i>}
+            {active && <i className={`nmx-plugin-tab-market-dot${active.paused ? ' is-paused' : ''}`} aria-hidden='true'></i>}
+        </button>;
         const boundPlugins = this.appPluginsBoundToTab(conversationId, currentTab);
         const baseRunPlugin = run ? this.appPlugins.find(plugin => plugin.id === run.pluginId) : undefined;
         const runPlugin = baseRunPlugin && active && (active.model !== undefined || active.vision !== undefined)
@@ -51908,7 +52964,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 copied: appPluginText(this.desktopLocale, 'copied'), close: appPluginText(this.desktopLocale, 'close'), studioArea: appPluginText(this.desktopLocale, 'studioArea'),
                 studioPoint: appPluginText(this.desktopLocale, 'studioPoint') } } : undefined;
         const canStopOnEsc = Boolean(active && typeof bridge.stopAppPlugin === 'function');
-        return { headerExtra, bar, floatingChat, overlay, studio, running: canStopOnEsc, ...(canStopOnEsc ? { onStop: () => void this.stopAppPluginFromHub(active!.runId) } : {}) };
+        const chatStreaming = chatMessages.some(message => message.role === 'assistant' && Boolean(message.streaming || message.pending));
+        return { headerExtra, bar, floatingChat, overlay, studio, running: canStopOnEsc, chatOpen, onToggleChat: () => this.toggleAppPluginChat(key), chatStreaming,
+            chatLabel: appPluginText(this.desktopLocale, 'aiConsoleTitle'), ...(canStopOnEsc ? { onStop: () => void this.stopAppPluginFromHub(active!.runId) } : {}) };
     }
 
     /** Opens a tab's 插件市场: installed plugins for its app and the marketplace's, fetched for this app only. */
@@ -52039,6 +53097,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected appControlPickerOpen = false;
     protected appControlPickerApps: readonly AppControlPickerApp[] = [];
     protected appControlPickerLoading = false;
+    /** Why the in-app picker's list could not be read ('' when it could): shown with Retry instead of "no matching apps". */
+    protected appControlPickerError = '';
 
     protected composerApp(sessionId = this.activeCodingSessionId): ComposerApp | undefined {
         return this.composerAppItems(sessionId)[0];
@@ -52114,7 +53174,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             await this.refreshAppControlPickerApps();
             return;
         }
-        if (!bridge.pickApplication || this.composerAppPicking) return;
+        if (!bridge.pickApplication) {
+            // Only a build whose bridge has neither picker says this version cannot pick apps.
+            this.addNotification?.('warning', appControlText(this.desktopLocale, 'unavailable'), '');
+            return;
+        }
+        if (this.composerAppPicking) return;
         this.composerAppPicking = true;
         this.update();
         try {
@@ -52123,7 +53188,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 await this.selectComposerApp(picked);
             }
         } catch {
-            this.attachmentError = appControlText(this.desktopLocale, 'unavailable');
+            this.addNotification?.('error', appControlText(this.desktopLocale, 'describeFailed'), '');
         } finally {
             this.composerAppPicking = false;
             this.update();
@@ -52131,14 +53196,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
     }
 
+    /**
+     * Loads the in-app picker's list. A failure keeps the rows already shown (a refresh never wipes what the user is
+     * looking at) and, with none to show, the picker says the list could not be read and offers Retry.
+     */
     protected async refreshAppControlPickerApps(): Promise<void> {
         const bridge = window.nextmuxDesktop;
-        if (typeof bridge?.listApplications !== 'function') return;
+        if (typeof bridge?.listApplications !== 'function' && typeof bridge?.listApplicationsDetailed !== 'function') return;
         this.appControlPickerLoading = true;
         this.update();
         try {
-            const listed = await bridge.listApplications();
+            let listed: readonly { readonly name: string; readonly id: string; readonly path?: string; readonly icon?: string; readonly packaged?: boolean; readonly running?: boolean }[] | undefined;
+            if (typeof bridge.listApplicationsDetailed === 'function') {
+                const result = await bridge.listApplicationsDetailed();
+                if (result?.ok && Array.isArray(result.apps)) listed = result.apps;
+                else this.appControlPickerError = (result && !result.ok && typeof result.error === 'string' && result.error) || 'app_list_failed';
+            } else {
+                listed = await bridge.listApplications!();
+            }
             if (Array.isArray(listed)) {
+                this.appControlPickerError = '';
                 this.appControlPickerApps = listed.map(item => {
                     const icon = typeof item.icon === 'string' && item.icon.startsWith('data:image/')
                         ? item.icon
@@ -52148,7 +53225,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 });
             }
         } catch {
-            this.attachmentError = appControlText(this.desktopLocale, 'unavailable');
+            this.appControlPickerError = 'app_list_failed';
         } finally {
             this.appControlPickerLoading = false;
             this.update();
@@ -52171,7 +53248,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 await this.selectComposerApp(picked);
             }
         } catch {
-            this.attachmentError = appControlText(this.desktopLocale, 'unavailable');
+            this.addNotification?.('error', appControlText(this.desktopLocale, 'describeFailed'), '');
         } finally {
             this.composerAppPicking = false;
             this.update();
@@ -52245,8 +53322,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.composerOpeningApps.set(sessionId, [...currentOpening, pendingEntry]);
         this.update();
 
+        // The conversation the app opens for: known to the failure notice too, even after a long permission wait.
+        let targetSessionId = this.activeCodingSessionId || sessionId;
         try {
-            let targetSessionId = this.activeCodingSessionId || sessionId;
             if (!targetSessionId && typeof this.ensureCodingSession === 'function' && Array.isArray(this.codingSessions)) {
                 const created = this.ensureCodingSession(picked.name);
                 if (created?.id) {
@@ -52256,18 +53334,48 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         this.composerApps.set(targetSessionId, draftApps);
                         this.composerApps.delete('');
                     }
+                    // The draft's busy chips belong to the new conversation too: left under the draft key they would show
+                    // (and count toward the limit) in whichever conversation is opened next while a permission wait runs.
+                    const draftOpening = this.composerOpeningApps.get('');
+                    if (draftOpening?.length) {
+                        this.composerOpeningApps.set(targetSessionId, [...(this.composerOpeningApps.get(targetSessionId) || []), ...draftOpening]);
+                        this.composerOpeningApps.delete('');
+                    }
+                }
+            }
+            // macOS: without Accessibility or Screen Recording the app could not come into a tab. Ask first and wait for
+            // the grant with the app's chip busy, instead of opening it and failing (the AI's tool calls wait the same way).
+            const mac = /mac/i.test(navigator.platform);
+            const awaitPermission = async (capability: Awaited<ReturnType<NonNullable<typeof bridge.getComputerCapability>>>): Promise<boolean> =>
+                typeof this.waitForPickerPermission === 'function' && await this.waitForPickerPermission(targetSessionId, pendingEntry, capability);
+            if (mac && typeof bridge.getComputerCapability === 'function') {
+                const capability = await bridge.getComputerCapability().catch(() => undefined);
+                if (capability && !capability.available) {
+                    if (capability.reason === 'permission_required') {
+                        if (!(await awaitPermission(capability))) return false;
+                    } else if (capability.reason === 'runtime_missing' || capability.reason === 'unsupported_system') {
+                        const copy = this.appOpenFailureCopy?.({ ok: false, error: capability.reason }, picked);
+                        if (copy) this.addNotification?.(copy.kind, copy.title, copy.body, targetSessionId || undefined);
+                        return false;
+                    }
                 }
             }
             await this.initComputerWindowView?.();
-            const opened = await bridge.openAppInTab(targetSessionId, picked.id || picked.name, { source: 'user' });
-            const wasRunningInOs = Boolean(
-                picked.running
-                || opened?.wasRunningInOs
-                || opened?.launched === false
-                || opened?.error === 'app_already_open_in_os_uncontrollable'
-                || opened?.error === 'computer_window_owned'
-                || (opened?.error === 'app_window_unavailable' && opened?.launched !== true)
-            );
+            // resultVersion 2: failures say which stage failed, whether this call launched the app and whether it was the
+            // user's own running copy, so the notice below can say what to do.
+            const openOptions = { source: 'user' as const, resultVersion: 2 as const };
+            let opened = await bridge.openAppInTab(targetSessionId, picked.id || picked.name, openOptions);
+            // A grant revoked between the check and the open: wait once more, then try once more.
+            if (mac && opened?.ok === false && opened.error === 'permission_required' && typeof bridge.getComputerCapability === 'function') {
+                const capability = await bridge.getComputerCapability().catch(() => undefined);
+                if (capability && !capability.available && capability.reason === 'permission_required') {
+                    if (!(await awaitPermission({ ...capability, ...(opened.missing?.length && !(capability as { missing?: unknown }).missing ? { missing: opened.missing } : {}) }))) return false;
+                    opened = await bridge.openAppInTab(targetSessionId, picked.id || picked.name, openOptions);
+                }
+            }
+            // Only the open result itself says whether the user's own running copy was used; a picker row's "running"
+            // is a hint about the list, not about this open.
+            const wasRunningInOs = opened?.wasRunningInOs === true;
             const windowUncontrollable = Boolean(
                 !opened?.ok
                 || !opened.pid
@@ -52305,16 +53413,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         }
                     }
                 }
-                if (wasRunningInOs) {
-                    this.addNotification?.('warning', appControlText(this.desktopLocale, 'alreadyOpenInOs'), picked.name, targetSessionId || undefined);
-                } else {
-                    this.addNotification?.('error', appControlText(this.desktopLocale, 'unavailable'), picked.name, targetSessionId || undefined);
-                }
+                const copy = this.appOpenFailureCopy?.(opened, picked) ?? (wasRunningInOs || opened?.error === 'app_already_open_in_os_uncontrollable'
+                    ? { kind: 'warning' as const, title: appControlText(this.desktopLocale, 'alreadyOpenInOs'), body: picked.name }
+                    : { kind: 'error' as const, title: appControlText(this.desktopLocale, 'openFailed', { name: picked.name }), body: '' });
+                this.addNotification?.(copy.kind, copy.title, copy.body, targetSessionId || undefined);
                 return false;
             }
 
             // Immediate tab opening in the top tab bar (keeping the Conversation tab active so the composer & chips stay visible).
             const platform = /win/i.test(navigator.platform) ? 'win32' : 'darwin';
+            const realtime = typeof tabRealtimeFacts === 'function' ? tabRealtimeFacts(opened) : {};
             const tab = appWindowTab({
                 pid: opened.pid!,
                 windowId: opened.windowId!,
@@ -52324,7 +53432,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 familyId: opened.familyId,
                 role: opened.role,
                 windows: opened.windows,
-                ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {})
+                ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}),
+                ...realtime
             }, platform);
             const state = this.conversationTabs || emptyConversationTabs();
             const hostTab = targetSessionId ? visualTabsFor(state, targetSessionId).find(item =>
@@ -52350,7 +53459,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         familyId: opened.familyId,
                         role: opened.role,
                         windows: opened.windows,
-                        ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {})
+                        ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}),
+                        ...realtime
                     }, true);
                     const baseState = hostTab.id !== attached.id ? closeVisualTab(state, targetSessionId, hostTab.id) : state;
                     const nextTabs = openVisualTab(baseState, targetSessionId, attached, false);
@@ -52366,7 +53476,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         familyId: opened.familyId,
                         role: opened.role,
                         windows: opened.windows,
-                        ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {})
+                        ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}),
+                        ...realtime
                     }, true);
                     const nextTabs = openVisualTab(state, targetSessionId, createdTab, false);
                     this.conversationTabs = nextTabs;
@@ -52379,15 +53490,31 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 item.id === picked.id ? { ...item, running: true } : item
             );
             return true;
+        } catch {
+            // The open itself failed (an IPC rejection): say so instead of leaving an unhandled rejection and a silent picker.
+            const copy = this.appOpenFailureCopy?.(undefined, picked) ?? { kind: 'error' as const, title: appControlText(this.desktopLocale, 'openFailed', { name: picked.name }), body: '' };
+            this.addNotification?.(copy.kind, copy.title, copy.body, targetSessionId || undefined);
+            return false;
         } finally {
-            for (const key of [sessionId, this.activeCodingSessionId || '', '']) {
+            // This pick's own busy chip, wherever it is now (a new pick of the same app made meanwhile keeps its own).
+            for (const key of new Set([sessionId, targetSessionId, this.activeCodingSessionId || '', '', ...this.composerOpeningApps.keys()])) {
                 const pending = this.composerOpeningApps.get(key) || [];
-                const remaining = pending.filter(item => item.id !== picked.id);
+                if (!pending.includes(pendingEntry)) continue;
+                const remaining = pending.filter(item => item !== pendingEntry);
                 if (remaining.length) this.composerOpeningApps.set(key, remaining);
                 else this.composerOpeningApps.delete(key);
             }
             this.update();
         }
+    }
+
+    /** The notice for an app that could not open in a tab (see appOpenFailureCopy in nextmux-app-control.tsx). */
+    protected appOpenFailureCopy(opened: AppOpenOutcome | undefined, picked: { readonly name: string }): { readonly kind: 'warning' | 'error'; readonly title: string; readonly body: string } {
+        const mac = /mac/i.test(navigator.platform);
+        const missing = (opened?.missing || []).filter((kind): kind is ComputerPermissionKind => kind === 'accessibility' || kind === 'screen');
+        return appOpenFailureCopy(this.desktopLocale, opened, picked.name, {
+            mac, permissionItems: computerPermissionNames(this.desktopLocale, missing.length ? missing : ['accessibility', 'screen'])
+        });
     }
 
     protected setComposerApp(
@@ -52422,7 +53549,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 await this.selectComposerApp(described);
             }
         } catch {
-            this.attachmentError = appControlText(this.desktopLocale, 'unavailable');
+            this.addNotification?.('error', appControlText(this.desktopLocale, 'describeFailed'), '');
         } finally {
             this.composerAppPicking = false;
             this.update();
@@ -52488,6 +53615,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 else this.composerOpeningApps.delete(key);
             }
         }
+        // Closing the busy chip of an app that waits for a permission is the same as the card's Cancel.
+        const wait = this.computerPermissionWaits?.get(sessionId);
+        if (wait?.appName && (!appId || wait.appId === appId)) this.computerPermissionWaits.delete(sessionId);
         this.update();
         requestAnimationFrame(() => this.composerTextareaRef.current?.focus());
     }
@@ -52711,9 +53841,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const merchantCatalogPending = this.activeRelayKey.startsWith('managed:') && this.merchantCatalogStatus !== 'ready';
         const composerRelay = this.relayOption(this.activeRelayKey, 'coding');
         const pickerConnection = this.officialModels.connections.find(candidate => officialConnectionRelayKey(candidate.id) === modelPickerRelayKey);
-        const officialPickerPending = Boolean(pickerConnection && (this.officialPickerValidations.has(pickerConnection.id)
+        const officialPickerPending = Boolean(pickerConnection && (this.officialPickerValidations?.has(pickerConnection.id)
             || this.officialBusyConnectionId === pickerConnection.id && this.officialConnectionStage === 'discovering'));
-        const officialPickerFailed = Boolean(pickerConnection && this.officialPickerValidationFailures.has(pickerConnection.id));
+        const officialPickerFailed = Boolean(pickerConnection && this.officialPickerValidationFailures?.has(pickerConnection.id));
         const composerRelayUnavailable = !composerRelay && this.activeRelayKey.startsWith('official:');
         const modelRouteById = this.routesForRelay(modelPickerRelayKey, 'coding', true, true).reduce((byModel, candidate) => {
             const modelId = this.modelKeyForRoute(candidate);
@@ -52777,6 +53907,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             .sort((left, right) => (left.rank ?? Infinity) - (right.rank ?? Infinity)
                 || left.label.localeCompare(right.label, undefined, { numeric: true, sensitivity: 'base' })));
         const pickerSearchable = Boolean(pickerQuery) || visibleModelOptions.length + moreModelOptions.length > 12;
+        // An own API whose list could not be read and has nothing to show: the failure takes the empty list's place.
+        const officialFailureInPlace = officialPickerFailed && !officialPickerPending && !pickerQuery && pickerRows.length === 0;
         // The active route can briefly be absent while a merchant catalog is
         // being hydrated. Resolve it from the persisted route as a fallback so
         // the automatic-best control does not disappear during that transition.
@@ -52835,7 +53967,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // The notice is dismissible per failed turn; a later failure shows it again.
         // The user pressed Esc during this turn: the AI no longer controls windows until the next prompt or 恢复控制.
         const desktopControlStopped = Boolean(codingSession && this.desktopControlEscapedConversations.has(codingSession.id));
-        const balanceInsufficient = isInsufficientBalanceFailure(visibleTurns.at(-1)?.failure)
+        // Only the NextMux wallet offers 立即充值 here; another provider's balance stays in the thread, in its own words.
+        const balanceInsufficient = isInsufficientBalanceFailure(visibleTurns.at(-1)?.failure, this.routeBillingSource?.(visibleTurns.at(-1)?.routeId))
             && this.balanceNoticeDismissedTurnId !== visibleTurns.at(-1)?.id;
         // These notices ("请先选择模型。", a failed attachment, the balance fuse, Esc) take the notice slot at the
         // right end of the row under the composer; while one shows, the other corner notices wait.
@@ -53078,14 +54211,36 @@ export class NextMuxDesktopWidget extends ReactWidget {
             <div className={`nmx-coding-stage${this.composerDropMode === 'thread' ? ' is-drop-target' : ''}`} onFocusCapture={() => { this.threadFocusActive = true; }}
                 onDragEnter={event => this.handleCodingStageDragOver(event)} onDragOver={event => this.handleCodingStageDragOver(event)}
                 onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) this.clearComposerDropState(); }}
-                onDrop={event => { if (this.codingPanel === 'thread' && event.dataTransfer.types.includes('Files')) this.handleComposerDrop(event as React.DragEvent<HTMLDivElement>); }}>
+                onDrop={event => {
+                    if (this.codingPanel !== 'thread' || !event.dataTransfer.types.includes('Files')) return;
+                    // A drop that reaches here from the AI Console (or its resize edges) is the console's, never the conversation's.
+                    if (event.target instanceof Element && event.target.closest('.nmx-plugin-chat-overlay, .nmx-plugin-chat-panel')) { this.clearComposerDropState(); return; }
+                    this.handleComposerDrop(event as React.DragEvent<HTMLDivElement>);
+                }}>
                 {this.composerDropMode === 'thread' && <ComposerDropOverlay locale={this.desktopLocale} variant='thread' asProject={this.canDropFolderAsProject()} />}
-                {visualTab && <ConversationVisualTabView locale={this.desktopLocale} tab={visualTab}
-                    controls={this.conversationWindowControls(this.activeCodingSessionId, visualTab)}
-                    onReopenApp={mode => this.reopenConversationAppTab(codingSession?.id || '', visualTab, mode)}
-                    plugin={this.appPluginTabParts(this.activeCodingSessionId, visualTab)}
-                    announcement={this.tabAnnouncements.get(`${this.activeCodingSessionId}\n${visualTab.id}`)}
-                    onSelectWindow={(pid, windowId) => this.selectConversationTabWindow(this.activeCodingSessionId, visualTab.id, pid, windowId)} />}
+                {(() => {
+                    // The tab on show and the app tabs kept warm behind it share one layer over the conversation; with no
+                    // tab on show the layer stays (hidden, full size) so their captures keep running (nextmux-composer-attachments.css).
+                    const warmTabs = typeof this.warmVisualTabs === 'function' ? this.warmVisualTabs() : visualTab ? [visualTab] : [];
+                    if (!warmTabs.length) return undefined;
+                    return <div className={`nmx-visual-tab-warm-layer${visualTab ? ' is-active' : ''}`} aria-hidden={!visualTab || undefined}>
+                        {warmTabs.map(tab => {
+                            const isActive = visualTab?.id === tab.id;
+                            return <ConversationVisualTabView key={`${this.activeCodingSessionId}:${tab.id}`}
+                                active={isActive}
+                                locale={this.desktopLocale}
+                                tab={tab}
+                                controls={this.conversationWindowControls(this.activeCodingSessionId, tab)}
+                                onReopenApp={mode => this.reopenConversationAppTab(codingSession?.id || '', tab, mode)}
+                                plugin={isActive ? this.appPluginTabParts(this.activeCodingSessionId, tab) : undefined}
+                                scheduledTasks={this.conversationTabScheduledTasks(this.activeCodingSessionId)}
+                                onToggleScheduledTask={taskId => void this.toggleScheduledTask(taskId)}
+                                onDeleteScheduledTask={this.detachedConversationId ? undefined : taskId => void this.deleteScheduledTask(taskId)}
+                                announcement={this.tabAnnouncements.get(`${this.activeCodingSessionId}\n${tab.id}`)}
+                                onSelectWindow={(pid, windowId) => this.selectConversationTabWindow(this.activeCodingSessionId, tab.id, pid, windowId)} />;
+                        })}
+                    </div>;
+                })()}
                 {/* The turn timeline and file rail belong to the conversation, not to a window tab. The rail gives way to an
                     open right-hand drawer; a detached window shows none (it keeps the drawer state for the main window). */}
                 {this.codingPanel === 'thread' && !visualTab && !activeCouncilChild && this.renderThreadNavigator(allVisibleTurns)}
@@ -53188,7 +54343,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         const normalizedTurnFailure = this.normalizeTurnFailureForDisplay?.(failure || error, turn.routeId) ?? (failure || error);
                         const displayError = error || failure
                             ? conversationErrorText(this.desktopLocale, normalizedTurnFailure, { source: modelFailureSource(turn.routeId),
-                                surface: 'thread', hasSelectedRelay, hasSelectedRoute,
+                                surface: 'thread', hasSelectedRelay, hasSelectedRoute, providerName: this.routeProviderName?.(turn.routeId),
                                 retryCount: (turn.events || []).filter(event => event.type === 'model_retry_scheduled').length,
                                 relaySwitchCount: turn.failoverCount || (turn.events || []).filter(event => event.type === 'backend_fallback').length })
                             : '';
@@ -53327,7 +54482,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                  {/* A failed turn has one localized user-facing sentence.
                                   * Technical attempt codes stay out of this surface. */}
                                 {stage === 'running' && this.renderAgentActivity(activityEvents, true, false, turn.id, undefined, turn.steeringMessages, liveResult?.changes || turn.changes,
-                                    this.computerPermissionWait && this.computerPermissionWait.conversationId === this.activeCodingSessionId ? computerPermissionNames(this.desktopLocale, this.computerPermissionWait.missing) : undefined)}
+                                    this.computerPermissionWait && this.computerPermissionWait.conversationId === this.activeCodingSessionId && !this.computerPermissionWait.appName ? computerPermissionNames(this.desktopLocale, this.computerPermissionWait.missing) : undefined)}
                                 {stage === 'error' && <>{this.renderAgentActivity(errorActivityEvents, false, true, turn.id, 'stopped', turn.steeringMessages, liveResult?.changes || turn.changes)}<StreamNotice locale={this.desktopLocale} tone='error' role={live ? 'alert' : 'status'} action={this.renderOriginalManagedReceiptAction?.(this.activeCodingSessionId, turn.id) || this.renderOllamaPullAction(this.activeCodingSessionId, turn, failure || error) || this.renderModelFailureAction(normalizedTurnFailure, undefined, modelFailureSource(turn.routeId), { surface: 'thread', hasSelectedRelay: this.activeRelayKey === undefined ? undefined : Boolean(this.activeRelayKey), hasSelectedRoute: this.activeModelRouteId === undefined && turn.routeId === undefined ? undefined : Boolean(this.activeModelRouteId || turn.routeId) })} text={this.renderThreadText(displayError || agentOutcomeText(this.desktopLocale, 'fallbackBody'), turn.id, 'error')} />{this.renderOriginalManagedReceiptResult?.(this.activeCodingSessionId, turn.id)}{!workspace && !displayError && <div className='nmx-inline-actions'><button className='nmx-inline-action' onClick={() => this.openWorkspace()}>打开项目目录</button></div>}</>}
                                 {stage === 'cancelled' && <>{this.renderAgentActivity(cancelledActivityEvents, false, true, turn.id, 'stopped', turn.steeringMessages, liveResult?.changes || turn.changes)}</>}
                                 {(stage === 'complete' || stage === 'paused') && <>
@@ -53407,7 +54562,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 </div>}
                             </div></div>}
                         </section>;
-                    }} /> : <div className='nmx-empty-task'>
+                    }} /> : <div className='nmx-empty-task' aria-hidden={visualTab ? true : undefined}>
                     <span className='nmx-empty-mark nmx-empty-brand-mark'>{this.renderBrandMark('nmx-empty-brand-svg')}</span>
                    <h2>{workspace ? this.projectQuestion(workspace.label) : '今天想做什么？'}</h2>
                     {privateWorkspaceLabel && <p className='nmx-empty-workspace-note'><i className='codicon codicon-info'></i>{privateWorkspaceLabel}</p>}
@@ -53418,6 +54573,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         && <ComputerPermissionWait locale={this.desktopLocale} missing={this.computerPermissionWait.missing}
                             onOpenSettings={kind => void (window.nextmuxDesktop as SystemPermissionsBridge | undefined)?.openPermissionSettings?.(kind)}
                             onRelaunch={() => void (window.nextmuxDesktop as SystemPermissionsBridge | undefined)?.relaunchApp?.()}
+                            {...(this.computerPermissionWait.appName ? { appName: this.computerPermissionWait.appName,
+                                onCancel: () => this.cancelPickerPermissionWait(this.computerPermissionWait?.conversationId ?? this.activeCodingSessionId) } : {})}
                             {...(/win/i.test(navigator.platform) ? { onInstallAgain: () => void window.nextmuxDesktop?.requestComputerPermission?.() } : {})} />}
                     <div className={`nmx-composer-wrap is-rows-${this.composerRows()}`}
                     ref={node => { if (node) node.inert = Boolean(this.incognitoModeOperation && this.incognitoModeSessionId === codingSession?.id || this.draftWorkspaceBindingOperation && this.draftWorkspaceBindingSessionId === codingSession?.id); }}
@@ -53467,6 +54624,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     {this.renderSlashCommandDrawerPortal?.()}
                     {this.appControlPickerOpen && <AppControlPickerPopover locale={this.desktopLocale} apps={this.appControlPickerApps}
                         selectedIds={this.composerSelectedAppIds()} pendingIds={this.composerPendingAppIds()} loading={this.appControlPickerLoading}
+                        error={this.appControlPickerError} onRetry={() => void this.refreshAppControlPickerApps()}
                         onToggleApp={app => void this.selectComposerApp(app)} onBrowse={() => void this.browseComposerApp()}
                         onClose={() => { this.appControlPickerOpen = false; this.update(); requestAnimationFrame(() => this.composerTextareaRef.current?.focus()); }} />}
                     {this.codingPopover === 'permission' && <section className='nmx-composer-popover nmx-permission-popover'>
@@ -53497,7 +54655,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             <span className='nmx-checkbox-indicator' aria-hidden='true'></span><span data-help={modelPickerSwitchHint}>{automaticOptimalText(this.desktopLocale)}</span>
                         </label>}{composerRelay && <button disabled={officialPickerPending || this.merchantCatalogStatus === 'loading' || this.catalogLoading}
                             aria-label={localizeDesktopSurface(this.desktopLocale, '刷新')} title={localizeDesktopSurface(this.desktopLocale, '刷新')}
-                            onClick={() => void (pickerConnection ? this.refreshOfficialConnectionModels(pickerConnection)
+                            onClick={() => void (pickerConnection ? this.ensureOfficialConnectionModelsLoaded(pickerConnection, { userInitiated: true, force: true })
                                 : composerRelay.kind === 'managed' ? this.loadSelectedMerchantCatalog(composerRelay.merchantId!, false, true) : this.loadCatalog())}><i className='codicon codicon-refresh'></i></button>}</header>
                         {pickerSearchable && <div className='nmx-model-picker-search'><i className='codicon codicon-search' aria-hidden='true'></i>
                             <ImeInput value={this.modelPickerQuery || ''} placeholder={modelPickerListText(this.desktopLocale, 'search')} aria-label={modelPickerListText(this.desktopLocale, 'search')}
@@ -53517,10 +54675,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             {merchantCatalogPending && <div className='nmx-merchant-catalog-status is-centered' role='status'>
                                 {this.merchantCatalogStatus === 'loading' && <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />}
                                 <span>{relayText(this.desktopLocale, this.merchantCatalogStatus === 'loading' ? 'modelsLoading' : this.merchantCatalogError || this.merchantCatalogStatus === 'failed' ? 'modelsFailed' : this.merchantCatalogStatus === 'partial' ? 'modelsPartial' : 'modelsNotLoaded')}</span>
-                                {this.merchantCatalogStatus !== 'loading' && <button onClick={() => void this.loadSelectedMerchantCatalog(this.activeRelayKey.slice('managed:'.length), Boolean(this.selectedMerchantCatalog?.nextCursor))}>{this.tx('retry')}</button>}
+                                {this.merchantCatalogStatus !== 'loading' && <button type='button' onClick={() => void this.loadSelectedMerchantCatalog(this.activeRelayKey.slice('managed:'.length), Boolean(this.selectedMerchantCatalog?.nextCursor))}>{this.tx('retry')}</button>}
                             </div>}
                             {officialPickerPending && <div className='nmx-merchant-catalog-status is-centered' role='status'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' /><span>{relayText(this.desktopLocale, 'modelsLoading')}</span></div>}
-                            {!officialPickerPending && !merchantCatalogPending && (() => {
+                            {/* An own API whose list could not be read says so in place of the empty list, as the other drawers do. */}
+                            {officialFailureInPlace && pickerConnection && this.renderOfficialPickerFailedState?.(pickerConnection,
+                                this.officialPickerAuthFailures.has(pickerConnection.id), () => this.closeNavigationSurface())}
+                            {!officialPickerPending && !merchantCatalogPending && !officialFailureInPlace && (() => {
                                 // Every API key of the chosen merchant is busy: say so and offer another merchant, not an empty list.
                                 const pickerRelayFull = !pickerQuery && modelPickerRelayKey.startsWith('managed:')
                                     && Boolean(this.relayMerchantIdIsFull?.(modelPickerRelayKey.slice('managed:'.length), 'coding'));
@@ -53530,19 +54691,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         : modelOptions.length > 0 && <button onClick={() => { this.completeNavigationSurface(); this.openSettingsPanel('models'); }}>{modelVisibilityCopy(this.desktopLocale)[0]}</button>}</div>;
                             })()}
                         </div>}
-                        {(officialPickerPending && visibleModelOptions.length > 0 || officialPickerFailed && !officialPickerPending) && <div className='nmx-merchant-catalog-status' role='status'>
+                        {(officialPickerPending && pickerRows.length > 0 || officialPickerFailed && !officialPickerPending && !officialFailureInPlace) && <div className='nmx-merchant-catalog-status' role='status'>
                             {officialPickerPending && <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />}
                             <span>{officialPickerPending ? relayText(this.desktopLocale, 'modelsLoading')
-                                : pickerConnection && this.officialPickerAuthFailures.has(pickerConnection.id) ? agentOutcomeText(this.desktopLocale, 'api_key_rejected')
-                                    : relayText(this.desktopLocale, 'modelsUnavailable')}</span>
-                            {!officialPickerPending && pickerConnection && this.officialPickerAuthFailures.has(pickerConnection.id)
-                                ? <button onClick={() => { this.closeNavigationSurface(); this.selectModelCenterView('official'); }}>{relayText(this.desktopLocale, 'openModelCenter')}</button>
-                                : !officialPickerPending && pickerConnection && <button onClick={() => void this.refreshOfficialConnectionModels(pickerConnection)}>{this.tx('retry')}</button>}
+                                : pickerConnection && this.officialPickerAuthFailures?.has(pickerConnection.id) ? agentOutcomeText(this.desktopLocale, 'api_key_rejected')
+                                    : pickerRows.length > 0 ? relayText(this.desktopLocale, 'modelsUnavailable') : relayText(this.desktopLocale, 'modelsFailed')}</span>
+                            {!officialPickerPending && pickerConnection && this.officialPickerAuthFailures?.has(pickerConnection.id)
+                                ? <button type='button' onClick={() => { this.closeNavigationSurface(); this.selectModelCenterView('official'); }}>{relayText(this.desktopLocale, 'openModelCenter')}</button>
+                                : !officialPickerPending && pickerConnection && <button type='button' onClick={() => void this.ensureOfficialConnectionModelsLoaded(pickerConnection, { userInitiated: true, force: true })}>{this.tx('retry')}</button>}
                         </div>}
                         {merchantCatalogPending && modelOptions.length > 0 && (this.merchantCatalogStatus === 'loading' || this.merchantCatalogError) && <div className='nmx-merchant-catalog-status' role='status'>
                             {this.merchantCatalogStatus === 'loading' && <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />}
                             <span>{relayText(this.desktopLocale, this.merchantCatalogStatus === 'loading' ? 'modelsLoading' : this.merchantCatalogError || this.merchantCatalogStatus === 'failed' ? 'modelsFailed' : this.merchantCatalogStatus === 'partial' ? 'modelsPartial' : 'modelsNotLoaded')}</span>
-                            {this.merchantCatalogStatus !== 'loading' && <button onClick={() => void this.loadSelectedMerchantCatalog(this.activeRelayKey.slice('managed:'.length), Boolean(this.selectedMerchantCatalog?.nextCursor))}>{this.tx('retry')}</button>}
+                            {this.merchantCatalogStatus !== 'loading' && <button type='button' onClick={() => void this.loadSelectedMerchantCatalog(this.activeRelayKey.slice('managed:'.length), Boolean(this.selectedMerchantCatalog?.nextCursor))}>{this.tx('retry')}</button>}
                         </div>}
                         {/* "Enable more models" always opens Settings → Models; the "N more models hidden" hint beside it owns the inline list. */}
                         <footer className='nmx-model-picker-settings-footer'><button type='button' className='nmx-model-picker-settings-link'
@@ -53627,7 +54788,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             // Without a resolved model (still loading, or another relay selected) nothing is known yet:
                             // no "cannot read" warning. Sending decides again with the route actually used.
                             const delivery = route ? attachmentDelivery(item.attachment, route) : 'native';
-                            const hint = [this.composerAnchorHint(item.id), delivery === 'extract' ? composerAttachmentUiText(this.desktopLocale, 'willExtractHint')
+                            // Cohere reads a text file itself up to 120,000 characters; a longer one is read by NextMux instead.
+                            const longText = delivery === 'extract' && route?.kind === 'official_connection' && route.connection.protocol === 'cohere_chat'
+                                && item.attachment.kind === 'file' && isPlainTextAttachmentMime(item.attachment.mimeType);
+                            const hint = [this.composerAnchorHint(item.id), delivery === 'extract' ? composerAttachmentUiText(this.desktopLocale, longText ? 'longTextHint' : 'willExtractHint')
                                 : delivery === 'describe' ? composerAttachmentUiText(this.desktopLocale, 'willDescribeHint') : ''].filter(Boolean).join('\n') || undefined;
                             return <AttachmentChip key={item.id} locale={this.desktopLocale} name={item.attachment.name} kind={item.attachment.kind}
                                 mimeType={item.attachment.kind === 'text' ? undefined : item.attachment.mimeType} meta={this.formatMediaSize(item.size)}
@@ -53802,8 +54966,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             const notifications = (this.composerNotifications || []).filter(item => !item.conversationId || item.conversationId === this.activeCodingSessionId);
                             const notification = notifications.filter(item => item.kind === 'error' || item.kind === 'warning').at(-1)
                                 || (!this.councilBelowNotice && !routePriceNotice ? notifications.at(-1) : undefined);
+                            // The capsule is one line: its tooltip carries the whole notice (a long title's advice too), and it stays
+                            // while the pointer or focus is on it, so it never closes under the person reading it.
+                            const fullText = notification?.body && notification.body !== notification.title ? `${notification.title}\n${notification.body}` : notification?.title;
+                            // A held notice replaced by another (or by a conversation switch) gets no pointerleave: let it go here.
+                            if (this.composerNotificationHeldId && this.composerNotificationHeldId !== notification?.id) this.holdComposerNotification?.(this.composerNotificationHeldId, false);
                             if (notification) return <div key={notification.id} className={`nmx-route-price-notice nmx-council-below-notice is-${notification.kind}`} role='status'
-                                data-session-id={notification.conversationId} data-help={notification.body || notification.title} title={notification.body || notification.title}>
+                                data-session-id={notification.conversationId} data-help={fullText} title={fullText}
+                                onPointerEnter={() => this.holdComposerNotification?.(notification.id, true)}
+                                onPointerLeave={event => this.holdComposerNotification?.(notification.id, event.currentTarget.contains(document.activeElement))}
+                                onFocus={() => this.holdComposerNotification?.(notification.id, true)}
+                                onBlur={event => this.holdComposerNotification?.(notification.id, event.currentTarget.contains(event.relatedTarget as Node | null) || event.currentTarget.matches(':hover'))}>
                                 <i className={`codicon codicon-${notification.kind === 'error' ? 'error' : notification.kind === 'warning' ? 'warning' : notification.kind === 'success' ? 'pass' : 'info'}`} aria-hidden='true'></i>
                                 <span data-nmx-literal>{notification.title}</span>
                                 <button type='button' aria-label={managedPriceText(this.desktopLocale, 'close')} title={managedPriceText(this.desktopLocale, 'close')} onClick={() => { this.dismissComposerNotification(notification.id); this.update(); }}>×</button>
@@ -53840,6 +55013,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         // Re-open the picker the notice asks for (it may have been closed since).
                                         this.modelPickerRelayOpen = this.attachmentErrorAction?.kind === 'relay';
                                         this.codingPopover = 'routes';
+                                        if (!this.modelPickerRelayOpen && this.activeRelayKey?.startsWith('official:')) {
+                                            void this.ensureOfficialConnectionModelsLoaded?.(this.activeRelayKey);
+                                        }
                                         this.ensureDetachedPickerCatalogs?.(this.modelPickerRelayOpen);
                                         this.update();
                                     }}>
@@ -53931,6 +55107,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const routes = availableRoutes.filter(candidate => this.isModelVisible(candidate.kind === 'managed_gateway' ? candidate.offering.canonicalModel : candidate.connection.model) || candidate.id === route?.id);
         // Unchecked models stay out of plans too; say why the list is empty instead of showing a bare picker.
         const allModelsHidden = Boolean(this.scheduleDraft.relayKey) && !this.scheduleCatalogLoading && availableRoutes.length > 0 && routes.length === 0;
+        const scheduleOfficial = this.scheduleDraft.relayKey?.startsWith('official:') && !this.scheduleCatalogLoading
+            ? this.officialPickerConnectionState?.(this.scheduleDraft.relayKey) : undefined;
         const prior = this.scheduledTasks.find(task => task.id === this.scheduleDraft.id);
         const savedRoute = prior && this.scheduleDraft.routeId === prior.routeId && this.scheduleDraft.relayKey === prior.relayKey ? prior.modelRoute : undefined;
         const relays = this.relayOptions('coding').filter(option => option.kind !== 'automatic');
@@ -53978,6 +55156,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 <p>按本机时间执行；休眠后补跑一次。结果保存在所选项目的计划对话中。</p>
                 {!route && !savedRoute && (allModelsHidden
                     ? <p role='status'>{localizeDesktopSurface(this.desktopLocale, '这个 API 的模型都未勾选，勾选后才能用于计划。')} <button type='button' className='nmx-link-button' onClick={() => { this.closeNavigationSurface(); this.openSettingsPanel('models'); }}>{localizeDesktopSurface(this.desktopLocale, '去勾选模型')}</button></p>
+                    // An own API whose list could not be read says so (as the model pickers do) instead of an empty choice.
+                    : scheduleOfficial?.failed && scheduleOfficial.connection && !availableRoutes.length
+                        ? <p role='status'>{scheduleOfficial.authFailed ? agentOutcomeText(this.desktopLocale, 'api_key_rejected') : relayText(this.desktopLocale, 'modelsFailed')} {scheduleOfficial.authFailed
+                            ? <button type='button' className='nmx-link-button' onClick={() => { this.closeNavigationSurface(); this.selectModelCenterView('official'); }}>{relayText(this.desktopLocale, 'openModelCenter')}</button>
+                            : <button type='button' className='nmx-link-button' onClick={() => void this.loadScheduleModels(true)}>{this.tx('retry')}</button>}</p>
                     : <p role='status'>请选择中转商与模型。</p>)}
                 {this.scheduleDraftError && <p role='alert'>{this.scheduleDraftError}</p>}
                 {this.scheduledTasksPersistenceError && <p role='alert'>{this.scheduledTasksPersistenceError}</p>}
@@ -54752,6 +55935,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.reconcileComicChatParamsAndReferences?.();
         this.persistComicChatUi();
         if (key.startsWith('managed:')) void this.loadComicChatRelayCatalog(key.slice('managed:'.length));
+        else if (key.startsWith('official:')) void this.ensureOfficialConnectionModelsLoaded?.(key);
         this.update();
     }
 
@@ -54888,6 +56072,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (relayKey.startsWith('managed:')) {
             const merchantId = relayKey.slice('managed:'.length);
             if (!this.merchantPickerSnapshots.has(merchantId)) void this.loadComicChatRelayCatalog(merchantId);
+        } else if (relayKey.startsWith('official:')) {
+            void this.ensureOfficialConnectionModelsLoaded?.(relayKey);
         }
         this.update();
     }
@@ -54920,6 +56106,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const layout = placeModelPickerPanels(basePlacement, viewport);
         const placement = layout.picker;
         const detailGeometry = layout.detail;
+        const {
+            connection: pickerConnection,
+            loading: officialLoading,
+            failed: officialFailed,
+            authFailed: officialAuthFailed
+        } = this.officialPickerConnectionState(relayKey);
         const relayLoading = Boolean(chatMerchantId
             && (this as unknown as { comicChatRelayLoading?: Set<string> }).comicChatRelayLoading?.has(chatMerchantId));
         return ReactDOM.createPortal(
@@ -54941,9 +56133,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         } as React.CSSProperties}>
                         <header>
                             <strong>{localizeDesktopSurface(this.desktopLocale, '选择模型')}</strong>
-                            <button type='button' disabled={this.catalogLoading || relayLoading}
+                            <button type='button' disabled={this.catalogLoading || relayLoading || officialLoading}
                                 aria-label={localizeDesktopSurface(this.desktopLocale, '刷新')} title={localizeDesktopSurface(this.desktopLocale, '刷新')}
-                                onClick={() => void (relayKey.startsWith('managed:') ? this.loadComicChatRelayCatalog(relayKey.slice('managed:'.length)) : this.loadCatalog())}>
+                                onClick={() => void (pickerConnection
+                                    ? this.ensureOfficialConnectionModelsLoaded(pickerConnection, { userInitiated: true, force: true })
+                                    : relayKey.startsWith('managed:') ? this.loadComicChatRelayCatalog(relayKey.slice('managed:'.length)) : this.loadCatalog())}>
                                 <i className='codicon codicon-refresh'></i>
                             </button>
                         </header>
@@ -55054,11 +56248,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             </div>
                         ) : (
                             <div className='nmx-model-picker-list nmx-model-picker-empty-list'>
-                                {relayLoading ? (
+                                {(relayLoading || officialLoading) ? (
                                     <div className='nmx-merchant-catalog-status is-centered' role='status'>
                                         <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />
                                         <span>{relayText(this.desktopLocale, 'modelsLoading')}</span>
                                     </div>
+                                ) : officialFailed && !this.comicModelPickerQuery.trim() && pickerConnection ? (
+                                    this.renderOfficialPickerFailedState(
+                                        pickerConnection,
+                                        officialAuthFailed,
+                                        () => this.dismissComicChatModelPicker()
+                                    )
                                 ) : (() => {
                                     const pickerRelayFull = !this.comicModelPickerQuery.trim()
                                         && relayKey.startsWith('managed:')
@@ -58140,25 +59340,62 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** “AI 模型”: the relay for every step and each step's model, in one small panel (see nextmux-comic-model-setup.tsx). */
     protected renderComicModelsSheet(): React.ReactNode {
         if (!this.comicModelsSheetOpen) return undefined;
+        const kind = this.comicModelKind();
+        const steps = this.comicModelSetupSteps();
+        const activeSource = this.comicStepPrefs.global
+            || steps.map(step => step.resolution.candidate?.source.key).find(Boolean)
+            || '';
+        const officialState = activeSource.startsWith('official:') ? this.officialPickerConnectionState?.(activeSource) : undefined;
+        const pendingOwnSources = (this.officialModels?.connections || [])
+            .filter(connection => !(typeof isCatalogOnlyOfficialProvider === 'function' && isCatalogOnlyOfficialProvider(connection.providerId))
+                && connection.providerId !== 'custom_media'
+                && !(typeof isOfficialMediaProtocol === 'function' && isOfficialMediaProtocol(connection.protocol))
+                && connection.protocol !== 'async_media_template'
+                && (!connection.discoveredModels.length
+                    || Boolean(this.officialPickerValidations?.has(connection.id))
+                    || Boolean(this.officialPickerValidationFailures?.has(connection.id))))
+            .map(connection => ({
+                key: typeof officialConnectionRelayKey === 'function' ? officialConnectionRelayKey(connection.id) : `official:${connection.id}`,
+                label: connection.label || connection.providerName,
+                kind: 'official' as const
+            }));
         return <ComicModelSetup locale={this.desktopLocale} themeClass={`nmx-theme-${this.resolvedDesktopTheme()}`} intro={this.comicModelSetupIntro}
-            steps={this.comicModelSetupSteps()} auto={this.comicStepAuto()} {...(this.comicModelSetupFocus ? { focus: this.comicModelSetupFocus } : {})}
+            steps={steps} auto={this.comicStepAuto()} {...(this.comicModelSetupFocus ? { focus: this.comicModelSetupFocus } : {})}
             {...(this.comicStepPrefs.global ? { source: this.comicStepPrefs.global } : {})}
-            scopeLabel={comicKindText(this.desktopLocale, this.comicModelKind())}
-            {...(this.comicModelKind() === 'music' ? { stepLabels: { text: musicText(this.desktopLocale, 'aiTitle'), music: musicText(this.desktopLocale, 'songTitle'), image: musicText(this.desktopLocale, 'cover') } } : {})}
+            scopeLabel={comicKindText(this.desktopLocale, kind)}
+            {...(kind === 'music' ? { stepLabels: { text: musicText(this.desktopLocale, 'aiTitle'), music: musicText(this.desktopLocale, 'songTitle'), image: musicText(this.desktopLocale, 'cover') } } : {})}
             anchorSelector='.nmx-studio-desk'
             // Only where a video step makes the sound (a song has no video to carry its music).
-            soundVideoModel={this.comicModelKind() !== 'music' && this.comicVideoMakesSound(this.comicStepMediaRoute('video')) ? this.comicStepChoice('video')?.label : undefined}
+            soundVideoModel={kind !== 'music' && this.comicVideoMakesSound(this.comicStepMediaRoute('video')) ? this.comicStepChoice('video')?.label : undefined}
             refreshing={Boolean(this.modelListsRefreshing)} onRefresh={() => void this.refreshAllModelLists()}
             // Still reading: the catalogues, or the relay directory the source list is built from.
             busy={this.catalogLoading || this.registryModelsLoading || this.officialModelsLoading
-                || COMIC_STEP_CAPABILITIES.some(capability => Boolean((this.comicStepDirectoryByScope?.get(`${this.comicModelKind()}:${capability}`) ?? this.comicStepDirectory.get(capability))?.loading))}
+                || COMIC_STEP_CAPABILITIES.some(capability => Boolean((this.comicStepDirectoryByScope?.get(`${kind}:${capability}`) ?? this.comicStepDirectory.get(capability))?.loading))}
             {...(this.comicSetupDepositDirectory ? { depositVerified: this.comicSetupDepositDirectory() } : {})}
             {...(this.comicSetupStoreProfiles ? { storeProfiles: this.comicSetupStoreProfiles() } : {})}
+            {...(pendingOwnSources.length ? { pendingOwnSources } : {})}
+            officialSourceLoading={Boolean(officialState?.loading)}
+            officialSourceFailed={Boolean(officialState?.failed)}
+            officialSourceAuthFailed={Boolean(officialState?.authFailed)}
+            {...(activeSource.startsWith('official:') ? {
+                onRetryOfficialSource: () => {
+                    void this.ensureOfficialConnectionModelsLoaded?.(activeSource, { force: true, userInitiated: true })?.then(() => {
+                        if (this.comicModelsSheetOpen && !this.isDisposed) {
+                            for (const capability of ['image', 'video', 'speech', 'music'] as const) this.syncMediaSheetToStep?.(capability);
+                            this.update();
+                        }
+                    });
+                },
+                onOpenModelCenter: () => {
+                    this.finishComicModelSetup();
+                    this.selectModelCenterView('official');
+                }
+            } : {})}
             pendingRelays={Object.fromEntries(COMIC_STEP_CAPABILITIES.map(capability => [
                 capability,
-                (this.comicStepDirectoryByScope?.get(`${this.comicModelKind()}:${capability}`) ?? this.comicStepDirectory.get(capability))?.relays || []
+                (this.comicStepDirectoryByScope?.get(`${kind}:${capability}`) ?? this.comicStepDirectory.get(capability))?.relays || []
             ]))}
-            {...(this.comicStepRelayLoadingFor(this.comicModelKind()) ? { loadingRelayKey: this.comicStepRelayLoadingFor(this.comicModelKind()) } : {})}
+            {...(this.comicStepRelayLoadingFor(kind) ? { loadingRelayKey: this.comicStepRelayLoadingFor(kind) } : {})}
             closeRequest={this.comicModelSetupCloseRequest}
             onAutoChange={auto => this.setComicStepAuto(auto)}
             onSourceSelect={key => this.selectComicSetupSource(key)}
@@ -58364,7 +59601,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     /** A balance refusal (the desktop's own, with amounts, or the platform's), never mistaken for a provider's quota. */
     protected isMediaBudgetFailure(error: unknown): boolean {
-        return (error as { readonly code?: string } | undefined)?.code === 'INSUFFICIENT_BALANCE';
+        // INSUFFICIENT_BALANCE is only ever NextMux's own budget refusal (this ledger's or the desktop service's); the
+        // gateway's wallet codes count as well, by the rule every wallet notice shares.
+        const errorSource = (error as { readonly readableError?: { readonly source?: unknown } } | undefined)?.readableError?.source;
+        const ownKeyError = errorSource === 'own_api' || errorSource === 'local';
+        return (!ownKeyError && (error as { readonly code?: string } | undefined)?.code === 'INSUFFICIENT_BALANCE')
+            || isInsufficientBalanceFailure(error);
     }
 
     /** What to say when paid media cannot start: the balance in NextMux's words, anything else as model errors say it. */
@@ -59911,7 +61153,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             `- Finish with one short sentence in ${this.comicLanguageName()} saying what changed.`
         ].filter(Boolean).join('\n');
         try {
-            const result = await this.runComicTextAgent(workspaceRoot, 'edit', prompt);
+            const result = await this.runComicTextAgent(workspaceRoot, 'edit', prompt, 'comic-edit');
             this.comicAdaptation = { status: 'done', purpose: 'edit', workspaceRoot, message: result.text || this.ct('rewriteDone'), progress: '' };
             if (workspaceRoot !== this.activeComicWorkspaceRoot) return undefined;
             await this.loadComicProject(true);

@@ -87,3 +87,32 @@
 :is(.nmx-shell, .nmx-board-modal-layer, .nmx-desktop-widget).nmx-theme-light button.is-danger:not(:disabled):not([role='menuitem']):not(.is-blocked):not([aria-disabled='true']):is(:hover, :active) {
     filter: brightness(0.96);
 }
+
+/* App tab chrome in the light theme. The generic light hover above (and nextmux.css's grey fill for any hovered
+   button) would grey the AI Console launcher, the pressed placement segment and a plan's delete button; each keeps
+   its own colours here, with enough specificity to outrank those !important guards without relying on order. */
+.nmx-shell.nmx-theme-light .nmx-visual-tab .nmx-visual-tab-screen > .nmx-plugin-chat-dock-icon:is(:hover, :active, :focus-visible) {
+    background: linear-gradient(155deg, #6c78f6 0%, #5865f2 52%, #4752c4 100%) !important;
+    color: #ffffff !important;
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab .nmx-visual-tab-bar .nmx-visual-tab-place > .nmx-visual-tab-place-btn[aria-pressed='true']:is(:hover, :active) {
+    background: #ffffff !important;
+    color: var(--nmx-text, #2d292b) !important;
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab .nmx-visual-tab-schedule-drawer .nmx-visual-tab-schedule-item > .nmx-visual-tab-schedule-delete:is(:hover, :active, :focus-visible) {
+    background: #fde8e8 !important;
+    color: #b42318 !important;
+}
+/* Armed for deletion: the same red as in the dark theme, above the light hover guard and the hover tint just above. */
+.nmx-shell.nmx-theme-light .nmx-visual-tab .nmx-visual-tab-schedule-drawer .nmx-visual-tab-schedule-item > .nmx-visual-tab-schedule-delete.is-armed,
+.nmx-shell.nmx-theme-light .nmx-visual-tab .nmx-visual-tab-schedule-drawer .nmx-visual-tab-schedule-item > .nmx-visual-tab-schedule-delete.is-armed:focus-visible:not(:hover, :active) {
+    background: var(--nmxv-danger-fill, #c64541) !important;
+    color: #ffffff !important;
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab .nmx-visual-tab-schedule-drawer .nmx-visual-tab-schedule-item > .nmx-visual-tab-schedule-delete.is-armed:is(:hover, :active) {
+    background: color-mix(in srgb, var(--nmxv-danger-fill, #c64541) 86%, #000000) !important;
+    color: #ffffff !important;
+}
+/* The AI Console's composer in the light theme: the attach button keeps a visible ring, the relay and model pills a dark label. */
+.nmx-shell.nmx-theme-light .nmx-plugin-chat-panel .nmx-plugin-chat-composer-card .nmx-plugin-chat-attach { color: #5c565a; box-shadow: inset 0 0 0 1px #cfc9cd; }
+.nmx-shell.nmx-theme-light .nmx-plugin-chat-panel .nmx-plugin-chat-composer-card .nmx-plugin-chat-attach:hover { color: #2d292b; background: #efecea; box-shadow: inset 0 0 0 1px #b9b2b7; }

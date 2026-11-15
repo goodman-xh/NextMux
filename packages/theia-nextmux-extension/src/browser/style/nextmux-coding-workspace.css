@@ -1007,6 +1007,9 @@
 .nmx-shell .nmx-own-model-list > header { display: grid; gap: 6px; }
 .nmx-shell .nmx-own-model-list > header input { box-sizing: border-box; width: 100%; height: 30px; padding: 0 10px; border: 1px solid var(--nmx-border); border-radius: 7px; color: var(--nmx-text); background: var(--nmx-bg); font-size: 12.5px; }
 .nmx-shell .nmx-own-model-list > header small, .nmx-shell .nmx-own-model-list > p { margin: 0; color: var(--nmx-muted); font-size: 12px; }
+/* The list being read (opened on an API saved untested): one quiet line with a spinner where the list will appear. */
+.nmx-shell .nmx-own-model-list > p.nmx-own-model-list-loading { display: flex; align-items: center; gap: 6px; padding: 4px 0; line-height: 18px; }
+.nmx-shell .nmx-own-model-list > p.nmx-own-model-list-loading > .codicon { flex: 0 0 auto; font-size: 13px; line-height: 1; }
 .nmx-shell .nmx-own-model-list details { min-width: 0; border-top: 1px solid var(--nmx-border); padding-top: 6px; }
 .nmx-shell .nmx-own-model-list summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--nmx-text); font-size: 12.5px; cursor: pointer; }
 .nmx-shell .nmx-own-model-list summary b { min-width: 22px; padding: 0 6px; border-radius: 10px; color: var(--nmx-muted); background: var(--nmx-hover); font-size: 11.5px; font-weight: 600; text-align: center; }
@@ -1162,6 +1165,19 @@
 @keyframes nmx-app-control-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
 .nmx-app-control-popover .nmx-app-control-empty { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 108px; padding: 12px; color: var(--nmx-acp-muted); font-size: 12.5px; text-align: center; }
 .nmx-app-control-popover .nmx-app-control-empty > i { font-size: 20px; opacity: .7; }
+/* The list could not be loaded (not "nothing matches"): a warning glyph in the measured gold pair (AA on both surfaces),
+   the message in body text, and Retry right under it. */
+.nmx-app-control-popover { --nmx-acp-warn: #e5b84b; }
+:is(.nmx-theme-light, [data-nextmux-theme='light']) .nmx-app-control-popover { --nmx-acp-warn: #8f5c0d; }
+.nmx-app-control-popover .nmx-app-control-empty.is-error > i { color: var(--nmx-acp-warn); opacity: 1; }
+.nmx-app-control-popover .nmx-app-control-empty.is-error > span { color: var(--nmx-acp-text); }
+.nmx-app-control-popover .nmx-app-control-empty > .nmx-app-control-retry {
+    display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box; height: 26px; min-height: 0; margin: 2px 0 0; padding: 0 10px;
+    border: 1px solid var(--nmx-acp-border); border-radius: 7px; color: var(--nmx-acp-text); background: transparent;
+    font: inherit; font-size: 12px; line-height: 1; white-space: nowrap; cursor: pointer; transition: background-color .12s ease, border-color .12s ease;
+}
+.nmx-app-control-popover .nmx-app-control-empty > .nmx-app-control-retry:hover { border-color: var(--nmx-acp-ring); background: var(--nmx-acp-hover); }
+.nmx-app-control-popover .nmx-app-control-empty > .nmx-app-control-retry > i { font-size: 13px; opacity: 1; }
 
 .nmx-app-control-popover .nmx-app-control-foot { flex: 0 0 auto; padding: 6px; border-top: 1px solid var(--nmx-acp-line); }
 .nmx-app-control-popover .nmx-app-control-browse { display: flex; align-items: center; gap: 8px; box-sizing: border-box; width: 100%; height: 34px; min-height: 0; margin: 0; padding: 0 8px; border: 0; border-radius: 8px; color: var(--nmx-acp-text); background: transparent; font: inherit; font-size: 13px; text-align: start; cursor: pointer; transition: background-color .12s ease; }
@@ -1310,8 +1326,6 @@
 @media (max-width: 560px) { .nmx-plugin-sources { grid-template-columns: 1fr; } .nmx-plugin-limits { grid-template-columns: 1fr; } .nmx-plugin-card-actions, .nmx-plugin-details, .nmx-plugin-tests { margin-inline-start: 0; padding-inline-start: 0; } }
 
 /* A tab's plugin: header button with its menu, the run bar, and the readings over the picture. */
-.nmx-visual-tab-action.nmx-plugin-tab-chat.is-active,
-.nmx-visual-tab-action.nmx-plugin-tab-market.is-active { color: var(--nmx-text); background: var(--nmx-hover); }
 .nmx-plugin-menu { position: absolute; top: calc(100% + 6px); inset-inline-end: 0; z-index: 30; display: flex; flex-direction: column; gap: 2px; min-width: 240px; max-width: 320px; padding: 6px;
   border: 1px solid var(--nmx-menu-border, var(--nmx-border)); border-radius: 10px; background: var(--nmx-menu-background, var(--nmx-panel)); box-shadow: 0 12px 32px rgba(0, 0, 0, .28); }
 .nmx-plugin-menu > button { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; border-radius: 7px; color: var(--nmx-menu-foreground, var(--nmx-text)); background: transparent; text-align: start; cursor: pointer; }
@@ -1339,23 +1353,42 @@
 .nmx-plugin-runbar-actions > button.is-danger { border-color: transparent; color: #fff; background: var(--nmxv-danger-fill, #c64541); }
 .nmx-plugin-runbar-actions > button.is-danger:hover { background: var(--nmxv-danger-fill-hover, #b23a36); }
 .nmx-plugin-hub-chat { margin-bottom: 12px; }
-/* Floating Resizable Top-Right AI Console Overlay inside .nmx-visual-tab-screen */
+/* ---------------------------------------------------------------------------
+ * AI Console (AppPluginChatPanel) over an app tab's picture.
+ * Closed, it is a launcher docked to an edge of the picture; open, a dialog moved by its title bar (it stays where
+ * it is let go) and resized from every side. Its composer is one row from the 280px minimum up, and it isolates
+ * itself from the conversation composer's global `.nmx-composer` rules (grid footer, 30px buttons, 64px textarea).
+ * ------------------------------------------------------------------------ */
 .nmx-plugin-chat-overlay {
   position: absolute; top: 10px; right: 10px; z-index: 28;
-  display: flex; flex-direction: column; min-width: 220px; min-height: 180px;
+  /* Never past the picture: in one smaller than 240 × 200 the console gives up its usual minimum (clampPluginChatOverlaySize). */
+  display: flex; flex-direction: column; min-width: min(220px, calc(100% - 20px)); min-height: min(180px, calc(100% - 20px));
   max-width: calc(100% - 20px); max-height: calc(100% - 20px);
   border-radius: 13px; pointer-events: auto;
   box-shadow: 0 14px 38px rgba(0, 0, 0, .42), 0 2px 8px rgba(0, 0, 0, .24);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  animation: nmx-plugin-chat-open 200ms cubic-bezier(.22, 1, .36, 1) both;
+  transition: box-shadow 160ms ease;
+}
+@keyframes nmx-plugin-chat-open {
+  from { opacity: 0; transform: translateY(6px) scale(.97); }
+  to { opacity: 1; transform: none; }
 }
 .nmx-shell.nmx-theme-light .nmx-plugin-chat-overlay {
   box-shadow: 0 12px 34px rgba(15, 23, 42, .16), 0 2px 6px rgba(15, 23, 42, .08);
 }
+.nmx-plugin-chat-overlay:is(.is-dragging, .is-resizing) { user-select: none; -webkit-user-select: none; }
+.nmx-plugin-chat-overlay.is-dragging { box-shadow: 0 22px 52px rgba(0, 0, 0, .5), 0 4px 12px rgba(0, 0, 0, .3); }
+.nmx-shell.nmx-theme-light .nmx-plugin-chat-overlay.is-dragging { box-shadow: 0 20px 46px rgba(15, 23, 42, .22), 0 4px 10px rgba(15, 23, 42, .1); }
+/* The title bar is the handle: grab, and grabbing while it moves; its own buttons stay plain buttons. */
+.nmx-plugin-chat-overlay .nmx-plugin-chat-header { cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; }
+.nmx-plugin-chat-overlay.is-dragging, .nmx-plugin-chat-overlay.is-dragging .nmx-plugin-chat-header { cursor: grabbing; }
+.nmx-plugin-chat-overlay .nmx-plugin-chat-header :is(button, a) { cursor: pointer; }
 .nmx-plugin-chat-overlay-body {
   display: flex; flex-direction: column; width: 100%; height: 100%; min-width: 0; min-height: 0;
 }
 .nmx-plugin-chat-overlay-body > .nmx-plugin-chat-panel {
-  flex: 1 1 auto; width: 100%; height: 100%; min-height: 0; padding: 9px 11px; gap: 7px;
+  flex: 1 1 auto; width: 100%; height: 100%; min-height: 0; padding: 8px 10px 9px; gap: 6px;
   border-radius: 13px; overflow: hidden;
   background: color-mix(in srgb, var(--nmx-panel, #16181d) 92%, #0b0d11);
   border: 1px solid color-mix(in srgb, var(--nmx-border) 95%, rgba(255, 255, 255, .08));
@@ -1365,44 +1398,112 @@
   border-color: #cbd5e1 !important;
 }
 .nmx-plugin-chat-overlay-body .nmx-plugin-chat-messages {
-  flex: 1 1 0; min-height: 0; max-height: none; padding: 8px 4px; gap: 9px;
+  flex: 1 1 0; min-height: 0; max-height: none; padding: 6px 3px; gap: 8px;
 }
-.nmx-plugin-chat-resize-left {
-  position: absolute; top: 8px; bottom: 14px; left: -4px; width: 8px; z-index: 3;
-  cursor: ew-resize; touch-action: none;
+/* Every side and corner resizes; the bottom-right corner shows the usual grip. */
+.nmx-plugin-chat-resize { position: absolute; z-index: 3; touch-action: none; }
+.nmx-plugin-chat-resize:is(.is-n, .is-s) { left: 12px; right: 12px; height: 8px; cursor: ns-resize; }
+.nmx-plugin-chat-resize.is-n { top: -4px; }
+.nmx-plugin-chat-resize.is-s { bottom: -4px; }
+.nmx-plugin-chat-resize:is(.is-e, .is-w) { top: 12px; bottom: 12px; width: 8px; cursor: ew-resize; }
+.nmx-plugin-chat-resize.is-e { right: -4px; }
+.nmx-plugin-chat-resize.is-w { left: -4px; }
+.nmx-plugin-chat-resize:is(.is-ne, .is-nw, .is-se, .is-sw) { z-index: 4; width: 16px; height: 16px; }
+.nmx-plugin-chat-resize.is-ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.nmx-plugin-chat-resize.is-sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.nmx-plugin-chat-resize.is-nw { top: -5px; left: -5px; cursor: nwse-resize; }
+.nmx-plugin-chat-resize.is-se { right: -5px; bottom: -5px; cursor: nwse-resize; }
+/* Drawn with an inset shadow: the light theme greys every border colour. */
+.nmx-plugin-chat-resize.is-se::after {
+  content: ''; position: absolute; right: 7px; bottom: 7px; width: 6px; height: 6px; border-bottom-right-radius: 2px;
+  box-shadow: inset -1.5px -1.5px 0 color-mix(in srgb, var(--nmx-muted) 70%, transparent); pointer-events: none;
 }
-.nmx-plugin-chat-resize-bottom {
-  position: absolute; left: 14px; right: 8px; bottom: -4px; height: 8px; z-index: 3;
-  cursor: ns-resize; touch-action: none;
+
+/* The closed console: a Discord-like launcher resting on an edge, the white pill at its side naming the edge. */
+.nmx-visual-tab-screen > .nmx-plugin-chat-dock-icon {
+  position: absolute; z-index: 27; box-sizing: border-box;
+  width: 42px; height: 42px; min-width: 42px; min-height: 42px; margin: 0; padding: 0;
+  display: grid; place-items: center;
+  border: 0; border-radius: 50%; color: #ffffff;
+  background: linear-gradient(155deg, #6c78f6 0%, #5865f2 52%, #4752c4 100%);
+  box-shadow: 0 10px 26px rgba(8, 10, 32, .38), 0 2px 6px rgba(8, 10, 32, .28), inset 0 1px 0 rgba(255, 255, 255, .22), inset 0 0 0 1px rgba(255, 255, 255, .1);
+  cursor: pointer; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none;
+  transition: left 240ms cubic-bezier(.22, 1, .36, 1), top 240ms cubic-bezier(.22, 1, .36, 1), border-radius 200ms cubic-bezier(.22, 1, .36, 1),
+    transform 180ms cubic-bezier(.22, 1, .36, 1), box-shadow 180ms ease;
+  animation: nmx-plugin-chat-dock-in 260ms cubic-bezier(.22, 1, .36, 1) both;
 }
-.nmx-plugin-chat-resize-corner {
-  position: absolute; left: -4px; bottom: -4px; width: 15px; height: 15px; z-index: 4;
-  cursor: nesw-resize; touch-action: none;
+@keyframes nmx-plugin-chat-dock-in {
+  from { opacity: 0; transform: scale(.6); }
+  to { opacity: 1; transform: none; }
 }
-.nmx-plugin-chat-resize-corner::after {
-  content: ''; position: absolute; left: 5px; bottom: 5px; width: 6px; height: 6px;
-  border-left: 1.5px solid color-mix(in srgb, var(--nmx-muted) 55%, transparent);
-  border-bottom: 1.5px solid color-mix(in srgb, var(--nmx-muted) 55%, transparent);
-  border-bottom-left-radius: 2px; pointer-events: none;
+.nmx-visual-tab-screen > .nmx-plugin-chat-dock-icon:is(:hover, :focus-visible) {
+  border-radius: 14px; transform: translateY(-2px);
+  box-shadow: 0 14px 32px rgba(8, 10, 32, .44), 0 3px 8px rgba(8, 10, 32, .3), inset 0 1px 0 rgba(255, 255, 255, .26), inset 0 0 0 1px rgba(255, 255, 255, .14);
 }
+.nmx-visual-tab-screen > .nmx-plugin-chat-dock-icon:active { transform: scale(.95); }
+.nmx-visual-tab-screen > .nmx-plugin-chat-dock-icon:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }
+/* While dragged it follows the pointer exactly; let go, it glides to the nearest edge (the left/top transition above). */
+.nmx-visual-tab-screen > .nmx-plugin-chat-dock-icon.is-dragging {
+  cursor: grabbing; border-radius: 14px; transform: scale(1.06);
+  transition: border-radius 200ms cubic-bezier(.22, 1, .36, 1), transform 180ms cubic-bezier(.22, 1, .36, 1), box-shadow 180ms ease;
+  box-shadow: 0 22px 46px rgba(8, 10, 32, .5), 0 6px 14px rgba(8, 10, 32, .32), inset 0 1px 0 rgba(255, 255, 255, .26), inset 0 0 0 1px rgba(255, 255, 255, .14);
+}
+.nmx-plugin-chat-dock-icon > .nmx-tab-glyph { filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .2)); pointer-events: none; }
+.nmx-plugin-chat-dock-pill {
+  position: absolute; border-radius: 999px; background: #ffffff; opacity: .92; pointer-events: none;
+  box-shadow: 0 0 8px rgba(88, 101, 242, .6);
+  transition: width 200ms cubic-bezier(.22, 1, .36, 1), height 200ms cubic-bezier(.22, 1, .36, 1), opacity 160ms ease;
+}
+.nmx-plugin-chat-dock-icon:is([data-edge='right'], [data-edge='left']) > .nmx-plugin-chat-dock-pill { top: 50%; width: 3px; height: 14px; transform: translateY(-50%); }
+.nmx-plugin-chat-dock-icon[data-edge='right'] > .nmx-plugin-chat-dock-pill { right: -7px; }
+.nmx-plugin-chat-dock-icon[data-edge='left'] > .nmx-plugin-chat-dock-pill { left: -7px; }
+.nmx-plugin-chat-dock-icon:is([data-edge='top'], [data-edge='bottom']) > .nmx-plugin-chat-dock-pill { left: 50%; width: 14px; height: 3px; transform: translateX(-50%); }
+.nmx-plugin-chat-dock-icon[data-edge='top'] > .nmx-plugin-chat-dock-pill { top: -7px; }
+.nmx-plugin-chat-dock-icon[data-edge='bottom'] > .nmx-plugin-chat-dock-pill { bottom: -7px; }
+.nmx-plugin-chat-dock-icon:is([data-edge='right'], [data-edge='left']):is(:hover, :focus-visible) > .nmx-plugin-chat-dock-pill { height: 22px; }
+.nmx-plugin-chat-dock-icon:is([data-edge='top'], [data-edge='bottom']):is(:hover, :focus-visible) > .nmx-plugin-chat-dock-pill { width: 22px; }
+.nmx-plugin-chat-dock-icon.is-dragging > .nmx-plugin-chat-dock-pill { opacity: 0; }
+/* A reply still arriving while the console is closed: a green dot that keeps pulsing. */
+.nmx-plugin-chat-dock-pulse {
+  position: absolute; top: -2px; right: -2px; width: 12px; height: 12px; border-radius: 50%;
+  background: #23a55a; box-shadow: 0 0 0 2.5px #111214; pointer-events: none;
+}
+.nmx-plugin-chat-dock-pulse::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%; background: #23a55a;
+  animation: nmx-plugin-chat-dock-pulse 1.4s cubic-bezier(.22, 1, .36, 1) infinite;
+}
+@keyframes nmx-plugin-chat-dock-pulse {
+  0% { opacity: .75; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.6); }
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab-screen > .nmx-plugin-chat-dock-icon {
+  box-shadow: 0 10px 24px rgba(71, 82, 196, .32), 0 2px 6px rgba(15, 23, 42, .14), inset 0 1px 0 rgba(255, 255, 255, .26), inset 0 0 0 1px rgba(255, 255, 255, .12);
+}
+.nmx-shell.nmx-theme-light .nmx-plugin-chat-dock-pill { background: #4752c4; box-shadow: 0 0 6px rgba(71, 82, 196, .45); }
+.nmx-shell.nmx-theme-light .nmx-plugin-chat-dock-pulse { background: #1a7f37; box-shadow: 0 0 0 2.5px #ffffff; }
+.nmx-shell.nmx-theme-light .nmx-plugin-chat-dock-pulse::after { background: #1a7f37; }
+.nmx-shell.nmx-theme-light .nmx-visual-tab-screen > .nmx-plugin-chat-dock-icon:focus-visible { outline-color: #4752c4; }
+
 .nmx-plugin-chat-panel {
-  display: flex; flex-direction: column; gap: 8px; padding: 10px 12px;
+  position: relative;
+  display: flex; flex-direction: column; gap: 7px; padding: 9px 11px;
   border: 1px solid var(--nmx-border); border-radius: 12px;
   background: color-mix(in srgb, var(--nmx-panel, #16181d) 94%, transparent);
-  color: var(--nmx-text); font-size: 12.5px; box-sizing: border-box;
+  color: var(--nmx-text); font-size: 12px; line-height: 1.5; box-sizing: border-box;
 }
 .nmx-shell.nmx-theme-light .nmx-plugin-chat-panel {
   background: color-mix(in srgb, var(--nmx-panel, #ffffff) 98%, #f8fafc);
 }
 .nmx-plugin-chat-header { display: flex; flex-direction: column; flex: 0 0 auto; }
-.nmx-plugin-chat-title-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
-.nmx-plugin-chat-title { display: inline-flex; align-items: center; gap: 6px; color: var(--nmx-text); font-size: 12.5px; min-width: 0; overflow: hidden; }
-.nmx-plugin-chat-title > strong { flex: 0 0 auto; }
+.nmx-plugin-chat-title-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; min-height: 22px; }
+.nmx-plugin-chat-title { display: inline-flex; align-items: center; gap: 5px; color: var(--nmx-text); font-size: 12px; line-height: 16px; min-width: 0; overflow: hidden; }
+.nmx-plugin-chat-title > .codicon { flex: none; font-size: 13px; }
+.nmx-plugin-chat-title > strong { flex: 0 0 auto; font-weight: 650; }
 .nmx-plugin-chat-subtitle {
-  color: var(--nmx-muted); font-size: 11px; font-weight: 400;
+  color: var(--nmx-muted); font-size: 10.5px; font-weight: 400;
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.nmx-plugin-chat-header-actions { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.nmx-plugin-chat-header-actions { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; }
 .nmx-plugin-cap-badge {
   display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px;
   border: 1px solid color-mix(in srgb, var(--nmx-border) 80%, transparent); border-radius: 999px;
@@ -1410,6 +1511,8 @@
   color: var(--nmx-muted); font-size: 11px; line-height: 1; white-space: nowrap;
   max-width: 100%; overflow: hidden; text-overflow: ellipsis;
 }
+.nmx-plugin-chat-panel .nmx-plugin-cap-badge { height: 18px; padding: 0 6px; gap: 3px; font-size: 10.5px; }
+.nmx-plugin-chat-panel .nmx-plugin-cap-badge > .codicon { font-size: 11px; }
 .nmx-plugin-cap-badge.is-tool {
   border-color: color-mix(in srgb, #3b82f6 38%, var(--nmx-border));
   background: color-mix(in srgb, #3b82f6 9%, transparent);
@@ -1424,77 +1527,74 @@
 .nmx-plugin-cap-badge > button {
   border: 0; background: transparent; color: inherit; padding: 0 2px; cursor: pointer; font-size: 12px; line-height: 1;
 }
-.nmx-plugin-chat-clear, .nmx-plugin-chat-close {
-  display: inline-flex; align-items: center; justify-content: center; gap: 3px; height: 22px; padding: 0 7px;
+/* Outranks `.nmx-desktop-widget button { color: inherit; font: inherit }` without relying on order. */
+.nmx-plugin-chat-header-actions > :is(.nmx-plugin-chat-clear, .nmx-plugin-chat-close) {
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px; height: 20px; min-height: 20px; margin: 0; padding: 0 6px;
   border: 1px solid var(--nmx-border); border-radius: 6px; background: transparent;
-  color: var(--nmx-muted); font-size: 11px; cursor: pointer;
+  color: var(--nmx-muted); font-size: 10.5px; line-height: 1; cursor: pointer;
 }
-.nmx-plugin-chat-close { width: 22px; padding: 0; }
-.nmx-plugin-chat-clear:hover, .nmx-plugin-chat-close:hover { color: var(--nmx-text); background: var(--nmx-hover); }
+.nmx-plugin-chat-header-actions > :is(.nmx-plugin-chat-clear, .nmx-plugin-chat-close) > .codicon { font-size: 12px; }
+.nmx-plugin-chat-header-actions > .nmx-plugin-chat-close { width: 20px; padding: 0; }
+.nmx-plugin-chat-header-actions > :is(.nmx-plugin-chat-clear, .nmx-plugin-chat-close):hover { color: var(--nmx-text); background: var(--nmx-hover); }
 .nmx-plugin-chat-messages {
-  display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto;
-  padding: 8px 6px; border-top: 1px solid color-mix(in srgb, var(--nmx-border) 50%, transparent);
+  display: flex; flex-direction: column; gap: 9px; max-height: 280px; overflow-y: auto;
+  padding: 7px 5px; border-top: 1px solid color-mix(in srgb, var(--nmx-border) 50%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--nmx-border) 50%, transparent);
 }
 .nmx-plugin-chat-empty {
-  display: flex; align-items: flex-start; gap: 8px; padding: 8px 4px; color: var(--nmx-muted); font-size: 12.5px; line-height: 1.55;
+  display: flex; align-items: flex-start; gap: 7px; padding: 7px 3px; color: var(--nmx-muted); font-size: 11.5px; line-height: 1.5;
 }
+.nmx-plugin-chat-empty > .codicon { flex: none; margin-top: 1px; font-size: 13px; }
 .nmx-plugin-chat-turn {
-  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  display: flex; flex-direction: column; gap: 5px; min-width: 0;
 }
 .nmx-plugin-chat-turn.is-user {
-  align-self: flex-end; max-width: min(84%, 560px); border: 0; background: transparent; padding: 0;
+  align-self: flex-end; max-width: min(86%, 560px); border: 0; background: transparent; padding: 0;
 }
 .nmx-plugin-chat-user-bubble {
-  display: flex; flex-direction: column; gap: 6px; padding: 8px 13px;
+  display: flex; flex-direction: column; gap: 5px; padding: 6px 11px;
   width: fit-content; min-width: 0; max-width: 100%;
-  border-radius: 16px 16px 4px 16px;
+  border-radius: 14px 14px 4px 14px;
   background: color-mix(in srgb, var(--nmx-text) 9%, var(--nmx-panel, #16181d));
   border: 1px solid color-mix(in srgb, var(--nmx-border) 80%, transparent);
   color: var(--nmx-text);
 }
+/* The console's bubbles keep its compact size over the conversation's 14px message text. */
+.nmx-plugin-chat-panel .nmx-plugin-chat-user-bubble,
+.nmx-plugin-chat-panel .nmx-plugin-chat-user-bubble :is(p, li, .nmx-user-message-text, .nmx-user-markdown) { font-size: 12px !important; line-height: 1.5 !important; }
 .nmx-shell.nmx-theme-light .nmx-plugin-chat-user-bubble {
   background: #f1f5f9; border-color: #e2e8f0 !important; color: #0f172a;
 }
 .nmx-plugin-chat-turn.is-assistant {
-  align-self: stretch; border: 0; background: transparent; padding: 2px 4px;
+  align-self: stretch; border: 0; background: transparent; padding: 2px 3px;
 }
 .nmx-plugin-chat-assistant-meta {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 11.5px; color: var(--nmx-muted);
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 10.5px; line-height: 15px; color: var(--nmx-muted);
 }
 .nmx-plugin-chat-assistant-model { font-weight: 600; color: var(--nmx-text); }
-.nmx-plugin-chat-assistant-route { color: var(--nmx-muted); font-size: 11px; }
-.nmx-plugin-chat-stop-msg {
-  margin-inline-start: auto; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px;
-  border: 1px solid color-mix(in srgb, #ef4444 45%, var(--nmx-border)); border-radius: 999px;
-  background: color-mix(in srgb, #ef4444 10%, transparent); color: #f87171; font-size: 11px; cursor: pointer;
-}
-.nmx-plugin-chat-stop-msg:hover { background: color-mix(in srgb, #ef4444 18%, transparent); }
-.nmx-shell.nmx-theme-light .nmx-plugin-chat-stop-msg {
-  color: #dc2626; background: rgba(239, 68, 68, .08); border-color: rgba(220, 38, 38, .35) !important;
-}
+.nmx-plugin-chat-assistant-route { color: var(--nmx-muted); font-size: 10px; }
 .nmx-plugin-chat-thinking {
   border-inline-start: 2px solid color-mix(in srgb, var(--nmx-border) 90%, transparent);
-  padding-inline-start: 10px; color: var(--nmx-muted); font-size: 12px;
+  padding-inline-start: 9px; color: var(--nmx-muted); font-size: 11px;
 }
 .nmx-plugin-chat-thinking > summary { cursor: pointer; user-select: none; font-weight: 500; }
 .nmx-plugin-chat-thinking > pre {
-  margin: 6px 0 0; white-space: pre-wrap; word-break: break-word;
-  font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--nmx-muted);
+  margin: 5px 0 0; white-space: pre-wrap; word-break: break-word;
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--nmx-muted);
 }
 .nmx-plugin-chat-markdown {
-  line-height: 1.6; color: var(--nmx-text); word-break: break-word;
+  font-size: 12px; line-height: 1.55; color: var(--nmx-text); word-break: break-word;
 }
 /* The console renders replies with the conversation's StreamText + Markdown (nextmux-markdown.css): keep the
    console's compact type size instead of the main column's 15px narration. */
 .nmx-desktop-widget .nmx-plugin-chat-markdown > .nmx-stream-text.nmx-agent-narration {
   margin: 0 !important;
   font-size: inherit;
-  line-height: 1.6;
+  line-height: 1.55;
 }
-.nmx-desktop-widget .nmx-plugin-chat-markdown .nmx-assistant-markdown { --md-gap: 8px; }
+.nmx-desktop-widget .nmx-plugin-chat-markdown .nmx-assistant-markdown { --md-gap: 7px; }
 .nmx-plugin-chat-pending {
-  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 2px 0;
+  display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 2px 0;
 }
 .nmx-plugin-chat-dot {
   width: 6px; height: 6px; border-radius: 50%; background: var(--nmx-muted); opacity: .45;
@@ -1507,24 +1607,17 @@
   40% { opacity: 1; transform: scale(1.08); }
 }
 .nmx-plugin-chat-stream-caret {
-  display: inline-block; width: 6px; height: 14px; vertical-align: text-bottom; margin-inline-start: 2px;
+  display: inline-block; width: 6px; height: 13px; vertical-align: text-bottom; margin-inline-start: 2px;
   border-radius: 2px; background: var(--nmx-text); opacity: .7;
   animation: nmx-plugin-chat-pulse 1s ease-in-out infinite;
 }
-.nmx-plugin-chat-error { font-size: 12px; color: #f87171; }
+.nmx-plugin-chat-error { font-size: 11.5px; color: #f87171; }
 .nmx-shell.nmx-theme-light .nmx-plugin-chat-error { color: #dc2626; }
-.nmx-plugin-chat-msg-actions { display: inline-flex; gap: 6px; margin-top: 2px; }
-.nmx-plugin-chat-msg-actions > button {
-  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px;
-  border: 1px solid var(--nmx-border); border-radius: 6px; background: transparent;
-  color: var(--nmx-muted); font-size: 11px; cursor: pointer;
-}
-.nmx-plugin-chat-msg-actions > button:hover { color: var(--nmx-text); background: var(--nmx-hover); }
 .nmx-plugin-chat-text { white-space: pre-wrap; word-break: break-word; line-height: 1.55; color: inherit; }
-.nmx-plugin-chat-tools, .nmx-plugin-chat-pending-files { display: flex; flex-wrap: wrap; gap: 5px; }
-.nmx-plugin-chat-attachments { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 8px; margin-top: 2px; }
+.nmx-plugin-chat-tools { display: flex; flex-wrap: wrap; gap: 4px; }
+.nmx-plugin-chat-attachments { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 7px; margin-top: 2px; }
 .nmx-plugin-chat-media {
-  display: flex; flex-direction: column; gap: 6px; padding: 6px;
+  display: flex; flex-direction: column; gap: 5px; padding: 5px;
   border: 1px solid var(--nmx-border); border-radius: 7px;
   background: color-mix(in srgb, var(--nmx-text) 2%, transparent); overflow: hidden;
 }
@@ -1535,53 +1628,160 @@
 .nmx-plugin-chat-media > pre {
   margin: 0; padding: 6px; max-height: 110px; overflow: auto; border-radius: 5px;
   background: color-mix(in srgb, var(--nmx-text) 6%, transparent);
-  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap;
+  font: 10.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap;
 }
 .nmx-plugin-chat-media-bar {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11.5px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11px;
 }
 .nmx-plugin-chat-media-bar > span, .nmx-plugin-chat-media-bar > strong {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.nmx-plugin-chat-media-bar > small { color: var(--nmx-muted); font-size: 10px; white-space: nowrap; }
 .nmx-plugin-chat-media-bar > a, .nmx-plugin-chat-media-bar > button {
-  margin-inline-start: auto; display: inline-flex; align-items: center; height: 22px; padding: 0 8px;
+  margin-inline-start: auto; display: inline-flex; align-items: center; height: 20px; padding: 0 7px;
   border: 1px solid var(--nmx-border); border-radius: 5px; background: transparent;
-  color: var(--nmx-text); font-size: 11px; text-decoration: none; cursor: pointer;
+  color: var(--nmx-text); font-size: 10.5px; text-decoration: none; cursor: pointer;
 }
 .nmx-plugin-chat-media-bar > a:hover, .nmx-plugin-chat-media-bar > button:hover { background: var(--nmx-hover); }
-.nmx-plugin-chat-composer-card {
-  flex: 0 0 auto; display: flex; flex-direction: column; gap: 5px; padding: 7px 9px;
-  border: 1px solid var(--nmx-border); border-radius: 12px;
+/* Files dragged over the console: the conversation composer's drop card, sized for the console. */
+.nmx-shell .nmx-plugin-chat-panel.is-drag-over { box-shadow: inset 0 0 0 1px var(--nmx-drop-accent, #ff6f97); }
+.nmx-shell .nmx-plugin-chat-panel > .nmx-composer-drop-overlay {
+  inset: 6px; z-index: 6; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; text-align: center;
+}
+.nmx-shell .nmx-plugin-chat-panel > .nmx-composer-drop-overlay .nmx-drop-copy > strong { font-size: 12.5px; }
+.nmx-shell .nmx-plugin-chat-panel > .nmx-composer-drop-overlay .nmx-drop-copy > small { font-size: 10.5px; line-height: 1.4; }
+
+/* Composer card: the console's own compact layout, not the conversation composer's. */
+.nmx-desktop-widget .nmx-plugin-chat-panel > .nmx-plugin-chat-composer-card {
+  position: relative; flex: 0 0 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; margin: 0;
+  padding: 4px 5px 4px 7px; box-sizing: border-box;
+  border: 1px solid var(--nmx-border); border-radius: 11px; box-shadow: none;
   background: color-mix(in srgb, var(--nmx-text) 3%, var(--nmx-panel, #16181d));
+  transition: border-color 140ms ease, box-shadow 160ms ease;
 }
-.nmx-shell.nmx-theme-light .nmx-plugin-chat-composer-card {
-  background: #ffffff; border-color: #cbd5e1 !important;
+/* At rest the card keeps the conversation composer's border (nextmux.css pins every #nextmux… .nmx-composer to
+   --nmx-composer-resting-border, focused or not). Focused, the console's card does light up: over a live app it shows
+   whether typing goes to the console or, through 键鼠, to the app. */
+#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-chat-panel > .nmx-composer.nmx-plugin-chat-composer-card:focus-within {
+  border-color: color-mix(in srgb, var(--nmx-text) 30%, var(--nmx-composer-resting-border, var(--nmx-border))) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nmx-text) 7%, transparent) !important;
 }
-.nmx-plugin-chat-textarea {
-  width: 100%; min-height: 32px; max-height: 110px; padding: 2px 2px; resize: none;
-  border: 0 !important; outline: 0 !important; box-shadow: none !important;
-  background: transparent !important; color: var(--nmx-text); font: inherit; line-height: 1.45;
+/* On the light theme's white card the ring needs more ink to reach 3:1 (about #8a8685). */
+#nextmux\.desktop\.widget .nmx-shell.nmx-theme-light .nmx-plugin-chat-panel > .nmx-composer.nmx-plugin-chat-composer-card:focus-within {
+  border-color: color-mix(in srgb, var(--nmx-text) 45%, var(--nmx-composer-resting-border, var(--nmx-border))) !important;
 }
-.nmx-plugin-chat-composer-bar {
-  display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: nowrap;
+.nmx-shell.nmx-theme-light .nmx-plugin-chat-panel > .nmx-plugin-chat-composer-card { background: #ffffff; }
+.nmx-plugin-chat-composer-card > div { display: flex !important; grid-template-columns: none !important; }
+#nextmux\.desktop\.widget .nmx-shell .nmx-plugin-chat-composer-card textarea.nmx-plugin-chat-textarea,
+.nmx-desktop-widget .nmx-plugin-chat-composer-card textarea.nmx-plugin-chat-textarea {
+  display: block; width: 100%; box-sizing: border-box;
+  min-height: 24px !important; max-height: 88px !important; margin: 0; padding: 2px 2px 1px; resize: none;
+  border: 0 !important; outline: 0 !important; box-shadow: none !important; background: transparent !important;
+  color: var(--nmx-text);
+  font-size: 12px !important; line-height: 1.4 !important; letter-spacing: 0 !important;
 }
-.nmx-plugin-chat-composer-tools {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 4px; min-width: 0; flex: 1 1 auto;
+.nmx-plugin-chat-attach-note { margin: 0; padding: 1px 2px 0; color: #e5a33d; font-size: 10.5px; line-height: 1.35; }
+.nmx-shell.nmx-theme-light .nmx-plugin-chat-attach-note { color: #9a5b00; }
+/* One row from the 280px minimum up: + · relay · model · send/stop. A name that fits is shown whole; names that do not
+   share what is left and fade out inside their own box, short of the chevron. */
+.nmx-plugin-chat-composer-card > .nmx-plugin-chat-composer-bar {
+  display: flex !important; grid-template-columns: none !important; align-items: center; justify-content: space-between;
+  flex-wrap: nowrap !important; gap: 4px; width: 100%; min-width: 0; overflow: hidden;
 }
-.nmx-plugin-chat-composer-tools .nmx-composer-relay-button,
-.nmx-plugin-chat-composer-tools .nmx-route-button {
-  max-width: 120px; height: 24px; padding: 0 7px; font-size: 11px;
+.nmx-plugin-chat-composer-card .nmx-plugin-chat-composer-tools {
+  display: flex !important; grid-template-columns: none !important; align-items: center; flex-wrap: nowrap !important;
+  flex: 1 1 auto; gap: 3px; min-width: 0; overflow: hidden;
 }
-.nmx-plugin-chat-composer-tools .nmx-composer-relay-button > span,
-.nmx-plugin-chat-composer-tools .nmx-route-button > span {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+/* From a zero basis each pill grows at most to its whole name: a short name keeps its width and the long ones share the
+   rest evenly (a shrink weighted by width would also cut a short name beside a long one). 38px holds the padding, both
+   icons and their gaps, so the chevron is never clipped. */
+.nmx-plugin-chat-composer-card .nmx-plugin-chat-composer-tools :is(.nmx-plugin-chat-relay-trigger, .nmx-plugin-chat-model-trigger) {
+  flex: 1 1 0 !important; min-width: 38px !important; max-width: max-content !important; overflow: hidden; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 3px; box-sizing: border-box;
+  height: 22px !important; min-height: 22px !important; padding: 0 5px !important; border-radius: 7px;
+  font-size: 11px !important; line-height: 14px !important;
 }
-.nmx-plugin-chat-attach {
-  display: inline-grid; place-items: center; width: 24px; height: 24px; flex: 0 0 24px;
-  border: 1px solid var(--nmx-border); border-radius: 999px; color: var(--nmx-muted); cursor: pointer;
+/* Keyboard focus. The bar and the tools row clip (overflow), so the shared ring of nextmux-desktop-production.css is drawn
+   inside each control: the .nmx-desktop-widget .nmx-shell selector outranks that rule's (0,5,3), the bare one keeps the
+   ring wherever the console is drawn without it. */
+.nmx-plugin-chat-composer-card > .nmx-plugin-chat-composer-bar :is(.nmx-plugin-chat-relay-trigger, .nmx-plugin-chat-model-trigger, .nmx-plugin-chat-send-btn):focus-visible,
+.nmx-desktop-widget .nmx-shell .nmx-plugin-chat-composer-card > .nmx-plugin-chat-composer-bar :is(.nmx-plugin-chat-relay-trigger, .nmx-plugin-chat-model-trigger, .nmx-plugin-chat-send-btn):focus-visible {
+  outline: 2px solid var(--nmx-focus-ring, #6b8afd) !important; outline-offset: -2px;
 }
-.nmx-plugin-chat-attach:hover { color: var(--nmx-text); background: var(--nmx-hover); }
-.nmx-plugin-chat-attach > input[type='file'] { display: none; }
+/* On the filled send/停止 circle a ring at the edge would run into the fill (under 2:1 in the light theme). A 2px gap in the
+   glyph's colour, the card's tone in both themes, keeps ring, gap and button apart as an outside ring would. */
+.nmx-plugin-chat-composer-card > .nmx-plugin-chat-composer-bar > .nmx-plugin-chat-send-btn:focus-visible {
+  box-shadow: inset 0 0 0 4px currentColor;
+}
+/* The name ends where its box ends, the pill's gap before the chevron: no negative margin pulls the chevron over it. */
+.nmx-plugin-chat-composer-card .nmx-plugin-chat-composer-tools :is(.nmx-plugin-chat-relay-trigger, .nmx-plugin-chat-model-trigger) > span {
+  flex: 0 1 auto; min-width: 0; max-width: none; margin: 0; padding: 0; overflow: hidden; white-space: nowrap; text-overflow: clip;
+  font-size: 11px !important; line-height: 14px !important;
+  --nmx-pill-label-fade: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+}
+.nmx-plugin-chat-composer-card .nmx-plugin-chat-composer-tools :is(.nmx-plugin-chat-relay-trigger, .nmx-plugin-chat-model-trigger) > span:dir(rtl) {
+  --nmx-pill-label-fade: linear-gradient(to left, #000 calc(100% - 14px), transparent);
+}
+@supports (animation-timeline: scroll(self inline)) {
+  /* As .nmx-file-path-name: the fade exists only while the name really overflows (its scroll timeline is active), so a
+     name that fits is never dimmed. */
+  .nmx-plugin-chat-composer-card .nmx-plugin-chat-composer-tools :is(.nmx-plugin-chat-relay-trigger, .nmx-plugin-chat-model-trigger) > span {
+    animation: nmx-pill-label-fade linear both;
+    animation-timeline: scroll(self inline);
+  }
+}
+@keyframes nmx-pill-label-fade {
+  from, to {
+    -webkit-mask-image: var(--nmx-pill-label-fade);
+    mask-image: var(--nmx-pill-label-fade);
+  }
+}
+.nmx-plugin-chat-composer-card .nmx-plugin-chat-composer-tools :is(.nmx-plugin-chat-relay-trigger, .nmx-plugin-chat-model-trigger) > :is(i, .codicon) {
+  position: relative; flex: 0 0 auto; margin: 0; font-size: 11px !important;
+}
+.nmx-plugin-chat-composer-card .nmx-plugin-chat-attach {
+  display: inline-grid !important; place-items: center; box-sizing: border-box;
+  width: 22px !important; height: 22px !important; min-width: 22px !important; min-height: 22px !important; flex: 0 0 22px !important;
+  margin: 0; padding: 0 !important; border-radius: 50%; color: var(--nmx-muted); background: transparent; cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--nmx-border);
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+.nmx-plugin-chat-composer-card .nmx-plugin-chat-attach:hover {
+  color: var(--nmx-text); background: var(--nmx-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nmx-text) 24%, var(--nmx-border));
+}
+.nmx-plugin-chat-composer-card .nmx-plugin-chat-attach > input[type='file'] { display: none; }
+.nmx-plugin-chat-composer-card .nmx-plugin-chat-attach > .codicon { font-size: 13px; }
+/* Pending files: the conversation composer's chips (nextmux-composer-attachments.css), scaled for the console. */
+.nmx-shell .nmx-plugin-chat-composer-card > .nmx-plugin-chat-pending-files {
+  display: flex !important; flex-wrap: wrap !important; align-items: center; gap: 6px; width: auto; margin: 0;
+  padding: 6px 6px 2px 0; max-height: 82px; overflow-x: hidden; overflow-y: auto;
+}
+.nmx-shell .nmx-plugin-chat-pending-files > .nmx-attachment-chip {
+  min-width: 92px; max-width: min(100%, 168px); height: 30px; flex: 0 1 auto; padding: 0 7px 0 4px; border-radius: 9px;
+}
+.nmx-shell .nmx-plugin-chat-pending-files > .nmx-attachment-chip > :is(.nmx-attachment-preview, .nmx-attachment-label) { gap: 6px; border-radius: 7px; }
+.nmx-shell .nmx-plugin-chat-pending-files .nmx-attachment-thumb { width: 22px; height: 22px; flex: 0 0 22px; border-radius: 6px; }
+.nmx-shell .nmx-plugin-chat-pending-files .nmx-attachment-thumb > img { border-radius: 6px; }
+.nmx-shell .nmx-plugin-chat-pending-files .nmx-attachment-thumb > svg { width: 19px; height: 19px; }
+.nmx-shell .nmx-plugin-chat-pending-files .nmx-attachment-text { gap: 0; line-height: 1.2; }
+.nmx-shell .nmx-plugin-chat-pending-files .nmx-attachment-text > b { font-size: 11px; font-weight: 600; }
+.nmx-shell .nmx-plugin-chat-pending-files .nmx-attachment-text > small { font-size: 9.5px; }
+.nmx-shell .nmx-plugin-chat-pending-files > .nmx-attachment-chip > .nmx-attachment-remove {
+  top: -5px; inset-inline-end: -5px; width: 16px; height: 16px; min-width: 16px; min-height: 0 !important; border-width: 1.5px;
+}
+.nmx-shell .nmx-plugin-chat-pending-files > .nmx-attachment-chip > .nmx-attachment-remove > i { font-size: 9px; }
+/* Send, and in its place 停止 while a reply arrives (as in the conversation composer): a 26px circle. */
+.nmx-plugin-chat-composer-card .nmx-plugin-chat-composer-bar > .nmx-plugin-chat-send-btn {
+  display: inline-grid !important; place-items: center !important; box-sizing: border-box;
+  width: 26px !important; height: 26px !important; min-width: 26px !important; min-height: 26px !important; flex: 0 0 26px !important;
+  margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 50% !important; line-height: 1 !important;
+  font-size: 13px !important; cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease, transform 140ms ease, opacity 140ms ease;
+}
+.nmx-plugin-chat-composer-card .nmx-plugin-chat-composer-bar > .nmx-plugin-chat-send-btn:not(:disabled):active { transform: scale(.94); }
+.nmx-plugin-chat-composer-card .nmx-plugin-chat-composer-bar > .nmx-plugin-chat-send-btn > .codicon { font-size: 13px !important; }
+.nmx-plugin-chat-composer-card .nmx-plugin-chat-send-btn > .nmx-stop-glyph { width: 9px; height: 9px; border-radius: 2px; background: currentColor; }
 .nmx-plugin-chat-send-btn {
   width: 26px; height: 26px; min-height: 26px !important; flex: 0 0 26px; border-radius: 999px;
   display: inline-grid; place-items: center; border: 0;
@@ -1594,8 +1794,22 @@
   background: #ffffff !important; color: #18181b !important;
 }
 .nmx-plugin-chat-send-btn:not(:disabled) :where(i.codicon, svg) { color: inherit !important; }
+/* 停止 outranks the conversation's own stop colours (.nmx-desktop-widget .nmx-send-button.is-stop) in both themes. */
+.nmx-desktop-widget .nmx-plugin-chat-composer-card .nmx-plugin-chat-send-btn.is-stop:not(:disabled) {
+  background: #f4f4f5 !important; color: #18181b !important;
+}
+.nmx-desktop-widget .nmx-plugin-chat-composer-card .nmx-plugin-chat-send-btn.is-stop:not(:disabled):is(:hover, :active, :focus-visible) {
+  background: #ffffff !important; color: #18181b !important;
+}
 :is(.nmx-theme-light, .nmx-desktop-widget.nmx-theme-light, .nmx-shell.nmx-theme-light, body.theia-light, body.nextmux-light, body.NextMux-light, [data-nextmux-theme='light']) .nmx-plugin-chat-send-btn:not(:disabled) {
   background: #1f1d1e !important; color: #ffffff !important;
+}
+/* 停止 in the light theme: the same dark circle as send (a pale one would vanish on the white composer). */
+:is(.nmx-theme-light, .nmx-shell.nmx-theme-light, body.theia-light, body.nextmux-light, body.NextMux-light, [data-nextmux-theme='light']) .nmx-plugin-chat-composer-card .nmx-plugin-chat-send-btn.is-stop:not(:disabled) {
+  background: #1f1d1e !important; color: #ffffff !important;
+}
+:is(.nmx-theme-light, .nmx-shell.nmx-theme-light, body.theia-light, body.nextmux-light, body.NextMux-light, [data-nextmux-theme='light']) .nmx-plugin-chat-composer-card .nmx-plugin-chat-send-btn.is-stop:not(:disabled):is(:hover, :active, :focus-visible) {
+  background: #2d292b !important; color: #ffffff !important;
 }
 :is(.nmx-theme-light, .nmx-desktop-widget.nmx-theme-light, .nmx-shell.nmx-theme-light, body.theia-light, body.nextmux-light, body.NextMux-light, [data-nextmux-theme='light']) .nmx-plugin-chat-send-btn:not(:disabled):is(:hover, :active, :focus-visible) {
   background: #2d292b !important; color: #ffffff !important;
@@ -1604,6 +1818,11 @@
   color: #ffffff !important;
 }
 .nmx-plugin-chat-send-btn:disabled { opacity: .35; cursor: default; }
+@media (prefers-reduced-motion: reduce) {
+  .nmx-plugin-chat-overlay, .nmx-visual-tab-screen > .nmx-plugin-chat-dock-icon { animation: none; }
+  .nmx-visual-tab-screen > .nmx-plugin-chat-dock-icon, .nmx-plugin-chat-dock-pill, .nmx-plugin-chat-composer-card .nmx-plugin-chat-composer-bar > .nmx-plugin-chat-send-btn { transition: none; }
+  .nmx-plugin-chat-dock-pulse::after { animation: none; }
+}
 .nmx-shell .nmx-visual-tab-overlay { position: absolute; pointer-events: none; }
 /* Readings drawn over the app's own picture: their colours keep their meaning in both themes, so the outlines are
    important against the light theme's border guard (.nmx-theme-light * turns every border one hairline grey). */

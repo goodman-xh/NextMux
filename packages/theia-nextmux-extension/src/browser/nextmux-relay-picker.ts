@@ -201,6 +201,18 @@ const RELAY_COLUMN_TITLE_BREAKS: Readonly<Record<string, string>> = {
  */
 const RELAY_TALL_HEAD_LOCALES: ReadonlySet<string> = new Set(['es', 'fr', 'pt-BR', 'ru']);
 
+/** Own APIs newest first (createdAt), as 我的 API and the drawers list them; equal or unreadable dates keep their order. */
+export function sortOfficialConnectionsNewestFirst<T extends { readonly createdAt?: string }>(connections: readonly T[]): T[] {
+    return [...connections].sort((left, right) => {
+        const leftParsed = Date.parse(left.createdAt || '');
+        const rightParsed = Date.parse(right.createdAt || '');
+        const leftTime = Number.isFinite(leftParsed) ? leftParsed : Number.NEGATIVE_INFINITY;
+        const rightTime = Number.isFinite(rightParsed) ? rightParsed : Number.NEGATIVE_INFINITY;
+        const diff = rightTime - leftTime;
+        return Number.isNaN(diff) ? 0 : diff;
+    });
+}
+
 /** Relays that can serve come first, in their order; those that cannot (unavailableReason) follow, in theirs. */
 export function usableRelaysFirst<T extends { readonly unavailableReason?: unknown }>(options: readonly T[]): T[] {
     return [...options.filter(option => !option.unavailableReason), ...options.filter(option => option.unavailableReason)];

@@ -649,6 +649,18 @@
 .nmx-comic-setup-covered > .codicon { flex: none; margin-top: 2px; font-size: 13px; }
 .nmx-shell .nmx-comic-setup-models > .nmx-comic-setup-covered.is-elsewhere { color: var(--nmx-subtle); background: color-mix(in srgb, var(--nmx-text) 6%, transparent); font-weight: 400; }
 .nmx-shell .nmx-comic-setup-models > .nmx-comic-setup-covered.is-elsewhere > .codicon { color: var(--nmx-muted); }
+/* An own API's model list being read again, or not readable, above the models it still shows: a neutral line like the
+   one above, its action (重试, or 前往模型中心 for a refused key) a small outlined button whose focus ring the line's
+   padding holds. The text is the subtle tone (6.2:1 dark, 4.9:1 light on the wash); the button wraps under it when narrow. */
+.nmx-shell .nmx-comic-setup-models > .nmx-comic-setup-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; padding-block: 5px; padding-inline: 10px 6px; border-radius: 9px;
+    color: var(--nmx-subtle); background: color-mix(in srgb, var(--nmx-text) 6%, transparent); font-size: 12px; line-height: 1.55; }
+.nmx-shell .nmx-comic-setup-models > .nmx-comic-setup-status > .codicon { flex: none; font-size: 13px; }
+.nmx-shell .nmx-comic-setup-models > .nmx-comic-setup-status > .codicon-loading { color: var(--nmx-muted); }
+.nmx-shell .nmx-comic-setup-models > .nmx-comic-setup-status > .codicon-warning { color: #b45309; }
+.nmx-shell .nmx-comic-setup-models > .nmx-comic-setup-status > span { flex: 1 1 120px; min-width: 0; overflow-wrap: anywhere; }
+.nmx-shell .nmx-comic-setup-models > .nmx-comic-setup-status > button { flex: none; display: inline-flex; align-items: center; min-height: 26px; margin-inline-start: auto; padding: 0 10px;
+    border: 1px solid var(--nmx-border-strong); border-radius: 7px; color: var(--nmx-text); background: transparent; font: inherit; white-space: nowrap; cursor: pointer; }
+.nmx-shell .nmx-comic-setup-models > .nmx-comic-setup-status > button:hover { border-color: var(--nmx-text); background: var(--nmx-panel); }
 .nmx-comic-setup-model { display: flex; align-items: center; gap: 6px; border: 1px solid transparent; border-radius: 9px; transition: background-color 120ms ease; }
 .nmx-comic-setup-model:hover { background: var(--nmx-panel); }
 .nmx-comic-setup-model.is-selected { border-color: var(--nmx-text); background: var(--nmx-panel); }
@@ -695,7 +707,7 @@
 .nmx-comic-setup-saved > .codicon { color: #22a55b; font-size: 13px; }
 .nmx-comic-setup-foot > .nmx-primary-button { min-width: 88px; }
 .nmx-shell.nmx-theme-dark .nmx-comic-setup { box-shadow: 0 24px 64px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .04); }
-.nmx-shell.nmx-theme-dark :is(.nmx-comic-setup-functions > button.is-missing > small, .nmx-comic-setup-gap > p > .codicon, .nmx-comic-setup-warn) { color: #fbbf24; }
+.nmx-shell.nmx-theme-dark :is(.nmx-comic-setup-functions > button.is-missing > small, .nmx-comic-setup-gap > p > .codicon, .nmx-comic-setup-warn, .nmx-comic-setup-status > .codicon-warning) { color: #fbbf24; }
 .nmx-shell.nmx-theme-dark .nmx-comic-setup-functions > button.is-covered > small { color: #6ee7a0; }
 .nmx-shell.nmx-theme-dark .nmx-comic-setup-tabs > button.is-active > em { color: var(--nmx-bg); }
 .nmx-shell.nmx-theme-dark .nmx-comic-setup-badge { color: var(--nmx-text); background: var(--nmx-panel-2); }
