@@ -14,6 +14,7 @@ import type {
     DesktopAgentCouncilSlot
 } from '../common/nextmux-platform-protocol';
 import { desktopText, type NextMuxDesktopLocale } from './nextmux-locale';
+import { agentChildText } from './nextmux-agent-child-locale';
 import { agentOutcomeText } from './nextmux-agent-outcome-locale';
 import { councilModeText, councilRoleLabel } from './nextmux-council-mode-locale';
 import { councilValidationMessage } from './nextmux-council-validation';
@@ -1348,7 +1349,9 @@ export const CouncilRoleConversationStage: React.FC<CouncilRoleConversationStage
                             {renderActivity(child)}
                             {renderOutput(child)}
                             {child.error && (
-                                <p className='nmx-agent-child-error' data-nmx-literal>{child.error.message}</p>
+                                <p className={`nmx-agent-child-error${child.error.code === 'COUNCIL_SPECIALIST_TIMEOUT' ? ' is-timeout' : ''}`} data-nmx-literal data-error-code={child.error.code}>
+                                    {child.error.code === 'COUNCIL_SPECIALIST_TIMEOUT' ? agentChildText(locale, 'specialistTimeout') : child.error.message}
+                                </p>
                             )}
                         </div>
                     </div>

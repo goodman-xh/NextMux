@@ -97,7 +97,7 @@ import { AppPluginBuyDialog, AppPluginChatPanel, AppPluginInstallDialog, AppPlug
 import { appPluginError, appPluginReason, appPluginText } from './nextmux-app-plugins-locale';
 import { appPluginOptionsText, appPluginParamExtensions, isAppPluginImportFile } from './nextmux-app-plugin-options-locale';
 import { type AppPluginWindowInboundMessage, type AppPluginWindowRect, type AppPluginWindowSubModalSpec, type NextMuxDesktopBridgeWithTabAction } from './nextmux-app-plugin-window-sdk';
-import { pluginChatConversationUuid, PLUGIN_CHAT_DEFAULT_CONVERSATION_UUID, type AppPluginChatAttachment, type AppPluginChatMessage, type AppPluginChatRequest, type AppPluginFingerprint, type AppPluginInfo, type AppPluginInspection, type AppPluginLicense, type AppPluginLicenseCheck, type AppPluginMarketPlugin, type AppPluginMessage, type AppPluginMine, type AppPluginModel, type AppPluginModelChoices, type AppPluginOverlayItem, type AppPluginRunSnapshot, type AppPluginUiBundleResult, type AppPluginVisionModel } from '../common/nextmux-app-plugins';
+import { pluginChatConversationUuid, privateAppPluginEndpoint, PLUGIN_CHAT_DEFAULT_CONVERSATION_UUID, type AppPluginChatAttachment, type AppPluginChatMessage, type AppPluginChatRequest, type AppPluginFingerprint, type AppPluginInfo, type AppPluginInspection, type AppPluginLicense, type AppPluginLicenseCheck, type AppPluginMarketPlugin, type AppPluginMessage, type AppPluginMine, type AppPluginModel, type AppPluginModelChoices, type AppPluginOverlayItem, type AppPluginRunSnapshot, type AppPluginUiBundleResult, type AppPluginVisionModel } from '../common/nextmux-app-plugins';
 /** The billing line of a run on a model on this computer (translated through the surface table). */
 const LOCAL_MODEL_BILLING_LABEL = '本机模型运行，不计费';
 /** The skill plugin developer guide (docs/SKILL_PLUGIN_DEVELOPMENT.md, published on the website). */
@@ -4155,7 +4155,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected conversationWindowShown = false;
     protected readonly browserToolRequestsInFlight = new Set<string>();
     protected readonly browserToolConversationQueues = new Map<string, Promise<unknown>>();
-    protected readonly mountedBrowserIds = new Set<string>();
+    protected mountedBrowserIds = new Set<string>();
 
     protected conversationHistoryPersistedSessions = createConversationPersistenceBaseline<CodingSessionRecord>([]);
     protected codingSessionIdValue = '';
@@ -4425,6 +4425,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected walletTopupPollStartedAt = 0;
     protected walletTopupError = '';
     protected walletTopupPollTimer = 0;
+    protected walletTopupConsecutiveErrors = 0;
+    protected walletTopupPendingResume = false;
     protected notifications: readonly DesktopNotificationRecord[] = [];
     protected composerNotifications: readonly DesktopNotificationRecord[] = [];
     protected readonly composerNotificationTimers = new Map<string, number>();
@@ -5619,17 +5621,79 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // so millions of clients never arrive together) and download again only when it changed.
         // One timer handle for the whole chain; a check that finishes after the widget is gone schedules nothing (audit A21-06).
         let catalogVersionTimer: number | undefined;
+        let startupVersionCheckTimer: number | undefined;
+        const catalogHiddenOrOffline = (): boolean => (typeof document !== 'undefined' && document.visibilityState === 'hidden')
+            || (typeof navigator !== 'undefined' && navigator.onLine === false);
         const scheduleCatalogVersionCheck = (): void => {
             if (this.isDisposed) return;
             const delay = 30 * 60_000 + Math.round(Math.random() * 10 * 60_000);
-            catalogVersionTimer = window.setTimeout(() => { void this.checkModelCatalogVersion().finally(scheduleCatalogVersionCheck); }, delay);
+            catalogVersionTimer = window.setTimeout(() => {
+                if (catalogHiddenOrOffline()) {
+                    this.pendingCatalogVersionResume = true;
+                    scheduleCatalogVersionCheck();
+                    return;
+                }
+                void this.checkModelCatalogVersion().finally(scheduleCatalogVersionCheck);
+            }, delay);
         };
-        this.toDispose.push({ dispose: () => window.clearTimeout(catalogVersionTimer) });
-        window.setTimeout(() => void this.checkModelCatalogVersion(), 20_000 + Math.round(Math.random() * 20_000));
+        let onlineCatalogResumeTimer: number | undefined;
+        const resumeDeferredCatalogActivity = (): void => {
+            if (this.isDisposed || catalogHiddenOrOffline()) return;
+            if (this.pendingCatalogVersionResume) {
+                this.pendingCatalogVersionResume = false;
+                void this.checkModelCatalogVersion();
+            }
+            if (this.pendingCatalogSourceRetries.size > 0) {
+                const pending = [...this.pendingCatalogSourceRetries.entries()];
+                this.pendingCatalogSourceRetries.clear();
+                for (const [retryKey, retryLoad] of pending) {
+                    void this.loadCatalogSource(retryKey, retryLoad);
+                }
+            }
+            if (this.pendingModelListRefresh && !this.detachedConversationId && !this.catalogLoading) {
+                this.pendingModelListRefresh = false;
+                for (const merchant of this.catalogMerchantSources()) void this.loadCatalogSource(`merchant:${merchant}`, () => this.reloadMerchantCatalogSnapshot(merchant));
+                void this.loadVideoProfiles(true);
+            }
+            if (this.walletTopupPendingResume && this.walletTopupSheetOpen && this.platformSession?.linked) {
+                this.walletTopupPendingResume = false;
+                void this.refreshWalletTopupStatus();
+            }
+        };
+        const onCatalogVisibilityResume = (): void => {
+            if (typeof document === 'undefined' || document.visibilityState === 'visible') resumeDeferredCatalogActivity();
+        };
+        const onCatalogOnlineResume = (): void => {
+            if (this.isDisposed || catalogHiddenOrOffline()) return;
+            window.clearTimeout(onlineCatalogResumeTimer);
+            // Stagger reconnect catalog/wallet recovery (1s–8s) to avoid synchronized fleet bursts on recovery.
+            const staggerMs = 1_000 + Math.round(Math.random() * 7_000);
+            onlineCatalogResumeTimer = window.setTimeout(() => {
+                onlineCatalogResumeTimer = undefined;
+                resumeDeferredCatalogActivity();
+            }, staggerMs);
+        };
+        document.addEventListener?.('visibilitychange', onCatalogVisibilityResume);
+        window.addEventListener?.('online', onCatalogOnlineResume);
+        this.toDispose.push({ dispose: () => {
+            window.clearTimeout(catalogVersionTimer);
+            window.clearTimeout(startupVersionCheckTimer);
+            window.clearTimeout(onlineCatalogResumeTimer);
+            document.removeEventListener?.('visibilitychange', onCatalogVisibilityResume);
+            window.removeEventListener?.('online', onCatalogOnlineResume);
+        } });
+        startupVersionCheckTimer = window.setTimeout(() => {
+            if (catalogHiddenOrOffline()) {
+                this.pendingCatalogVersionResume = true;
+                return;
+            }
+            void this.checkModelCatalogVersion();
+        }, 20_000 + Math.round(Math.random() * 20_000));
         scheduleCatalogVersionCheck();
         this.toDispose.push({ dispose: () => {
             window.clearTimeout(this.catalogVersionRetryTimer);
             for (const retry of this.catalogSourceRetries.values()) window.clearTimeout(retry.timer);
+            this.pendingCatalogSourceRetries.clear();
         } });
         const offNotificationClick = window.nextmuxDesktop?.onSystemNotificationClick?.(target => this.openNotificationTarget(target));
         if (offNotificationClick) this.toDispose.push({ dispose: offNotificationClick });
@@ -5967,7 +6031,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!this.detachedConversationId) {
             const checkLinkedDeviceSession = (): void => {
                 if (this.isDisposed || !this.platformSession.linked || document.visibilityState === 'hidden') return;
-                if (Date.now() - this.lastDeviceSessionCheckAt < 15_000) return;
+                if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+                if (Date.now() - this.lastDeviceSessionCheckAt < 5 * 60_000) return;
                 void this.loadDeviceSession(true, true);
             };
             const onVisibilityChange = (): void => {
@@ -6009,6 +6074,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // load. The small, edge-cached lists (the open merchant's page, video model profiles) refresh hourly.
         const modelListTimer = setInterval(() => {
             if (this.detachedConversationId || this.catalogLoading) return;
+            if ((typeof document !== 'undefined' && document.visibilityState === 'hidden')
+                || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+                this.pendingModelListRefresh = true;
+                return;
+            }
+            this.pendingModelListRefresh = false;
             for (const merchant of this.catalogMerchantSources()) void this.loadCatalogSource(`merchant:${merchant}`, () => this.reloadMerchantCatalogSnapshot(merchant));
             void this.loadVideoProfiles(true);
         }, 60 * 60_000 + Math.round(Math.random() * 10 * 60_000));
@@ -35030,6 +35101,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             reconcileNextMuxEditorModelCache(this.contextFileTabs ? [...this.contextFileTabs.keys()] : []);
         }
         const drawerVisible = (this.workContextOpen || this.workContextClosing) && (this.isWorkContextSectionActive?.() ?? (this.activeSection === 'coding'));
+        const mountedBrowserIds: Set<string> = this.mountedBrowserIds ?? (this.mountedBrowserIds = new Set<string>());
         if (!drawerVisible && this.mountedBrowserIds.size === 0) return undefined;
         const browsers = this.currentCodingBrowsers();
         const activeBrowser = browsers.find(browser => browser.id === this.activeBrowserId) || browsers[0];
@@ -35040,10 +35112,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // The renderer normally initializes these collections during startup,
         // but keeping the view total makes recovery and first-render paths safe
         // while the conversation index is still loading.
-        const mountedBrowserIds: Set<string> = this.mountedBrowserIds || new Set<string>();
         const projectBrowsers: Map<string, readonly CodingBrowserRecord[]> = this.projectBrowsers || new Map();
         const codingSessions: readonly CodingSessionRecord[] = this.codingSessions || [];
-        if (drawerVisible && !fileMode && !agentMode && activeBrowser?.url) this.mountedBrowserIds.add(activeBrowser.id);
+        if (drawerVisible && !fileMode && !agentMode && activeBrowser?.url) mountedBrowserIds.add(activeBrowser.id);
         // A preview belongs to the conversation that opened it.
         const artifactPreview = this.artifactPreview && this.artifactPreview.sessionId === this.activeCodingSessionId ? this.artifactPreview : undefined;
         const retainedBrowsers = [...projectBrowsers.entries()].filter(([key]) => key === this.browserWorkspacePath()
@@ -36748,7 +36819,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.rememberNavigation();
         this.clearNavigationSurfaces();
         this.accountMenuOpen = true;
-        if (this.platformSession.linked && Date.now() - this.lastDeviceSessionCheckAt >= 5_000) {
+        if (this.platformSession.linked && Date.now() - this.lastDeviceSessionCheckAt >= 30_000) {
             void this.loadDeviceSession(true, true);
         }
         this.update();
@@ -37657,7 +37728,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     runtimeFinalText(this.desktopLocale, active.result) ?? active.result.finalText, active.result.outputParts, active.result.outputAssetOwnerId, `child:${active.childRunId}`
                 )}</div>}
                 {(active.result?.finalText || active.result?.outputParts?.length) && <CitationList locale={this.desktopLocale} citations={active.result.citations} onOpen={url => this.openExternalUrl(url)} />}
-                {active.error && <p className='nmx-agent-child-error' data-nmx-literal>{active.error.message}</p>}
+                {active.error && <p className={`nmx-agent-child-error${active.error.code === 'COUNCIL_SPECIALIST_TIMEOUT' ? ' is-timeout' : ''}`} data-nmx-literal data-error-code={active.error.code}>{active.error.code === 'COUNCIL_SPECIALIST_TIMEOUT' ? agentChildText(this.desktopLocale, 'specialistTimeout') : active.error.message}</p>}
                 {!this.privacySettings.saveConversationHistory && (continuationHandle || draftText)
                     && <small className='nmx-agent-child-draft-privacy'>{agentChildDraftText(this.desktopLocale, 'private')}</small>}
                 {(continuationHandle || continuationRunning || draftText) ? <form className='nmx-agent-child-composer' data-agent-child-composer={activeChildId}
@@ -39792,17 +39863,32 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected catalogSourceRetries = new Map<string, { timer: number; attempts: number }>();
 
-    /** A failed registry/global request must retry even when the executable catalog succeeded. */
+    /** A failed registry/global request must retry (bounded with backoff/jitter) even when the executable catalog succeeded. */
     protected async loadCatalogSource(key: string, load: () => Promise<boolean>): Promise<boolean> {
         const revision = this.catalogSnapshotRevision;
         const previous = this.catalogSourceRetries.get(key);
         if (previous) window.clearTimeout(previous.timer);
         const success = await load().catch(() => false);
         if (revision !== this.catalogSnapshotRevision) return false;
-        if (success) this.catalogSourceRetries.delete(key);
-        else if (!this.pendingCatalogVersion && !this.detachedConversationId && !this.isDisposed) {
+        if (success) {
+            this.catalogSourceRetries.delete(key);
+            this.pendingCatalogSourceRetries?.delete(key);
+        } else if (!this.pendingCatalogVersion && !this.detachedConversationId && !this.isDisposed) {
             const attempts = (previous?.attempts || 0) + 1;
-            const timer = window.setTimeout(() => void this.loadCatalogSource(key, load), Math.min(60_000, 5_000 * 2 ** Math.min(4, attempts - 1)));
+            if (attempts > 6) {
+                this.catalogSourceRetries.set(key, { timer: 0, attempts });
+                this.pendingCatalogSourceRetries?.set(key, load);
+                return false;
+            }
+            if ((typeof document !== 'undefined' && document.visibilityState === 'hidden')
+                || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+                this.catalogSourceRetries.set(key, { timer: 0, attempts });
+                this.pendingCatalogSourceRetries?.set(key, load);
+                return false;
+            }
+            const baseDelay = Math.min(120_000, 5_000 * 2 ** (attempts - 1));
+            const delay = attempts === 1 ? baseDelay : Math.round(baseDelay * (0.8 + Math.random() * 0.4));
+            const timer = window.setTimeout(() => void this.loadCatalogSource(key, load), delay);
             this.catalogSourceRetries.set(key, { timer, attempts });
         }
         return success;
@@ -39931,6 +40017,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (revision !== this.catalogSnapshotRevision) return false;
             const extra = missing(first.offerings);
             this.applyCatalog(extra.length ? { ...first, offerings: [...first.offerings, ...extra] } : first);
+            this.lastPlatformCatalogLoadedAt = Date.now();
             if (!savedSettled) void saved.then(() => {
                 const late = missing(this.platformCatalog.offerings);
                 if (revision !== this.catalogSnapshotRevision || !late.length || this.isDisposed) return;
@@ -40002,7 +40089,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected async loadCatalog(forceRegistry = false, sources: readonly ('catalog' | 'registry' | 'global')[] = ['catalog', 'registry', 'global']): Promise<boolean> {
-        if (!this.detachedConversationId) void this.loadModelCenterMerchantCount();
         const results = await Promise.all(sources.map(source => this.loadCatalogSource(source, () => source === 'catalog'
             ? this.loadPlatformCatalog() : source === 'registry' ? this.loadRegistryModels(forceRegistry) : this.loadGlobalModels(forceRegistry))));
         return results.every(Boolean);
@@ -40023,17 +40109,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected lastDeviceSessionCheckAt = 0;
 
     protected async loadDeviceSession(silent = false, sessionCheckOnly = false): Promise<void> {
+        if (this.deviceSessionLoadInFlight) return this.deviceSessionLoadInFlight;
         this.lastDeviceSessionCheckAt = Date.now();
         if (!silent) this.deviceLinkError = '';
-        try {
-            const walletObservedAt = Date.now();
-            this.applyPlatformSession(await this.platformService.getDeviceSession(), walletObservedAt, sessionCheckOnly);
-            // Startup reads the directory and this session together; a newly known account wipes the first read.
-            this.reloadRelayDirectoryAfterSessionChange();
-        } catch (error) {
-            if (!silent) this.deviceLinkError = error instanceof Error ? error.message : '无法连接账户服务';
+        const run = (async () => {
+            try {
+                const walletObservedAt = Date.now();
+                this.applyPlatformSession(await this.platformService.getDeviceSession(), walletObservedAt, sessionCheckOnly);
+                // Startup reads the directory and this session together; a newly known account wipes the first read.
+                this.reloadRelayDirectoryAfterSessionChange();
+            } catch (error) {
+                if (!silent) this.deviceLinkError = error instanceof Error ? error.message : '无法连接账户服务';
+            }
+            this.update();
+        })();
+        this.deviceSessionLoadInFlight = run;
+        try { await run; }
+        finally {
+            if (this.deviceSessionLoadInFlight === run) this.deviceSessionLoadInFlight = undefined;
         }
-        this.update();
     }
 
     /** `walletObservedAt`: when the request that returned this session started (its wallets show what was spent before then). */
@@ -40066,17 +40160,22 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             this.favoriteMerchantPage = undefined;
             this.selectedPublicMerchant = undefined;
-            this.catalogSnapshotRevision++;
-            this.catalogSnapshotRefresh.reset();
-            this.pendingCatalogVersion = '';
-            this.publicMerchantDirectoryVersion = '';
-            this.pendingCatalogMerchants.clear();
-            this.pendingComicDirectories.clear();
-            this.catalogVersionRetryAttempts = 0;
-            window.clearTimeout(this.catalogVersionRetryTimer);
-            for (const retry of this.catalogSourceRetries.values()) window.clearTimeout(retry.timer);
-            this.catalogSourceRetries.clear();
-            this.catalogRemovedMerchants.clear();
+            if (previousUserId) {
+                this.catalogSnapshotRevision++;
+                this.catalogSnapshotRefresh.reset();
+                this.pendingCatalogVersion = '';
+                this.publicMerchantDirectoryVersion = '';
+                this.lastPlatformCatalogLoadedAt = 0;
+                this.lastPublicMerchantLoadedAt = 0;
+                this.pendingCatalogMerchants.clear();
+                this.pendingComicDirectories.clear();
+                this.catalogVersionRetryAttempts = 0;
+                window.clearTimeout(this.catalogVersionRetryTimer);
+                for (const retry of this.catalogSourceRetries.values()) window.clearTimeout(retry.timer);
+                this.catalogSourceRetries.clear();
+                this.pendingCatalogSourceRetries?.clear();
+                this.catalogRemovedMerchants.clear();
+            }
             this.merchantCatalogRequest++;
             this.merchantCatalogInFlight = undefined;
             this.selectedMerchantCatalog = undefined;
@@ -40109,21 +40208,20 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         this.syncModelRoute();
         if (ownerChanged) this.fallBackToOwnSourceWhenSignedOut?.();
-        if (ownerChanged && !localOnly) void this.checkModelCatalogVersion();
+        if (ownerChanged && previousUserId && !localOnly) void this.checkModelCatalogVersion();
     }
 
-    /** Immediately transitions UI to unlinked state with 0 extra network requests when a foreground request reports a revoked/unlinked device token. */
-    protected syncUnlinkedSessionFromFailure(failure: unknown): boolean {
+    protected shouldUnlinkDesktopSessionFromFailure(failure: unknown): boolean {
         if (!failure || typeof failure !== 'object') return false;
         const rec = failure as Record<string, unknown>;
+        const nestedData = rec.data && typeof rec.data === 'object' ? rec.data as Record<string, unknown> : undefined;
         const nestedDetails = rec.details && typeof rec.details === 'object' ? rec.details as Record<string, unknown> : undefined;
         const nestedReadable = rec.readableError && typeof rec.readableError === 'object' ? rec.readableError as Record<string, unknown> : undefined;
         const nestedInfo = rec.errorInfo && typeof rec.errorInfo === 'object' ? rec.errorInfo as Record<string, unknown> : undefined;
-        const rawCode = [rec.code, nestedDetails?.code, nestedReadable?.code, nestedInfo?.code]
+        const rawCode = [rec.code, nestedData?.code, nestedDetails?.code, nestedReadable?.code, nestedInfo?.code]
             .find((val): val is string => typeof val === 'string' && val.trim().length > 0);
         const code = rawCode ? rawCode.trim().toLowerCase() : '';
-        const status = Number(rec.statusCode ?? rec.status ?? nestedDetails?.status ?? nestedReadable?.status ?? nestedInfo?.status ?? 0);
-        if (status !== 401 && ![
+        if (![
             'device_token_revoked',
             'device_revoked',
             'device_unlinked',
@@ -40131,9 +40229,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
             'device_suspended',
             'account_suspended',
             'device_link_required',
-            'unauthorized',
+            'device_auth_required',
+            'unauthorized_device',
+            'session_expired',
             'authentication_required'
         ].includes(code)) {
+            return false;
+        }
+        const status = Number(
+            rec.statusCode ?? rec.status ?? rec.httpStatus
+            ?? nestedData?.httpStatus ?? nestedData?.status
+            ?? nestedDetails?.httpStatus ?? nestedDetails?.status
+            ?? nestedReadable?.httpStatus ?? nestedReadable?.status
+            ?? nestedInfo?.httpStatus ?? nestedInfo?.status ?? 0
+        );
+        return status === 401 || status === 403 || !status;
+    }
+
+    /** Immediately transitions UI to unlinked state with 0 extra network requests when a foreground request reports a revoked/unlinked device token. */
+    protected syncUnlinkedSessionFromFailure(failure: unknown): boolean {
+        if (!this.shouldUnlinkDesktopSessionFromFailure(failure)) {
             return false;
         }
         if (this.platformSession?.linked) {
@@ -40179,9 +40294,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }
             }
         } catch (error) {
-            const code = typeof (error as { code?: unknown })?.code === 'string' ? String((error as { code?: string }).code).toLowerCase() : '';
-            const status = Number((error as { statusCode?: unknown; status?: unknown })?.statusCode ?? (error as { status?: unknown })?.status ?? 0);
-            if (status === 401 || ['device_token_revoked', 'device_revoked', 'device_suspended', 'account_suspended', 'invalid_device_token', 'device_unlinked', 'device_link_required', 'unauthorized', 'authentication_required'].includes(code)) {
+            if (this.shouldUnlinkDesktopSessionFromFailure(error)) {
                 this.applyPlatformSession?.({ linked: false, wallets: [] }, undefined, true, true);
                 this.update();
                 return;
@@ -40336,8 +40449,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const order = this.walletTopupOrder;
         const expiresAt = Number(order?.topup?.expiresAt);
         if (this.isDisposed || !this.platformSession?.linked || !this.walletTopupSheetOpen || !order || !new Set(['payment_pending', 'paid']).has(order.topup.status) || (expiresAt > 0 && Date.now() > expiresAt + 90_000)) return;
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            this.walletTopupPendingResume = true;
+            return;
+        }
+        this.walletTopupPendingResume = false;
         // The buyer is paying in the browser: poll briskly at first, then settle to a lighter cadence.
-        const delay = Date.now() - this.walletTopupPollStartedAt < 3 * 60_000 ? 2_500 : 6_000;
+        // Repeated errors back off with jitter up to 30s to avoid pounding an impaired platform.
+        const consecutiveErrors = this.walletTopupConsecutiveErrors || 0;
+        const delay = consecutiveErrors > 0
+            ? Math.min(30_000, Math.round(Math.min(30_000, 2_500 * 2 ** Math.min(4, consecutiveErrors - 1)) * (0.8 + Math.random() * 0.4)))
+            : (Date.now() - this.walletTopupPollStartedAt < 3 * 60_000 ? 2_500 : 6_000);
         this.walletTopupPollTimer = window.setTimeout(() => void this.refreshWalletTopupStatus(order.topup.id), delay);
     }
 
@@ -40352,6 +40474,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         this.walletTopupStage = 'creating';
         this.walletTopupError = '';
+        this.walletTopupConsecutiveErrors = 0;
+        this.walletTopupPendingResume = false;
         this.update();
         try {
             const order = await this.platformService.createWalletTopup(amountMinor, 'USD');
@@ -40383,9 +40507,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (!this.platformSession?.linked) this.clearWalletTopupPoll();
             return;
         }
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            this.walletTopupPendingResume = true;
+            this.clearWalletTopupPoll();
+            return;
+        }
         try {
             const order = await this.platformService.getWalletTopupStatus(orderId);
             if (!this.walletTopupSheetOpen || this.walletTopupOrder?.topup.id !== orderId) return;
+            this.walletTopupConsecutiveErrors = 0;
+            this.walletTopupPendingResume = false;
             this.walletTopupOrder = order;
             if (order.topup.status === 'credited') {
                 this.walletTopupStage = 'credited';
@@ -40409,6 +40540,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.update();
                 return;
             }
+            this.walletTopupConsecutiveErrors = (this.walletTopupConsecutiveErrors || 0) + 1;
             this.walletTopupError = walletTopupErrorText(this.desktopLocale, error, 'check', this.walletTopupOptions);
             this.scheduleWalletTopupPoll();
         }
@@ -40417,6 +40549,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected resetWalletTopupSurface(): void {
         this.clearWalletTopupPoll();
+        this.walletTopupConsecutiveErrors = 0;
+        this.walletTopupPendingResume = false;
         this.walletTopupSheetOpen = false;
         this.walletTopupStage = 'idle';
         this.walletTopupOrder = undefined;
@@ -40442,6 +40576,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected readonly catalogSnapshotRefresh = new CatalogSnapshotRefresh();
     protected catalogVersionRetryTimer: number | undefined;
     protected catalogVersionRetryAttempts = 0;
+    protected lastPlatformCatalogLoadedAt = 0;
+    protected lastPublicMerchantLoadedAt = 0;
+    protected pendingCatalogVersionResume = false;
+    protected pendingModelListRefresh = false;
+    protected pendingCatalogSourceRetries = new Map<string, () => Promise<boolean>>();
+    protected deviceSessionLoadInFlight: Promise<void> | undefined;
 
     /** Include background conversations and every selected comic step, not only the foreground relay. */
     protected catalogMerchantSources(): readonly string[] {
@@ -40562,6 +40702,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected async checkModelCatalogVersion(): Promise<void> {
         if (this.catalogVersionChecking || this.detachedConversationId || this.isDisposed) return;
         this.catalogVersionChecking = true;
+        this.pendingCatalogVersionResume = false;
         window.clearTimeout(this.catalogVersionRetryTimer);
         const requestRevision = this.catalogSnapshotRevision;
         let retry = false;
@@ -40570,6 +40711,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (requestRevision !== this.catalogSnapshotRevision) { retry = true; return; }
             // Each window owns its snapshot; another window's localStorage acknowledgement is insufficient.
             if (version === this.publicMerchantDirectoryVersion && !this.pendingCatalogVersion) return;
+            const previousDirectoryVersion = this.publicMerchantDirectoryVersion;
+            let savedAckVersion = '';
+            try { savedAckVersion = window.localStorage?.getItem?.('nextmux.desktop.modelCatalogVersion.v1') || ''; } catch { savedAckVersion = ''; }
+            const freshBootCatalogMatchesVersion = !previousDirectoryVersion
+                && Boolean(savedAckVersion)
+                && savedAckVersion === version;
+            const keepFreshBootPublicDirectory = freshBootCatalogMatchesVersion
+                && Boolean(this.publicMerchantPage)
+                && !this.publicMerchantPageError
+                && (this.lastPublicMerchantLoadedAt ?? 0) > 0
+                && Date.now() - (this.lastPublicMerchantLoadedAt ?? 0) < 5 * 60_000;
             for (const merchant of this.catalogMerchantSources()) this.pendingCatalogMerchants.add(merchant);
             if (version !== this.pendingCatalogVersion) {
                 this.pendingCatalogVersion = version;
@@ -40583,23 +40735,35 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 for (const [id, entry] of this.merchantPickerSnapshots) this.merchantPickerSnapshots.set(id, { ...entry, updatedAt: 0 });
                 for (const [kind, entry] of this.comicStepDirectory) this.comicStepDirectory.set(kind, { ...entry, loading: false });
                 this.comicRouteCache = undefined;
-                this.publicMerchantPageRequest++;
-                if (this.publicMerchantSearchTimer) window.clearTimeout(this.publicMerchantSearchTimer);
-                this.publicMerchantSearchTimer = 0;
-                this.publicMerchantPage = undefined;
-                this.publicMerchantBrowsePage = undefined;
-                this.favoriteMerchantPage = undefined;
-                this.selectedPublicMerchant = undefined;
-                this.publicMerchantPageLoading = false;
-                this.publicMerchantPageError = false;
-                // An open drawer reads the new revision at once; a closed one has it read before its next opening.
-                if ((this.relayDirectoryOnScreen?.() ?? this.modelPickerRelayOpen) && this.relaySourceTab !== 'my-api') void this.loadPublicMerchantPage();
-                else this.prewarmPublicMerchantPage?.();
+                if (!keepFreshBootPublicDirectory) {
+                    this.publicMerchantPageRequest++;
+                    if (this.publicMerchantSearchTimer) window.clearTimeout(this.publicMerchantSearchTimer);
+                    this.publicMerchantSearchTimer = 0;
+                    this.publicMerchantPage = undefined;
+                    this.publicMerchantBrowsePage = undefined;
+                    this.favoriteMerchantPage = undefined;
+                    this.selectedPublicMerchant = undefined;
+                    this.publicMerchantPageLoading = false;
+                    this.publicMerchantPageError = false;
+                    // An open drawer reads the new revision at once; a closed one has it read before its next opening.
+                    if ((this.relayDirectoryOnScreen?.() ?? this.modelPickerRelayOpen) && this.relaySourceTab !== 'my-api') void this.loadPublicMerchantPage();
+                    else this.prewarmPublicMerchantPage?.();
+                }
                 this.update();
             }
             const snapshotRevision = this.catalogSnapshotRevision;
+            const forceCatalogReload = Boolean(previousDirectoryVersion);
+            const skipRedundantBootCatalog = freshBootCatalogMatchesVersion
+                && (this.lastPlatformCatalogLoadedAt ?? 0) > 0
+                && Date.now() - (this.lastPlatformCatalogLoadedAt ?? 0) < 5 * 60_000
+                && Boolean(this.platformCatalog?.online);
             const ready = await this.catalogSnapshotRefresh.refresh(version, [
-                ...(['catalog', 'registry', 'global'] as const).map(source => ({ key: source, load: () => this.loadCatalog(true, [source]) })),
+                ...(['catalog', 'registry', 'global'] as const).map(source => ({
+                    key: source,
+                    load: () => source === 'catalog' && skipRedundantBootCatalog
+                        ? Promise.resolve(true)
+                        : this.loadCatalog(forceCatalogReload, [source])
+                })),
                 ...[...this.pendingCatalogMerchants].flatMap(id => [
                     { key: `merchant:${id}`, load: () => this.reloadMerchantCatalogSnapshot(id) },
                     { key: `discovery:${id}`, load: () => this.reloadMerchantDiscoverySnapshot(id) }
@@ -40624,8 +40788,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
         finally {
             this.catalogVersionChecking = false;
             if ((retry || this.pendingCatalogVersion) && !this.detachedConversationId && !this.isDisposed) {
-                const delay = Math.min(60_000, 5_000 * 2 ** Math.min(4, this.catalogVersionRetryAttempts++));
-                this.catalogVersionRetryTimer = window.setTimeout(() => void this.checkModelCatalogVersion(), delay);
+                const attempt = this.catalogVersionRetryAttempts++;
+                if (attempt < 6) {
+                    if ((typeof document !== 'undefined' && document.visibilityState === 'hidden')
+                        || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+                        this.pendingCatalogVersionResume = true;
+                    } else {
+                        const baseDelay = Math.min(300_000, 5_000 * 2 ** attempt);
+                        const delay = attempt === 0 ? baseDelay : Math.round(baseDelay * (0.8 + Math.random() * 0.4));
+                        this.catalogVersionRetryTimer = window.setTimeout(() => void this.checkModelCatalogVersion(), delay);
+                    }
+                } else {
+                    this.pendingCatalogVersionResume = true;
+                }
             }
         }
     }
@@ -42083,8 +42258,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
             } else this.publicMerchantPage = page;
             if (!query.trim()) {
                 const browse = this.publicMerchantBrowsePage;
+                const now = Date.now();
                 this.publicMerchantBrowsePage = { page: this.publicMerchantPage, sortMode,
-                    loadedAt: append && previous && browse?.page === previous ? browse.loadedAt : Date.now() };
+                    loadedAt: append && previous && browse?.page === previous ? browse.loadedAt : now };
+                this.lastPublicMerchantLoadedAt = now;
+                if (this.relaySourceTab === 'merchant' && this.publicMerchantPage.totalCount !== undefined) {
+                    this.modelCenterMerchantCount = this.publicMerchantPage.totalCount;
+                }
             }
         } catch {
             if (!current()) return;
@@ -49892,6 +50072,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected async loadModelCenterMerchantCount(): Promise<void> {
+        const browse = this.publicMerchantBrowsePage;
+        if (!this.publicMerchantPageError && browse?.page?.totalCount !== undefined && Date.now() - browse.loadedAt < 30_000) {
+            if (this.modelCenterMerchantCount !== browse.page.totalCount) {
+                this.modelCenterMerchantCount = browse.page.totalCount;
+                this.update();
+            }
+            return;
+        }
         const token = ++this.modelCenterMerchantCountRequest;
         try {
             const page = await this.platformService.getPublicMerchantDirectory();
@@ -50057,6 +50245,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     onLogin={() => void this.startDeviceLink()} />}
                 {(showMarketplace || showFavorites) && <ModelCenterMerchants service={this.platformService} locale={this.desktopLocale}
                     directoryVersion={`${this.publicMerchantDirectoryVersion}:${this.modelCenterRefreshToken}`}
+                    capacityPoller={this.relayCapacityPoller}
                     view={showFavorites ? 'favorites' : this.modelCenterView === 'capability' ? 'capability' : 'all'}
                     capability={this.modelCapabilityFilter} query={this.modelSearchQuery} favorites={[...this.favoriteMerchantLabels]}
                     copiedNumber={this.copiedIndicatorKey.startsWith('model-center:') ? this.copiedIndicatorKey.slice('model-center:'.length) : ''}
@@ -51478,15 +51667,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const launchParams = pending.params || tabOverride?.params;
             const launchModel = pending.model || tabOverride?.model;
             const model = launchModel || this.appPlugins.find(plugin => plugin.id === pending.pluginId)?.model;
+            let localConnectionEndpoint = model?.source === 'connection' && model.localEndpoint === true;
             if (model?.source === 'connection') {
                 // Recheck the existing connection; saved selections do not prove its current API protocol.
                 const choices = await this.platformService.appPluginModelChoices({ connectionId: model.connectionId }).catch(() => undefined);
                 if (!current()) return;
-                if (!choices?.connections.some(connection => connection.connectionId === model.connectionId
-                    && connection.decisions.some(choice => choice.model === model.model))) {
+                const matchedConnection = choices?.connections.find(connection => connection.connectionId === model.connectionId
+                    && connection.decisions.some(choice => choice.model === model.model));
+                if (!matchedConnection) {
                     this.appPluginStartError = appPluginError(this.desktopLocale, choices ? 'decision_protocol_unsupported' : 'decision_network');
                     return;
                 }
+                if (matchedConnection.localEndpoint) localConnectionEndpoint = true;
             }
             await this.initComputerWindowView();
             if (!current()) return;
@@ -51503,6 +51695,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const result = await bridge.startAppPlugin({ conversationId: pending.conversationId, tabId: pending.tabId, pid: pending.pid, windowId: pending.windowId,
                 title: pending.title, pluginId: pending.pluginId, goal: options.goal, maxMinutes: options.maxMinutes, maxCostUsd: options.maxCostUsd,
                 dryRun: options.dryRun, overlay: options.dryRun, handOff: options.handOff, locale: this.desktopLocale,
+                ...(localConnectionEndpoint ? { localModelEndpoint: true } : {}),
                 ...(launchParams ? { params: launchParams } : {}),
                 ...(license.gate ? { gate: license.gate } : {}) } as Parameters<NonNullable<typeof bridge.startAppPlugin>>[0]);
             if (!current()) {
@@ -51515,10 +51708,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 if (result.error === 'plugin_app_mismatch' && result.app) this.appPluginStartError += `（${result.app}）`;
                 return;
             }
-            if (launchModel && result.runId) {
-                await bridge.commandAppPlugin?.(result.runId, { model: launchModel } as Parameters<NonNullable<NextMuxDesktopBridge['commandAppPlugin']>>[1]);
+            const effectiveLaunchModel = launchModel?.source === 'connection' && localConnectionEndpoint && !launchModel.localEndpoint
+                ? { ...launchModel, localEndpoint: true }
+                : launchModel;
+            if (effectiveLaunchModel && result.runId) {
+                await bridge.commandAppPlugin?.(result.runId, { model: effectiveLaunchModel } as Parameters<NonNullable<NextMuxDesktopBridge['commandAppPlugin']>>[1]);
                 const createdRun = this.appPluginRuns.get(result.runId);
-                if (createdRun) this.rememberAppPluginRun({ ...createdRun, model: launchModel });
+                if (createdRun) this.rememberAppPluginRun({ ...createdRun, model: effectiveLaunchModel });
             }
             this.appPluginTabLaunchOverrides?.delete?.(tabKey);
             if (options.dryRun) this.appPluginOverlays.add(result.runId!);
@@ -51860,7 +52056,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // Keys and the platform credential stay in the backend; the answer goes straight back to the run.
             const runModel = message.model ?? (message.runId ? this.appPluginRuns?.get?.(message.runId)?.model : undefined) ?? undefined;
             const result = await this.platformService.decideAppPlugin({ requestId: message.requestId, deadlineAt: message.deadlineAt, model: runModel as AppPluginModel, state: message.state, questions: message.questions,
-                ...(message.images.length ? { images: message.images } : {}) }).catch(error => ({ ok: false, error: 'decision_network', readableError: modelFailure(this.desktopLocale, error) }));
+                ...(message.images.length ? { images: message.images } : {}) }).catch(error => ({ ok: false, dispatched: false, error: 'decision_network', readableError: modelFailure(this.desktopLocale, error) }));
             if (!result.ok && !String(result.error).endsWith('_cancelled')) this.addNotification('error', appPluginText(this.desktopLocale, 'plugins'), appPluginError(this.desktopLocale, result.readableError || result.error));
             await bridge?.answerAppPlugin?.(message.requestId, result);
             return;
@@ -51868,7 +52064,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (message.type === 'describe') {
             const runVision = message.vision ?? (message.runId ? this.appPluginRuns?.get?.(message.runId)?.vision : undefined) ?? undefined;
             const result = await this.platformService.describeAppPluginFrame({ requestId: message.requestId, deadlineAt: message.deadlineAt, vision: runVision as AppPluginVisionModel, image: message.image, hints: message.hints })
-                .catch(error => ({ ok: false, error: 'vision_network', readableError: modelFailure(this.desktopLocale, error) }));
+                .catch(error => ({ ok: false, dispatched: false, error: 'vision_network', readableError: modelFailure(this.desktopLocale, error) }));
             if (!result.ok && !String(result.error).endsWith('_cancelled')) this.addNotification('error', appPluginText(this.desktopLocale, 'plugins'), appPluginError(this.desktopLocale, result.readableError || result.error));
             await bridge?.answerAppPlugin?.(message.requestId, result);
             return;
@@ -52086,11 +52282,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const extras: AppPluginModel[] = [];
         for (const conn of this.officialModels?.connections || []) {
             const label = conn.label || conn.providerName || conn.providerId;
+            const localFlag = privateAppPluginEndpoint(conn.baseUrl) ? { localEndpoint: true } : {};
             if (conn.model) {
-                extras.push({ source: 'connection', connectionId: conn.id, connectionLabel: label, model: conn.model, label: conn.model, images: true });
+                extras.push({ source: 'connection', connectionId: conn.id, connectionLabel: label, model: conn.model, label: conn.model, images: true, ...localFlag });
             }
             for (const m of conn.discoveredModels || []) {
-                if (m?.id) extras.push({ source: 'connection', connectionId: conn.id, connectionLabel: label, model: m.id, label: m.id, images: true });
+                if (m?.id) extras.push({ source: 'connection', connectionId: conn.id, connectionLabel: label, model: m.id, label: m.id, images: true, ...localFlag });
             }
         }
         return extras;

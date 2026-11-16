@@ -66,6 +66,7 @@ type Props = {
     copiedNumber?: string;
     /** Includes public store-profile edits and moderation changes. */
     directoryVersion?: string;
+    capacityPoller?: RelayCapacityPoller;
     refreshing?: boolean;
     onRefresh?: (tabKey?: string) => Promise<void> | void;
     onFavorite: (id: string, name: string) => void; onCopy: (id: string) => Promise<void>;
@@ -76,8 +77,31 @@ const modelCenterCooldownUntilByTab: Record<string, number> = {};
 type CachedDirectoryEntry = { readonly page: PublicMerchantDirectoryPage; readonly updatedAt: number };
 type CachedSupportEntry = { readonly result: PlatformMerchantSupportCatalogPage; readonly updatedAt: number };
 let merchantDirectoryCacheByService = new WeakMap<Service, Map<string, CachedDirectoryEntry>>();
+let merchantDirectoryPendingByService = new WeakMap<Service, Map<string, Promise<PublicMerchantDirectoryPage>>>();
 let merchantSupportCatalogCacheByService = new WeakMap<Service, Map<string, CachedSupportEntry>>();
 let merchantSupportPendingByService = new WeakMap<Service, Map<string, Promise<PlatformMerchantSupportCatalogPage>>>();
+let sharedCapacityPollerByService = new WeakMap<Service, RelayCapacityPoller>();
+
+function directoryPendingFor(service: Service): Map<string, Promise<PublicMerchantDirectoryPage>> {
+    let map = merchantDirectoryPendingByService.get(service);
+    if (!map) {
+        map = new Map();
+        merchantDirectoryPendingByService.set(service, map);
+    }
+    return map;
+}
+
+function sharedCapacityPollerFor(
+    service: Service,
+    readCapacity: NonNullable<Service['getPublicMerchantCapacity']>
+): RelayCapacityPoller {
+    let poller = sharedCapacityPollerByService.get(service);
+    if (!poller) {
+        poller = new RelayCapacityPoller((batch, scope) => readCapacity.call(service, batch, scope));
+        sharedCapacityPollerByService.set(service, poller);
+    }
+    return poller;
+}
 
 function directoryCacheFor(service: Service): Map<string, CachedDirectoryEntry> {
     let map = merchantDirectoryCacheByService.get(service);
@@ -294,7 +318,7 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
             setCapacitySnapshot(undefined);
             return;
         }
-        const poller = new RelayCapacityPoller((batch, scope) => readCapacity.call(service, batch, scope));
+        const poller = props.capacityPoller ?? sharedCapacityPollerFor(service, readCapacity);
         const visibleIds = (): readonly string[] => {
             const root = directoryRef.current;
             const scroll = root?.closest<HTMLElement>('.nmx-workspace-scroll');
@@ -313,9 +337,8 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
         const detach = poller.attach(ids, capacityScope, snapshot => setCapacitySnapshot(snapshot), visibleIds);
         return () => {
             detach();
-            poller.stop();
         };
-    }, [service, merchantIdsKey, capacityScope]);
+    }, [service, props.capacityPoller, merchantIdsKey, capacityScope]);
     const closeTimer = React.useRef<number>();
     const [copyFailed, setCopyFailed] = React.useState(false);
     const generation = React.useRef(0);
@@ -337,15 +360,33 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
         forceNextLoad.current = undefined;
         const cooldownKey = tabCooldownKey;
         const cachedEntry = !force ? getCachedMerchantDirectoryPage(service, requestKey) : undefined;
+        const freshCached = Boolean(cachedEntry && Date.now() - cachedEntry.updatedAt < MODEL_CENTER_REFRESH_COOLDOWN_MS);
         const retainedPage = cachedEntry?.page ?? (sameFilter ? pageRef.current : undefined);
+        if (freshCached && retainedPage) {
+            busy.current = false;
+            setPage(retainedPage);
+            setLoading(false);
+            setError(false);
+            if (!sameFilter) { setDetail(undefined); setDetailClosing(false); }
+            return;
+        }
         busy.current = true;
         setPage(retainedPage);
         setLoading(force || !retainedPage);
         setError(false);
         if (!sameFilter) { setDetail(undefined); setDetailClosing(false); }
         const timer = window.setTimeout(() => {
-            const operation = view === 'favorites' ? loadModelCenterFavorites(service, request(), favoriteIds, force)
-                : service.getPublicMerchantDirectory(request(), force);
+            const pendingMap = directoryPendingFor(service);
+            let operation = !force ? pendingMap.get(requestKey) : undefined;
+            if (!operation) {
+                const rawOperation = view === 'favorites'
+                    ? loadModelCenterFavorites(service, request(), favoriteIds, force)
+                    : service.getPublicMerchantDirectory(request(), force);
+                operation = rawOperation.finally(() => {
+                    if (pendingMap.get(requestKey) === operation) pendingMap.delete(requestKey);
+                });
+                if (!force) pendingMap.set(requestKey, operation);
+            }
             void operation.then(result => {
                 setCachedMerchantDirectoryPage(service, requestKey, result);
                 if (token === generation.current) setPage(result);

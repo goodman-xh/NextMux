@@ -8,6 +8,11 @@ interface CapacityClaim {
     readonly visibleIds?: () => readonly string[];
 }
 
+const FOCUS_REFRESH_COOLDOWN_MS = 5_000;
+const RESTRICTED_POLL_INTERVAL_MS = 10_000;
+const NORMAL_POLL_INTERVAL_MS = 15_000;
+const MAX_ERROR_BACKOFF_MS = 60_000;
+
 /** One visible picker owns one serial read; scope changes never race old replies. */
 export class RelayCapacityPoller {
     private revision = 0;
@@ -20,12 +25,38 @@ export class RelayCapacityPoller {
     private scope: PublicMerchantCapacityScope = 'coding';
     private onSnapshot?: (value: PublicMerchantCapacitySnapshot | undefined) => void;
     private snapshot?: PublicMerchantCapacitySnapshot;
+    private consecutiveFailures = 0;
+    private lastRefreshAt = 0;
+    private errorBackoffUntil = 0;
+    private pausedPendingResume = false;
     private readonly claims: CapacityClaim[] = [];
-    private readonly onVisibilityOrFocus = (): void => {
+    private readonly onVisibilityOrFocus = (event?: { readonly type?: string }): void => {
         if (!this.running || this.pending) return;
         if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+        const now = Date.now();
+        if (this.consecutiveFailures > 0 && now < this.errorBackoffUntil) {
+            const remaining = Math.max(0, this.errorBackoffUntil - now)
+                + (event?.type === 'online' ? 1_000 + Math.round(Math.random() * 4_000) : 0);
+            clearTimeout(this.timer);
+            this.timer = setTimeout(() => {
+                this.timer = undefined;
+                void this.refresh();
+            }, remaining);
+            return;
+        }
+        if (!this.pausedPendingResume && now - this.lastRefreshAt < FOCUS_REFRESH_COOLDOWN_MS) return;
         clearTimeout(this.timer);
         this.timer = undefined;
+        if (event?.type === 'online') {
+            this.pausedPendingResume = false;
+            const staggerMs = 1_000 + Math.round(Math.random() * 4_000);
+            this.timer = setTimeout(() => {
+                this.timer = undefined;
+                void this.refresh();
+            }, staggerMs);
+            return;
+        }
         void this.refresh();
     };
 
@@ -42,9 +73,15 @@ export class RelayCapacityPoller {
         this.scope = scope;
         this.onSnapshot = onSnapshot;
         this.running = this.ids.length > 0;
+        this.consecutiveFailures = 0;
+        this.errorBackoffUntil = 0;
+        this.pausedPendingResume = false;
         if (this.running) {
             if (typeof document !== 'undefined') document.addEventListener?.('visibilitychange', this.onVisibilityOrFocus);
-            if (typeof window !== 'undefined') window.addEventListener?.('focus', this.onVisibilityOrFocus);
+            if (typeof window !== 'undefined') {
+                window.addEventListener?.('focus', this.onVisibilityOrFocus);
+                window.addEventListener?.('online', this.onVisibilityOrFocus);
+            }
         }
         this.emit(kept, this.revision);
         if (this.running && !this.pending) void this.refresh();
@@ -53,8 +90,14 @@ export class RelayCapacityPoller {
     stop(): void {
         this.revision++;
         this.running = false;
+        this.consecutiveFailures = 0;
+        this.errorBackoffUntil = 0;
+        this.pausedPendingResume = false;
         if (typeof document !== 'undefined') document.removeEventListener?.('visibilitychange', this.onVisibilityOrFocus);
-        if (typeof window !== 'undefined') window.removeEventListener?.('focus', this.onVisibilityOrFocus);
+        if (typeof window !== 'undefined') {
+            window.removeEventListener?.('focus', this.onVisibilityOrFocus);
+            window.removeEventListener?.('online', this.onVisibilityOrFocus);
+        }
         clearTimeout(this.timer); clearTimeout(this.expiryTimer);
         this.timer = this.expiryTimer = undefined;
         this.onSnapshot = undefined;
@@ -96,20 +139,39 @@ export class RelayCapacityPoller {
 
     private async refresh(): Promise<void> {
         if (!this.running || this.pending) return;
-        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        if ((typeof document !== 'undefined' && document.visibilityState === 'hidden')
+            || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
+            this.pausedPendingResume = true;
+            return;
+        }
+        this.pausedPendingResume = false;
+        this.lastRefreshAt = Date.now();
         this.pending = true;
         const revision = this.revision, ids = [...new Set(this.visibleIds())].filter(id => this.ids.includes(id)).slice(0, 32), scope = this.scope;
         try {
             const snapshot = await this.read(ids, scope);
             if (!this.running || revision !== this.revision) return;
+            if (snapshot === undefined) this.consecutiveFailures++;
+            else this.consecutiveFailures = 0;
             this.emit(snapshot, revision);
         } catch {
-            if (this.running && revision === this.revision) this.emit(undefined, revision);
+            if (this.running && revision === this.revision) {
+                this.consecutiveFailures++;
+                this.emit(undefined, revision);
+            }
         } finally {
             this.pending = false;
             if (this.running) {
                 const hasRestricted = Boolean(this.snapshot?.merchants.some(item => item.state === 'full' || Boolean(item.fullOfferingIds?.length)));
-                const nextIntervalMs = revision !== this.revision ? 0 : (hasRestricted ? 2000 : 10000);
+                const baseBackoffMs = Math.min(MAX_ERROR_BACKOFF_MS, 10_000 * 2 ** Math.min(3, this.consecutiveFailures - 1));
+                const nextIntervalMs = revision !== this.revision
+                    ? 0
+                    : this.consecutiveFailures > 0
+                        ? Math.max(1_000, Math.round(baseBackoffMs * (0.8 + Math.random() * 0.4)))
+                        : (hasRestricted ? RESTRICTED_POLL_INTERVAL_MS : NORMAL_POLL_INTERVAL_MS);
+                this.errorBackoffUntil = revision === this.revision && this.consecutiveFailures > 0
+                    ? Date.now() + nextIntervalMs
+                    : 0;
                 this.timer = setTimeout(() => void this.refresh(), nextIntervalMs);
             }
         }

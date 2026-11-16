@@ -879,7 +879,8 @@ function buildDecisionPickerCatalog(
                 if (inlineOnly && !isJevModel(opt.model)) continue;
                 const model: AppPluginModel = {
                     ...opt, source: 'connection', model: opt.model, label: opt.label,
-                    connectionId: conn.connectionId, connectionLabel: conn.label
+                    connectionId: conn.connectionId, connectionLabel: conn.label,
+                    ...(conn.localEndpoint ? { localEndpoint: true } : {})
                 };
                 list.push({
                     key: decisionModelKey(model),
@@ -1237,7 +1238,7 @@ export function AppPluginModelDialog(props: {
         ? relay && route ? { source: 'nextmux', model: relay.model, label: relay.label, inputPricePerMillion: route.inputPricePerMillion,
             ...(merchant ? { offeringId: route.offeringId, merchant: route.merchant } : {}), ...(relay.images ? { images: true } : {}) } : undefined
         : source === 'connection'
-            ? connection && ownModel ? { source: 'connection', ...ownModel, model: ownModel.model, label: ownModel.label, connectionId: connection.connectionId, connectionLabel: connection.label } : undefined
+            ? connection && ownModel ? { source: 'connection', ...ownModel, model: ownModel.model, label: ownModel.label, connectionId: connection.connectionId, connectionLabel: connection.label, ...(connection.localEndpoint ? { localEndpoint: true } : {}) } : undefined
             : server && localPick ? { source: 'local', model: localPick.model, endpoint: server.endpoint, protocol: server.protocol, images: localImages } : undefined;
     // 视觉模型 (only when the plugin must see and the decision model can't)
     const vision = plugin.summary?.vision || 'none';
@@ -1253,7 +1254,7 @@ export function AppPluginModelDialog(props: {
     // Never a default: a vision model runs every few seconds, and the first one listed may be an expensive one.
     const visionPick = visionList.find(model => model.model === visionName);
     const visionValue: AppPluginVisionModel | null = vision === 'none' || seesItself || !visionPick ? null
-        : visionSource === 'connection' && visionConnection ? { ...visionPick, source: 'connection', model: visionPick.model, connectionId: visionConnection.connectionId, connectionLabel: visionConnection.label }
+        : visionSource === 'connection' && visionConnection ? { ...visionPick, source: 'connection', model: visionPick.model, connectionId: visionConnection.connectionId, connectionLabel: visionConnection.label, ...(visionConnection.localEndpoint ? { localEndpoint: true } : {}) }
             : visionSource === 'local' && visionServer ? { source: 'local', model: visionPick.model, endpoint: visionServer.endpoint, protocol: visionServer.protocol === 'ollama' ? 'ollama' : 'openai' } : null;
     const needsVision = vision === 'required' && !seesItself;
     const compatibilityError = decision && decisionPluginCompatibility(decision, plugin.summary?.decisions || []);
@@ -1295,7 +1296,7 @@ export function AppPluginModelDialog(props: {
             label: item.label,
             meta: `${t(locale, 'ownApi')} · ${item.vision.length}`,
             models: item.vision.map(m => {
-                const modelObj: AppPluginModel = { ...m, source: 'connection', model: m.model, label: m.label || m.model, connectionId: item.connectionId, connectionLabel: item.label, images: true };
+                const modelObj: AppPluginModel = { ...m, source: 'connection', model: m.model, label: m.label || m.model, connectionId: item.connectionId, connectionLabel: item.label, ...(item.localEndpoint ? { localEndpoint: true } : {}), images: true };
                 return { key: decisionModelKey(modelObj), label: m.label || m.model, model: modelObj };
             })
         }))
@@ -1319,7 +1320,7 @@ export function AppPluginModelDialog(props: {
         : `local:${visionServer?.endpoint || ''}`;
     const selectedVisionModelObj: AppPluginModel | null = visionValue
         ? (visionValue.source === 'connection'
-            ? { source: 'connection', model: visionValue.model, label: visionValue.model, connectionId: visionValue.connectionId, connectionLabel: visionValue.connectionLabel, images: true }
+            ? { source: 'connection', model: visionValue.model, label: visionValue.model, connectionId: visionValue.connectionId, connectionLabel: visionValue.connectionLabel, ...(visionValue.localEndpoint ? { localEndpoint: true } : {}), images: true }
             : { source: 'local', model: visionValue.model, label: visionValue.model, endpoint: visionValue.endpoint, protocol: visionValue.protocol, images: true })
         : null;
     const loading = props.loading && !choices;
@@ -1449,15 +1450,16 @@ export function appPluginInlineModels(
             ...(model.images ? { images: true } : {}) });
     }
     for (const connection of choices?.connections || []) {
+        const localFlag = connection.localEndpoint ? { localEndpoint: true } : {};
         for (const model of connection.decisions || []) {
             if (!allModels && !isJevModel(model.model)) continue;
             pushModel({ ...model, source: 'connection',
-                connectionId: connection.connectionId, connectionLabel: connection.label });
+                connectionId: connection.connectionId, connectionLabel: connection.label, ...localFlag });
         }
         if (allModels) {
             for (const model of connection.vision || []) {
                 pushModel({ ...model, source: 'connection', images: true,
-                    connectionId: connection.connectionId, connectionLabel: connection.label });
+                    connectionId: connection.connectionId, connectionLabel: connection.label, ...localFlag });
             }
         }
     }

@@ -1359,6 +1359,8 @@ body:is(.windows, :has(#window-controls)) .nmx-shell .nmx-titlebar-context {
 }
 
 .nmx-shell .nmx-agent-child-error {
+    min-width: 0;
+    overflow-wrap: anywhere;
     margin: 0;
     padding: 10px 12px;
     border: 1px solid color-mix(in srgb, var(--nmx-danger) 40%, var(--nmx-border));
