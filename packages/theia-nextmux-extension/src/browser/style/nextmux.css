@@ -16919,11 +16919,13 @@ body.mac .nmx-titlebar-actions {
 .nmx-route-button,
 .nmx-permission-button,
 .nmx-composer-footer button,
-.nmx-model-picker-portal *,
-.nmx-model-effort-portal *,
-.nmx-relay-picker-popover * {
-    font-size: 13px !important;
-    line-height: 18px !important;
+.nmx-model-picker-portal .nmx-model-picker-popover,
+.nmx-model-picker-portal .nmx-model-option > button,
+.nmx-model-picker-portal .nmx-model-picker-search input,
+.nmx-model-effort-portal .nmx-model-effort-menu,
+.nmx-relay-picker-popover .nmx-relay-option-select {
+    font-size: 13px;
+    line-height: 18px;
 }
 
 .nmx-settings-nav,
@@ -23243,4 +23245,69 @@ span.nmx-md-video[data-nmx-video] {
     .nmx-video-card:is(:hover, :focus-visible) .nmx-video-card-play {
         transform: none;
     }
+}
+
+/* ---------------------------------------------------------------------------
+ * AI Console (plugin chat) drawers: z-index layering and keyboard focus.
+ * Their type is the coding composer's: the same portal, popover and card classes, so no typography is restated here
+ * (a rule here would also restyle the composer's, the comic and the Council drawers).
+ * Layers: floating plugin window 2450 < plugin sub-window modal 2460 (both inside the shell; bare: 12040 / 12080)
+ * < host dialogs, menus and toasts (2500+) < drawers 12055 < model card 12060 < hover tips 12065 (relay metric, evidence).
+ * ------------------------------------------------------------------------ */
+.nmx-shell .nmx-plugin-window-dialog {
+    z-index: 2450;
+    /* The window's rect is computed in nextmux-app-plugin-window-sdk.ts (PLUGIN_WINDOW_MIN_WIDTH/HEIGHT 240×180, then
+       clamped to the viewport). A larger CSS floor (the base rule's 280×220) drew the window wider than its rect, past
+       the viewport edge, and made west/north resizes move the opposite edge. */
+    min-width: 240px;
+    min-height: 180px;
+}
+
+/* A plugin's openModal sits above its own window but below every host dialog, menu, toast and portal (2500+), so
+   plugin content can never cover or imitate a host confirmation (the base rule put it at 12080, above them all). */
+.nmx-shell .nmx-plugin-subwindow-backdrop {
+    z-index: 2460;
+}
+
+/* The containers take the focus only as a landing point (role=dialog, tabindex=-1); their buttons keep the ring. */
+.nmx-shell :is(.nmx-plugin-window-dialog, .nmx-plugin-subwindow-dialog):focus {
+    outline: none;
+}
+
+.nmx-plugin-window-dialog.is-dragging .nmx-plugin-window-shield {
+    cursor: grabbing;
+}
+
+/* A reading's label normally hangs above its box; on a box touching the picture's top edge it sits inside the box,
+   where the tab does not clip it (AppPluginOverlay adds is-label-inside). */
+.nmx-plugin-overlay .nmx-plugin-overlay-box.is-label-inside > span {
+    top: 0;
+    border-radius: 0 0 4px 0;
+}
+
+.nmx-plugin-chat-picker-portal .nmx-model-picker-popover,
+.nmx-plugin-chat-picker-portal .nmx-relay-picker-popover {
+    z-index: 12055;
+}
+
+.nmx-plugin-chat-model-hover-portal,
+.nmx-plugin-chat-model-hover-portal .nmx-model-effort-menu {
+    z-index: 12060;
+}
+
+/* The row with keyboard focus reads as hovered (its card is open beside it); the chosen row keeps its own fill.
+   --nmx-hover is the popover's, so the one rule serves both themes. */
+.nmx-plugin-chat-picker-portal .nmx-model-option:is(:focus-within, :hover) > button[role='option'] {
+    background: var(--nmx-hover, rgba(255, 255, 255, .07));
+}
+
+/* A drawer or card holds focus itself only when it has nothing focusable (loading, or a card with no settings): a
+   keyboard ring then, none after a click. Both sit on their popover's --nmx-focus-ring (3:1 or more in both themes). */
+:is(.nmx-plugin-chat-picker-portal .nmx-model-picker-popover, .nmx-plugin-chat-model-hover-portal .nmx-model-effort-menu):focus {
+    outline: none;
+}
+
+:is(.nmx-plugin-chat-picker-portal .nmx-model-picker-popover, .nmx-plugin-chat-model-hover-portal .nmx-model-effort-menu):focus-visible {
+    outline: 1.5px solid var(--nmx-focus-ring, #a9a2a7);
+    outline-offset: -1.5px;
 }

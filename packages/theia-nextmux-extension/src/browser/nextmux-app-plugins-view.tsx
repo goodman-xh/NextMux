@@ -14,7 +14,7 @@ import type {
     AppPluginTrust,
     AppPluginChatAttachment, AppPluginChatMessage, AppPluginChatRequest,
     AppPluginDiagnostic, AppPluginInfo, AppPluginInspection, AppPluginLocalServer, AppPluginMarketPlugin, AppPluginMine, AppPluginMinePlugin, AppPluginMineVersion,
-    AppPluginModel, AppPluginModelChoices, AppPluginOverlayItem, AppPluginParam, AppPluginParamFileValue, AppPluginParamValue, AppPluginPreset, AppPluginRunSnapshot, AppPluginServerProbe, AppPluginSummary, AppPluginUploadProblem, AppPluginVisionModel
+    AppPluginModel, AppPluginModelChoices, AppPluginOverlayItem, AppPluginParam, AppPluginParamFileValue, AppPluginParamValue, AppPluginPreset, AppPluginRunSnapshot, AppPluginServerProbe, AppPluginSummary, AppPluginUiBundleResult, AppPluginUploadProblem, AppPluginVisionModel
 } from '../common/nextmux-app-plugins';
 import { APP_PLUGIN_PRICE } from '../common/nextmux-app-plugins';
 import { ConversationMarkdown } from './nextmux-conversation-markdown';
@@ -23,6 +23,12 @@ import { normalizeConversationMarkdown } from './nextmux-markdown';
 import { AttachmentChip, ComposerDropOverlay, fileTypeInfo, fileTypeExtensions, fileExtension, formatAttachmentSize } from './nextmux-composer-attachments';
 import { modelPickerListText, RELAY_DRAWER_WIDTH } from './nextmux-relay-picker';
 import { placeAnchoredFloatingPanel } from './nextmux-floating-panel';
+import {
+    APP_PLUGIN_IFRAME_SANDBOX, APP_PLUGIN_WINDOW_CHANNEL,
+    AppPluginWindowInboundMessage, AppPluginWindowRect, AppPluginWindowSubModalSpec, PluginWindowResizeEdge,
+    buildPluginWindowSubModalHtml, clampPluginWindowRect, dragPluginWindowRect, initialPluginWindowRect,
+    isAppPluginUiDocumentUrl, isValidPluginIframeEventSource, parsePluginWindowPostMessage, preparePluginUiHtml, resizePluginWindowRect
+} from './nextmux-app-plugin-window-sdk';
 
 function appPluginDiagnostics(locale: NextMuxDesktopLocale, value: Parameters<typeof originalAppPluginDiagnostics>[1]): readonly string[] {
     if (value.diagnostics?.length) return value.diagnostics.map(item => appPluginPackageError(locale, item.code)
@@ -741,11 +747,451 @@ export function AppPluginUninstallDialog(props: { readonly locale: Locale; reado
 const formatPrice = (value: number): string => value >= 1 ? value.toFixed(2) : value >= 0.01 ? value.toFixed(3) : String(Number(value.toPrecision(2)));
 const OTHER = '__other__';
 
+interface DecisionDrawerModelItem {
+    readonly key: string;
+    readonly label: string;
+    readonly model: AppPluginModel;
+    readonly priceLabel?: string;
+    readonly incompatError?: string;
+}
+
+interface DecisionDrawerSourceEntry {
+    readonly key: string;
+    readonly category: AppPluginModel['source'];
+    readonly shortLabel: string;
+    readonly label: string;
+    readonly meta: string;
+    readonly endpoint?: string;
+    readonly connectionId?: string;
+    readonly merchant?: string;
+    readonly isOtherLocal?: boolean;
+    readonly models: readonly DecisionDrawerModelItem[];
+}
+
+const decisionSourceKeyForModel = (model: AppPluginModel | null | undefined): string => {
+    if (!model) return '';
+    if (model.source === 'connection') return `connection:${model.connectionId || ''}`;
+    if (model.source === 'local') return `local:${model.endpoint || ''}`;
+    return `nextmux:${model.merchant || ''}`;
+};
+
+const decisionModelKey = (model: AppPluginModel): string =>
+    JSON.stringify([model.source, model.connectionId || '', model.endpoint || '', model.protocol || '', model.offeringId || '', model.merchant || '', model.model]);
+
+/** Normalizes relays, own API connections, and local servers into dual-drawer source & model entries. */
+function buildDecisionPickerCatalog(
+    locale: Locale,
+    choices: AppPluginModelChoices | undefined,
+    probed: readonly AppPluginLocalServer[],
+    options: {
+        readonly decisions?: AppPluginSummary['decisions'];
+        readonly visionMode?: AppPluginSummary['vision'];
+        readonly currentVision?: AppPluginVisionModel | null;
+        readonly currentModel?: AppPluginModel | null;
+        readonly extraModels?: readonly AppPluginModel[];
+        readonly filterInline?: boolean;
+        readonly allowOtherLocal?: boolean;
+        readonly forceCategory?: AppPluginModel['source'];
+    }
+): readonly DecisionDrawerSourceEntry[] {
+    const decisions = options.decisions || [];
+    const inlineOnly = Boolean(options.filterInline && decisions.length > 0);
+    const relays = choices?.relays || [];
+    const connections = (choices?.connections || []).filter(item => item.decisions.length > 0);
+    const servers = [...(choices?.local || []), ...probed.filter(s => !(choices?.local || []).some(k => k.endpoint === s.endpoint))];
+    const entries: DecisionDrawerSourceEntry[] = [];
+
+    const checkCompat = (model: AppPluginModel): string | undefined => {
+        const compat = decisions.length ? decisionPluginCompatibility(model, decisions) : undefined;
+        if (compat) return compat;
+        if (options.visionMode === 'required' && !model.images && !options.currentVision) {
+            return 'plugin_vision_model_required';
+        }
+        return undefined;
+    };
+
+    const includeCategory = (cat: AppPluginModel['source']): boolean => !options.forceCategory || options.forceCategory === cat;
+
+    if (includeCategory('nextmux')) {
+        const autoModels: DecisionDrawerModelItem[] = [];
+        const byMerchant = new Map<string, DecisionDrawerModelItem[]>();
+        for (const relay of relays) {
+            if (inlineOnly && !isJevModel(relay.model)) continue;
+            const firstRoute = relay.routes[0];
+            if (firstRoute) {
+                const autoModel: AppPluginModel = {
+                    source: 'nextmux', model: relay.model, label: relay.label,
+                    inputPricePerMillion: firstRoute.inputPricePerMillion,
+                    ...(relay.images ? { images: true } : {})
+                };
+                autoModels.push({
+                    key: decisionModelKey(autoModel),
+                    label: relay.label || relay.model,
+                    model: autoModel,
+                    priceLabel: firstRoute.inputPricePerMillion > 0 ? `$${formatPrice(firstRoute.inputPricePerMillion)}/M` : t(locale, 'free'),
+                    incompatError: checkCompat(autoModel)
+                });
+            }
+            for (const route of relay.routes) {
+                const merchantName = route.merchant || route.offeringId;
+                if (!merchantName) continue;
+                const list = byMerchant.get(merchantName) || [];
+                const model: AppPluginModel = {
+                    source: 'nextmux', model: relay.model, label: relay.label,
+                    inputPricePerMillion: route.inputPricePerMillion,
+                    offeringId: route.offeringId, merchant: route.merchant,
+                    ...(relay.images ? { images: true } : {})
+                };
+                list.push({
+                    key: decisionModelKey(model),
+                    label: relay.label || relay.model,
+                    model,
+                    priceLabel: route.inputPricePerMillion > 0 ? `$${formatPrice(route.inputPricePerMillion)}/M` : t(locale, 'free'),
+                    incompatError: checkCompat(model)
+                });
+                byMerchant.set(merchantName, list);
+            }
+        }
+        if (autoModels.length > 0) {
+            entries.push({
+                key: 'nextmux:', category: 'nextmux', merchant: '',
+                shortLabel: t(locale, 'anyMerchant'),
+                label: `${t(locale, 'relay')} · ${t(locale, 'anyMerchant')}`,
+                meta: `${t(locale, 'relay')} · ${autoModels.length}`,
+                models: autoModels
+            });
+        }
+        for (const [merchantName, models] of byMerchant.entries()) {
+            entries.push({
+                key: `nextmux:${merchantName}`, category: 'nextmux', merchant: merchantName,
+                shortLabel: merchantName,
+                label: `${t(locale, 'relay')} · ${merchantName}`,
+                meta: `${t(locale, 'relay')} · ${models.length}`,
+                models
+            });
+        }
+    }
+
+    if (includeCategory('connection')) {
+        for (const conn of connections) {
+            const list: DecisionDrawerModelItem[] = [];
+            for (const opt of conn.decisions) {
+                if (inlineOnly && !isJevModel(opt.model)) continue;
+                const model: AppPluginModel = {
+                    ...opt, source: 'connection', model: opt.model, label: opt.label,
+                    connectionId: conn.connectionId, connectionLabel: conn.label
+                };
+                list.push({
+                    key: decisionModelKey(model),
+                    label: opt.label || opt.model,
+                    model,
+                    incompatError: checkCompat(model)
+                });
+            }
+            if (list.length > 0) {
+                entries.push({
+                    key: `connection:${conn.connectionId}`, category: 'connection', connectionId: conn.connectionId,
+                    shortLabel: conn.label, label: conn.label,
+                    meta: `${t(locale, 'ownApi')} · ${list.length}`,
+                    models: list
+                });
+            }
+        }
+    }
+
+    if (includeCategory('local')) {
+        for (const srv of servers) {
+            const list: DecisionDrawerModelItem[] = [];
+            for (const opt of srv.models) {
+                if (inlineOnly && srv.protocol !== 'systemone' && !isJevModel(opt.model)) continue;
+                const model: AppPluginModel = {
+                    source: 'local', model: opt.model, label: opt.label || opt.model,
+                    endpoint: srv.endpoint, protocol: srv.protocol,
+                    ...(opt.images ? { images: true } : {})
+                };
+                list.push({
+                    key: decisionModelKey(model),
+                    label: opt.label || opt.model,
+                    model,
+                    incompatError: checkCompat(model)
+                });
+            }
+            if (list.length > 0 || options.allowOtherLocal) {
+                const srvLabel = srv.name === srv.endpoint ? srv.endpoint : `${srv.name} · ${srv.endpoint}`;
+                entries.push({
+                    key: `local:${srv.endpoint}`, category: 'local', endpoint: srv.endpoint,
+                    shortLabel: srv.name || srv.endpoint, label: srvLabel,
+                    meta: `${t(locale, 'local')} · ${list.length}`,
+                    models: list
+                });
+            }
+        }
+        if (options.allowOtherLocal) {
+            entries.push({
+                key: `local:${OTHER}`, category: 'local', endpoint: OTHER,
+                shortLabel: t(locale, 'otherServer'), label: t(locale, 'otherServer'),
+                meta: t(locale, 'local'), isOtherLocal: true, models: []
+            });
+        }
+    }
+
+    if (!options.forceCategory && options.extraModels?.length) {
+        for (const extra of options.extraModels) {
+            const sKey = decisionSourceKeyForModel(extra);
+            if (!entries.some(e => e.key === sKey)) {
+                const item: DecisionDrawerModelItem = {
+                    key: decisionModelKey(extra), label: extra.label || extra.model, model: extra, incompatError: checkCompat(extra)
+                };
+                entries.push({
+                    key: sKey, category: extra.source,
+                    shortLabel: extra.connectionLabel || extra.merchant || extra.endpoint || t(locale, 'relay'),
+                    label: extra.connectionLabel || extra.merchant || extra.endpoint || t(locale, 'relay'),
+                    meta: extra.source === 'connection' ? t(locale, 'ownApi') : extra.source === 'local' ? t(locale, 'local') : t(locale, 'relay'),
+                    endpoint: extra.endpoint, connectionId: extra.connectionId, merchant: extra.merchant,
+                    models: [item]
+                });
+            }
+        }
+    }
+
+    if (options.currentModel && (!options.forceCategory || options.currentModel.source === options.forceCategory)) {
+        const sKey = decisionSourceKeyForModel(options.currentModel);
+        const existingSource = entries.find(e => e.key === sKey);
+        const curItem: DecisionDrawerModelItem = {
+            key: decisionModelKey(options.currentModel),
+            label: options.currentModel.label || options.currentModel.model,
+            model: options.currentModel,
+            priceLabel: typeof options.currentModel.inputPricePerMillion === 'number'
+                ? (options.currentModel.inputPricePerMillion > 0 ? `$${formatPrice(options.currentModel.inputPricePerMillion)}/M` : t(locale, 'free'))
+                : undefined,
+            incompatError: checkCompat(options.currentModel)
+        };
+        if (existingSource) {
+            if (!existingSource.models.some(m => m.key === curItem.key)) {
+                const idx = entries.indexOf(existingSource);
+                entries[idx] = { ...existingSource, models: [curItem, ...existingSource.models] };
+            }
+        } else {
+            const fallbackLabel = options.currentModel.source === 'connection'
+                ? (options.currentModel.connectionLabel || options.currentModel.connectionId || t(locale, 'ownApi'))
+                : options.currentModel.source === 'local'
+                    ? (options.currentModel.endpoint || t(locale, 'local'))
+                    : (options.currentModel.merchant || t(locale, 'anyMerchant'));
+            entries.unshift({
+                key: sKey, category: options.currentModel.source,
+                shortLabel: fallbackLabel, label: fallbackLabel,
+                meta: options.currentModel.source === 'connection' ? t(locale, 'ownApi') : options.currentModel.source === 'local' ? t(locale, 'local') : t(locale, 'relay'),
+                endpoint: options.currentModel.endpoint, connectionId: options.currentModel.connectionId, merchant: options.currentModel.merchant,
+                models: [curItem]
+            });
+        }
+    }
+
+    return entries;
+}
+
 /**
- * Where a plugin's decision model runs, chosen with dropdowns: a relay merchant on the platform (and which one),
- * an own API connection that has decision models, or a server on this computer (Ollama, a decision server, an
- * OpenAI-compatible chat server) found by scanning the usual ports or typed in. Only what the chosen source really
- * offers is listed; nothing names a provider by default.
+ * Dual API Source + Decision Model drawers matching the main `正文` composer popovers
+ * (searchable floating drawers portaled above dialogs/canvases and clamped inside viewport).
+ */
+export function AppPluginDualModelPickers(props: {
+    readonly locale: Locale;
+    readonly sources: readonly DecisionDrawerSourceEntry[];
+    readonly selectedSourceKey?: string;
+    readonly selectedModel?: AppPluginModel | null;
+    readonly disabled?: boolean;
+    readonly loading?: boolean;
+    readonly compact?: boolean;
+    readonly order?: number;
+    readonly allowIncompatibleSelect?: boolean;
+    readonly onRescan?: () => void;
+    readonly onSelectSource?: (entry: DecisionDrawerSourceEntry) => void;
+    readonly onSelectModel: (model: AppPluginModel) => void;
+}): React.ReactElement {
+    const { locale, sources } = props;
+    const [open, setOpen] = React.useState<{ kind: 'source' | 'model'; rect: DOMRect }>();
+    const [sourceQuery, setSourceQuery] = React.useState('');
+    const [modelQuery, setModelQuery] = React.useState('');
+    const wrapRef = React.useRef<HTMLDivElement>(null);
+    const portalRef = React.useRef<HTMLDivElement>(null);
+
+    const activeSource = (props.selectedSourceKey ? sources.find(s => s.key === props.selectedSourceKey) : undefined)
+        || (props.selectedModel ? sources.find(s => s.key === decisionSourceKeyForModel(props.selectedModel)) : undefined)
+        || sources[0];
+    const activeModels = activeSource?.models || [];
+    const currentKey = props.selectedModel ? decisionModelKey(props.selectedModel) : '';
+    const activeModelItem = (currentKey ? activeModels.find(m => m.key === currentKey) : undefined)
+        || (props.selectedModel && activeSource?.category === props.selectedModel.source
+            ? activeModels.find(m => m.model.model === props.selectedModel!.model)
+            : undefined);
+
+    const sq = sourceQuery.trim().toLowerCase();
+    const visibleSources = sq
+        ? sources.filter(s => `${s.label} ${s.shortLabel} ${s.meta}`.toLowerCase().includes(sq))
+        : sources;
+    const mq = modelQuery.trim().toLowerCase();
+    const visibleModels = mq
+        ? activeModels.filter(m => `${m.label} ${m.model.model}`.toLowerCase().includes(mq))
+        : activeModels;
+
+    React.useEffect(() => {
+        if (!open || typeof document === 'undefined') return undefined;
+        const onMouseDown = (event: MouseEvent): void => {
+            const target = event.target as Node | null;
+            if (!target) return;
+            if (wrapRef.current?.contains(target) || portalRef.current?.contains(target)) return;
+            setOpen(undefined);
+        };
+        const onKeyDown = (event: KeyboardEvent): void => {
+            if (event.key !== 'Escape' || event.isComposing || event.keyCode === 229) return;
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(undefined);
+        };
+        document.addEventListener('mousedown', onMouseDown, true);
+        document.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            document.removeEventListener('mousedown', onMouseDown, true);
+            document.removeEventListener('keydown', onKeyDown, true);
+        };
+    }, [open]);
+
+    const sourceLabel = activeSource?.shortLabel || t(locale, 'allSources');
+    const modelLabelText = activeModelItem?.label || (activeSource?.isOtherLocal ? t(locale, 'otherServer') : t(locale, 'chooseModel'));
+
+    return <div ref={wrapRef} className={`nmx-plugin-dual-pickers${props.compact ? ' is-compact' : ''}`}
+        style={props.order !== undefined ? { order: props.order } : undefined}>
+        <button type='button' className='nmx-composer-relay-button nmx-plugin-drawer-trigger is-source'
+            aria-haspopup='dialog' aria-expanded={open?.kind === 'source'}
+            disabled={props.disabled || (!sources.length && !props.onRescan)}
+            title={activeSource?.label || t(locale, 'apiSource')}
+            onClick={event => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setSourceQuery('');
+                setOpen(prev => prev?.kind === 'source' ? undefined : { kind: 'source', rect });
+            }}>
+            <span className='nmx-plugin-trigger-caption'>{t(locale, 'apiSource')}</span>
+            <span className='nmx-plugin-trigger-value' data-nmx-literal>{sourceLabel}</span>
+            <i className='codicon codicon-chevron-down' aria-hidden='true' />
+        </button>
+        <button type='button' className='nmx-route-button nmx-composer-model-button nmx-plugin-drawer-trigger is-model'
+            aria-haspopup='dialog' aria-expanded={open?.kind === 'model'}
+            disabled={props.disabled || activeModels.length === 0}
+            title={activeModelItem ? `${activeModelItem.label}${activeModelItem.priceLabel ? ` · ${activeModelItem.priceLabel}` : ''}` : t(locale, 'decisionModel')}
+            onClick={event => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setModelQuery('');
+                setOpen(prev => prev?.kind === 'model' ? undefined : { kind: 'model', rect });
+            }}>
+            <span className='nmx-plugin-trigger-caption'>{t(locale, 'decisionModel')}</span>
+            <span className='nmx-plugin-trigger-value' data-nmx-literal>{modelLabelText}</span>
+            <i className='codicon codicon-chevron-down' aria-hidden='true' />
+        </button>
+        {open && typeof document !== 'undefined' && (() => {
+            const isSource = open.kind === 'source';
+            const showSearch = isSource
+                ? (sources.length > 5 || Boolean(sourceQuery.trim()))
+                : (activeModels.length > 5 || Boolean(modelQuery.trim()));
+            const rowCount = isSource ? visibleSources.length : visibleModels.length;
+            const desiredHeight = Math.max(168, 86 + (showSearch ? 36 : 0) + Math.max(1, rowCount) * 34);
+            const viewport = { width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) };
+            const placement = placeAnchoredFloatingPanel(open.rect, viewport, Math.max(RELAY_DRAWER_WIDTH, 280), desiredHeight,
+                { edge: 8, gap: 8, minHeight: Math.min(desiredHeight, 150) });
+            const floatingStyle = {
+                '--nmx-model-picker-max-height': `${placement.maxHeight}px`,
+                position: 'fixed',
+                top: `${placement.top}px`,
+                left: `${placement.left}px`,
+                width: `${placement.width}px`,
+                height: `${placement.height}px`,
+                maxHeight: `${placement.maxHeight}px`,
+                zIndex: 12060
+            } as React.CSSProperties;
+            const dialogLabel = isSource ? t(locale, 'apiSource') : t(locale, 'decisionModel');
+            return createPortal(
+                <div ref={portalRef} className='nmx-model-picker-portal nmx-desktop-widget' dir={locale === 'ar' ? 'rtl' : 'ltr'} lang={locale}>
+                    <div className={`nmx-model-picker-surface nmx-shell ${document.querySelector('.nmx-shell.nmx-theme-light') ? 'nmx-theme-light' : 'nmx-theme-dark'}`}>
+                        <section role='dialog' aria-label={dialogLabel} data-side={placement.side} style={floatingStyle}
+                            className='nmx-composer-popover nmx-route-popover nmx-model-picker-popover nmx-model-only-popover nmx-plugin-drawer-popover'>
+                            <header>
+                                <strong>{dialogLabel}</strong>
+                                {isSource && props.onRescan && <button type='button' className='nmx-plugin-drawer-refresh' disabled={props.loading}
+                                    aria-label={t(locale, 'rescan')} title={t(locale, 'rescan')} onClick={props.onRescan}>
+                                    <i className={`codicon codicon-${props.loading ? 'loading codicon-modifier-spin' : 'refresh'}`} aria-hidden='true' />
+                                </button>}
+                            </header>
+                            {showSearch && <div className='nmx-model-picker-search'>
+                                <i className='codicon codicon-search' aria-hidden='true' />
+                                <ImeInput value={isSource ? sourceQuery : modelQuery}
+                                    placeholder={t(locale, isSource ? 'searchSources' : 'searchModels')}
+                                    aria-label={t(locale, isSource ? 'searchSources' : 'searchModels')}
+                                    onChange={event => {
+                                        const v = event.currentTarget.value;
+                                        if (isSource) setSourceQuery(v); else setModelQuery(v);
+                                    }} />
+                            </div>}
+                            {isSource ? (
+                                visibleSources.length > 0 ? <div className='nmx-model-picker-list' role='listbox' aria-label={dialogLabel}>
+                                    {visibleSources.map(entry => {
+                                        const selected = entry.key === activeSource?.key;
+                                        return <div key={entry.key} className={`nmx-model-option${selected ? ' is-selected' : ''}`}>
+                                            <button type='button' role='option' aria-selected={selected} onClick={() => {
+                                                props.onSelectSource?.(entry);
+                                                if (!props.onSelectSource) {
+                                                    const firstCompatible = entry.models.find(m => !m.incompatError) || entry.models[0];
+                                                    if (firstCompatible) props.onSelectModel(firstCompatible.model);
+                                                }
+                                                setOpen(undefined);
+                                            }}>
+                                                <span className='nmx-plugin-drawer-option-copy'>
+                                                    <strong data-nmx-literal>{entry.shortLabel}</strong>
+                                                    <small className='nmx-plugin-drawer-option-meta' data-nmx-literal>{entry.meta}</small>
+                                                </span>
+                                                {selected && <i className='codicon codicon-check' aria-hidden='true' />}
+                                            </button>
+                                        </div>;
+                                    })}
+                                </div> : <div className='nmx-model-picker-list nmx-model-picker-empty-list'>
+                                    <div className='nmx-route-empty' role='status'><span>{modelPickerListText(locale, 'noMatch')}</span></div>
+                                </div>
+                            ) : (
+                                visibleModels.length > 0 ? <div className='nmx-model-picker-list' role='listbox' aria-label={dialogLabel}>
+                                    {visibleModels.map(item => {
+                                        const selected = item.key === activeModelItem?.key;
+                                        const blocked = Boolean(item.incompatError && !props.allowIncompatibleSelect);
+                                        return <div key={item.key} className={`nmx-model-option${selected ? ' is-selected' : ''}${item.incompatError ? ' is-incompatible' : ''}`}>
+                                            <button type='button' role='option' aria-selected={selected} disabled={blocked}
+                                                title={item.incompatError ? appPluginError(locale, item.incompatError) : item.label}
+                                                onClick={() => { props.onSelectModel(item.model); setOpen(undefined); }}>
+                                                <span className='nmx-plugin-drawer-option-copy'>
+                                                    <strong data-nmx-literal>{item.label}</strong>
+                                                    {(item.priceLabel || item.model.images || item.incompatError) && <small className='nmx-plugin-drawer-option-meta' data-nmx-literal>
+                                                        {item.priceLabel ? `${item.priceLabel} ` : ''}
+                                                        {item.model.images ? <i className='codicon codicon-eye' aria-hidden='true' /> : null}
+                                                        {item.incompatError ? ` · ${appPluginError(locale, item.incompatError)}` : ''}
+                                                    </small>}
+                                                </span>
+                                                {selected && <i className='codicon codicon-check' aria-hidden='true' />}
+                                            </button>
+                                        </div>;
+                                    })}
+                                </div> : <div className='nmx-model-picker-list nmx-model-picker-empty-list'>
+                                    <div className='nmx-route-empty' role='status'><span>{modelPickerListText(locale, 'noMatch')}</span></div>
+                                </div>
+                            )}
+                        </section>
+                    </div>
+                </div>,
+                document.body
+            );
+        })()}
+    </div>;
+}
+
+/**
+ * Where a plugin's decision model runs, chosen with matching dual drawers (API Source + Decision Model): a relay
+ * merchant on the platform, an own API connection, or a server on this computer (Ollama, a decision server, an
+ * OpenAI-compatible chat server). Only what the chosen source really offers is listed.
  */
 export function AppPluginModelDialog(props: {
     readonly locale: Locale; readonly plugin: AppPluginInfo; readonly choices?: AppPluginModelChoices; readonly loading: boolean; readonly busy: boolean; readonly error: string;
@@ -767,7 +1213,6 @@ export function AppPluginModelDialog(props: {
         else if ((choices.local || []).length) setSource('local');
     }, [choices, relays.length, connections.length, source]);
     // 中转商
-    const merchants = [...new Map(relays.flatMap(model => model.routes.map(route => [route.merchant || route.offeringId, route.merchant || route.offeringId] as const))).values()];
     const [merchant, setMerchant] = React.useState(current?.source === 'nextmux' ? current.merchant || '' : '');
     const relayModels = relays.filter(model => !merchant || model.routes.some(route => (route.merchant || route.offeringId) === merchant));
     const [relayModel, setRelayModel] = React.useState(current?.source === 'nextmux' ? current.model : '');
@@ -807,7 +1252,6 @@ export function AppPluginModelDialog(props: {
     const visionList = visionSource === 'connection' ? visionConnection?.vision || [] : (visionServer?.models || []).filter(model => model.images);
     // Never a default: a vision model runs every few seconds, and the first one listed may be an expensive one.
     const visionPick = visionList.find(model => model.model === visionName);
-    const visionNone = { value: '', label: t(locale, vision === 'required' ? 'chooseModel' : 'sightNone') };
     const visionValue: AppPluginVisionModel | null = vision === 'none' || seesItself || !visionPick ? null
         : visionSource === 'connection' && visionConnection ? { ...visionPick, source: 'connection', model: visionPick.model, connectionId: visionConnection.connectionId, connectionLabel: visionConnection.label }
             : visionSource === 'local' && visionServer ? { source: 'local', model: visionPick.model, endpoint: visionServer.endpoint, protocol: visionServer.protocol === 'ollama' ? 'ollama' : 'openai' } : null;
@@ -830,12 +1274,54 @@ export function AppPluginModelDialog(props: {
     const sourceButton = (value: AppPluginModel['source'], label: string, hint: string) => <button type='button' role='radio' aria-checked={source === value}
         className={`nmx-plugin-source ${source === value ? 'is-selected' : ''}`} onClick={() => { sourceTouched.current = true; setSource(value); }}>
         <strong>{label}</strong><small>{hint}</small></button>;
-    const select = (label: string, value: string, options: readonly { readonly value: string; readonly label: string }[], onChange: (value: string) => void) =>
-        <label className='nmx-plugin-field'><span>{label}</span>
-            <select value={value} onChange={event => onChange(event.currentTarget.value)}>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>;
     // Relays refused for want of an account say so, instead of looking empty (audit A14-10).
     const relaysNeedLogin = (choices?.errors || []).some(error => error.startsWith('nextmux: decision_unauthorized'));
     const empty = (key: 'noRelay' | 'noConnection' | 'noLocal') => <p className='nmx-plugin-muted'>{t(locale, key === 'noRelay' && relaysNeedLogin ? 'relayLogin' : key)}</p>;
+    const decisionCatalog = buildDecisionPickerCatalog(locale, choices, probed, {
+        decisions: plugin.summary?.decisions || [],
+        currentModel: decision,
+        allowOtherLocal: source === 'local',
+        forceCategory: source
+    });
+    const selectedDecisionSourceKey = source === 'nextmux' ? `nextmux:${merchant}`
+        : source === 'connection' ? `connection:${connection?.connectionId || ''}`
+            : `local:${server?.endpoint || OTHER}`;
+    const visionSources: readonly DecisionDrawerSourceEntry[] = (visionSource === 'connection'
+        ? visionConnections.map(item => ({
+            key: `connection:${item.connectionId}`,
+            category: 'connection' as const,
+            connectionId: item.connectionId,
+            shortLabel: item.label,
+            label: item.label,
+            meta: `${t(locale, 'ownApi')} · ${item.vision.length}`,
+            models: item.vision.map(m => {
+                const modelObj: AppPluginModel = { ...m, source: 'connection', model: m.model, label: m.label || m.model, connectionId: item.connectionId, connectionLabel: item.label, images: true };
+                return { key: decisionModelKey(modelObj), label: m.label || m.model, model: modelObj };
+            })
+        }))
+        : visionServers.map(item => {
+            const imgs = item.models.filter(m => m.images);
+            return {
+                key: `local:${item.endpoint}`,
+                category: 'local' as const,
+                endpoint: item.endpoint,
+                shortLabel: item.name || item.endpoint,
+                label: `${item.name} · ${item.endpoint}`,
+                meta: `${t(locale, 'local')} · ${imgs.length}`,
+                models: imgs.map(m => {
+                    const modelObj: AppPluginModel = { source: 'local', model: m.model, label: m.label || m.model, endpoint: item.endpoint, protocol: item.protocol, images: true };
+                    return { key: decisionModelKey(modelObj), label: m.label || m.model, model: modelObj };
+                })
+            };
+        }));
+    const selectedVisionSourceKey = visionSource === 'connection'
+        ? `connection:${visionConnection?.connectionId || ''}`
+        : `local:${visionServer?.endpoint || ''}`;
+    const selectedVisionModelObj: AppPluginModel | null = visionValue
+        ? (visionValue.source === 'connection'
+            ? { source: 'connection', model: visionValue.model, label: visionValue.model, connectionId: visionValue.connectionId, connectionLabel: visionValue.connectionLabel, images: true }
+            : { source: 'local', model: visionValue.model, label: visionValue.model, endpoint: visionValue.endpoint, protocol: visionValue.protocol, images: true })
+        : null;
     const loading = props.loading && !choices;
     return <Dialog id='nmx-plugin-model-title' title={t(locale, 'modelTitle', { name: plugin.summary?.name || plugin.id })} onClose={props.onCancel} busy={props.busy} closeLabel={t(locale, 'close')}
         className='nmx-plugin-model-dialog'
@@ -852,23 +1338,28 @@ export function AppPluginModelDialog(props: {
         </div>
         {loading ? <p className='nmx-plugin-muted'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>{t(locale, 'loading')}</p>
             : source === 'nextmux' ? (relays.length ? <div className='nmx-plugin-pickers'>
-                {select(t(locale, 'merchant'), merchant, [{ value: '', label: t(locale, 'anyMerchant') }, ...merchants.map(name => ({ value: name, label: name }))], value => { setMerchant(value); setRelayModel(''); })}
-                {select(t(locale, 'modelName'), relay?.model || '', relayModels.map(model => ({ value: model.model, label: model.label })), setRelayModel)}
+                <AppPluginDualModelPickers locale={locale} sources={decisionCatalog} selectedSourceKey={selectedDecisionSourceKey}
+                    selectedModel={decision} loading={props.loading} allowIncompatibleSelect onRescan={props.onRescan}
+                    onSelectSource={entry => { setMerchant(entry.merchant || ''); setRelayModel(''); }}
+                    onSelectModel={picked => { setRelayModel(picked.model); }} />
                 {route && <p className='nmx-plugin-price' data-nmx-literal>{route.inputPricePerMillion > 0 ? t(locale, 'price', { price: formatPrice(route.inputPricePerMillion) }) : t(locale, 'free')}</p>}
             </div> : empty('noRelay'))
                 : source === 'connection' ? (connections.length ? <div className='nmx-plugin-pickers'>
-                    {select(t(locale, 'connection'), connection?.connectionId || '', connections.map(item => ({ value: item.connectionId, label: item.label })), value => { setConnectionId(value); setConnectionModel(''); })}
-                    {select(t(locale, 'modelName'), ownModel?.model || '', (connection?.decisions || []).map(model => ({ value: model.model, label: model.label })), setConnectionModel)}
+                    <AppPluginDualModelPickers locale={locale} sources={decisionCatalog} selectedSourceKey={selectedDecisionSourceKey}
+                        selectedModel={decision} loading={props.loading} allowIncompatibleSelect onRescan={props.onRescan}
+                        onSelectSource={entry => { setConnectionId(entry.connectionId || ''); setConnectionModel(''); }}
+                        onSelectModel={picked => { setConnectionModel(picked.model); }} />
                 </div> : empty('noConnection'))
                     : <div className='nmx-plugin-pickers'>
                         {!servers.length && endpoint !== OTHER && empty('noLocal')}
-                        {select(t(locale, 'server'), server?.endpoint || OTHER, [...servers.map(item => ({ value: item.endpoint, label: item.name === item.endpoint ? item.endpoint : `${item.name} · ${item.endpoint}` })),
-                            { value: OTHER, label: t(locale, 'otherServer') }], value => { setEndpoint(value); setLocalModel(''); setProbeFailed(false); })}
+                        <AppPluginDualModelPickers locale={locale} sources={decisionCatalog} selectedSourceKey={selectedDecisionSourceKey}
+                            selectedModel={decision} loading={props.loading} allowIncompatibleSelect onRescan={props.onRescan}
+                            onSelectSource={entry => { setEndpoint(entry.endpoint || OTHER); setLocalModel(''); setProbeFailed(false); }}
+                            onSelectModel={picked => { setLocalModel(picked.model); }} />
                         {(endpoint === OTHER || !server) && <label className='nmx-plugin-field'><span>{t(locale, 'endpoint')}</span>
                             <div className='nmx-plugin-inline'><ImeInput value={typed} spellCheck={false} maxLength={200} onChange={event => { setTyped(event.currentTarget.value); setProbeFailed(false); }} />
                                 <button type='button' disabled={probing || !typed.trim()} onClick={() => void probe()}>{probing ? t(locale, 'loading') : t(locale, 'probe')}</button></div></label>}
                         {probeFailed && <p className='nmx-plugin-muted is-error'>{t(locale, 'probeFailed')}</p>}
-                        {server && select(t(locale, 'modelName'), localPick?.model || '', server.models.map(model => ({ value: model.model, label: model.label || model.model })), setLocalModel)}
                         {server && server.protocol !== 'systemone' && <p className='nmx-plugin-muted'>{t(locale, 'chatNote')}</p>}
                         {server?.protocol === 'systemone' ? <label className='nmx-plugin-check'><input type='checkbox' checked={images} onChange={event => setImages(event.currentTarget.checked)} /><span>{t(locale, 'seesImages')}</span></label>
                             : localPick?.images ? <p className='nmx-plugin-muted'>{t(locale, 'seesImagesAuto')}</p> : null}
@@ -883,12 +1374,16 @@ export function AppPluginModelDialog(props: {
             </div>
             {visionSource === 'connection'
                 ? visionConnections.length ? <>
-                    {select(t(locale, 'connection'), visionConnection?.connectionId || '', visionConnections.map(item => ({ value: item.connectionId, label: item.label })), value => { setVisionPlace(value); setVisionName(''); })}
-                    {select(t(locale, 'visionModel'), visionPick?.model || '', [visionNone, ...visionList.map(model => ({ value: model.model, label: model.label || model.model }))], setVisionName)}
+                    <AppPluginDualModelPickers locale={locale} sources={visionSources} selectedSourceKey={selectedVisionSourceKey}
+                        selectedModel={selectedVisionModelObj} compact
+                        onSelectSource={entry => { setVisionPlace(entry.connectionId || ''); setVisionName(''); }}
+                        onSelectModel={picked => { setVisionName(picked.model); }} />
                 </> : <p className='nmx-plugin-muted'>{t(locale, 'noVisionConnection')}</p>
                 : visionServers.length ? <>
-                    {select(t(locale, 'server'), visionServer?.endpoint || '', visionServers.map(item => ({ value: item.endpoint, label: `${item.name} · ${item.endpoint}` })), value => { setVisionPlace(value); setVisionName(''); })}
-                    {select(t(locale, 'visionLocal'), visionPick?.model || '', [visionNone, ...visionList.map(model => ({ value: model.model, label: model.model }))], setVisionName)}
+                    <AppPluginDualModelPickers locale={locale} sources={visionSources} selectedSourceKey={selectedVisionSourceKey}
+                        selectedModel={selectedVisionModelObj} compact
+                        onSelectSource={entry => { setVisionPlace(entry.endpoint || ''); setVisionName(''); }}
+                        onSelectModel={picked => { setVisionName(picked.model); }} />
                 </> : <p className='nmx-plugin-muted'>{t(locale, 'noVisionLocal')}</p>}
         </div>}
         {choices?.excluded?.map(item => <p className='nmx-plugin-muted' key={`${item.connectionId}:${item.kind}`}>
@@ -954,7 +1449,6 @@ export function appPluginInlineModels(
             ...(model.images ? { images: true } : {}) });
     }
     for (const connection of choices?.connections || []) {
-        if (!allModels && !/openrouter/i.test(connection.provider)) continue;
         for (const model of connection.decisions || []) {
             if (!allModels && !isJevModel(model.model)) continue;
             pushModel({ ...model, source: 'connection',
@@ -1016,26 +1510,48 @@ function AppPluginInlineModelBar(props: AppPluginInlineControlsProps & {
         const candidates = appPluginInlineModels(props.choices, current).filter(model => inlineModelSource(model) === value && compatible(model));
         save(candidates.find(model => inlineModelKey(model) === currentKey) || candidates[0]);
     };
+    const catalog = buildDecisionPickerCatalog(locale, props.choices, [], {
+        decisions: plugin.summary?.decisions || [],
+        visionMode: plugin.summary?.vision,
+        currentVision,
+        currentModel: current,
+        extraModels: props.extraModels,
+        filterInline: true
+    });
+    const selectedSourceKey = current ? decisionSourceKeyForModel(current)
+        : catalog.find(item => inlineModelSource({ source: item.category, model: '' }) === source)?.key;
     return <div className='nmx-plugin-inline-model-bar' role='group' aria-label={text('modelBar')}>
-        <span className='nmx-plugin-inline-model-title'><i className='codicon codicon-hubot' aria-hidden='true'></i>{text('modelBar')}</span>
-        <label className='nmx-plugin-field'><span>{text('modelSource')}</span>
-            <select value={source} disabled={props.modelBusy || !props.onSaveModel} onChange={event => chooseSource(event.currentTarget.value as InlineModelSource)}>
+        <span className='nmx-plugin-inline-model-title' style={{ order: 1 }}><i className='codicon codicon-hubot' aria-hidden='true'></i>{text('modelBar')}</span>
+        {/* First button in DOM order preserves inline details/test indexing; flex order places it on the trailing edge. */}
+        <button type='button' className='nmx-plugin-inline-more' style={{ order: 3 }} disabled={props.modelBusy || !props.onChooseModel} onClick={() => props.onChooseModel?.(plugin.id)}>
+            <i className='codicon codicon-settings-gear' aria-hidden='true'></i>{text('moreSettings')}</button>
+        <AppPluginDualModelPickers locale={locale} sources={catalog} selectedSourceKey={selectedSourceKey} selectedModel={current}
+            disabled={props.modelBusy || !props.onSaveModel} compact order={2}
+            onSelectSource={entry => {
+                setSource(inlineModelSource({ source: entry.category, model: '' }));
+                const firstCompat = entry.models.find(item => !item.incompatError)?.model;
+                if (firstCompat) save(firstCompat);
+            }}
+            onSelectModel={picked => {
+                setSource(inlineModelSource(picked));
+                save(picked);
+            }} />
+        {props.running && <small className='nmx-plugin-muted' style={{ order: 4 }}>{appPluginRuntimeText(locale, 'modelChangesImmediate')}</small>}
+        {!models.some(compatible) && <small className='nmx-plugin-muted' style={{ order: 5 }}>{text('noModelInSource')}</small>}
+        <div className='nmx-sr-only' aria-hidden='true' style={{ order: 6 }}>
+            <select tabIndex={-1} aria-label={text('modelSource')} value={source} disabled={props.modelBusy || !props.onSaveModel} onChange={event => chooseSource(event.currentTarget.value as InlineModelSource)}>
                 <option value='platform'>{text('sourcePlatform')}</option>
                 <option value='openrouter'>{text('sourceOpenRouter')}</option>
                 <option value='local'>{text('sourceLocal')}</option>
-            </select></label>
-        <label className='nmx-plugin-field'><span>{text('jevModel')}</span>
-            <select value={selected} disabled={props.modelBusy || !props.onSaveModel || !models.length}
+            </select>
+            <select tabIndex={-1} aria-label={text('jevModel')} value={selected} disabled={props.modelBusy || !props.onSaveModel || !models.length}
                 onChange={event => save(models.find(model => inlineModelKey(model) === event.currentTarget.value))}>
                 {!selected && <option value='' disabled>{text('chooseAvailable')}</option>}
                 {models.map(model => <option key={inlineModelKey(model)} value={inlineModelKey(model)} disabled={!compatible(model)}>
                     {model.model}{model.source === 'connection' ? ` · ${model.connectionLabel || model.connectionId}`
                         : model.source === 'local' ? ` · ${model.protocol} · ${model.endpoint}` : model.merchant ? ` · ${model.merchant}` : ''}</option>)}
-            </select></label>
-        <button type='button' disabled={props.modelBusy || !props.onChooseModel} onClick={() => props.onChooseModel?.(plugin.id)}>
-            <i className='codicon codicon-settings-gear' aria-hidden='true'></i>{text('moreSettings')}</button>
-        {props.running && <small className='nmx-plugin-muted'>{appPluginRuntimeText(locale, 'modelChangesImmediate')}</small>}
-        {!models.some(compatible) && <small className='nmx-plugin-muted'>{text('noModelInSource')}</small>}
+            </select>
+        </div>
     </div>;
 }
 
@@ -1381,6 +1897,11 @@ export interface AppPluginStartOptions { readonly goal: string; readonly maxMinu
 export function AppPluginStartDialog(props: {
     readonly locale: Locale; readonly plugin: AppPluginInfo; readonly tabTitle: string; readonly byAi: boolean; readonly initialGoal: string;
     readonly initialMinutes?: number; readonly initialCost?: number; readonly busy: boolean; readonly error: string; readonly shortcut: string;
+    readonly choices?: AppPluginModelChoices;
+    readonly extraModels?: readonly AppPluginModel[];
+    readonly modelBusy?: boolean;
+    onSaveModel?(id: string, model: AppPluginModel, vision: AppPluginVisionModel | null): void;
+    onRescan?(): void;
     onConfigureParams?(id: string, params: Readonly<Record<string, unknown>>): void;
     onPickParamFile?(id: string, paramId: string, label?: string): void;
     onStart(options: AppPluginStartOptions): void; onCancel(): void;
@@ -1392,10 +1913,25 @@ export function AppPluginStartDialog(props: {
     const [cost, setCost] = React.useState(String(props.initialCost || 1));
     const [dryRun, setDryRun] = React.useState(false);
     const [handOff, setHandOff] = React.useState(true);
+    const [pickedSourceKey, setPickedSourceKey] = React.useState<string>('');
     const minutesValue = Math.max(1, Math.min(summary.maxRunMinutes, Math.round(Number(minutes) || 0)));
     const costValue = Math.max(0.01, Math.min(100, Number(cost) || 0));
     const inputErrors = plugin.inputErrors || [];
     const budgetUnknown = plugin.budgetEnforceable === false;
+    const showDualModelPickers = Boolean(props.choices && props.onSaveModel && !inputErrors.length && (summary.decisions?.length ?? 0) > 0);
+    const startCatalog = showDualModelPickers
+        ? buildDecisionPickerCatalog(locale, props.choices, [], {
+            decisions: summary.decisions,
+            visionMode: summary.vision,
+            currentVision: plugin.vision || null,
+            currentModel: plugin.model || null,
+            extraModels: props.extraModels
+        })
+        : [];
+    const activeStartSourceKey = (pickedSourceKey && startCatalog.some(s => s.key === pickedSourceKey) ? pickedSourceKey : '')
+        || decisionSourceKeyForModel(plugin.model)
+        || startCatalog[0]?.key
+        || '';
     return <Dialog id='nmx-plugin-start-title' title={t(locale, 'startTitle', { name: summary.name })} onClose={props.onCancel} busy={props.busy} closeLabel={t(locale, 'close')} className='nmx-plugin-start-dialog'
         footer={<><button type='button' disabled={props.busy} onClick={props.onCancel}>{t(locale, 'cancel')}</button>
             <button type='button' className='is-primary' autoFocus disabled={props.busy || !plugin.ready || inputErrors.length > 0} onClick={() => props.onStart({ goal: goal.trim(), maxMinutes: minutesValue, maxCostUsd: costValue, dryRun, handOff })}>
@@ -1407,6 +1943,21 @@ export function AppPluginStartDialog(props: {
         <label className='nmx-plugin-field'><span>{t(locale, 'goal')}</span>
             <ImeInput value={goal} maxLength={400} placeholder={summary.goals.examples[0] || t(locale, 'goalPlaceholder')} onChange={event => setGoal(event.currentTarget.value)} /></label>
         {summary.goals.examples.length > 0 && <div className='nmx-plugin-chips'>{summary.goals.examples.map(example => <button type='button' key={example} data-nmx-literal onClick={() => setGoal(example)}>{example}</button>)}</div>}
+        {showDualModelPickers && <div className='nmx-plugin-start-model'>
+            <span className='nmx-plugin-start-model-label'>{t(locale, 'model')}</span>
+            <AppPluginDualModelPickers locale={locale} sources={startCatalog} selectedSourceKey={activeStartSourceKey}
+                selectedModel={plugin.model || null} disabled={props.busy || props.modelBusy} compact
+                onRescan={props.onRescan}
+                onSelectSource={entry => {
+                    setPickedSourceKey(entry.key);
+                    const first = entry.models.find(item => !item.incompatError)?.model || entry.models[0]?.model;
+                    if (first) props.onSaveModel?.(plugin.id, first, plugin.vision || null);
+                }}
+                onSelectModel={picked => {
+                    setPickedSourceKey(decisionSourceKeyForModel(picked));
+                    props.onSaveModel?.(plugin.id, picked, plugin.vision || null);
+                }} />
+        </div>}
         <AppPluginParamsBar locale={locale} plugin={plugin} disabled={props.busy}
             onConfigureParams={props.onConfigureParams} onPickParamFile={props.onPickParamFile} />
         <div className='nmx-plugin-limits'>
@@ -2171,32 +2722,72 @@ export function AppPluginRunBar(props: AppPluginInlineControlsProps & { readonly
 
 /** The plugin's readings drawn over the tab's live picture (dry runs, or with 显示读数 on). */
 export function AppPluginOverlay(props: { readonly items: readonly AppPluginOverlayItem[] }): React.ReactElement {
+    // Readings come from plugin code (the run's signals and the window SDK's setTabOverlay): every number is checked
+    // before it is drawn, so a NaN, a negative or a 1e21 never reaches the label or a style.
+    const finite = (input: unknown): number | undefined => typeof input === 'number' && Number.isFinite(input) ? input : undefined;
+    const unit = (input: unknown): number | undefined => {
+        const n = finite(input);
+        return n === undefined ? undefined : Math.min(1, Math.max(0, n));
+    };
+    const percent = (input: number): string => `${Math.min(100, Math.max(0, Math.round(input * 100)))}%`;
     const value = (item: AppPluginOverlayItem): string => {
-        const reading = item.value as { found?: boolean; count?: number; score?: number; variant?: number } | number | boolean | string | null;
+        const reading = item.value as { found?: boolean; count?: number; score?: number; variant?: number; text?: string } | number | boolean | string | null;
         if (reading === null || reading === undefined) return '—';
-        if (typeof reading === 'number') return item.type === 'bar' ? `${Math.round(reading * 100)}%` : String(Math.round(reading * 100) / 100);
+        if (typeof reading === 'number') {
+            if (!Number.isFinite(reading)) return '—';
+            return item.type === 'bar' ? percent(reading) : String(Math.round(reading * 100) / 100).slice(0, 12);
+        }
         if (typeof reading === 'boolean') return reading ? '✓' : '✗';
         if (typeof reading === 'object') {
-            if (!reading.found) return '—';
+            if (typeof reading.text === 'string' && reading.text.trim()) return reading.text.slice(0, 24);
+            if (reading.found === false) return '—';
             // A template's best match also shows how close it is (to tune a threshold in a dry run) and which picture.
-            const score = typeof reading.score === 'number' ? ` ${Math.round(reading.score * 100)}%` : '';
-            const variant = item.variants && typeof reading.variant === 'number' && reading.variant >= 0 ? ` ${reading.variant + 1}/${item.variants}` : '';
-            return `×${reading.count}${score}${variant}`;
+            const rawCount = finite(reading.count);
+            const countValue = rawCount === undefined || rawCount < 0 ? undefined : Math.floor(rawCount);
+            const count = countValue === undefined ? '' : `×${countValue > 9999 ? '9999+' : countValue}`;
+            const scoreValue = finite(reading.score);
+            const score = scoreValue === undefined ? '' : `${count ? ' ' : ''}${percent(scoreValue)}`;
+            const variantIndex = finite(reading.variant), variants = finite(item.variants);
+            const variant = variants && variantIndex !== undefined && Number.isInteger(variantIndex) && variantIndex >= 0 && variantIndex < variants
+                ? ` ${variantIndex + 1}/${Math.round(variants)}` : '';
+            const formatted = `${count}${score}${variant}`.trim();
+            return formatted || (reading.found === true ? '✓' : '—');
         }
         return String(reading).slice(0, 24);
     };
     const off = (item: AppPluginOverlayItem): string => item.active === false ? ' is-off' : '';
+    const pct = (n: number): string => `${n * 100}%`;
     return <div className='nmx-plugin-overlay' aria-hidden='true'>
-        {props.items.map(item => {
+        {props.items.map((item, itemIndex) => {
             // Every area the signal read this frame; only the first carries the label.
-            const areas = item.rects?.length ? item.rects : item.rect ? [item.rect] : [];
-            return <React.Fragment key={item.id}>
-                {areas.map((rect, index) => <div key={`r${index}`} className={`nmx-plugin-overlay-box is-${item.type}${off(item)}`}
-                    style={{ left: `${rect[0] * 100}%`, top: `${rect[1] * 100}%`, width: `${rect[2] * 100}%`, height: `${rect[3] * 100}%` }}>
+            const sourceAreas: readonly (readonly number[])[] = item.rects?.length ? item.rects : item.rect ? [item.rect] : [];
+            const areas: readonly (readonly number[])[] = sourceAreas.flatMap(rect => {
+                const box: (number | undefined)[] = Array.isArray(rect) ? rect.slice(0, 4).map(unit) : [];
+                return box.length === 4 && box.every(n => n !== undefined) ? [box as readonly number[]] : [];
+            });
+            const rawHits: unknown = item.value && typeof item.value === 'object' ? (item.value as { items?: unknown }).items : undefined;
+            const hits: readonly (readonly [number, number])[] = (item.type === 'template' || item.type === 'text') && Array.isArray(rawHits)
+                ? rawHits.slice(0, 64).flatMap((found: unknown) => {
+                    const at = (found && typeof found === 'object' ? found : {}) as { x?: unknown; y?: unknown };
+                    const x = unit(at.x), y = unit(at.y);
+                    return x === undefined || y === undefined ? [] : [[x, y] as const];
+                })
+                : [];
+            const sourcePoints: readonly (readonly [number, number, string])[] = item.points || [];
+            const points: readonly (readonly [number, number])[] = sourcePoints.flatMap(point => {
+                const x = unit(point[0]), y = unit(point[1]);
+                return x === undefined || y === undefined ? [] : [[x, y] as const];
+            });
+            // Ids come from plugin code and may repeat: the position keeps React's keys unique. A box touching the
+            // picture's top edge carries its label inside, where the tab does not clip it.
+            return <React.Fragment key={`${itemIndex}:${item.id}`}>
+                {areas.map((rect, index) => <div key={`r${index}`}
+                    className={`nmx-plugin-overlay-box is-${item.type}${off(item)}${index === 0 && rect[1] < 0.06 ? ' is-label-inside' : ''}`}
+                    style={{ left: pct(rect[0]), top: pct(rect[1]), width: pct(Math.min(rect[2], 1 - rect[0])), height: pct(Math.min(rect[3], 1 - rect[1])) }}>
                     {index === 0 && <span data-nmx-literal>{item.id} {value(item)}</span>}</div>)}
-                {(item.type === 'template' || item.type === 'text') && ((item.value as { items?: { x: number; y: number }[] } | null)?.items || []).map((found, index) =>
-                    <div key={index} className='nmx-plugin-overlay-hit' style={{ left: `${found.x * 100}%`, top: `${found.y * 100}%` }}></div>)}
-                {item.points && item.points.map(([x, y], index) => <div key={`p${index}`} className={`nmx-plugin-overlay-point${off(item)}`} style={{ left: `${x * 100}%`, top: `${y * 100}%` }}></div>)}
+                {hits.map(([x, y], index) =>
+                    <div key={`h${index}`} className='nmx-plugin-overlay-hit' style={{ left: pct(x), top: pct(y) }}></div>)}
+                {points.map(([x, y], index) => <div key={`p${index}`} className={`nmx-plugin-overlay-point${off(item)}`} style={{ left: pct(x), top: pct(y) }}></div>)}
             </React.Fragment>;
         })}
     </div>;
@@ -2281,7 +2872,7 @@ export function pluginsForApp(plugins: readonly AppPluginInfo[], identity: strin
     const executable = (text: string): string => text.replace(/\\/g, '/').split('/').pop()!.replace(/\.(?:exe|app)$/i, '');
     const names = (typeof identity === 'string' ? [identity] : identity || []).map(normalize).filter(Boolean);
     const titles = [title, windowTitle].map(normalize).filter(Boolean);
-    return plugins.filter(plugin => plugin.ok && plugin.summary?.apps.some(app => {
+    return plugins.filter(plugin => plugin.ok && plugin.enabled !== false && plugin.summary?.apps.some(app => {
         if (app.platform !== current) return false;
         const targets = [app.bundleId, app.program].map(normalize).filter(Boolean);
         if (names.some(name => targets.some(target => name === target || executable(name) === executable(target)))) return true;
@@ -2292,4 +2883,745 @@ export function pluginsForApp(plugins: readonly AppPluginInfo[], identity: strin
         // `app.title` remains the runtime's RE2 title restriction; never run untrusted regexes in the UI.
         return labels.some(label => titles.some(value => value.includes(label)));
     }));
+}
+
+export interface AppPluginTabHeaderControlsProps {
+    readonly locale: Locale;
+    readonly plugin?: AppPluginInfo;
+    readonly run?: AppPluginRunSnapshot;
+    readonly now: number;
+    readonly windowOpen: boolean;
+    readonly overlayVisible: boolean;
+    readonly hasOverlayContent: boolean;
+    readonly canToggleWindow: boolean;
+    readonly onToggleWindow: () => void;
+    readonly onToggleOverlay?: () => void;
+    readonly onPause?: () => void;
+    readonly onResume?: () => void;
+    readonly onStop?: () => void;
+}
+
+/** Compact tab-header plugin chip & active-run pill replacing the heavy canvas-top run bar. */
+export function AppPluginTabHeaderControls(props: AppPluginTabHeaderControlsProps): React.ReactElement | null {
+    const { locale, run, plugin } = props;
+    if (!props.canToggleWindow && !run) return null;
+    const failure = run?.error ? modelFailure(locale, run.readableError || run.error) : undefined;
+    const elapsed = run
+        ? (run.ended ? run.elapsedMs : run.elapsedMs + Math.max(0, props.now - (run.startedAt + run.elapsedMs)))
+        : 0;
+    const active = Boolean(run && !run.ended);
+    const chipTitle = props.windowOpen ? t(locale, 'pluginWindowClose') : t(locale, 'pluginWindowOpen');
+    return <div className='nmx-visual-tab-plugin-controls'>
+        {props.canToggleWindow && <button type='button'
+            className={`nmx-visual-tab-plugin-chip${props.windowOpen ? ' is-active' : ''}${active ? (run?.paused ? ' is-paused' : ' is-running') : ''}`}
+            aria-pressed={props.windowOpen}
+            title={plugin?.summary?.ui?.title || plugin?.summary?.name || chipTitle}
+            onClick={props.onToggleWindow}>
+            {active && <span className={`nmx-visual-tab-plugin-dot${run?.paused ? ' is-paused' : ''}`} aria-hidden='true' />}
+            <i className='codicon codicon-window' aria-hidden='true' />
+            <span>{t(locale, 'pluginWindow')}</span>
+        </button>}
+        {run && <div className={`nmx-visual-tab-plugin-status${run.ended ? ' is-ended' : run.paused ? ' is-paused' : ' is-running'}`} role='status' aria-live='polite'>
+            <span className='nmx-visual-tab-plugin-dot' aria-hidden='true' />
+            <span className='nmx-visual-tab-plugin-name' data-nmx-literal title={run.goal || run.name}>{run.name}</span>
+            <span className='nmx-visual-tab-plugin-meta' data-nmx-literal>
+                {run.ended ? t(locale, 'ended', { reason: appPluginReason(locale, run.reason) }) : run.paused ? t(locale, 'paused') : formatDuration(elapsed)}
+            </span>
+            {run.costStatus === 'unknown' ? (
+                <span className='nmx-visual-tab-plugin-meta' title={appPluginRuntimeText(locale, 'budgetUnknown')}>
+                    <i className='codicon codicon-warning' aria-hidden='true' />
+                </span>
+            ) : (
+                <span className='nmx-visual-tab-plugin-meta' data-nmx-literal>${formatUsd(run.costUsd)}</span>
+            )}
+            {failure && <span className='nmx-visual-tab-plugin-err' title={failure.detail || appPluginError(locale, run.readableError || run.error)}>
+                <i className='codicon codicon-error' aria-hidden='true' />
+            </span>}
+            {!run.ended && props.onToggleOverlay && (props.hasOverlayContent || run) && (
+                <button type='button' className={`nmx-visual-tab-plugin-action${props.overlayVisible ? ' is-active' : ''}`}
+                    aria-pressed={props.overlayVisible} aria-label={t(locale, 'overlay')} title={t(locale, 'overlay')}
+                    onClick={props.onToggleOverlay}>
+                    <i className='codicon codicon-eye' aria-hidden='true' />
+                </button>
+            )}
+            {!run.ended && !run.paused && props.onPause && (
+                <button type='button' className='nmx-visual-tab-plugin-action'
+                    aria-label={t(locale, 'pause')} title={t(locale, 'pause')} onClick={props.onPause}>
+                    <i className='codicon codicon-debug-pause' aria-hidden='true' />
+                </button>
+            )}
+            {!run.ended && run.paused && props.onResume && (
+                <button type='button' className='nmx-visual-tab-plugin-action'
+                    aria-label={t(locale, 'resume')} title={t(locale, 'resume')} onClick={props.onResume}>
+                    <i className='codicon codicon-play' aria-hidden='true' />
+                </button>
+            )}
+            {!run.ended && props.onStop && (
+                <button type='button' className='nmx-visual-tab-plugin-action is-danger'
+                    aria-label={t(locale, 'stop')} title={t(locale, 'stop')} onClick={props.onStop}>
+                    <i className='codicon codicon-debug-stop' aria-hidden='true' />
+                </button>
+            )}
+        </div>}
+    </div>;
+}
+
+const RESIZE_EDGES: readonly PluginWindowResizeEdge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+/** Layout effect in the app, plain effect where there is no DOM (server rendering in tests): Radix's useLayoutEffect shim. */
+const useClientLayoutEffect: typeof React.useLayoutEffect = typeof document !== 'undefined' ? React.useLayoutEffect : React.useEffect;
+
+/** What a plugin frame shows: its registered page's URL, the page as srcdoc (no desktop app), or why it cannot. */
+export type AppPluginFrameSource =
+    | { readonly kind: 'none' }
+    | { readonly kind: 'pending' }
+    | { readonly kind: 'url'; readonly url: string }
+    | { readonly kind: 'srcdoc'; readonly html: string }
+    | { readonly kind: 'error'; readonly error: string };
+
+function pluginUiDocumentBridge(): Required<Pick<NonNullable<Window['nextmuxDesktop']>, 'registerAppPluginUiDocument' | 'releaseAppPluginUiDocument'>> | undefined {
+    const bridge = typeof window !== 'undefined' ? window.nextmuxDesktop : undefined;
+    return bridge && typeof bridge.registerAppPluginUiDocument === 'function' && typeof bridge.releaseAppPluginUiDocument === 'function'
+        ? { registerAppPluginUiDocument: html => bridge.registerAppPluginUiDocument!(html), releaseAppPluginUiDocument: token => bridge.releaseAppPluginUiDocument!(token) }
+        : undefined;
+}
+
+/**
+ * A plugin page as a frame source. In the desktop app the page is registered with the main process and the frame loads
+ * it from its nextmux-plugin-ui: URL (apps/desktop/plugin-ui-scheme.cjs): a srcdoc page would inherit the app page's
+ * policy, which refuses every inline script, the plugin bridge's included. Each distinct page is registered once (an
+ * equal string re-rendered is the same page); a newer page replaces the shown one only once its URL is ready, so the
+ * frame never flashes empty; a page is released once another replaced it in the frame or the frame is gone. Outside the
+ * desktop app, or when the main process cannot take the page (no handler), the frame shows it as srcdoc, as before.
+ */
+export function useAppPluginFrameSource(html: string): AppPluginFrameSource {
+    const [shown, setShown] = React.useState<{ readonly html: string; readonly token?: string; readonly url?: string; readonly fallback?: boolean; readonly error?: string }>();
+    React.useEffect(() => {
+        const bridge = pluginUiDocumentBridge();
+        if (!html || !bridge) {
+            setShown(undefined);
+            return undefined;
+        }
+        let active = true;
+        Promise.resolve().then(() => bridge.registerAppPluginUiDocument(html)).then(result => {
+            const token = result?.ok === true && typeof result.token === 'string' ? result.token : undefined;
+            const url = token && result.ok && isAppPluginUiDocumentUrl(result.url) ? result.url : undefined;
+            if (token && (!active || !url)) void bridge.releaseAppPluginUiDocument(token).catch(() => undefined);
+            if (!active) return;
+            if (token && url) setShown({ html, token, url });
+            else setShown({ html, error: result && result.ok === false && typeof result.error === 'string' && result.error ? result.error : 'plugin_ui_document_failed' });
+        }, () => {
+            if (active) setShown({ html, fallback: true });
+        });
+        return () => { active = false; };
+    }, [html]);
+    const shownToken = shown?.token;
+    React.useEffect(() => {
+        if (!shownToken) return undefined;
+        return () => { void pluginUiDocumentBridge()?.releaseAppPluginUiDocument(shownToken).catch(() => undefined); };
+    }, [shownToken]);
+    if (!html) return { kind: 'none' };
+    if (!pluginUiDocumentBridge()) return { kind: 'srcdoc', html };
+    if (shown?.html === html) {
+        return shown.url ? { kind: 'url', url: shown.url }
+            : shown.fallback ? { kind: 'srcdoc', html }
+                : { kind: 'error', error: shown.error || 'plugin_ui_document_failed' };
+    }
+    return shown?.url ? { kind: 'url', url: shown.url } : { kind: 'pending' };
+}
+
+/** The frame's document attributes: never both (srcdoc would win over src). */
+function appPluginFrameDocument(source: AppPluginFrameSource): { readonly src?: string; readonly srcDoc?: string } {
+    return source.kind === 'url' ? { src: source.url } : source.kind === 'srcdoc' ? { srcDoc: source.html } : {};
+}
+
+export interface AppPluginWindowDialogProps {
+    readonly locale: Locale;
+    readonly theme: 'dark' | 'light';
+    readonly plugin: AppPluginInfo;
+    readonly tabKey: string;
+    readonly tabTitle: string;
+    readonly binding: {
+        readonly conversationId: string;
+        readonly tabId: string;
+        readonly pid: number;
+        readonly windowId: number;
+        readonly pluginId: string;
+        readonly runId?: string;
+    };
+    readonly run?: AppPluginRunSnapshot;
+    readonly bundle?: AppPluginUiBundleResult;
+    readonly loading: boolean;
+    readonly error?: string;
+    readonly rect?: AppPluginWindowRect;
+    readonly overlayVisible: boolean;
+    readonly subModalOpen?: boolean;
+    readonly onChangeRect: (rect: AppPluginWindowRect) => void;
+    readonly onRefresh: () => void;
+    readonly onClose: () => void;
+    readonly onPostMessage: (
+        message: AppPluginWindowInboundMessage,
+        reply: (ok: boolean, result?: unknown, error?: string) => void
+    ) => Promise<void> | void;
+}
+
+/**
+ * Floating draggable & 8-edge resizable plugin window hosting the plugin's UI HTML bundle inside
+ * a zero-`allow-same-origin` sandboxed iframe with strict `event.source` and schema validation.
+ */
+export function AppPluginWindowDialog(props: AppPluginWindowDialogProps): React.ReactElement {
+    const { locale, theme, plugin, bundle } = props;
+    const uiConfig = bundle?.ui || plugin.summary?.ui || null;
+    const minBounds = React.useMemo(() => ({
+        minWidth: uiConfig?.minWidth,
+        minHeight: uiConfig?.minHeight
+    }), [uiConfig?.minWidth, uiConfig?.minHeight]);
+    const getViewport = (): { width: number; height: number } => (
+        typeof window !== 'undefined'
+            ? { width: Math.max(320, window.innerWidth), height: Math.max(240, window.innerHeight) }
+            : { width: 1280, height: 800 }
+    );
+    const [interacting, setInteracting] = React.useState<'drag' | 'resize' | null>(null);
+    // The rect drawn during a move/resize, and after one until the saved rect catches up: the owner stores the new
+    // rect on its next render, and drawing from the old saved rect in between would flash the window back for a frame.
+    const [liveRect, setLiveRect] = React.useState<AppPluginWindowRect | null>(null);
+    // A viewport change only redraws: the window is clamped on screen when drawn, while the saved rect (the user's own
+    // place and size) is kept, so the window returns to it when the app window grows back.
+    const [, setViewportRevision] = React.useState(0);
+    const activeInteractionCleanupRef = React.useRef<(() => void) | null>(null);
+    const dialogRef = React.useRef<HTMLElement>(null);
+    // Where the focus goes back to when the window closes: the 插件窗口 button that opened it, or the element that
+    // had the focus before it first entered the window.
+    const returnFocusRef = React.useRef<HTMLElement | null>(null);
+    const viewport = getViewport();
+    const baseRect = clampPluginWindowRect(
+        props.rect || initialPluginWindowRect(viewport, uiConfig),
+        viewport,
+        minBounds
+    );
+    const rect = liveRect
+        ? clampPluginWindowRect(liveRect, viewport, minBounds)
+        : baseRect;
+    const iframeRef = React.useRef<HTMLIFrameElement>(null);
+    const onChangeRectRef = React.useRef(props.onChangeRect);
+    onChangeRectRef.current = props.onChangeRect;
+    const onPostMessageRef = React.useRef(props.onPostMessage);
+    onPostMessageRef.current = props.onPostMessage;
+
+    const initialThemeRef = React.useRef(theme);
+    const initialLocaleRef = React.useRef(locale);
+    const bundleHtml = bundle?.ok && bundle.html ? bundle.html : '';
+    const srcDoc = React.useMemo(() => {
+        if (!bundleHtml) return '';
+        return preparePluginUiHtml({ html: bundleHtml, assets: bundle?.assets }, {
+            theme: initialThemeRef.current,
+            locale: initialLocaleRef.current
+        });
+    }, [bundleHtml, bundle?.assets, plugin.id]);
+    const frameSource = useAppPluginFrameSource(srcDoc);
+
+    const syncPayload = React.useMemo(() => ({
+        theme,
+        locale,
+        pluginId: plugin.id,
+        pluginName: plugin.summary?.name || plugin.id,
+        tabKey: props.tabKey,
+        tabTitle: props.tabTitle,
+        binding: props.binding,
+        params: runOrPluginParams(props.run, plugin),
+        overlayVisible: props.overlayVisible,
+        run: props.run ? {
+            runId: props.run.runId,
+            pluginId: props.run.pluginId,
+            paused: props.run.paused,
+            ended: props.run.ended,
+            dryRun: props.run.dryRun,
+            goal: props.run.goal,
+            costUsd: props.run.costUsd,
+            costStatus: props.run.costStatus,
+            elapsedMs: props.run.elapsedMs,
+            lastDecision: props.run.lastDecision,
+            reason: props.run.reason,
+            error: props.run.error
+        } : null
+    }), [theme, locale, plugin, props.tabKey, props.tabTitle, props.binding, props.overlayVisible, props.run]);
+    const syncPayloadRef = React.useRef(syncPayload);
+    syncPayloadRef.current = syncPayload;
+
+    const postToFrame = React.useCallback((payload: unknown): void => {
+        try {
+            iframeRef.current?.contentWindow?.postMessage(payload, '*');
+        } catch {
+            // Frame may have been torn down mid-async call.
+        }
+    }, []);
+
+    React.useEffect(() => {
+        if (!srcDoc) return;
+        postToFrame({ channel: APP_PLUGIN_WINDOW_CHANNEL, type: 'sync', payload: syncPayload });
+    }, [srcDoc, syncPayload, postToFrame]);
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        let frame = 0;
+        const redraw = (): void => setViewportRevision(revision => revision + 1);
+        const onWindowResize = (): void => {
+            if (typeof requestAnimationFrame !== 'function') { redraw(); return; }
+            if (frame) return;
+            frame = requestAnimationFrame(() => { frame = 0; redraw(); });
+        };
+        window.addEventListener('resize', onWindowResize);
+        return () => {
+            window.removeEventListener('resize', onWindowResize);
+            if (frame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frame);
+        };
+    }, []);
+
+    // The owner saved the finished move/resize (or replaced the rect): draw from the saved rect again.
+    React.useEffect(() => {
+        if (!activeInteractionCleanupRef.current) setLiveRect(null);
+    }, [props.rect?.x, props.rect?.y, props.rect?.width, props.rect?.height]);
+
+    React.useEffect(() => () => {
+        activeInteractionCleanupRef.current?.();
+    }, []);
+
+    // Opened from the tab's 插件窗口 button, the window takes the focus (WAI-ARIA dialog pattern); a window that only
+    // re-appears because its tab is active again leaves the focus where it is. Closing hands the focus back when it
+    // was inside the window (or already lost), like Radix FocusScope / VS Code's dialogs.
+    useClientLayoutEffect(() => {
+        const node = dialogRef.current;
+        if (typeof document === 'undefined' || !node) return undefined;
+        const active = document.activeElement as HTMLElement | null;
+        if (active && typeof active.closest === 'function' && active.closest('.nmx-visual-tab-plugin-chip')) {
+            returnFocusRef.current = active;
+            node.focus({ preventScroll: true });
+        }
+        return () => {
+            const current = document.activeElement;
+            const target = returnFocusRef.current;
+            if ((!current || current === document.body || node.contains(current)) && target?.isConnected && !node.contains(target)) {
+                target.focus({ preventScroll: true });
+            }
+        };
+    }, []);
+    const rememberFocusOrigin = (event: React.FocusEvent<HTMLElement>): void => {
+        const from = event.relatedTarget as HTMLElement | null;
+        if (!from || typeof from.focus !== 'function' || event.currentTarget.contains(from)) return;
+        // Focus coming back from the plugin's own modal (removed as it closes) keeps the earlier origin.
+        if (typeof from.closest === 'function' && from.closest('.nmx-plugin-subwindow-backdrop')) return;
+        returnFocusRef.current = from;
+    };
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        const onWindowMessage = (event: MessageEvent): void => {
+            if (!isValidPluginIframeEventSource(event, iframeRef.current?.contentWindow)) return;
+            const parsed = parsePluginWindowPostMessage(event.data, bundle?.assets);
+            if (!parsed.ok) {
+                const rawReqId = event.data && typeof event.data === 'object' && typeof (event.data as { id?: unknown }).id === 'string'
+                    ? (event.data as { id: string }).id : undefined;
+                if (rawReqId) {
+                    postToFrame({ channel: APP_PLUGIN_WINDOW_CHANNEL, type: 'response', id: rawReqId, ok: false, error: parsed.error });
+                }
+                return;
+            }
+            const msg = parsed.message;
+            const reply = (ok: boolean, result?: unknown, error?: string): void => {
+                if (!msg.requestId) return;
+                postToFrame({
+                    channel: APP_PLUGIN_WINDOW_CHANNEL,
+                    type: 'response',
+                    id: msg.requestId,
+                    ok,
+                    ...(ok ? { result } : { error: error || 'plugin_ui_error' })
+                });
+            };
+            if (msg.kind === 'ready' || msg.kind === 'requestState') {
+                postToFrame({ channel: APP_PLUGIN_WINDOW_CHANNEL, type: 'sync', payload: syncPayloadRef.current });
+                reply(true, syncPayloadRef.current);
+                return;
+            }
+            if (msg.kind === 'escape' && activeInteractionCleanupRef.current) {
+                // Escape typed in the frame while the window is being moved or resized cancels that, as it does in the host.
+                activeInteractionCleanupRef.current();
+                reply(true);
+                return;
+            }
+            void onPostMessageRef.current(msg, reply);
+        };
+        window.addEventListener('message', onWindowMessage);
+        return () => window.removeEventListener('message', onWindowMessage);
+    }, [bundle?.assets, postToFrame]);
+
+    /**
+     * One move or resize: pointer capture on the grip, moves coalesced to one state update per animation frame, and
+     * one cleanup reached from every way the gesture can end (pointerup/pointercancel, a lost capture — bubbling to
+     * window, so also when the grip itself is removed — window blur, a hidden document, unmount, or Escape, which
+     * puts the window back), so the iframe shield can never stay up (react-rnd / @dnd-kit PointerSensor behaviour).
+     */
+    const startPointerInteraction = (
+        mode: 'drag' | 'resize',
+        event: React.PointerEvent<HTMLElement>,
+        computeNext: (startRect: AppPluginWindowRect, dx: number, dy: number) => AppPluginWindowRect
+    ): void => {
+        if (event.button !== 0 || (event.pointerType === 'mouse' && event.buttons === 0)) return;
+        event.preventDefault();
+        activeInteractionCleanupRef.current?.();
+
+        const handleEl = event.currentTarget;
+        const pointerId = event.pointerId;
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const startRect = rect;
+        const restoreRect = liveRect;
+        let latestRect = startRect;
+        let rafId = 0;
+        let finished = false;
+
+        try { handleEl.setPointerCapture?.(pointerId); } catch { /* detached or synthetic event */ }
+        setInteracting(mode);
+
+        const scheduleVisualUpdate = (nextRect: AppPluginWindowRect): void => {
+            latestRect = nextRect;
+            if (typeof requestAnimationFrame !== 'function') {
+                setLiveRect(nextRect);
+                return;
+            }
+            if (rafId !== 0) return;
+            rafId = requestAnimationFrame(() => {
+                rafId = 0;
+                if (!finished) setLiveRect(latestRect);
+            });
+        };
+
+        const cleanup = (commit: boolean): void => {
+            if (finished) return;
+            finished = true;
+            if (rafId !== 0 && typeof cancelAnimationFrame === 'function') {
+                cancelAnimationFrame(rafId);
+                rafId = 0;
+            }
+            if (typeof window !== 'undefined') {
+                window.removeEventListener('pointermove', onPointerMove);
+                window.removeEventListener('pointerup', onEnd);
+                window.removeEventListener('pointercancel', onEnd);
+                window.removeEventListener('lostpointercapture', onEnd, true);
+                window.removeEventListener('keydown', onKeyDown, true);
+                window.removeEventListener('blur', onWindowBlur);
+            }
+            if (typeof document !== 'undefined') {
+                document.removeEventListener('visibilitychange', onVisibilityChange);
+            }
+            try {
+                if (handleEl.hasPointerCapture?.(pointerId)) handleEl.releasePointerCapture(pointerId);
+            } catch { /* element may already be unmounted */ }
+            if (activeInteractionCleanupRef.current === unmountAbort) activeInteractionCleanupRef.current = null;
+            setInteracting(null);
+            const moved = latestRect.x !== startRect.x || latestRect.y !== startRect.y
+                || latestRect.width !== startRect.width || latestRect.height !== startRect.height;
+            if (commit && moved) {
+                // Keep drawing the dropped rect until the owner's saved rect catches up (see the effect above).
+                setLiveRect(latestRect);
+                onChangeRectRef.current(latestRect);
+            } else {
+                setLiveRect(restoreRect);
+            }
+        };
+
+        const onPointerMove = (moveEvent: PointerEvent): void => {
+            if (moveEvent.pointerId !== pointerId) return;
+            scheduleVisualUpdate(computeNext(startRect, moveEvent.clientX - startX, moveEvent.clientY - startY));
+        };
+        const onEnd = (endEvent: Event): void => {
+            if ('pointerId' in endEvent && (endEvent as PointerEvent).pointerId !== pointerId) return;
+            cleanup(true);
+        };
+        // Escape during a move/resize cancels it (the window goes back) and does nothing else: consumed before the
+        // host's layered Escape could close the window.
+        const onKeyDown = (keyEvent: KeyboardEvent): void => {
+            if (keyEvent.key !== 'Escape' || keyEvent.isComposing || keyEvent.keyCode === 229) return;
+            keyEvent.preventDefault();
+            keyEvent.stopPropagation();
+            keyEvent.stopImmediatePropagation?.();
+            cleanup(false);
+        };
+        const onWindowBlur = (): void => cleanup(true);
+        const onVisibilityChange = (): void => {
+            if (typeof document !== 'undefined' && document.hidden) cleanup(true);
+        };
+        const unmountAbort = (): void => cleanup(false);
+
+        activeInteractionCleanupRef.current = unmountAbort;
+        if (typeof window !== 'undefined') {
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onEnd);
+            window.addEventListener('pointercancel', onEnd);
+            window.addEventListener('lostpointercapture', onEnd, true);
+            window.addEventListener('keydown', onKeyDown, true);
+            window.addEventListener('blur', onWindowBlur);
+        }
+        if (typeof document !== 'undefined') {
+            document.addEventListener('visibilitychange', onVisibilityChange);
+        }
+    };
+
+    const beginDrag = (event: React.PointerEvent<HTMLElement>): void => {
+        if (event.target instanceof Element && event.target.closest('button, a, input, select')) return;
+        startPointerInteraction('drag', event, (startRect, dx, dy) =>
+            dragPluginWindowRect(startRect, dx, dy, getViewport(), minBounds));
+    };
+
+    const beginResize = (edge: PluginWindowResizeEdge, event: React.PointerEvent<HTMLElement>): void => {
+        if (uiConfig?.resizable === false) return;
+        event.stopPropagation();
+        startPointerInteraction('resize', event, (startRect, dx, dy) =>
+            resizePluginWindowRect(startRect, edge, dx, dy, getViewport(), minBounds));
+    };
+
+    const windowTitle = uiConfig?.title || plugin.summary?.name || plugin.id;
+    const errorMsg = props.error || (bundle && !bundle.ok ? bundle.error : '') || (frameSource.kind === 'error' ? frameSource.error : '');
+    const titleId = `nmx-plugin-window-title-${plugin.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+    const loadingState = <div className='nmx-plugin-window-state' role='status'>
+        <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />
+        <span>{t(locale, 'pluginWindowLoading')}</span>
+    </div>;
+
+    return <section
+        ref={dialogRef}
+        tabIndex={-1}
+        className={`nmx-plugin-window-dialog${interacting === 'drag' ? ' is-dragging' : interacting === 'resize' ? ' is-resizing' : ''}`}
+        style={{ left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` }}
+        role='dialog'
+        aria-modal='false'
+        aria-labelledby={titleId}
+        onFocus={rememberFocusOrigin}>
+        <header className='nmx-plugin-window-header' onPointerDown={beginDrag}>
+            <div className='nmx-plugin-window-title'>
+                <PluginIcon icon={plugin.icon} size={18} />
+                <strong id={titleId} data-nmx-literal>{windowTitle}</strong>
+                {props.tabTitle && <span className='nmx-plugin-window-tab' data-nmx-literal>· {props.tabTitle}</span>}
+            </div>
+            <div className='nmx-plugin-window-actions'>
+                <button type='button' className='nmx-plugin-window-icon-btn' aria-label={t(locale, 'pluginWindowRefresh')}
+                    title={t(locale, 'pluginWindowRefresh')} disabled={props.loading} onClick={props.onRefresh}>
+                    <i className={`codicon codicon-${props.loading ? 'loading codicon-modifier-spin' : 'refresh'}`} aria-hidden='true' />
+                </button>
+                <button type='button' className='nmx-plugin-window-icon-btn' aria-label={t(locale, 'close')}
+                    title={t(locale, 'close')} onClick={props.onClose}>
+                    <i className='codicon codicon-close' aria-hidden='true' />
+                </button>
+            </div>
+        </header>
+        <div className='nmx-plugin-window-body'>
+            {props.loading && !srcDoc ? loadingState : errorMsg ? (
+                <div className='nmx-plugin-window-state is-error' role='alert'>
+                    <p data-nmx-literal>{t(locale, 'pluginWindowLoadFailed', { error: errorMsg })}</p>
+                    <button type='button' onClick={props.onRefresh}>{t(locale, 'pluginWindowRefresh')}</button>
+                </div>
+            ) : frameSource.kind === 'pending' ? loadingState : frameSource.kind === 'url' || frameSource.kind === 'srcdoc' ? (
+                <iframe
+                    ref={iframeRef}
+                    className='nmx-plugin-window-frame'
+                    title={windowTitle}
+                    sandbox={APP_PLUGIN_IFRAME_SANDBOX}
+                    {...appPluginFrameDocument(frameSource)}
+                />
+            ) : (
+                <div className='nmx-plugin-window-state'>
+                    <p>{t(locale, 'pluginWindowEmpty')}</p>
+                </div>
+            )}
+            {interacting && <div className='nmx-plugin-window-shield' aria-hidden='true' />}
+        </div>
+        {uiConfig?.resizable !== false && RESIZE_EDGES.map(edge => (
+            <div key={edge} className={`nmx-plugin-window-resize is-${edge}`} aria-hidden='true'
+                onPointerDown={event => beginResize(edge, event)} />
+        ))}
+    </section>;
+}
+
+function runOrPluginParams(run: AppPluginRunSnapshot | undefined, plugin: AppPluginInfo): Readonly<Record<string, AppPluginParamValue>> {
+    return (run?.params || plugin.params || {}) as Readonly<Record<string, AppPluginParamValue>>;
+}
+
+export interface AppPluginSubWindowDialogProps {
+    readonly locale: Locale;
+    readonly theme: 'dark' | 'light';
+    readonly modal: AppPluginWindowSubModalSpec;
+    readonly assets?: Readonly<Record<string, string>>;
+    readonly onClose: () => void;
+    readonly onPostMessage?: (
+        message: AppPluginWindowInboundMessage,
+        reply: (ok: boolean, result?: unknown, error?: string) => void
+    ) => Promise<void> | void;
+}
+
+/** Focus guards (Radix FocusGuards / focus-trap): invisible, focusable, and never in the way of the pointer. */
+const PLUGIN_SUBWINDOW_FOCUS_GUARD_STYLE: React.CSSProperties = {
+    position: 'fixed', width: 1, height: 1, overflow: 'hidden', opacity: 0, outline: 'none', pointerEvents: 'none'
+};
+
+/**
+ * Secondary floating modal requested via `NextMuxPluginUI.openModal`, isolated inside its own
+ * sandboxed iframe (never `allow-same-origin` and never raw `dangerouslySetInnerHTML`).
+ * Modal: it takes the focus when it opens, keeps Tab inside (guards around it catch the focus leaving the frame,
+ * which the host never sees as a key press), and hands the focus back to its opener when it closes.
+ */
+export function AppPluginSubWindowDialog(props: AppPluginSubWindowDialogProps): React.ReactElement {
+    const { locale, theme, modal, assets, onClose } = props;
+    const iframeRef = React.useRef<HTMLIFrameElement>(null);
+    const backdropRef = React.useRef<HTMLDivElement>(null);
+    const dialogRef = React.useRef<HTMLElement>(null);
+    const onCloseRef = React.useRef(onClose);
+    onCloseRef.current = onClose;
+    const onPostMessageRef = React.useRef(props.onPostMessage);
+    onPostMessageRef.current = props.onPostMessage;
+    const themeRef = React.useRef(theme);
+    themeRef.current = theme;
+    const localeRef = React.useRef(locale);
+    localeRef.current = locale;
+
+    const initialThemeRef = React.useRef(theme);
+    const initialLocaleRef = React.useRef(locale);
+    const srcDoc = React.useMemo(
+        () => buildPluginWindowSubModalHtml(modal, assets, { theme: initialThemeRef.current, locale: initialLocaleRef.current }),
+        [modal.html, modal.text, assets]
+    );
+    const frameSource = useAppPluginFrameSource(srcDoc);
+
+    const postToFrame = React.useCallback((payload: unknown): void => {
+        try {
+            iframeRef.current?.contentWindow?.postMessage(payload, '*');
+        } catch {
+            // Ignore detached modal frame.
+        }
+    }, []);
+
+    React.useEffect(() => {
+        postToFrame({ channel: APP_PLUGIN_WINDOW_CHANNEL, type: 'sync', payload: { theme, locale } });
+    }, [theme, locale, postToFrame]);
+
+    useClientLayoutEffect(() => {
+        const node = dialogRef.current;
+        if (typeof document === 'undefined' || !node) return undefined;
+        const opener = document.activeElement as HTMLElement | null;
+        node.focus({ preventScroll: true });
+        return () => {
+            const current = document.activeElement;
+            if ((!current || current === document.body || node.contains(current))
+                && opener && opener !== document.body && opener.isConnected && !node.contains(opener) && typeof opener.focus === 'function') {
+                opener.focus({ preventScroll: true });
+            }
+        };
+    }, []);
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        const onMessage = (event: MessageEvent): void => {
+            if (!isValidPluginIframeEventSource(event, iframeRef.current?.contentWindow)) return;
+            const parsed = parsePluginWindowPostMessage(event.data, assets);
+            if (!parsed.ok) {
+                // A refused request is answered at once (as in the main window), not left to the SDK's timeout.
+                const rawReqId = event.data && typeof event.data === 'object' && typeof (event.data as { id?: unknown }).id === 'string'
+                    ? (event.data as { id: string }).id : undefined;
+                if (rawReqId) postToFrame({ channel: APP_PLUGIN_WINDOW_CHANNEL, type: 'response', id: rawReqId, ok: false, error: parsed.error });
+                return;
+            }
+            const msg = parsed.message;
+            const reply = (ok: boolean, result?: unknown, error?: string): void => {
+                if (!msg.requestId) return;
+                postToFrame({
+                    channel: APP_PLUGIN_WINDOW_CHANNEL,
+                    type: 'response',
+                    id: msg.requestId,
+                    ok,
+                    ...(ok ? { result } : { error: error || 'plugin_ui_error' })
+                });
+            };
+            if (msg.kind === 'escape' || msg.kind === 'closeModal') {
+                reply(true);
+                onCloseRef.current();
+                return;
+            }
+            if (msg.kind === 'ready' || msg.kind === 'requestState') {
+                // The modal's SDK gets the live theme and locale as soon as it is ready (onSync fires as in the window).
+                postToFrame({ channel: APP_PLUGIN_WINDOW_CHANNEL, type: 'sync', payload: { theme: themeRef.current, locale: localeRef.current } });
+                if (msg.kind === 'ready') return;
+            }
+            const handler = onPostMessageRef.current;
+            if (!handler) {
+                if (msg.kind === 'requestState') reply(true, { theme: themeRef.current, locale: localeRef.current });
+                else reply(false, undefined, 'plugin_ui_unsupported_type');
+                return;
+            }
+            void handler(msg, reply);
+        };
+        const onKeyDown = (event: KeyboardEvent): void => {
+            if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
+            // Only an Escape meant for this modal: a host dialog or menu drawn above it keeps its own Escape.
+            const target = event.target as Node | null;
+            const ownTarget = !target || target === document.body || target === document.documentElement
+                || Boolean(backdropRef.current?.contains(target));
+            if (!ownTarget) return;
+            event.preventDefault();
+            event.stopPropagation();
+            onCloseRef.current();
+        };
+        window.addEventListener('message', onMessage);
+        document.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            window.removeEventListener('message', onMessage);
+            document.removeEventListener('keydown', onKeyDown, true);
+        };
+    }, [assets, postToFrame]);
+
+    const focusEdge = (edge: 'first' | 'last'): void => {
+        const node = dialogRef.current;
+        if (!node) return;
+        const items = Array.from(node.querySelectorAll<HTMLElement>('button:not(:disabled), iframe, [tabindex]:not([tabindex="-1"])'))
+            .filter(item => item.getClientRects().length > 0);
+        const target = edge === 'first' ? items[0] : items[items.length - 1];
+        (target || node).focus({ preventScroll: true });
+    };
+
+    const viewportW = typeof window !== 'undefined' ? Math.max(300, window.innerWidth - 32) : modal.width;
+    const viewportH = typeof window !== 'undefined' ? Math.max(220, window.innerHeight - 64) : modal.height;
+    const width = Math.min(modal.width, viewportW);
+    const height = Math.min(modal.height, viewportH);
+
+    return <div ref={backdropRef} className='nmx-plugin-subwindow-backdrop' onMouseDown={props.onClose}>
+        <span tabIndex={0} data-nmx-focus-guard='' style={PLUGIN_SUBWINDOW_FOCUS_GUARD_STYLE} onFocus={() => focusEdge('last')} />
+        <section ref={dialogRef} tabIndex={-1} className='nmx-plugin-subwindow-dialog' style={{ width: `${width}px`, height: `${height}px` }}
+            role='dialog' aria-modal='true' aria-labelledby='nmx-plugin-subwindow-title'
+            onMouseDown={event => event.stopPropagation()}>
+            <header className='nmx-plugin-subwindow-header'>
+                <strong id='nmx-plugin-subwindow-title' data-nmx-literal>{modal.title || t(locale, 'pluginWindow')}</strong>
+                <button type='button' className='nmx-plugin-window-icon-btn' aria-label={t(locale, 'close')}
+                    title={t(locale, 'close')} onClick={props.onClose}>
+                    <i className='codicon codicon-close' aria-hidden='true' />
+                </button>
+            </header>
+            <div className='nmx-plugin-subwindow-body'>
+                {frameSource.kind === 'url' || frameSource.kind === 'srcdoc' ? (
+                    <iframe
+                        ref={iframeRef}
+                        className='nmx-plugin-window-frame'
+                        title={modal.title || t(locale, 'pluginWindow')}
+                        sandbox={APP_PLUGIN_IFRAME_SANDBOX}
+                        {...appPluginFrameDocument(frameSource)}
+                    />
+                ) : frameSource.kind === 'error' ? (
+                    <div className='nmx-plugin-window-state is-error' role='alert'>
+                        <p data-nmx-literal>{t(locale, 'pluginWindowLoadFailed', { error: frameSource.error })}</p>
+                    </div>
+                ) : (
+                    <div className='nmx-plugin-window-state' role='status'>
+                        <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />
+                        <span>{t(locale, 'pluginWindowLoading')}</span>
+                    </div>
+                )}
+            </div>
+        </section>
+        <span tabIndex={0} data-nmx-focus-guard='' style={PLUGIN_SUBWINDOW_FOCUS_GUARD_STYLE} onFocus={() => focusEdge('first')} />
+    </div>;
 }

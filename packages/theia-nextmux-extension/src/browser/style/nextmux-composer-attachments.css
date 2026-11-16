@@ -1667,6 +1667,171 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 .nmx-shell.nmx-theme-light .nmx-plugin-tab-market-dot { background: #1a7f37; }
 .nmx-shell.nmx-theme-light .nmx-plugin-tab-market-dot.is-paused { background: #b7791f; }
 
+/* Compact tab-header Plugin Window toggle chip & live run status controls (replaces heavy canvas-top run bar). */
+.nmx-shell .nmx-visual-tab-plugin-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 1 auto;
+    min-width: 0;
+}
+.nmx-shell .nmx-visual-tab-plugin-chip {
+    position: relative;
+    flex: none;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    min-height: 26px;
+    padding: 0 9px;
+    border: 1px solid color-mix(in srgb, var(--nmx-border, rgba(255, 255, 255, .14)) 88%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--nmx-text, #f3f4f6) 5%, transparent);
+    color: var(--nmx-text, #f3f4f6);
+    font: inherit;
+    font-size: 11.5px;
+    font-weight: 550;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 120ms ease;
+}
+.nmx-shell .nmx-visual-tab-plugin-chip:hover {
+    background: color-mix(in srgb, var(--nmx-text, #f3f4f6) 11%, transparent);
+}
+.nmx-shell .nmx-visual-tab-plugin-chip:active { transform: scale(.96); }
+.nmx-shell .nmx-visual-tab-plugin-chip:focus-visible {
+    outline: 2px solid var(--nmx-focus-ring, #6b8afd);
+    outline-offset: 1px;
+}
+.nmx-shell .nmx-visual-tab-plugin-chip.is-active {
+    border-color: color-mix(in srgb, #6b8afd 58%, transparent);
+    background: color-mix(in srgb, #5865f2 22%, transparent);
+    color: #eef0ff;
+}
+.nmx-shell .nmx-visual-tab-plugin-chip > .codicon { font-size: 12.5px; flex: none; }
+.nmx-shell .nmx-visual-tab-plugin-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex: none;
+    background: #23a55a;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #23a55a 26%, transparent);
+}
+.nmx-shell .nmx-visual-tab-plugin-dot.is-paused {
+    background: #f0b232;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #f0b232 26%, transparent);
+}
+.nmx-shell .nmx-visual-tab-plugin-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    max-width: 340px;
+    height: 26px;
+    padding: 0 6px 0 8px;
+    border: 1px solid color-mix(in srgb, var(--nmx-border, rgba(255, 255, 255, .14)) 82%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--nmx-text, #f3f4f6) 4%, transparent);
+    color: var(--nmx-text, #f3f4f6);
+    font-size: 11px;
+    line-height: 1;
+}
+.nmx-shell .nmx-visual-tab-plugin-status.is-ended > .nmx-visual-tab-plugin-dot {
+    background: var(--nmx-muted, #8e929b);
+    box-shadow: none;
+}
+.nmx-shell .nmx-visual-tab-plugin-status.is-paused > .nmx-visual-tab-plugin-dot {
+    background: #f0b232;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #f0b232 24%, transparent);
+}
+.nmx-shell .nmx-visual-tab-plugin-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+.nmx-shell .nmx-visual-tab-plugin-meta {
+    flex: none;
+    color: var(--nmx-muted, #a1a1aa);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.nmx-shell .nmx-visual-tab-plugin-err {
+    flex: none;
+    color: #f87171;
+    display: inline-flex;
+    align-items: center;
+}
+.nmx-shell .nmx-visual-tab-plugin-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--nmx-muted, #a1a1aa);
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+.nmx-shell .nmx-visual-tab-plugin-action:hover {
+    color: var(--nmx-text, #f3f4f6);
+    background: color-mix(in srgb, var(--nmx-text, #f3f4f6) 10%, transparent);
+}
+.nmx-shell .nmx-visual-tab-plugin-action.is-active {
+    color: #a3abff;
+    background: color-mix(in srgb, #5865f2 22%, transparent);
+}
+.nmx-shell .nmx-visual-tab-plugin-action.is-danger:hover {
+    color: #fecaca;
+    background: rgba(239, 68, 68, .22);
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab-plugin-chip {
+    border-color: rgba(15, 23, 42, .14);
+    background: rgba(15, 23, 42, .04);
+    color: #1f1d1e;
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab-plugin-chip:hover {
+    background: rgba(15, 23, 42, .09);
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab-plugin-chip.is-active {
+    border-color: rgba(71, 82, 196, .45);
+    background: rgba(88, 101, 242, .13);
+    color: #363f9e;
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab-plugin-status {
+    border-color: rgba(15, 23, 42, .12);
+    background: rgba(15, 23, 42, .035);
+    color: #1f1d1e;
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab-plugin-meta { color: #52525b; }
+.nmx-shell.nmx-theme-light .nmx-visual-tab-plugin-dot { background: #1a7f37; }
+.nmx-shell.nmx-theme-light .nmx-visual-tab-plugin-dot.is-paused { background: #b7791f; }
+.nmx-shell.nmx-theme-light .nmx-visual-tab-plugin-action { color: #52525b; }
+.nmx-shell.nmx-theme-light .nmx-visual-tab-plugin-action:hover {
+    color: #18181b;
+    background: rgba(15, 23, 42, .08);
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab-plugin-action.is-active {
+    color: #363f9e;
+    background: rgba(88, 101, 242, .15);
+}
+.nmx-shell.nmx-theme-light .nmx-visual-tab-plugin-action.is-danger:hover {
+    color: #b42318 !important;
+    background: rgba(220, 38, 38, .12);
+}
+@media (max-width: 720px) {
+    .nmx-shell .nmx-visual-tab-plugin-status { max-width: 210px; }
+    .nmx-shell .nmx-visual-tab-plugin-name { max-width: 72px; }
+}
+
 /* Plans: a clock with their count right before 键鼠; a drawer of switches beneath it on hover, focus or a click. */
 .nmx-shell .nmx-visual-tab-schedule { position: relative; flex: none; display: inline-flex; align-items: center; }
 .nmx-shell .nmx-visual-tab-icon-btn.nmx-visual-tab-schedule-trigger { width: auto; padding: 0 6px 0 5px; }

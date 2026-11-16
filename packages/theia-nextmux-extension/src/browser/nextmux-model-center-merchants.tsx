@@ -496,12 +496,23 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
                 const quality = rating.value === undefined ? relayEvidenceText(locale, 'unmeasured') : rating.initial ? text('initialRating') : text('votedRating', rating.samples);
                 // A quarantined API is never mentioned (no "N API(s) off sale", no warning of its own). Every check of the
                 // last day failing is said on the card, not only in the icon's hint.
+                const finiteNonNegative = (value: unknown): number | undefined =>
+                    typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+                const ratingValue = finiteNonNegative(rating.value);
+                const authenticityValue = finiteNonNegative(merchant.metrics?.authenticity);
+                const latencyValue = finiteNonNegative(merchant.metrics?.latencyMs);
+                const measuredAvailability = (merchant.measurement?.availability?.sampleCount ?? 0) > 0
+                    ? finiteNonNegative(merchant.metrics?.availability)
+                    : undefined;
+                const availabilityText = measuredAvailability !== undefined && measuredAvailability <= 1
+                    ? percent(measuredAvailability)
+                    : '';
                 const api = publicMerchantApiDisplay(merchant);
                 const apiState = api.state;
-                const statusLabel = `${text('apiStatus')} · ${modelCenterApiState(locale, apiState)}${api.checksFailing ? ` · ${modelCenterChecksFailing(locale, 'hint')}` : ''}`;
+                const statusLabel = `${text('apiStatus')} · ${modelCenterApiState(locale, apiState)}${availabilityText ? ` (${availabilityText})` : ''}${api.checksFailing ? ` · ${modelCenterChecksFailing(locale, 'hint')}` : ''}`;
                 // Values the directory supplies for want of current ones read quieter, and their hint says what they are.
-                const latencyStale = merchant.metrics?.latencyMs !== undefined && merchant.measurement?.latency?.state === 'stale';
-                const authenticityListed = merchant.metrics?.authenticity !== undefined && merchant.measurement?.authenticity?.scope === 'listed_offerings';
+                const latencyStale = latencyValue !== undefined && merchant.measurement?.latency?.state === 'stale';
+                const authenticityListed = authenticityValue !== undefined && merchant.measurement?.authenticity?.scope === 'listed_offerings';
                 const outputs = merchantOutputCategories(merchant.outputCategories);
                 const storeIntro = (merchant.storeTagline || merchant.storeDescription || '').trim();
                 const storeIntroDisplay = storeIntro || text('noStoreIntro');
@@ -526,16 +537,16 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
                         {isCapacityFull && hint(<small className='nmx-mc-api-alert is-capacity' data-relay-capacity-badge='full'>{relayText(locale, 'relayFullBadge')}</small>, relayText(locale, 'relayFull'))}
                         {api.checksFailing && hint(<small className='nmx-mc-api-alert' data-api-detail='probe_failures'><i className='codicon codicon-warning' aria-hidden='true' />{modelCenterChecksFailing(locale, 'chip')}</small>, statusLabel)}</span>}</div>
                     <div className='nmx-mc-metrics'>
-                        {hint(<><i className='codicon codicon-star-full' aria-hidden='true' /><strong data-unmeasured={rating.value === undefined || undefined}>{percent(rating.value === undefined ? undefined : rating.value / 100)}</strong></>, `${market('rating')} · ${quality}`)}
+                        {hint(<><i className='codicon codicon-star-full' aria-hidden='true' /><strong data-metric='rating' data-unmeasured={ratingValue === undefined || undefined}>{percent(ratingValue === undefined ? undefined : ratingValue / 100)}</strong></>, `${market('rating')} · ${quality}`)}
                         {/* 真实性: the mean identity score of the relay's models that have one (availability stays in the platform's routing). */}
-                        {hint(<><i className='codicon codicon-verified' aria-hidden='true' /><strong data-unmeasured={merchant.metrics?.authenticity === undefined || undefined} data-fallback={authenticityListed || undefined}>{percent(merchant.metrics?.authenticity === undefined ? undefined : merchant.metrics.authenticity / 100)}</strong></>,
-                            `${market('authenticity')} · ${merchant.metrics?.authenticity === undefined ? relayText(locale, 'authenticityPending') : percent(merchant.metrics.authenticity / 100)}${authenticityListed ? ` · ${relayMeasurementNote(locale, 'authenticityListed')}` : ''}`)}
-                        {hint(<><i className='codicon codicon-watch' aria-hidden='true' /><strong dir='ltr' data-unmeasured={merchant.metrics?.latencyMs === undefined || undefined} data-fallback={latencyStale || undefined}>{merchant.metrics?.latencyMs === undefined ? '—' : `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(merchant.metrics.latencyMs)} ms`}</strong></>, `${market('latency')} · ${merchant.metrics?.latencyMs === undefined ? relayEvidenceText(locale, 'unmeasured') : `${merchant.metrics.latencyMs} ms`}${latencyStale ? ` · ${relayMeasurementNote(locale, 'latencyStale', merchant.measurement?.latency?.observedAt)}` : ''}`)}
+                        {hint(<><i className='codicon codicon-verified' aria-hidden='true' /><strong data-metric='authenticity' data-unmeasured={authenticityValue === undefined || undefined} data-fallback={authenticityListed || undefined}>{percent(authenticityValue === undefined ? undefined : authenticityValue / 100)}</strong></>,
+                            `${market('authenticity')} · ${authenticityValue === undefined ? relayText(locale, 'authenticityPending') : percent(authenticityValue / 100)}${authenticityListed ? ` · ${relayMeasurementNote(locale, 'authenticityListed')}` : ''}`)}
+                        {hint(<><i className='codicon codicon-watch' aria-hidden='true' /><strong data-metric='latency' dir='ltr' data-unmeasured={latencyValue === undefined || undefined} data-fallback={latencyStale || undefined}>{latencyValue === undefined ? '—' : `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(latencyValue)} ms`}</strong></>, `${market('latency')} · ${latencyValue === undefined ? relayEvidenceText(locale, 'unmeasured') : `${latencyValue} ms`}${latencyStale ? ` · ${relayMeasurementNote(locale, 'latencyStale', merchant.measurement?.latency?.observedAt)}` : ''}`)}
                         {/* 平均倍率: the mean over the merchant's multiplier-priced models × APIs (its own prices have none). */}
                         {(() => {
                             const average = merchant.averageMultiplierBps === undefined ? merchant.metrics?.multiplierBps : merchant.averageMultiplierBps ?? undefined;
                             const multiplier = relayMultiplierTag(locale, average);
-                            return hint(<><i className='codicon codicon-symbol-number' aria-hidden='true' /><strong dir='ltr' data-unmeasured={!multiplier || undefined}>{multiplier || '—'}</strong></>,
+                            return hint(<><i className='codicon codicon-symbol-number' aria-hidden='true' /><strong data-metric='multiplier' dir='ltr' data-unmeasured={!multiplier || undefined}>{multiplier || '—'}</strong></>,
                                 `${offeringPriceText(locale, 'averageMultiplier')} · ${multiplier || '—'}`);
                         })()}
                     </div>

@@ -2399,3 +2399,231 @@
 .nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-footer > span {
     color: #52525b !important;
 }
+
+/* ---------------------------------------------------------------------------
+ * Floating Draggable / Resizable Plugin Window Dialog & Secondary Modal Dialog
+ * ------------------------------------------------------------------------ */
+.nmx-plugin-window-dialog {
+    position: fixed;
+    z-index: 12040;
+    display: flex;
+    flex-direction: column;
+    min-width: 280px;
+    min-height: 220px;
+    box-sizing: border-box;
+    border: 1px solid color-mix(in srgb, var(--nmx-border, rgba(255, 255, 255, .14)) 92%, transparent);
+    border-radius: 13px;
+    background: color-mix(in srgb, var(--nmx-panel, #16181d) 96%, transparent);
+    color: var(--nmx-text, #f3f4f6);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, .46), 0 3px 10px rgba(0, 0, 0, .28);
+    backdrop-filter: blur(18px) saturate(1.1);
+    overflow: hidden;
+    animation: nmxv-dialog-in 150ms cubic-bezier(.22, 1, .36, 1);
+}
+.nmx-shell.nmx-theme-light .nmx-plugin-window-dialog {
+    border-color: rgba(15, 23, 42, .14);
+    background: rgba(255, 255, 255, .97);
+    color: #1f1d1e;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, .16), 0 3px 10px rgba(15, 23, 42, .08);
+}
+.nmx-plugin-window-dialog:is(.is-dragging, .is-resizing) {
+    user-select: none;
+    -webkit-user-select: none;
+}
+.nmx-plugin-window-dialog.is-dragging {
+    box-shadow: 0 24px 56px rgba(0, 0, 0, .54), 0 6px 14px rgba(0, 0, 0, .32);
+}
+.nmx-shell.nmx-theme-light .nmx-plugin-window-dialog.is-dragging {
+    box-shadow: 0 22px 48px rgba(15, 23, 42, .22), 0 5px 12px rgba(15, 23, 42, .1);
+}
+.nmx-plugin-window-header,
+.nmx-plugin-subwindow-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 6px 10px 6px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--nmx-border, rgba(255, 255, 255, .12)) 80%, transparent);
+    background: color-mix(in srgb, var(--nmx-text, #f3f4f6) 3%, transparent);
+    user-select: none;
+    -webkit-user-select: none;
+}
+.nmx-plugin-window-header {
+    cursor: grab;
+    touch-action: none;
+}
+.nmx-plugin-window-dialog.is-dragging .nmx-plugin-window-header { cursor: grabbing; }
+.nmx-shell.nmx-theme-light :is(.nmx-plugin-window-header, .nmx-plugin-subwindow-header) {
+    border-bottom-color: rgba(15, 23, 42, .1);
+    background: rgba(15, 23, 42, .03);
+}
+.nmx-plugin-window-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    flex: 1 1 auto;
+    font-size: 12.5px;
+    line-height: 17px;
+}
+.nmx-plugin-window-title > strong,
+.nmx-plugin-subwindow-header > strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 620;
+}
+.nmx-plugin-window-tab {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--nmx-muted, #a1a1aa);
+    font-size: 11.5px;
+}
+.nmx-shell.nmx-theme-light .nmx-plugin-window-tab { color: #52525b; }
+.nmx-plugin-window-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+.nmx-plugin-window-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--nmx-muted, #a1a1aa);
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+.nmx-plugin-window-icon-btn:hover:not(:disabled) {
+    color: var(--nmx-text, #f3f4f6);
+    background: color-mix(in srgb, var(--nmx-text, #f3f4f6) 11%, transparent);
+}
+.nmx-shell.nmx-theme-light .nmx-plugin-window-icon-btn { color: #52525b; }
+.nmx-shell.nmx-theme-light .nmx-plugin-window-icon-btn:hover:not(:disabled) {
+    color: #18181b;
+    background: rgba(15, 23, 42, .08);
+}
+.nmx-plugin-window-icon-btn:focus-visible {
+    outline: 2px solid var(--nmx-focus-ring, #6b8afd);
+    outline-offset: 1px;
+}
+.nmx-plugin-window-body,
+.nmx-plugin-subwindow-body {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.nmx-plugin-window-frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+    flex: 1 1 auto;
+    border: 0;
+    background: transparent;
+}
+.nmx-plugin-window-shield {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    background: transparent;
+}
+.nmx-plugin-window-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    padding: 24px;
+    text-align: center;
+    color: var(--nmx-muted, #a1a1aa);
+    font-size: 12.5px;
+    line-height: 18px;
+}
+.nmx-plugin-window-state.is-error { color: #fca5a5; }
+.nmx-shell.nmx-theme-light .nmx-plugin-window-state { color: #52525b; }
+.nmx-shell.nmx-theme-light .nmx-plugin-window-state.is-error { color: #b42318; }
+.nmx-plugin-window-state > button {
+    height: 28px;
+    padding: 0 12px;
+    border: 1px solid color-mix(in srgb, var(--nmx-border, rgba(255, 255, 255, .18)) 88%, transparent);
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--nmx-text, #f3f4f6) 8%, transparent);
+    color: var(--nmx-text, #f3f4f6);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+.nmx-shell.nmx-theme-light .nmx-plugin-window-state > button {
+    border-color: rgba(15, 23, 42, .16);
+    background: rgba(15, 23, 42, .05);
+    color: #1f1d1e;
+}
+
+/* 8-edge resize grips matching AI Console overlay ergonomics. */
+.nmx-plugin-window-resize { position: absolute; z-index: 6; touch-action: none; }
+.nmx-plugin-window-resize.is-n { top: -4px; left: 10px; right: 10px; height: 8px; cursor: ns-resize; }
+.nmx-plugin-window-resize.is-s { bottom: -4px; left: 10px; right: 10px; height: 8px; cursor: ns-resize; }
+.nmx-plugin-window-resize.is-e { top: 10px; right: -4px; bottom: 10px; width: 8px; cursor: ew-resize; }
+.nmx-plugin-window-resize.is-w { top: 10px; left: -4px; bottom: 10px; width: 8px; cursor: ew-resize; }
+.nmx-plugin-window-resize.is-ne { top: -5px; right: -5px; width: 14px; height: 14px; cursor: nesw-resize; }
+.nmx-plugin-window-resize.is-nw { top: -5px; left: -5px; width: 14px; height: 14px; cursor: nwse-resize; }
+.nmx-plugin-window-resize.is-se { bottom: -5px; right: -5px; width: 14px; height: 14px; cursor: nwse-resize; }
+.nmx-plugin-window-resize.is-sw { bottom: -5px; left: -5px; width: 14px; height: 14px; cursor: nesw-resize; }
+
+/* Secondary modal window opened from plugin UI (`openModal`). */
+.nmx-plugin-subwindow-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 12080;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(8, 10, 14, .56);
+    backdrop-filter: blur(4px);
+    animation: nmxv-fade-in 120ms ease;
+}
+.nmx-shell.nmx-theme-light .nmx-plugin-subwindow-backdrop {
+    background: rgba(15, 23, 42, .32);
+}
+.nmx-plugin-subwindow-dialog {
+    display: flex;
+    flex-direction: column;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 32px);
+    border: 1px solid color-mix(in srgb, var(--nmx-border, rgba(255, 255, 255, .16)) 92%, transparent);
+    border-radius: 14px;
+    background: var(--nmx-panel, #181a20);
+    color: var(--nmx-text, #f3f4f6);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, .54);
+    overflow: hidden;
+    animation: nmxv-dialog-in 150ms cubic-bezier(.22, 1, .36, 1);
+}
+.nmx-shell.nmx-theme-light .nmx-plugin-subwindow-dialog {
+    border-color: rgba(15, 23, 42, .16);
+    background: #ffffff;
+    color: #1f1d1e;
+    box-shadow: 0 22px 54px rgba(15, 23, 42, .22);
+}
+@media (prefers-reduced-motion: reduce) {
+    .nmx-plugin-window-dialog,
+    .nmx-plugin-subwindow-backdrop,
+    .nmx-plugin-subwindow-dialog {
+        animation: none;
+    }
+}

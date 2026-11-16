@@ -92,11 +92,12 @@ import {
     type AppControlPickerApp, type AppOpenOutcome, type ComposerApp
 } from './nextmux-app-control';
 import { PanelBoundary } from './nextmux-panel-boundary';
-import { AppPluginBuyDialog, AppPluginChatPanel, AppPluginInstallDialog, AppPluginLoadDialog, AppPluginMarketUploadDialog, AppPluginModelDialog, AppPluginOverlay, AppPluginRunBar, AppPluginStartDialog, AppPluginHubDialog, AppPluginUninstallDialog, AppPluginsSettings,
+import { AppPluginBuyDialog, AppPluginChatPanel, AppPluginInstallDialog, AppPluginLoadDialog, AppPluginMarketUploadDialog, AppPluginModelDialog, AppPluginOverlay, AppPluginStartDialog, AppPluginSubWindowDialog, AppPluginTabHeaderControls, AppPluginHubDialog, AppPluginUninstallDialog, AppPluginWindowDialog, AppPluginsSettings,
     appPluginPriceCents, appPluginUploadProblemText, pluginsForApp, usd, type AppPluginStartOptions, type AppPluginsTab } from './nextmux-app-plugins-view';
 import { appPluginError, appPluginReason, appPluginText } from './nextmux-app-plugins-locale';
 import { appPluginOptionsText, appPluginParamExtensions, isAppPluginImportFile } from './nextmux-app-plugin-options-locale';
-import { pluginChatConversationUuid, PLUGIN_CHAT_DEFAULT_CONVERSATION_UUID, type AppPluginChatAttachment, type AppPluginChatMessage, type AppPluginChatRequest, type AppPluginFingerprint, type AppPluginInfo, type AppPluginInspection, type AppPluginLicense, type AppPluginLicenseCheck, type AppPluginMarketPlugin, type AppPluginMessage, type AppPluginMine, type AppPluginModel, type AppPluginModelChoices, type AppPluginRunSnapshot, type AppPluginVisionModel } from '../common/nextmux-app-plugins';
+import { type AppPluginWindowInboundMessage, type AppPluginWindowRect, type AppPluginWindowSubModalSpec, type NextMuxDesktopBridgeWithTabAction } from './nextmux-app-plugin-window-sdk';
+import { pluginChatConversationUuid, PLUGIN_CHAT_DEFAULT_CONVERSATION_UUID, type AppPluginChatAttachment, type AppPluginChatMessage, type AppPluginChatRequest, type AppPluginFingerprint, type AppPluginInfo, type AppPluginInspection, type AppPluginLicense, type AppPluginLicenseCheck, type AppPluginMarketPlugin, type AppPluginMessage, type AppPluginMine, type AppPluginModel, type AppPluginModelChoices, type AppPluginOverlayItem, type AppPluginRunSnapshot, type AppPluginUiBundleResult, type AppPluginVisionModel } from '../common/nextmux-app-plugins';
 /** The billing line of a run on a model on this computer (translated through the surface table). */
 const LOCAL_MODEL_BILLING_LABEL = '本机模型运行，不计费';
 /** The skill plugin developer guide (docs/SKILL_PLUGIN_DEVELOPMENT.md, published on the website). */
@@ -185,6 +186,7 @@ import { activityToolVisual, conversationErrorText, projectConversationStream } 
 import { conversationStreamText } from './nextmux-conversation-stream-locale';
 import { modelFailure, modelFailureText, modelFailureSource } from './nextmux-model-errors';
 import { BillingFailureSource, billingShortfall, isInsufficientBalanceFailure, providerQuotaText } from './nextmux-billing-shortfall';
+import { billingMovementReferenceLabel } from './nextmux-billing-labels';
 import { CommunitySkillCard } from './nextmux-community-skill-card';
 import { ProjectMemoryPanel } from './nextmux-project-memory-panel';
 import { installModalChrome } from './nextmux-modal-chrome';
@@ -8706,7 +8708,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         void next.run().finally(() => { this.computerViewStarting = false; this.pumpComputerViewStarts(); });
     }
     protected readonly computerWindowControls = new Map<string, ConversationWindowControls>();
-    /** User preference is separate from the temporary OS unmute while a tab is hidden. */
+    /** Per-window audio preference persists even when a tab is hidden or inactive. */
     protected readonly computerWindowSoundPreferences = new Map<string, boolean>();
     protected readonly computerTabSoundPreferences = new Map<string, boolean>();
     protected readonly computerWindowVisibility = new Map<string, boolean>();
@@ -8732,10 +8734,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (this.computerWindowVisibility.get(key) === false && this.isWindowInDetachedTab?.(conversationId, pid, windowId)) {
                 return;
             }
-            const sound = this.computerWindowVisibility.get(key) === false ? true : this.computerWindowSoundPreferences.get(key) ?? false;
-            if (this.computerWindowVisibility.get(key) !== false) {
-                this.computerWindowStateSync?.get(key)?.({ sound });
-            }
+            // Keep muted tabs muted even when hidden (switching to 正文, other tabs, conversations, or other pages).
+            const sound = this.computerWindowSoundPreferences.get(key) ?? false;
+            this.computerWindowStateSync?.get(key)?.({ sound });
             await window.nextmuxDesktop?.setComputerWindowSound?.(conversationId, pid, windowId, sound).catch(() => undefined);
         });
         this.computerWindowSoundQueues.set(key, apply);
@@ -8910,8 +8911,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             };
             // The app side owns the switches; its 'state' events (whoever changed them) keep this header current.
             this.computerWindowStateSync.set(key, patch => {
-                if (typeof patch.sound === 'boolean' && widget.computerWindowVisibility.get(key) !== false
-                    && !widget.computerWindowSoundQueues.has(key)) widget.computerWindowSoundPreferences.set(key, patch.sound);
+                if (typeof patch.sound === 'boolean' && !widget.computerWindowSoundQueues.has(key)) {
+                    widget.computerWindowSoundPreferences.set(key, patch.sound);
+                }
                 changed({ ...patch, ...(widget.computerWindowSoundPreferences.has(key) ? { sound: widget.computerWindowSoundPreferences.get(key) } : {}) });
             });
             if (this.computerWindowStateSync.size > 64) this.computerWindowStateSync.delete(this.computerWindowStateSync.keys().next().value!);
@@ -9014,8 +9016,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 },
                 setSound: async on => {
                     await widget.computerWindowSoundQueues.get(key);
-                    const result = await bridge.setComputerWindowSound?.(conversationId, ref.pid, ref.windowId,
-                        widget.computerWindowVisibility.get(key) === false ? true : on);
+                    const result = await bridge.setComputerWindowSound?.(conversationId, ref.pid, ref.windowId, on);
                     if (result?.ok) {
                         widget.computerTabSoundPreferences.set(tabKey, on);
                         const currentTab = visualTabsFor(widget.conversationTabs, conversationId).find(item => item.id === tab.id) || tab;
@@ -9240,6 +9241,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (close) {
             for (const tab of tabs) {
                 this.abortAppPluginChatForPrefix?.(`${conversationId}\n${tab.id}`, true);
+                this.clearAppPluginTabUiState?.(`${conversationId}\n${tab.id}`);
             }
             const closingStart = (request: typeof this.appPluginQueuedGoal): boolean => Boolean(request
                 && request.conversationId === conversationId && tabs.some(tab => tab.id === request.tabId));
@@ -26906,7 +26908,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.closeComicModelHoverImmediately();
             changed = true;
         }
-        if (this.appPluginChatPicker && !target?.closest('.nmx-plugin-chat-picker-portal .nmx-model-picker-popover, .nmx-relay-metric-tooltip, .nmx-offering-price-pop, .nmx-model-price-overlay-drawer, [data-plugin-chat-picker-anchor]')) {
+        if (this.appPluginChatPicker && !target?.closest('.nmx-plugin-chat-picker-portal .nmx-model-picker-popover, .nmx-plugin-chat-model-hover-portal .nmx-model-effort-menu, .nmx-relay-metric-tooltip, .nmx-offering-price-pop, .nmx-model-price-overlay-drawer, [data-plugin-chat-picker-anchor]')) {
             this.closeAppPluginChatPicker(false);
             changed = true;
         }
@@ -36264,7 +36266,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             || this.activeCheckpointDiff
             || this.officialProviderSheet || this.officialModelListOpenId || this.myApisOpen || this.scheduleDialogOpen || this.fullAccessConfirmationOpen
             || this.pendingRelaySwitch
-            || this.appPluginChatPicker || this.appPluginStart || this.appPluginUninstall || this.appPluginModelFor || this.appPluginInstall || this.appPluginBuy || this.appPluginLoadOpen || this.appPluginUpload || this.appPluginHub
+            || this.appPluginChatPicker || this.activeTabPluginSubWindow?.() || this.appPluginStart || this.appPluginUninstall || this.appPluginModelFor || this.appPluginInstall || this.appPluginBuy || this.appPluginLoadOpen || this.appPluginUpload || this.appPluginHub || this.activeTabPluginWindowOpen?.()
             || this.comicStudioIsolatedPicker || this.comicCreateSheetOpen || this.comicKindSheet || this.comicModelsSheetOpen || this.comicCharacterSheetOpen || this.comicExportSheetOpen || this.mediaSheetOpen || this.comicChatUi?.().materials
             || this.codingSessionRenameId || this.codingSessionDeleteId || this.projectMenuPath || this.projectDeletePath || this.pendingTurnEdit || this.turnCopyMenuId);
     }
@@ -36272,6 +36274,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected dismissTopSurface(): boolean {
         if (this.slashCommandDrawerVisible?.()) { this.dismissSlashCommandDrawer?.(true); return true; }
         if (this.appPluginChatPicker) { this.closeAppPluginChatPicker(false); return true; }
+        if (this.activeTabPluginSubWindow?.()) { this.appPluginSubWindow = undefined; this.update(); return true; }
         if (this.goalDrawer) { this.closeGoalDrawer(); return true; }
         if (this.goalCloseConfirmation) { this.closeGoalConfirmation(); return true; }
         if (this.pendingDurableRetry) { this.settleDurableRetryConfirmation(false); return true; }
@@ -36354,6 +36357,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         else if (this.appPluginHub) {
             this.appPluginHub = undefined;
         }
+        else if (this.activeTabPluginWindowOpen?.()) {
+            this.closeActiveTabPluginWindow?.();
+        }
         else if (this.comicStudioIsolatedPicker) {
             this.closeComicStudioIsolatedPicker(false);
         }
@@ -36383,7 +36389,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected hasTransientNavigationSurface(): boolean {
         return Boolean(this.slashCommandDrawerVisible?.() || this.goalDrawer || this.goalCloseConfirmation || this.pendingDurableRetry || this.pendingRestoreConfirmation || this.pendingIncognitoMode || this.conversationWindowMenuOpen || this.accountMenuOpen || this.codingPopover || this.codingSearchOpen || this.codingSessionMenuId || this.conversationTabMenuAt
             || this.walletTopupSheetOpen || this.selectedOffering || this.activeCheckpointDiff || this.officialProviderSheet || this.officialModelListOpenId || this.myApisOpen || this.scheduleDialogOpen
-            || this.appPluginChatPicker || this.appPluginStart || this.appPluginUninstall || this.appPluginModelFor || this.appPluginInstall || this.appPluginBuy || this.appPluginLoadOpen || this.appPluginUpload || this.appPluginHub
+            || this.appPluginChatPicker || this.activeTabPluginSubWindow?.() || this.appPluginStart || this.appPluginUninstall || this.appPluginModelFor || this.appPluginInstall || this.appPluginBuy || this.appPluginLoadOpen || this.appPluginUpload || this.appPluginHub || this.activeTabPluginWindowOpen?.()
             || this.fullAccessConfirmationOpen || this.pendingRelaySwitch || this.comicStudioIsolatedPicker || this.comicCreateSheetOpen || this.comicKindSheet || this.comicModelsSheetOpen || this.comicCharacterSheetOpen
             || this.comicExportSheetOpen || this.mediaSheetOpen || this.comicChatUi?.().materials || this.codingSessionRenameId || this.codingSessionDeleteId
             || this.projectMenuPath || this.projectDeletePath || this.pendingTurnEdit || this.turnCopyMenuId);
@@ -36405,7 +36411,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
      * window, and the drawer's editor/terminal/browser keep the key.
      */
     protected handleSurfaceEscape = (event: KeyboardEvent): void => {
-        if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || !this.node.isConnected) return;
+        // One layer per press: a held key's repeats must not close the plugin modal, then its window, then more.
+        if (event.key !== 'Escape' || event.repeat || event.defaultPrevented || event.isComposing || !this.node.isConnected) return;
         if (this.walletTopupSheetOpen) return;
         if (typeof document !== 'undefined' && document.querySelector('.nmx-comic-studio-context-menu, .nmx-comic-studio-lightbox')) {
             return;
@@ -49076,7 +49083,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'} lang={this.desktopLocale}
                 style={{ width: `${tooltipWidth}px`, left: `${Math.max(8, Math.min(tooltipRect.left, window.innerWidth - tooltipWidth - 8))}px`,
                     top: `${Math.max(8, Math.min(tooltipRect.bottom + 6, window.innerHeight - 110))}px`,
-                    ...(this.comicStudioIsolatedPicker || this.comicStudioModalState?.open ? { zIndex: 12030 } : {}) }}>{tooltip.seal ? <><DepositVerifiedSeal size={13} />{tooltip.text}</> : tooltip.text}</div>, document.body)}
+                    ...(this.comicStudioIsolatedPicker || this.comicStudioModalState?.open || this.appPluginChatPicker ? { zIndex: 12065 } : {}) }}>{tooltip.seal ? <><DepositVerifiedSeal size={13} />{tooltip.text}</> : tooltip.text}</div>, document.body)}
         </section>;
     }
 
@@ -50401,6 +50408,384 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
     }
     protected readonly appPluginOverlays = new Set<string>();
+    /** Floating plugin UI window open per tab (`tabKey -> pluginId`), bounds, cached bundles, custom overlays, and active secondary modal. */
+    protected readonly appPluginOpenWindows = new Map<string, string>();
+    protected readonly appPluginWindowRects = new Map<string, AppPluginWindowRect>();
+    protected readonly appPluginUiBundles = new Map<string, { readonly pluginId: string; readonly locale: string; readonly bundle?: AppPluginUiBundleResult; readonly loading: boolean; readonly error?: string }>();
+    /** Bumped whenever a plugin's UI bundle is dropped, so a load still in flight cannot cache the old bundle again. */
+    protected readonly appPluginUiGenerations = new Map<string, number>();
+    protected readonly appPluginCustomOverlays = new Map<string, readonly AppPluginOverlayItem[]>();
+    protected readonly appPluginCustomOverlayVisible = new Map<string, boolean>();
+    protected readonly appPluginCustomOverlayOwners = new Map<string, string>();
+    protected appPluginSubWindow: { readonly tabKey: string; readonly pluginId: string; readonly modal: AppPluginWindowSubModalSpec } | undefined;
+
+    protected clearAppPluginTabUiState(tabKey: string): void {
+        this.appPluginOpenWindows?.delete(tabKey);
+        this.appPluginCustomOverlays?.delete(tabKey);
+        this.appPluginCustomOverlayVisible?.delete(tabKey);
+        this.appPluginCustomOverlayOwners?.delete(tabKey);
+        for (const rectKey of [...(this.appPluginWindowRects?.keys() || [])]) {
+            if (rectKey.startsWith(`${tabKey}\n`)) this.appPluginWindowRects?.delete(rectKey);
+        }
+        if (this.appPluginSubWindow?.tabKey === tabKey) this.appPluginSubWindow = undefined;
+    }
+
+    protected activeTabPluginWindowKey(): string | undefined {
+        if (this.activeSection !== 'coding') return undefined;
+        const tab = this.activeVisualTab?.();
+        const convId = this.activeCodingSessionId;
+        return tab && convId ? `${convId}\n${tab.id}` : undefined;
+    }
+
+    protected activeTabPluginWindowOpen(): boolean {
+        const key = this.activeTabPluginWindowKey();
+        const pluginId = key ? this.appPluginOpenWindows?.get(key) : undefined;
+        if (!pluginId) return false;
+        return Boolean((this.appPlugins || []).some(plugin => plugin.id === pluginId && plugin.ok && plugin.enabled !== false));
+    }
+
+    protected activeTabPluginSubWindow(): { readonly tabKey: string; readonly pluginId: string; readonly modal: AppPluginWindowSubModalSpec } | undefined {
+        const key = this.activeTabPluginWindowKey();
+        const sub = this.appPluginSubWindow;
+        if (!key || !sub || sub.tabKey !== key) return undefined;
+        return (this.appPlugins || []).some(plugin => plugin.id === sub.pluginId && plugin.ok && plugin.enabled !== false)
+            ? sub
+            : undefined;
+    }
+
+    protected closeActiveTabPluginWindow(): void {
+        const key = this.activeTabPluginWindowKey();
+        if (!key) return;
+        this.appPluginOpenWindows?.delete(key);
+        if (this.appPluginSubWindow?.tabKey === key) this.appPluginSubWindow = undefined;
+    }
+
+    protected purgeAppPluginUiState(
+        pluginId: string,
+        options: { readonly purgeWindow?: boolean; readonly purgeOverlays?: boolean; readonly purgeBundle?: boolean; readonly purgeRects?: boolean } = {}
+    ): void {
+        const { purgeWindow = true, purgeOverlays = true, purgeBundle = true, purgeRects = false } = options;
+        if (purgeBundle) this.appPluginUiGenerations?.set(pluginId, (this.appPluginUiGenerations.get(pluginId) ?? 0) + 1);
+        if (purgeBundle && this.appPluginUiBundles) {
+            for (const [cacheKey, entry] of [...this.appPluginUiBundles.entries()]) {
+                if (entry.pluginId === pluginId) this.appPluginUiBundles.delete(cacheKey);
+            }
+        }
+        if (this.appPluginSubWindow?.pluginId === pluginId) {
+            this.appPluginSubWindow = undefined;
+        }
+        if (purgeWindow && this.appPluginOpenWindows) {
+            for (const [tabKey, openId] of [...this.appPluginOpenWindows.entries()]) {
+                if (openId === pluginId) this.appPluginOpenWindows.delete(tabKey);
+            }
+        }
+        if (purgeOverlays) {
+            const ownerTabKeys = new Set<string>();
+            for (const [tabKey, ownerId] of [...(this.appPluginCustomOverlayOwners?.entries() || [])]) {
+                if (ownerId === pluginId) ownerTabKeys.add(tabKey);
+            }
+            for (const tabKey of ownerTabKeys) {
+                this.appPluginCustomOverlays?.delete(tabKey);
+                this.appPluginCustomOverlayVisible?.delete(tabKey);
+                this.appPluginCustomOverlayOwners?.delete(tabKey);
+            }
+        }
+        if (purgeRects && this.appPluginWindowRects) {
+            const suffix = `\n${pluginId}`;
+            for (const rectKey of [...this.appPluginWindowRects.keys()]) {
+                if (rectKey.endsWith(suffix)) this.appPluginWindowRects.delete(rectKey);
+            }
+        }
+    }
+
+    protected reconcileAppPluginUiWithCatalog(plugins: readonly AppPluginInfo[]): void {
+        const byId = new Map(plugins.map(plugin => [plugin.id, plugin]));
+        for (const [tabKey, openId] of [...(this.appPluginOpenWindows?.entries() || [])]) {
+            const plugin = byId.get(openId);
+            if (!plugin || !plugin.ok || plugin.enabled === false || !plugin.summary?.ui) {
+                this.appPluginOpenWindows?.delete(tabKey);
+            }
+        }
+        if (this.appPluginSubWindow) {
+            const subPlugin = byId.get(this.appPluginSubWindow.pluginId);
+            if (!subPlugin || !subPlugin.ok || subPlugin.enabled === false) {
+                this.appPluginSubWindow = undefined;
+            }
+        }
+        for (const [cacheKey, entry] of [...(this.appPluginUiBundles?.entries() || [])]) {
+            const plugin = byId.get(entry.pluginId);
+            if (!plugin || !plugin.ok || plugin.enabled === false) {
+                this.appPluginUiBundles?.delete(cacheKey);
+                this.appPluginUiGenerations?.set(entry.pluginId, (this.appPluginUiGenerations.get(entry.pluginId) ?? 0) + 1);
+            }
+        }
+        for (const [tabKey, ownerId] of [...(this.appPluginCustomOverlayOwners?.entries() || [])]) {
+            const plugin = byId.get(ownerId);
+            if (!plugin || !plugin.ok || plugin.enabled === false) {
+                this.appPluginCustomOverlays?.delete(tabKey);
+                this.appPluginCustomOverlayVisible?.delete(tabKey);
+                this.appPluginCustomOverlayOwners?.delete(tabKey);
+            }
+        }
+        for (const rectKey of [...(this.appPluginWindowRects?.keys() || [])]) {
+            const split = rectKey.lastIndexOf('\n');
+            if (split >= 0) {
+                const pluginId = rectKey.slice(split + 1);
+                if (!byId.has(pluginId)) this.appPluginWindowRects?.delete(rectKey);
+            }
+        }
+    }
+
+    protected async ensureAppPluginUiLoaded(pluginId: string, force = false): Promise<void> {
+        const bridge = window.nextmuxDesktop;
+        const locale = this.desktopLocale;
+        const cacheKey = `${pluginId}\n${locale}`;
+        const existing = this.appPluginUiBundles.get(cacheKey);
+        if (!force && (existing?.loading || existing?.bundle?.ok)) return;
+        if (!bridge?.loadAppPluginUi) {
+            this.appPluginUiBundles.set(cacheKey, { pluginId, locale, loading: false, error: appPluginText(locale, 'pluginWindowEmpty') });
+            this.update();
+            return;
+        }
+        this.appPluginUiBundles.set(cacheKey, { pluginId, locale, bundle: existing?.bundle, loading: true, error: undefined });
+        this.update();
+        // An uninstall, reload or disable while this read runs drops the bundle; its answer is then stale.
+        const generation = this.appPluginUiGenerations?.get(pluginId) ?? 0;
+        const stale = (): boolean => this.isDisposed || (this.appPluginUiGenerations?.get(pluginId) ?? 0) !== generation;
+        try {
+            const bundle = await bridge.loadAppPluginUi(pluginId, locale);
+            if (stale()) return;
+            this.appPluginUiBundles.set(cacheKey, {
+                pluginId,
+                locale,
+                bundle,
+                loading: false,
+                error: bundle.ok ? undefined : (bundle.error || 'plugin_ui_load_failed')
+            });
+        } catch (error) {
+            if (stale()) return;
+            this.appPluginUiBundles.set(cacheKey, {
+                pluginId,
+                locale,
+                bundle: existing?.bundle,
+                loading: false,
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
+        this.update();
+    }
+
+    protected toggleAppPluginWindow(tabKey: string, pluginId: string): void {
+        if (this.appPluginOpenWindows.get(tabKey) === pluginId) {
+            this.appPluginOpenWindows.delete(tabKey);
+            if (this.appPluginSubWindow?.tabKey === tabKey) this.appPluginSubWindow = undefined;
+            this.update();
+            return;
+        }
+        this.appPluginOpenWindows.set(tabKey, pluginId);
+        if (this.appPluginSubWindow && this.appPluginSubWindow.tabKey !== tabKey) this.appPluginSubWindow = undefined;
+        void this.ensureAppPluginUiLoaded(pluginId);
+        this.update();
+    }
+
+    protected async handleAppPluginWindowPostMessage(
+        ctx: { readonly tabKey: string; readonly conversationId: string; readonly tabId: string; readonly pid: number; readonly windowId: number; readonly pluginId: string; readonly runId?: string },
+        message: AppPluginWindowInboundMessage,
+        reply: (ok: boolean, result?: unknown, error?: string) => void
+    ): Promise<void> {
+        const resolveBinding = (): { readonly pid: number; readonly windowId: number; readonly runId?: string; readonly tab?: ConversationVisualTab } => {
+            const tab = visualTabsFor(this.conversationTabs, ctx.conversationId).find(item => item.id === ctx.tabId);
+            const liveRun = [...this.appPluginRuns.values()].find(run =>
+                !run.ended && run.conversationId === ctx.conversationId && run.tabId === ctx.tabId && run.pluginId === ctx.pluginId
+            );
+            return {
+                tab,
+                pid: tab?.windowRef?.pid ?? ctx.pid,
+                windowId: tab?.windowRef?.windowId ?? ctx.windowId,
+                runId: liveRun?.runId || ctx.runId
+            };
+        };
+        try {
+            if (message.kind === 'escape') {
+                if (this.appPluginSubWindow?.tabKey === ctx.tabKey) this.appPluginSubWindow = undefined;
+                else this.appPluginOpenWindows.delete(ctx.tabKey);
+                reply(true);
+                this.update();
+                return;
+            }
+            if (message.kind === 'openModal') {
+                this.appPluginSubWindow = { tabKey: ctx.tabKey, pluginId: ctx.pluginId, modal: message.modal };
+                reply(true);
+                this.update();
+                return;
+            }
+            if (message.kind === 'closeModal') {
+                if (this.appPluginSubWindow?.tabKey === ctx.tabKey) this.appPluginSubWindow = undefined;
+                reply(true);
+                this.update();
+                return;
+            }
+            if (message.kind === 'setTabOverlay') {
+                const { runId } = resolveBinding();
+                if (message.items === undefined) {
+                    const existing = this.appPluginCustomOverlays.get(ctx.tabKey) || [];
+                    const nextVisible = typeof message.visible === 'boolean'
+                        ? message.visible
+                        : (this.appPluginCustomOverlayVisible.get(ctx.tabKey) ?? (existing.length > 0));
+                    this.appPluginCustomOverlayVisible.set(ctx.tabKey, nextVisible);
+                    if (runId && typeof message.visible === 'boolean') {
+                        if (message.visible) this.appPluginOverlays.add(runId);
+                        else this.appPluginOverlays.delete(runId);
+                    }
+                    reply(true, { count: existing.length, visible: nextVisible });
+                    this.update();
+                    return;
+                }
+                const items = Array.isArray(message.items) ? message.items : [];
+                if (items.length === 0) {
+                    this.appPluginCustomOverlays.delete(ctx.tabKey);
+                    this.appPluginCustomOverlayVisible.delete(ctx.tabKey);
+                    this.appPluginCustomOverlayOwners?.delete(ctx.tabKey);
+                    if (runId && message.visible === false) this.appPluginOverlays.delete(runId);
+                    reply(true, { count: 0, visible: false });
+                    this.update();
+                    return;
+                }
+                const nextVisible = typeof message.visible === 'boolean' ? message.visible : true;
+                this.appPluginCustomOverlays.set(ctx.tabKey, items);
+                this.appPluginCustomOverlayOwners?.set(ctx.tabKey, ctx.pluginId);
+                this.appPluginCustomOverlayVisible.set(ctx.tabKey, nextVisible);
+                if (runId && typeof message.visible === 'boolean') {
+                    if (message.visible) this.appPluginOverlays.add(runId);
+                    else this.appPluginOverlays.delete(runId);
+                }
+                reply(true, { count: items.length, visible: nextVisible });
+                this.update();
+                return;
+            }
+            if (message.kind === 'tabAction') {
+                const runAction = (window.nextmuxDesktop as NextMuxDesktopBridgeWithTabAction | undefined)?.runAppPluginTabAction;
+                if (!runAction) {
+                    reply(false, undefined, 'tab_action_unavailable');
+                    return;
+                }
+                const { pid, windowId, runId } = resolveBinding();
+                const res = await runAction({
+                    ...message.payload,
+                    pluginId: ctx.pluginId,
+                    conversationId: ctx.conversationId,
+                    tabId: ctx.tabId,
+                    pid,
+                    windowId,
+                    ...(runId ? { runId } : {}),
+                    action: message.action
+                });
+                reply(Boolean(res?.ok), res, res?.error);
+                return;
+            }
+            if (message.kind === 'mcpCall') {
+                const callMcp = window.nextmuxDesktop?.callAppPluginMcp;
+                if (!callMcp) {
+                    reply(false, undefined, 'mcp_unavailable');
+                    return;
+                }
+                const { pid, windowId, runId } = resolveBinding();
+                const res = await callMcp({
+                    pluginId: ctx.pluginId,
+                    ...(runId ? { runId } : {}),
+                    ...(message.serverId ? { serverId: message.serverId } : {}),
+                    tool: message.tool,
+                    ...(message.arguments ? { arguments: message.arguments } : {}),
+                    ...(message.timeoutMs ? { timeoutMs: message.timeoutMs } : {}),
+                    conversationId: ctx.conversationId,
+                    tabId: ctx.tabId,
+                    pid,
+                    windowId
+                });
+                reply(Boolean(res?.ok), res?.result ?? res, res?.error);
+                return;
+            }
+            if (message.kind === 'command') {
+                const bridge = window.nextmuxDesktop;
+                const { pid, windowId, runId, tab } = resolveBinding();
+                const cmd = message.command;
+                if (cmd.action === 'start') {
+                    await this.startAppPluginGoal({
+                        pluginId: ctx.pluginId,
+                        conversationId: ctx.conversationId,
+                        tabId: ctx.tabId,
+                        pid,
+                        windowId,
+                        title: tab?.target || tab?.title || '',
+                        byAi: false,
+                        goal: cmd.goal || ''
+                    });
+                    reply(true, { started: true });
+                    return;
+                }
+                if (cmd.action === 'stop') {
+                    if (!runId) { reply(false, undefined, 'run_missing'); return; }
+                    await this.stopAppPluginRun(runId);
+                    this.update();
+                    reply(true, { ended: true });
+                    return;
+                }
+                if (!runId || !bridge?.commandAppPlugin) {
+                    reply(false, undefined, 'run_missing');
+                    return;
+                }
+                const res = await bridge.commandAppPlugin(runId, {
+                    ...(cmd.action === 'pause' ? { pause: true } : {}),
+                    ...(cmd.action === 'resume' ? { resume: true } : {}),
+                    ...(typeof cmd.goal === 'string' ? { goal: cmd.goal } : {}),
+                    ...(typeof cmd.overlay === 'boolean' ? { overlay: cmd.overlay } : {})
+                });
+                if (typeof cmd.overlay === 'boolean') {
+                    if (cmd.overlay) this.appPluginOverlays.add(runId);
+                    else this.appPluginOverlays.delete(runId);
+                    this.appPluginCustomOverlayVisible.set(ctx.tabKey, cmd.overlay);
+                }
+                reply(Boolean(res?.ok), res, res?.error);
+                this.update();
+                return;
+            }
+            if (message.kind === 'configure') {
+                const { runId } = resolveBinding();
+                const run = runId ? this.appPluginRuns.get(runId) : undefined;
+                const ok = await this.configureAppPlugin(
+                    ctx.pluginId,
+                    run && !run.ended && run.pluginId === ctx.pluginId
+                        ? { params: message.params, runId: run.runId, conversationId: ctx.conversationId, tabId: ctx.tabId }
+                        : { params: message.params, scope: 'defaults' }
+                );
+                reply(ok, { ok });
+                return;
+            }
+            if (message.kind === 'pickParamFile') {
+                const { runId } = resolveBinding();
+                await this.pickAppPluginParamFile(
+                    ctx.pluginId,
+                    message.paramId,
+                    message.label,
+                    runId ? { runId, conversationId: ctx.conversationId, tabId: ctx.tabId } : undefined
+                );
+                reply(true, { params: this.appPlugins.find(p => p.id === ctx.pluginId)?.params });
+                return;
+            }
+            const plugin = this.appPlugins.find(p => p.id === ctx.pluginId);
+            const { runId } = resolveBinding();
+            const run = runId ? this.appPluginRuns.get(runId) : undefined;
+            reply(true, {
+                theme: this.resolvedDesktopTheme(),
+                locale: this.desktopLocale,
+                pluginId: ctx.pluginId,
+                tabKey: ctx.tabKey,
+                params: (run?.params || plugin?.params || {})
+            });
+        } catch (error) {
+            reply(false, undefined, error instanceof Error ? error.message : String(error));
+        }
+    }
     /** The tab whose 插件市场 dialog is open, and the marketplace's plugins for that tab's app. */
     protected appPluginHub: { key: string; conversationId: string; tabId: string; appId: string; programs: readonly string[]; appName: string; pid: number; windowId: number; title: string; windowTitle?: string } | undefined;
     protected appPluginHubMarket: { app: string; plugins: readonly AppPluginMarketPlugin[]; loading: boolean; error: string } = { app: '', plugins: [], loading: false, error: '' };
@@ -50603,6 +50988,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     const plugins = await bridge.listAppPlugins!(this.desktopLocale);
                     if (this.appPluginsReloadRequested) continue;
                     this.appPlugins = plugins;
+                    this.reconcileAppPluginUiWithCatalog?.(plugins);
                     this.appPluginsLoaded = true;
                     this.appPluginsError = '';
                     for (const run of await bridge.appPluginRuns?.() || []) this.rememberAppPluginRun(run);
@@ -50684,10 +51070,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.appPluginsBusy = id;
         this.update();
         try {
+            const wasWindowOpen = [...(this.appPluginOpenWindows?.values() || [])].includes(id);
             const result = await window.nextmuxDesktop?.reloadAppPlugin?.(id);
             if (result && !result.ok) this.appPluginTests[id] = { ok: false, diagnostics: result.diagnostics, errors: result.errors || [result.error || 'plugin_invalid'] };
             else delete this.appPluginTests[id];
+            // The reloaded page sets its own overlays again; the old page's are dropped with its bundle.
+            this.purgeAppPluginUiState?.(id, { purgeWindow: false, purgeOverlays: true, purgeBundle: true, purgeRects: false });
             await this.loadAppPlugins(true);
+            if (wasWindowOpen && [...(this.appPluginOpenWindows?.values() || [])].includes(id)) {
+                void this.ensureAppPluginUiLoaded?.(id, true);
+            }
         } finally { this.appPluginsBusy = ''; this.update(); }
     }
 
@@ -50737,6 +51129,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const hostScope = scope ?? ((runId && hasLivePatch) || hostSettings.model !== undefined || hostSettings.vision !== undefined ? 'defaults' : undefined);
         const result = await window.nextmuxDesktop?.configureAppPlugin?.(id, hostScope ? { ...hostSettings, scope: hostScope } : hostSettings);
         if (!result?.ok) { this.appPluginsError = appPluginError(this.desktopLocale, result?.error || 'plugin_invalid'); this.update(); return false; }
+        if (hostSettings.enabled === false) {
+            this.purgeAppPluginUiState?.(id, { purgeWindow: true, purgeOverlays: true, purgeBundle: true, purgeRects: false });
+        }
         await this.loadAppPlugins(true);
         return true;
     }
@@ -50844,6 +51239,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             await window.nextmuxDesktop?.uninstallAppPlugin?.(id);
             this.appPluginUninstall = '';
             delete this.appPluginTests[id];
+            this.purgeAppPluginUiState?.(id, { purgeWindow: true, purgeOverlays: true, purgeBundle: true, purgeRects: true });
             await this.loadAppPlugins(true);
         } finally { this.appPluginUninstallBusy = false; this.update(); }
     }
@@ -50971,6 +51367,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             startsByTab.set(tabKey, entry);
             this.appPluginStart = entry;
             this.appPluginStartError = '';
+            if (!this.appPluginChoices) void this.loadAppPluginChoices?.();
             if (!this.appPluginHub || this.appPluginHub.key === tabKey) this.appPluginHub = undefined;
             this.update();
         });
@@ -51531,6 +51928,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected readonly appPluginChatAutoRouting = new Map<string, boolean>();
     protected appPluginChatPicker: { readonly tabKey: string; readonly kind: 'relay' | 'model'; readonly anchorSelector: string } | undefined;
     protected appPluginChatModelQuery = '';
+    protected appPluginChatHoverRouteId: string | undefined;
+    protected appPluginChatHoverPlacement: AdjacentFloatingPanelPlacement | undefined;
+    protected appPluginChatHoverCloseTimer: number | undefined;
     protected readonly appPluginChatActiveRequests = new Map<string, { readonly tabKey: string; readonly parentConversationId?: string; readonly requestId: string; readonly controller: AbortController }>();
     protected readonly appPluginChatLoadingMerchants = new Set<string>();
     protected readonly appPluginChatCatalogPromises = new Map<string, Promise<void>>();
@@ -51562,6 +51962,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
 
         if (this.appPluginChatPicker && matchesKey(this.appPluginChatPicker.tabKey)) {
+            this.closeAppPluginChatModelHoverImmediately?.();
             this.appPluginChatPicker = undefined;
             this.appPluginChatModelQuery = '';
             this.relayMetricTooltip = undefined;
@@ -51736,7 +52137,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return this.activeModelRoute?.();
     }
 
-    protected toggleAppPluginChatPicker(tabKey: string, kind: 'relay' | 'model', anchorSelector: string): void {
+    protected toggleAppPluginChatPicker(tabKey: string, kind: 'relay' | 'model', anchorSelector: string, focusEdge: 'selected' | 'first' | 'last' = 'selected'): void {
         if (this.appPluginChatPicker?.tabKey === tabKey
             && this.appPluginChatPicker.kind === kind
             && this.appPluginChatPicker.anchorSelector === anchorSelector) {
@@ -51758,14 +52159,304 @@ export class NextMuxDesktopWidget extends ReactWidget {
         } else if (kind === 'model' && relayKey.startsWith('official:')) {
             void this.ensureOfficialConnectionModelsLoaded?.(relayKey);
         }
+        this.closeAppPluginChatModelHoverImmediately?.();
         this.appPluginChatModelQuery = '';
         this.appPluginChatPicker = { tabKey, kind, anchorSelector };
         this.ensureDetachedPickerCatalogs?.(kind === 'relay');
+        this.update();
+        // The drawer is portalled to <body>, after everything else: without moving focus into it, Tab from the trigger
+        // would never reach it and its own Esc handling would never see the key.
+        this.focusAppPluginChatPickerEntry?.(kind, focusEdge);
+    }
+
+    /**
+     * Moves focus into the open AI Console drawer once it is on the page (the widget renders a frame or two after
+     * update()). The model drawer starts on its search field when it has one (VS Code quick pick, Open WebUI), else on the
+     * chosen model or the first; the source drawer on its search field. `first` / `last` come from ↓ / ↑ on the trigger.
+     * Focus already inside the drawer is left alone.
+     */
+    protected focusAppPluginChatPickerEntry(kind: 'relay' | 'model', edge: 'selected' | 'first' | 'last' = 'selected', attempt = 0): void {
+        if (typeof document === 'undefined' || typeof requestAnimationFrame !== 'function') return;
+        requestAnimationFrame(() => {
+            if (this.appPluginChatPicker?.kind !== kind) return;
+            const drawer = document.getElementById(kind === 'relay' ? 'nmx-plugin-chat-relay-drawer' : 'nmx-plugin-chat-model-drawer');
+            if (!drawer) {
+                if (attempt < 10) this.focusAppPluginChatPickerEntry(kind, edge, attempt + 1);
+                return;
+            }
+            const active = document.activeElement;
+            if (edge === 'selected' && active && drawer.contains(active)) return;
+            const search = drawer.querySelector<HTMLElement>(kind === 'relay' ? '.nmx-relay-source-search input' : '.nmx-model-picker-search input');
+            let target: HTMLElement | null | undefined;
+            if (kind === 'relay') {
+                target = search || drawer.querySelector<HTMLElement>('.nmx-relay-option-select.is-selected:not(:disabled), .nmx-relay-option-select:not(:disabled)');
+            } else {
+                const options = Array.from(drawer.querySelectorAll<HTMLElement>('.nmx-model-option > button[role="option"]'));
+                target = edge === 'first' ? options[0]
+                    : edge === 'last' ? options[options.length - 1]
+                        : search || options.find(option => option.getAttribute('aria-selected') === 'true') || options[0];
+                target ||= search || drawer.querySelector<HTMLElement>('.nmx-route-empty button, header button:not(:disabled)');
+            }
+            (target || drawer).focus();
+        });
+    }
+
+    protected closeAppPluginChatModelHoverImmediately(): void {
+        if (this.appPluginChatHoverCloseTimer !== undefined) {
+            window.clearTimeout(this.appPluginChatHoverCloseTimer);
+            this.appPluginChatHoverCloseTimer = undefined;
+        }
+        this.appPluginChatHoverRouteId = undefined;
+        this.appPluginChatHoverPlacement = undefined;
+        this.releaseModelEvidenceTitle?.();
+        this.modelEvidenceTooltip = undefined;
+    }
+
+    protected cancelAppPluginChatModelHoverClose(): void {
+        if (this.appPluginChatHoverCloseTimer !== undefined) {
+            window.clearTimeout(this.appPluginChatHoverCloseTimer);
+            this.appPluginChatHoverCloseTimer = undefined;
+        }
+    }
+
+    protected scheduleAppPluginChatModelHoverClose(): void {
+        this.cancelAppPluginChatModelHoverClose();
+        this.appPluginChatHoverCloseTimer = window.setTimeout(() => {
+            this.appPluginChatHoverCloseTimer = undefined;
+            const hoveredRouteId = this.appPluginChatHoverRouteId;
+            if (!hoveredRouteId) return;
+            if (typeof document !== 'undefined') {
+                const activeEl = document.activeElement as HTMLElement | null;
+                const escapedId = hoveredRouteId.replace(/["\\]/g, '\\$&');
+                if (activeEl?.closest?.(`.nmx-plugin-chat-model-hover-portal [data-model-id="${escapedId}"], .nmx-plugin-chat-picker-portal .nmx-model-option[data-model-id="${escapedId}"]`)) {
+                    return;
+                }
+            }
+            this.appPluginChatHoverRouteId = undefined;
+            this.appPluginChatHoverPlacement = undefined;
+            this.releaseModelEvidenceTitle?.();
+            this.modelEvidenceTooltip = undefined;
+            this.update();
+        }, 240);
+    }
+
+    protected openAppPluginChatModelHover(
+        candidateRoute: DesktopModelRoute | undefined,
+        candidate: CouncilModelCandidate,
+        anchor: HTMLElement,
+        panelPlacement?: { readonly detail?: { readonly side: 'left' | 'right'; readonly left: number; readonly width: number } }
+    ): void {
+        const depth = reasoningDepthChoicesForDisplay(this.reasoningDepthChoicesForRoute(candidateRoute));
+        const rawContextMaximum = this.rawModelContextWindowTokens?.(candidateRoute, candidate.modelId) ?? this.modelContextWindowTokens(candidateRoute, candidate.modelId);
+        const learnedContextCap = this.learnedRouteContextCap?.(candidateRoute);
+        const contextMaximum = this.modelContextWindowTokens(candidateRoute, candidate.modelId);
+        const contextChoices = typeof contextWindowChoices === 'function' ? contextWindowChoices(rawContextMaximum, learnedContextCap) : [];
+        const contextCapped = learnedContextCap !== undefined && rawContextMaximum !== undefined && learnedContextCap < rawContextMaximum;
+        const contextShown = contextMaximum !== undefined && contextChoices.length > 1;
+        const settingsRowCount = (depth.options.length ? 1 + Math.ceil(depth.options.length / 6) : 0)
+            + (contextShown ? 1 + Math.ceil(contextChoices.length / 6) : 0)
+            + (!contextShown && contextMaximum !== undefined ? 1 : 0)
+            + (contextCapped ? 2 : 0);
+        const viewport = { width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) };
+        // Never wider than the window can show beside its 8px edges (the placement clamps its left to that width too).
+        const width = Math.max(1, Math.min(viewport.width - 16, panelPlacement?.detail?.width ?? Math.min(264, Math.max(200, Math.round(anchor.closest<HTMLElement>('.nmx-model-picker-popover')?.getBoundingClientRect().width || 264)))));
+        const initial = placeAdjacentFloatingPanel(anchor.getBoundingClientRect(), viewport, width, Math.max(220, 142 + settingsRowCount * 30));
+        this.cancelAppPluginChatModelHoverClose();
+        this.appPluginChatHoverPlacement = {
+            ...initial,
+            width,
+            ...(panelPlacement?.detail ? { side: panelPlacement.detail.side, left: panelPlacement.detail.left, width: panelPlacement.detail.width } : {})
+        };
+        if (this.appPluginChatHoverRouteId !== candidate.routeId) {
+            this.appPluginChatHoverRouteId = candidate.routeId;
+            this.update();
+        }
+    }
+
+    protected fitAppPluginChatModelHoverMenu(menu: HTMLElement): void {
+        const placement = this.appPluginChatHoverPlacement;
+        if (!placement) return;
+        const edge = 8;
+        const top = Math.max(edge, Math.min(placement.top, window.innerHeight - edge - naturalPanelHeight(menu)));
+        const maxHeight = Math.max(1, window.innerHeight - top - edge);
+        if (Math.abs(top - placement.top) < 1 && Math.abs(maxHeight - placement.maxHeight) < 1) return;
+        this.appPluginChatHoverPlacement = { ...placement, top, maxHeight };
+        menu.style.top = `${top}px`;
+        menu.style.maxHeight = `${maxHeight}px`;
+    }
+
+    /**
+     * The model list scrolled. A card stays beside the row it describes: it follows a row that has keyboard focus (arrow
+     * keys scroll the list), is left alone while focus is inside it, and closes for a row the pointer merely rested on, as
+     * the coding composer's card does.
+     */
+    protected followAppPluginChatModelHover(list: HTMLElement): void {
+        const routeId = this.appPluginChatHoverRouteId;
+        const placement = this.appPluginChatHoverPlacement;
+        if (!routeId || !placement || typeof document === 'undefined') return;
+        const escaped = routeId.replace(/["\\]/g, '\\$&');
+        const active = document.activeElement as HTMLElement | null;
+        if (active?.closest?.(`.nmx-plugin-chat-model-hover-portal [data-model-id="${escaped}"]`)) return;
+        const row = active?.closest?.<HTMLElement>('.nmx-model-option');
+        const menu = document.querySelector<HTMLElement>(`.nmx-plugin-chat-model-hover-portal .nmx-model-effort-menu[data-model-id="${escaped}"]`);
+        const rowRect = row && list.contains(row) && row.dataset.modelId === routeId ? row.getBoundingClientRect() : undefined;
+        const listRect = list.getBoundingClientRect();
+        if (!menu || !rowRect || rowRect.bottom <= listRect.top || rowRect.top >= listRect.bottom) {
+            this.closeAppPluginChatModelHoverImmediately();
+            this.update();
+            return;
+        }
+        const edge = 8;
+        const top = Math.max(edge, Math.min(rowRect.top, window.innerHeight - edge - naturalPanelHeight(menu)));
+        const maxHeight = Math.max(1, window.innerHeight - top - edge);
+        this.appPluginChatHoverPlacement = { ...placement, top, maxHeight };
+        menu.style.top = `${top}px`;
+        menu.style.maxHeight = `${maxHeight}px`;
+    }
+
+    /**
+     * Focus leaving the AI Console drawer for another control (Tab past its end, a click that focuses something else)
+     * closes it, as Radix Popover does. Moves within the drawer, into its model card, price drawer or back to a trigger
+     * keep it; focus lost to nothing (another window) does too.
+     */
+    protected closeAppPluginChatPickerOnFocusOut(next: EventTarget | null): void {
+        const element = next as Element | null;
+        if (!this.appPluginChatPicker || typeof element?.closest !== 'function') return;
+        if (element.closest('.nmx-plugin-chat-picker-portal, .nmx-plugin-chat-model-hover-portal, .nmx-relay-metric-tooltip, .nmx-offering-price-pop, .nmx-model-price-overlay-drawer, [data-plugin-chat-picker-anchor]')) return;
+        this.closeAppPluginChatPicker(false);
+    }
+
+    /** Quick-pick keys on the model search field: ↓ / ↑ go into the list, Enter takes the first match of what was typed. */
+    protected handleAppPluginChatModelSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>): void {
+        if (event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        const options = Array.from(event.currentTarget.closest('.nmx-model-picker-popover')
+            ?.querySelectorAll<HTMLElement>('.nmx-model-option > button[role="option"]') || []);
+        if (!options.length) return;
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            event.stopPropagation();
+            options[event.key === 'ArrowDown' ? 0 : options.length - 1].focus();
+        } else if (event.key === 'Enter' && event.currentTarget.value.trim()) {
+            event.preventDefault();
+            event.stopPropagation();
+            options[0].click();
+        }
+    }
+
+    /**
+     * Keys of the AI Console model list (WAI-ARIA APG listbox, VS Code quick pick): ↑ / ↓ / Home / End move between models
+     * (↑ on the first goes back to the search field), → (← in Arabic) opens the model's card and moves into it; Enter and
+     * Space choose, the option being a button. Esc belongs to the drawer. Keys from the card, which React bubbles through
+     * its row, are not the list's.
+     */
+    protected handleAppPluginChatModelListKeyDown(event: React.KeyboardEvent<HTMLElement>, openCard: (routeId: string, row: HTMLElement) => void): void {
+        if (event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        const list = event.currentTarget;
+        if (!(event.target instanceof Node) || !list.contains(event.target)) return;
+        const buttons = Array.from(list.querySelectorAll<HTMLElement>('.nmx-model-option > button[role="option"]'));
+        if (!buttons.length) return;
+        const active = document.activeElement;
+        const current = buttons.findIndex(button => button === active || button.contains(active));
+        const move = (target: HTMLElement | null | undefined): void => {
+            event.preventDefault();
+            event.stopPropagation();
+            target?.focus();
+        };
+        if (event.key === 'ArrowDown') return move(buttons[current < 0 ? 0 : Math.min(buttons.length - 1, current + 1)]);
+        if (event.key === 'ArrowUp') {
+            const search = current === 0 ? list.closest('.nmx-model-picker-popover')?.querySelector<HTMLElement>('.nmx-model-picker-search input') : null;
+            return move(search || buttons[current < 0 ? buttons.length - 1 : Math.max(0, current - 1)]);
+        }
+        if (event.key === 'Home') return move(buttons[0]);
+        if (event.key === 'End') return move(buttons[buttons.length - 1]);
+        if (event.key !== (this.desktopLocale === 'ar' ? 'ArrowLeft' : 'ArrowRight') || current < 0) return;
+        const row = buttons[current].closest<HTMLElement>('.nmx-model-option');
+        const routeId = row?.dataset.modelId;
+        if (!row || !routeId) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (this.appPluginChatHoverRouteId !== routeId) openCard(routeId, row);
+        this.focusAppPluginChatModelCard(routeId);
+    }
+
+    /**
+     * Keys inside an AI Console model card. Its 思考深度 and 上下文长度 rows are radio groups (WAI-ARIA APG): one Tab stop
+     * each, arrows move and choose, Home / End jump. Esc, or ← (→ in Arabic) outside a group, goes back to the model's
+     * row as a submenu returns to its menu: the drawer stays open, and a second Esc closes it.
+     */
+    protected handleAppPluginChatModelCardKeyDown(event: React.KeyboardEvent<HTMLElement>, routeId: string): void {
+        if (event.defaultPrevented || event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
+        const rtl = this.desktopLocale === 'ar';
+        const target = event.target as HTMLElement | null;
+        const radio = target?.closest?.<HTMLElement>('[role="radio"]');
+        const group = radio?.closest<HTMLElement>('[role="radiogroup"]');
+        if (radio && group && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
+            const radios = Array.from(group.querySelectorAll<HTMLElement>('[role="radio"]:not(:disabled)'));
+            const index = radios.indexOf(radio);
+            const forward = event.key === 'ArrowDown' || event.key === (rtl ? 'ArrowLeft' : 'ArrowRight');
+            const next = event.key === 'Home' ? radios[0]
+                : event.key === 'End' ? radios[radios.length - 1]
+                    : radios[(index + (forward ? 1 : -1) + radios.length) % radios.length];
+            event.preventDefault();
+            event.stopPropagation();
+            if (next && next !== radio) {
+                next.focus();
+                next.click();
+            }
+            return;
+        }
+        if (event.key !== 'Escape' && event.key !== (rtl ? 'ArrowRight' : 'ArrowLeft')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const escaped = routeId.replace(/["\\]/g, '\\$&');
+        document.querySelector<HTMLElement>(`.nmx-plugin-chat-picker-portal .nmx-model-option[data-model-id="${escaped}"] > button[role="option"]`)?.focus();
+    }
+
+    /** Moves focus into a model's card once it is on the page: its first Tab stop (the chosen 思考深度), else the card. */
+    protected focusAppPluginChatModelCard(routeId: string, attempt = 0): void {
+        if (typeof document === 'undefined') return;
+        const escaped = routeId.replace(/["\\]/g, '\\$&');
+        const card = document.querySelector<HTMLElement>(`.nmx-plugin-chat-model-hover-portal .nmx-model-effort-menu[data-model-id="${escaped}"]`);
+        if (!card) {
+            if (attempt < 10 && this.appPluginChatHoverRouteId === routeId && typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(() => this.focusAppPluginChatModelCard(routeId, attempt + 1));
+            }
+            return;
+        }
+        (card.querySelector<HTMLElement>('button:not(:disabled):not([tabindex="-1"]), a[href], input:not(:disabled), [tabindex="0"]') || card).focus();
+    }
+
+    protected setAppPluginChatRouteReasoningDepth(route: DesktopModelRoute | undefined, option: ReasoningDepthOption): void {
+        if (!route || !this.reasoningDepthChoicesForRoute(route).options.some(item => item.id === option.id)) return;
+        const modelKey = this.modelKeyForRoute(route);
+        const settings = declaredReasoningSettings(this.modelReasoningContract(route)?.reasoningControls, option.settings);
+        this.reasoningSettingsByModel = { ...this.reasoningSettingsByModel, [modelKey]: settings };
+        try { window.localStorage.setItem('nextmux.desktop.reasoningSettings.v1', JSON.stringify(this.reasoningSettingsByModel)); } catch { /* applies to this window */ }
+        if (option.effort) {
+            this.reasoningEffortByModel = { ...this.reasoningEffortByModel, [modelKey]: option.effort };
+            try { window.localStorage.setItem('nextmux.desktop.reasoningEffort.v1', JSON.stringify(this.reasoningEffortByModel)); } catch { /* applies to this window */ }
+        }
+        this.cancelAppPluginChatModelHoverClose();
+        this.update();
+    }
+
+    protected setAppPluginChatRouteContextWindow(route: DesktopModelRoute | undefined, value: number | undefined): void {
+        if (!route) return;
+        const modelKey = this.modelKeyForRoute(route);
+        const maximum = this.modelContextWindowTokens(route, modelKey);
+        const normalized = value !== undefined && maximum !== undefined && value <= maximum ? normalizeContextWindowTokens(value) : undefined;
+        const next = { ...this.contextWindowByModel };
+        if (normalized === undefined) delete next[modelKey];
+        else next[modelKey] = normalized;
+        this.contextWindowByModel = next;
+        try { window.localStorage.setItem('nextmux.desktop.contextWindow.v1', JSON.stringify(this.contextWindowByModel)); } catch { /* applies to this window */ }
+        this.cancelAppPluginChatModelHoverClose();
         this.update();
     }
 
     protected closeAppPluginChatPicker(restoreFocus: boolean): void {
         const anchorSelector = this.appPluginChatPicker?.anchorSelector;
+        this.closeAppPluginChatModelHoverImmediately?.();
         this.appPluginChatPicker = undefined;
         this.appPluginChatModelQuery = '';
         this.relayMetricTooltip = undefined;
@@ -51836,6 +52527,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const modelPickerOpen = this.appPluginChatPicker?.tabKey === tabKey
             && this.appPluginChatPicker.kind === 'model'
             && this.appPluginChatPicker.anchorSelector === modelAnchorSelector;
+        // "Label: value" with the colon of the language (full-width in Chinese and Japanese).
+        const labelled = (label: string, value: string): string => `${label}${/^(zh|ja)/.test(this.desktopLocale) ? '：' : ': '}${value}`;
+        // Menu-button keys (WAI-ARIA APG): ↓/↑ open the drawer and move into it; Esc closes only this drawer, never the
+        // console, the plugin window or the running plugin behind it.
+        const triggerKeyDown = (kind: 'relay' | 'model', open: boolean, anchorSelector: string) => (event: React.KeyboardEvent<HTMLButtonElement>): void => {
+            if (event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
+            if (event.key === 'Escape' && open) {
+                event.preventDefault();
+                event.stopPropagation();
+                this.closeAppPluginChatPicker(true);
+                return;
+            }
+            if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+            event.preventDefault();
+            event.stopPropagation();
+            const edge = event.key === 'ArrowUp' ? 'last' : 'first';
+            if (open) this.focusAppPluginChatPickerEntry?.(kind, edge);
+            else this.toggleAppPluginChatPicker(tabKey, kind, anchorSelector, edge);
+        };
         const renderRelayBtn = (anchor?: DepositVerifiedHintAnchor): React.ReactElement => (
             <button
                 type='button'
@@ -51843,10 +52553,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 data-relay-trigger='plugin-chat'
                 data-plugin-chat-picker-anchor={relayAnchorAttr}
                 {...anchor}
-                aria-label={localizeDesktopSurface(this.desktopLocale, '选择中转商或自有 API') + '：' + (relayOption?.label || localizeDesktopSurface(this.desktopLocale, '未选择')) + relayDepositLabel}
+                aria-label={labelled(localizeDesktopSurface(this.desktopLocale, '选择中转商或自有 API'), relayOption?.label || localizeDesktopSurface(this.desktopLocale, '未选择')) + relayDepositLabel}
+                aria-haspopup='dialog'
                 aria-expanded={relayPickerOpen}
+                aria-controls={relayPickerOpen ? 'nmx-plugin-chat-relay-drawer' : undefined}
                 title={relayHint ? undefined : relayOption?.label || relayText(this.desktopLocale, relayUnavailable ? 'savedRelayUnavailable' : 'selectRelay')}
                 onClick={() => this.toggleAppPluginChatPicker(tabKey, 'relay', relayAnchorSelector)}
+                onKeyDown={triggerKeyDown('relay', relayPickerOpen, relayAnchorSelector)}
             >
                 <i className={`codicon codicon-${relayUnavailable ? 'warning' : relayOption?.kind === 'official' ? 'verified-filled' : relayOption?.kind === 'automatic' ? 'sparkle' : 'server-environment'}`} aria-hidden='true'></i>
                 <span className={relayGold ? 'is-deposit-verified' : undefined}>{relayOption?.label || relayText(this.desktopLocale, relayUnavailable ? 'savedRelayUnavailable' : 'selectRelay')}</span>
@@ -51860,9 +52573,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 className={`nmx-route-button nmx-plugin-chat-model-trigger${modelPickerOpen ? ' is-active' : ''}`}
                 data-plugin-chat-picker-anchor={modelAnchorAttr}
                 data-route-id={route?.id || ''}
+                aria-label={route ? labelled(localizeDesktopSurface(this.desktopLocale, '选择模型'), routeLabel) : routeLabel}
+                aria-haspopup='dialog'
                 aria-expanded={modelPickerOpen}
+                aria-controls={modelPickerOpen ? 'nmx-plugin-chat-model-drawer' : undefined}
                 title={routeLabel}
                 onClick={() => this.toggleAppPluginChatPicker(tabKey, 'model', modelAnchorSelector)}
+                onKeyDown={triggerKeyDown('model', modelPickerOpen, modelAnchorSelector)}
             >
                 <i className='codicon codicon-zap' aria-hidden='true'></i>
                 <span data-nmx-literal>{routeLabel}</span>
@@ -51896,11 +52613,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             this.closeAppPluginChatPicker(true);
                         }
                     }}
+                    onBlur={event => this.closeAppPluginChatPickerOnFocusOut?.(event.relatedTarget)}
                 >
                     <div className={`nmx-model-picker-surface nmx-shell nmx-theme-${this.resolvedDesktopTheme()}`}>
                         <section
+                            id='nmx-plugin-chat-relay-drawer'
                             className='nmx-composer-popover nmx-route-popover nmx-model-picker-popover nmx-relay-picker-popover'
                             data-side={placement.side}
+                            role='dialog'
+                            tabIndex={-1}
                             aria-label={localizeDesktopSurface(this.desktopLocale, '选择中转商')}
                             style={{
                                 '--nmx-model-picker-max-height': `${placement.maxHeight}px`,
@@ -51909,7 +52630,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 width: `${placement.width}px`,
                                 height: `${placement.height}px`,
                                 maxHeight: `${placement.maxHeight}px`,
-                                zIndex: 12020
+                                zIndex: 12055
                             } as React.CSSProperties}
                         >
                             <div className='nmx-model-picker-relay-view'>
@@ -51931,6 +52652,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             void this.loadAppPluginChatRelayCatalog(merchantId, false);
         }
         const candidates = this.councilCandidateModelsForRelay?.(activeRelayKey) || [];
+        const activeRelayRoutes = this.councilRoutesForRelay?.(activeRelayKey, true) || [];
         const query = this.appPluginChatModelQuery.trim().toLowerCase();
         const filtered = query
             ? candidates.filter(item =>
@@ -51939,6 +52661,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 || Boolean(item.detail?.toLowerCase().includes(query)))
             : candidates;
         const activeRoute = this.appPluginChatRouteFor(tabKey);
+        // One Tab stop for the list (APG listbox): the chosen model, or the first when none is on the list.
+        const anySelected = filtered.some(item => item.routeId === activeRoute?.id);
         const activeRelayOption = this.relayPickerOptions?.('coding').find(option => option.key === activeRelayKey) || this.relayOption?.(activeRelayKey, 'coding');
         const showAutoSwitch = activeRelayOption?.kind === 'managed' || activeRoute?.kind === 'managed_gateway';
         const autoSwitchChecked = this.appPluginChatAutoRouting.get(tabKey) ?? this.automaticRouting;
@@ -51966,6 +52690,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         this.closeAppPluginChatPicker(true);
                     }
                 }}
+                onBlur={event => this.closeAppPluginChatPickerOnFocusOut?.(event.relatedTarget)}
             >
                 {merchantId && this.relayCapacityPoller && <RelayCapacityRefresh
                     poller={this.relayCapacityPoller}
@@ -51975,8 +52700,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 />}
                 <div className={`nmx-model-picker-surface nmx-shell nmx-theme-${this.resolvedDesktopTheme()}`}>
                     <section
+                        id='nmx-plugin-chat-model-drawer'
                         className='nmx-composer-popover nmx-route-popover nmx-model-picker-popover nmx-model-only-popover'
                         data-side={placement.side}
+                        role='dialog'
+                        tabIndex={-1}
                         aria-label={localizeDesktopSurface(this.desktopLocale, '选择模型')}
                         style={{
                             '--nmx-model-picker-max-height': `${placement.maxHeight}px`,
@@ -51985,7 +52713,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             width: `${placement.width}px`,
                             height: `${placement.height}px`,
                             maxHeight: `${placement.maxHeight}px`,
-                            zIndex: 12020
+                            zIndex: 12055
                         } as React.CSSProperties}
                     >
                         <header>
@@ -52023,31 +52751,220 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 value={this.appPluginChatModelQuery}
                                 placeholder={modelPickerListText(this.desktopLocale, 'search')}
                                 aria-label={modelPickerListText(this.desktopLocale, 'search')}
+                                aria-controls={filtered.length > 0 ? 'nmx-plugin-chat-model-list' : undefined}
                                 onChange={event => {
                                     this.appPluginChatModelQuery = event.currentTarget.value;
+                                    this.cancelModelHoverIntent?.();
+                                    this.closeAppPluginChatModelHoverImmediately?.();
                                     this.update();
                                 }}
+                                onKeyDown={event => this.handleAppPluginChatModelSearchKeyDown?.(event)}
                             />
                         </div>}
                         {filtered.length > 0 ? (
-                            <div className='nmx-model-picker-list' role='listbox' aria-label={localizeDesktopSurface(this.desktopLocale, '选择模型')}>
-                                {filtered.map(candidate => {
+                            <div className='nmx-model-picker-list' id='nmx-plugin-chat-model-list' role='listbox' aria-label={localizeDesktopSurface(this.desktopLocale, '选择模型')}
+                                onScroll={event => {
+                                    this.noteModelListScroll?.();
+                                    this.followAppPluginChatModelHover?.(event.currentTarget);
+                                }}
+                                onKeyDown={event => this.handleAppPluginChatModelListKeyDown?.(event, (routeId, row) => {
+                                    const target = filtered.find(item => item.routeId === routeId);
+                                    if (target) this.openAppPluginChatModelHover(activeRelayRoutes.find(item => item.id === routeId), target, row, placement);
+                                })}>
+                                {filtered.map((candidate, index) => {
                                     const selected = activeRoute?.id === candidate.routeId;
+                                    const candidateRoute = activeRelayRoutes.find(route => route.id === candidate.routeId);
+                                    const offering = candidateRoute?.kind === 'managed_gateway' ? candidateRoute.offering : undefined;
+                                    const fidelity = candidate.authenticity?.value ?? (offering ? measuredModelFidelity(offering.fidelity) : undefined);
+                                    const hoverOpen = this.appPluginChatHoverRouteId === candidate.routeId ? this.appPluginChatHoverPlacement : undefined;
+                                    const openHover = (anchor: HTMLElement): void => this.openAppPluginChatModelHover(candidateRoute, candidate, anchor, placement);
+                                    const onHover = (event: React.PointerEvent<HTMLElement>): void =>
+                                        this.intendModelHover
+                                            ? this.intendModelHover(candidate.routeId, this.appPluginChatHoverRouteId || '', event, openHover)
+                                            : openHover(event.currentTarget);
+                                    const escapedRouteId = candidate.routeId.replace(/["\\]/g, '\\$&');
                                     return (
-                                        <div key={candidate.routeId} className={`nmx-model-option${selected ? ' is-selected' : ''}`} data-model-id={candidate.modelId}>
+                                        <div key={candidate.routeId} className={`nmx-model-option${selected ? ' is-selected' : ''}`} data-model-id={candidate.routeId}
+                                            onPointerEnter={onHover}
+                                            onPointerMove={onHover}
+                                            onFocus={event => openHover(event.currentTarget)}
+                                            onBlur={event => {
+                                                const nextFocus = event.relatedTarget as HTMLElement | null;
+                                                if (nextFocus && (event.currentTarget.contains(nextFocus)
+                                                    || nextFocus.closest?.(`.nmx-plugin-chat-model-hover-portal [data-model-id="${escapedRouteId}"]`))) {
+                                                    return;
+                                                }
+                                                this.scheduleAppPluginChatModelHoverClose();
+                                            }}
+                                            onPointerLeave={() => { this.cancelModelHoverIntent?.(candidate.routeId); this.scheduleAppPluginChatModelHoverClose(); }}>
                                             <button
                                                 type='button'
                                                 role='option'
                                                 aria-selected={selected}
+                                                tabIndex={selected || (!anySelected && index === 0) ? 0 : -1}
+                                                aria-label={candidate.detail ? `${candidate.label} · ${candidate.detail}` : candidate.label}
                                                 onClick={() => this.selectAppPluginChatRoute(tabKey, candidate.routeId)}
                                             >
                                                 <span>
                                                     <strong data-nmx-literal>{candidate.label}</strong>
                                                     {candidate.variantTag && <small className='nmx-model-price-variant' dir='ltr'>{candidate.variantTag}</small>}
-                                                    {candidate.authenticity !== undefined && <ModelAuthenticityTag locale={this.desktopLocale} value={candidate.authenticity.value} />}
+                                                    {(offering || fidelity !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity}
+                                                        onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)}
+                                                        onLeave={() => this.hideModelEvidenceTooltip?.()} />}
                                                 </span>
                                                 {selected && <i className='codicon codicon-check' aria-hidden='true' />}
                                             </button>
+                                            {hoverOpen && (() => {
+                                                const depth = reasoningDepthChoicesForDisplay(this.reasoningDepthChoicesForRoute(candidateRoute));
+                                                const activeDepth = this.activeReasoningDepthId(candidateRoute, depth);
+                                                const depthChecked = depth.options.some(item => item.id === activeDepth);
+                                                const rawContextMaximum = this.rawModelContextWindowTokens?.(candidateRoute, candidate.modelId) ?? this.modelContextWindowTokens(candidateRoute, candidate.modelId);
+                                                const learnedContextCap = this.learnedRouteContextCap?.(candidateRoute);
+                                                const contextMaximum = this.modelContextWindowTokens(candidateRoute, candidate.modelId);
+                                                const contextChoices = typeof contextWindowChoices === 'function' ? contextWindowChoices(rawContextMaximum, learnedContextCap) : [];
+                                                const contextCapped = learnedContextCap !== undefined && rawContextMaximum !== undefined && learnedContextCap < rawContextMaximum;
+                                                const contextShown = contextMaximum !== undefined && contextChoices.length > 1;
+                                                const activeContextTokens = this.contextWindowForRoute?.(candidateRoute) ?? contextMaximum;
+                                                const contextChecked = contextChoices.some(tokens => tokens === activeContextTokens);
+                                                const authenticityPending = Boolean(offering) && fidelity === undefined;
+                                                const authenticityHint = authenticityPending ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint') : undefined;
+                                                const quality = offering ? measuredRelayQuality([offering]) : undefined;
+                                                const ownPriced = Boolean(offering && offeringIsOwnPriced(offering));
+                                                const multiplier = offering ? offeringMultiplierBps(offering) : undefined;
+                                                const officialOffering = !offering && candidateRoute?.kind === 'official_connection'
+                                                    ? this.officialRoutePriceOffering?.(candidateRoute, candidate.label)
+                                                    : undefined;
+                                                const routingSourceLabel = candidateRoute?.kind === 'managed_gateway'
+                                                    ? (activeRelayOption?.label || candidateRoute.offering.providerName || candidate.relayLabel || candidateRoute.offering.merchantId || '')
+                                                    : (candidateRoute?.connection?.label || activeRelayOption?.label || candidate.relayLabel || '');
+                                                const metrics: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = [
+                                                    {
+                                                        label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'),
+                                                        value: authenticityPending ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPending') : relayPercentText(this.desktopLocale, fidelity),
+                                                        unmeasured: authenticityPending,
+                                                        hint: authenticityHint
+                                                    },
+                                                    { label: relayText(this.desktopLocale, 'quality'), value: relayPercentText(this.desktopLocale, quality) },
+                                                    {
+                                                        label: relayText(this.desktopLocale, 'price'),
+                                                        value: ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, multiplier) || '—'
+                                                    }
+                                                ];
+                                                const contextRow: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> =
+                                                    contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
+                                                const routingRow: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> =
+                                                    routingSourceLabel ? [{ label: appPluginText(this.desktopLocale, 'relay'), value: routingSourceLabel }] : [];
+                                                const evidenceRows = [...(offering || officialOffering ? metrics.slice(0, 2) : metrics), ...(!contextShown ? contextRow : []), ...routingRow];
+                                                const modelMatch = this.codingModelOptions?.(activeRelayKey || undefined)?.find(option => (option.variantOf ?? option.id) === candidate.modelId);
+                                                const taxonomyTarget = modelMatch || {
+                                                    model: candidate.modelId,
+                                                    label: candidate.label,
+                                                    input: offering?.input || (['text'] as const),
+                                                    output: offering?.output || (['text'] as const),
+                                                    capabilities: offering?.capabilities || ([] as const)
+                                                };
+                                                return ReactDOM.createPortal(
+                                                    <div
+                                                        className={`nmx-model-effort-portal nmx-plugin-chat-model-hover-portal nmx-theme-${this.resolvedDesktopTheme()}`}
+                                                        dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'}
+                                                        lang={this.desktopLocale}
+                                                        style={{ zIndex: 12060 }}
+                                                        onFocus={() => this.cancelAppPluginChatModelHoverClose()}
+                                                        onPointerEnter={() => this.cancelAppPluginChatModelHoverClose()}
+                                                        onPointerLeave={() => this.scheduleAppPluginChatModelHoverClose()}
+                                                        onKeyDown={event => this.handleAppPluginChatModelCardKeyDown?.(event, candidate.routeId)}
+                                                    >
+                                                        <section
+                                                            className={`nmx-model-effort-menu nmx-model-evidence-menu is-${hoverOpen.side}`}
+                                                            data-model-id={candidate.routeId}
+                                                            tabIndex={-1}
+                                                            ref={element => { if (element) this.fitAppPluginChatModelHoverMenu(element); }}
+                                                            data-compact={hoverOpen.width !== undefined && hoverOpen.width < 240 || undefined}
+                                                            style={{
+                                                                top: `${hoverOpen.top}px`,
+                                                                left: `${hoverOpen.left}px`,
+                                                                width: hoverOpen.width === undefined ? undefined : `${hoverOpen.width}px`,
+                                                                maxHeight: `${hoverOpen.maxHeight}px`,
+                                                                zIndex: 12060
+                                                            }}
+                                                            aria-label={candidate.label}
+                                                            onFocus={() => this.cancelAppPluginChatModelHoverClose()}
+                                                            onBlur={event => {
+                                                                const nextFocus = event.relatedTarget as HTMLElement | null;
+                                                                if (nextFocus && (event.currentTarget.contains(nextFocus)
+                                                                    || nextFocus.closest?.(`.nmx-plugin-chat-picker-portal .nmx-model-option[data-model-id="${escapedRouteId}"]`))) {
+                                                                    return;
+                                                                }
+                                                                this.scheduleAppPluginChatModelHoverClose();
+                                                            }}
+                                                            onPointerEnter={() => this.cancelAppPluginChatModelHoverClose()}
+                                                            onPointerLeave={() => this.scheduleAppPluginChatModelHoverClose()}
+                                                        >
+                                                            <header>
+                                                                <strong data-nmx-literal>{candidate.label}</strong>
+                                                                <ModelTaxonomyTags locale={this.desktopLocale} model={taxonomyTarget} />
+                                                            </header>
+                                                            {depth.options.length > 0 && <>
+                                                                <div className='nmx-model-effort-caption'>{reasoningControlText(this.desktopLocale, 'depth')}</div>
+                                                                <div className='nmx-model-depth' role='radiogroup' aria-label={reasoningControlText(this.desktopLocale, 'depth')}
+                                                                    style={{ '--nmx-depth-cols': Math.min(6, depth.options.length) } as React.CSSProperties}>
+                                                                    {depth.options.map((item, depthIndex) => {
+                                                                        const depthLabel = this.reasoningDepthLabel(item);
+                                                                        const depthTip = `${reasoningControlText(this.desktopLocale, 'depth')}: ${item.evidence ? `${depthLabel} · ${reasoningControlText(this.desktopLocale, 'verified')}` : depthLabel}`;
+                                                                        return <button key={item.id} type='button' role='radio' aria-checked={activeDepth === item.id}
+                                                                            tabIndex={activeDepth === item.id || (!depthChecked && depthIndex === 0) ? 0 : -1}
+                                                                            data-reasoning-depth={item.id}
+                                                                            className={`${activeDepth === item.id ? 'is-active' : ''}${item.evidence ? ' has-evidence' : ''}`}
+                                                                            aria-label={depthTip}
+                                                                            onPointerEnter={event => this.showModelEvidenceTooltip?.(depthTip, event.currentTarget)}
+                                                                            onPointerLeave={() => this.hideModelEvidenceTooltip?.()}
+                                                                            onFocus={event => this.showModelEvidenceTooltip?.(depthTip, event.currentTarget)}
+                                                                            onBlur={() => this.hideModelEvidenceTooltip?.()}
+                                                                            onClick={() => this.setAppPluginChatRouteReasoningDepth(candidateRoute, item)}>{depthLabel}</button>;
+                                                                    })}
+                                                                </div>
+                                                            </>}
+                                                            {contextShown && <>
+                                                                <div className='nmx-model-effort-caption'>{contextBudgetText(this.desktopLocale, 'window')}</div>
+                                                                <div className='nmx-model-depth nmx-model-context-window' role='radiogroup' aria-label={contextBudgetText(this.desktopLocale, 'window')}
+                                                                    style={{ '--nmx-depth-cols': Math.min(6, contextChoices.length) } as React.CSSProperties}>
+                                                                    {contextChoices.map((tokens, contextIndex) => {
+                                                                        const shortLabel = contextWindowTokenLabel(tokens);
+                                                                        const fullTokens = (() => { try { return tokens.toLocaleString(this.desktopLocale); } catch { return String(tokens); } })();
+                                                                        const contextTip = `${contextBudgetText(this.desktopLocale, 'window')}: ${shortLabel} (${fullTokens} Tokens)`;
+                                                                        return <button key={tokens} type='button' role='radio' aria-checked={activeContextTokens === tokens}
+                                                                            tabIndex={activeContextTokens === tokens || (!contextChecked && contextIndex === 0) ? 0 : -1}
+                                                                            data-context-window={tokens} className={activeContextTokens === tokens ? 'is-active' : ''} dir='ltr'
+                                                                            aria-label={contextTip}
+                                                                            onPointerEnter={event => this.showModelEvidenceTooltip?.(contextTip, event.currentTarget)}
+                                                                            onPointerLeave={() => this.hideModelEvidenceTooltip?.()}
+                                                                            onFocus={event => this.showModelEvidenceTooltip?.(contextTip, event.currentTarget)}
+                                                                            onBlur={() => this.hideModelEvidenceTooltip?.()}
+                                                                            onClick={() => this.setAppPluginChatRouteContextWindow(candidateRoute, tokens)}>{shortLabel}</button>;
+                                                                    })}
+                                                                </div>
+                                                            </>}
+                                                            {contextCapped && <p className='nmx-model-context-learned' role='note'>
+                                                                <i className='codicon codicon-info' aria-hidden='true'></i>
+                                                                <span>{contextBudgetText(this.desktopLocale, 'learned').split('{cap}').join(contextWindowTokenLabel(learnedContextCap!))}</span>
+                                                            </p>}
+                                                            <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}
+                                                                role={metric.hint ? 'group' : undefined}
+                                                                aria-label={metric.hint ? `${metric.label}: ${metric.value}. ${metric.hint}` : undefined}
+                                                                tabIndex={metric.hint ? 0 : undefined}
+                                                                onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
+                                                                onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
+                                                                onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
+                                                                onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}>
+                                                                <dt>{metric.label}</dt>
+                                                                <dd data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd>
+                                                            </div>)}</dl>
+                                                            {(offering || officialOffering) && <OfferingPriceCard locale={this.desktopLocale} offering={(offering || officialOffering)!} collapsible pullOutDrawer officialOnly={!offering && Boolean(officialOffering)} />}
+                                                        </section>
+                                                    </div>,
+                                                    document.body
+                                                );
+                                            })()}
                                         </div>
                                     );
                                 })}
@@ -52633,6 +53550,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
                 const autoSwitch = this.appPluginChatAutoRouting?.get(key) ?? Boolean(this.automaticRouting);
                 const pluginSwitchSource: AutomaticRelaySource = !autoSwitch ? 'off' : chosenRelayKey === 'auto' ? 'auto_best' : 'user';
+                const reasoningSettings = activeRoute ? this.reasoningSettingsForRoute?.(activeRoute) : undefined;
+                const reasoningLevels = activeRoute ? (this.reasoningEffortLevels?.(activeRoute) || []) : [];
+                const userReasoningEffort = activeRoute ? this.reasoningEffortForRoute?.(activeRoute) : undefined;
+                const reasoningEffort = userReasoningEffort && (!reasoningLevels.length || reasoningLevels.includes(userReasoningEffort))
+                    ? userReasoningEffort
+                    : reasoningLevels[0];
+                const contextWindowTokens = activeRoute ? this.contextWindowForRoute?.(activeRoute, undefined, true) : undefined;
                 const result = await this.platformService.runAgent({
                     route: agentRoute,
                     ...(managedRouteForPolicy && typeof sameModelRelayPolicy === 'function' ? {
@@ -52642,6 +53566,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             this.modelSwitchSettings?.get?.(managedRouteForPolicy)
                         )
                     } : {}),
+                    ...(reasoningSettings?.reasoningEnabled !== undefined ? { reasoningEnabled: reasoningSettings.reasoningEnabled } : {}),
+                    ...(reasoningSettings?.reasoningMode ? { reasoningMode: reasoningSettings.reasoningMode } : {}),
+                    ...(reasoningEffort ? { reasoningEffort } : {}),
+                    ...(reasoningSettings?.reasoningBudgetTokens !== undefined ? { reasoningBudgetTokens: reasoningSettings.reasoningBudgetTokens } : {}),
+                    ...(contextWindowTokens !== undefined ? { contextWindowTokens } : {}),
                     workbench: 'coding',
                     toolScope: 'plugin-chat',
                     pluginChatRequestId: requestId,
@@ -52919,32 +53848,56 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     : base;
             })()
             : boundPlugins[0];
-        const bar = run ? <AppPluginRunBar locale={this.desktopLocale} run={run} now={Date.now()} overlay={this.appPluginOverlays.has(run.runId)}
-            plugin={runPlugin} appName={currentTab.target || currentTab.title}
-            choices={this.appPluginChoices} extraModels={extraModels} modelBusy={this.appPluginModelBusy} error={this.appPluginsError}
-            chatOpen={chatOpen} chatMessages={chatMessages} chatBusy={false} chatModel={chatModel}
-            chatComposerModelControls={this.renderAppPluginChatModelControls(key, 'bar')}
-            chatRenderMarkdown={this.renderAppPluginChatMarkdown}
-            onToggleChat={() => this.toggleAppPluginChat(key)}
-            onChatSend={req => void this.sendAppPluginChatMessage(key, conversationId, currentTab, req)}
-            onChatStopMessage={msgId => void this.stopAppPluginChatMessage(key, msgId)}
-            onChatClear={() => this.clearAppPluginChatMessages(key)}
-            onChatSelectModel={model => { this.appPluginChatModels.set(key, model); this.update(); }}
-            onApplyChatToApp={text => this.applyPluginChatToApp(conversationId, currentTab, text)}
-            onSaveModel={(id, model, vision, targetRunId) => void this.saveInlineAppPluginModel(id, model, vision, targetRunId ?? (active?.pluginId === id ? active.runId : undefined))}
-            onChooseModel={id => void this.openAppPluginModel(id, active?.pluginId === id ? active.runId : undefined)}
-            onConfigureParams={(id, params) => void this.configureAppPlugin(id, run ? { params, runId: run.runId, conversationId: run.conversationId, tabId: run.tabId } : { params, scope: 'defaults' })}
-            onPickParamFile={(id, paramId, label) => void this.pickAppPluginParamFile(id, paramId, label, run)}
-            onCommand={command => void this.sendAppPluginGoal(command.runId, command.goal)}
-            onStart={(id, goal) => void this.startAppPluginGoal({ pluginId: id, conversationId, tabId: currentTab.id, pid: currentTab.windowRef!.pid,
-                windowId: currentTab.windowRef!.windowId, title: currentTab.target || currentTab.title, byAi: false, goal: goal || '' })}
-            onStop={() => void bridge.stopAppPlugin?.(run.runId)} onPause={() => void bridge.commandAppPlugin?.(run.runId, { pause: true })} onResume={() => void bridge.commandAppPlugin?.(run.runId, { resume: true })}
-            onToggleOverlay={() => {
-                const on = !this.appPluginOverlays.has(run.runId);
-                if (on) this.appPluginOverlays.add(run.runId); else this.appPluginOverlays.delete(run.runId);
-                void bridge.commandAppPlugin?.(run.runId, { overlay: on });
-                this.update();
-            }} /> : undefined;
+        const openWindowPluginId = this.appPluginOpenWindows?.get?.(key);
+        const windowPlugin = (openWindowPluginId
+            ? (boundPlugins.find(plugin => plugin.id === openWindowPluginId && plugin.ok && plugin.enabled !== false)
+                || this.appPlugins?.find?.(plugin => plugin.id === openWindowPluginId && plugin.ok && plugin.enabled !== false))
+            : undefined)
+            || (runPlugin?.summary?.ui && runPlugin.ok && runPlugin.enabled !== false ? runPlugin : undefined)
+            || boundPlugins.find(plugin => Boolean(plugin?.summary?.ui))
+            || (runPlugin?.ok && runPlugin?.enabled !== false ? runPlugin : undefined)
+            || activeBoundPlugin;
+        const canToggleWindow = Boolean(windowPlugin && (windowPlugin.summary?.ui || (openWindowPluginId && openWindowPluginId === windowPlugin.id)));
+        const windowOpen = Boolean(windowPlugin && openWindowPluginId === windowPlugin.id);
+        const customOverlayItems = this.appPluginCustomOverlays?.get?.(key) || [];
+        const customOverlayVisible = this.appPluginCustomOverlayVisible?.get?.(key) ?? (customOverlayItems.length > 0);
+        const runOverlayVisible = Boolean(active && this.appPluginOverlays?.has?.(active.runId));
+        const combinedOverlayItems = [
+            ...(runOverlayVisible && active?.overlay ? active.overlay : []),
+            ...(customOverlayVisible && customOverlayItems.length > 0 ? customOverlayItems : [])
+        ];
+        const overlayVisible = Boolean(runOverlayVisible || (customOverlayVisible && customOverlayItems.length > 0));
+        const hasOverlayContent = Boolean((active?.overlay?.length ?? 0) > 0 || customOverlayItems.length > 0);
+        const headerControls = typeof AppPluginTabHeaderControls === 'function'
+            ? <AppPluginTabHeaderControls
+                locale={this.desktopLocale}
+                plugin={windowPlugin}
+                run={run}
+                now={Date.now()}
+                windowOpen={windowOpen}
+                overlayVisible={overlayVisible}
+                hasOverlayContent={hasOverlayContent}
+                canToggleWindow={canToggleWindow}
+                onToggleWindow={() => { if (windowPlugin) this.toggleAppPluginWindow?.(key, windowPlugin.id); }}
+                onToggleOverlay={() => {
+                    const next = !overlayVisible;
+                    if (active) {
+                        if (next) this.appPluginOverlays?.add?.(active.runId);
+                        else this.appPluginOverlays?.delete?.(active.runId);
+                        void bridge.commandAppPlugin?.(active.runId, { overlay: next });
+                    }
+                    if (customOverlayItems.length > 0) this.appPluginCustomOverlayVisible?.set?.(key, next);
+                    this.update();
+                }}
+                onPause={run ? () => void bridge.commandAppPlugin?.(run.runId, { pause: true }) : undefined}
+                onResume={run ? () => void bridge.commandAppPlugin?.(run.runId, { resume: true }) : undefined}
+                onStop={run ? () => {
+                    if (typeof this.stopAppPluginFromHub === 'function') void this.stopAppPluginFromHub(run.runId);
+                    else void bridge.stopAppPlugin?.(run.runId);
+                } : undefined}
+            />
+            : undefined;
+        const bar = undefined;
         const floatingChat = chatOpen ? <AppPluginChatPanel locale={this.desktopLocale} appName={currentTab.target || currentTab.title}
             plugin={activeBoundPlugin} plugins={boundPlugins} run={active}
             choices={this.appPluginChoices} extraModels={extraModels} selectedModel={chatModel} messages={chatMessages}
@@ -52958,14 +53911,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
             onClear={() => this.clearAppPluginChatMessages(key)}
             onApplyToApp={text => this.applyPluginChatToApp(conversationId, currentTab, text)}
             onClose={() => this.toggleAppPluginChat(key)} /> : undefined;
-        const overlay = active && this.appPluginOverlays.has(active.runId) && active.overlay ? <AppPluginOverlay items={active.overlay} /> : undefined;
+        const overlay = combinedOverlayItems.length > 0 && typeof AppPluginOverlay === 'function'
+            ? <AppPluginOverlay items={combinedOverlayItems} />
+            : undefined;
         const studio = this.appPluginStudio === key ? { onClose: () => { this.appPluginStudio = ''; this.update(); },
             labels: { studio: appPluginText(this.desktopLocale, 'studio'), studioHint: appPluginText(this.desktopLocale, 'studioHint'), copy: appPluginText(this.desktopLocale, 'copy'),
                 copied: appPluginText(this.desktopLocale, 'copied'), close: appPluginText(this.desktopLocale, 'close'), studioArea: appPluginText(this.desktopLocale, 'studioArea'),
                 studioPoint: appPluginText(this.desktopLocale, 'studioPoint') } } : undefined;
         const canStopOnEsc = Boolean(active && typeof bridge.stopAppPlugin === 'function');
         const chatStreaming = chatMessages.some(message => message.role === 'assistant' && Boolean(message.streaming || message.pending));
-        return { headerExtra, bar, floatingChat, overlay, studio, running: canStopOnEsc, chatOpen, onToggleChat: () => this.toggleAppPluginChat(key), chatStreaming,
+        return { headerControls, headerExtra, bar, floatingChat, overlay, studio, running: canStopOnEsc, chatOpen, onToggleChat: () => this.toggleAppPluginChat(key), chatStreaming,
             chatLabel: appPluginText(this.desktopLocale, 'aiConsoleTitle'), ...(canStopOnEsc ? { onStop: () => void this.stopAppPluginFromHub(active!.runId) } : {}) };
     }
 
@@ -53075,6 +54030,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
             {this.appPluginStart && startPlugin?.summary && <AppPluginStartDialog key={`${this.appPluginStart.pluginId}:${this.appPluginStart.tabId}`} locale={this.desktopLocale}
                 plugin={startPlugin} tabTitle={this.appPluginStart.title} byAi={this.appPluginStart.byAi} initialGoal={this.appPluginStart.goal}
                 initialMinutes={this.appPluginStart.minutes} initialCost={this.appPluginStart.cost} busy={this.appPluginStartBusy} error={this.appPluginStartError} shortcut={shortcut}
+                choices={this.appPluginChoices}
+                extraModels={this.appPluginExtraModels()}
+                modelBusy={this.appPluginModelBusy}
+                onRescan={() => void this.loadAppPluginChoices()}
+                onSaveModel={(id, model, vision) => {
+                    if (this.appPluginStart && this.appPluginStart.pluginId === id && model !== undefined) {
+                        const tabKey = `${this.appPluginStart.conversationId}\n${this.appPluginStart.tabId}`;
+                        this.appPluginStart = { ...this.appPluginStart, model: model || undefined };
+                        this.appPluginStartsByTab?.set(tabKey, this.appPluginStart);
+                    }
+                    void this.saveInlineAppPluginModel(id, model, vision);
+                }}
                 onConfigureParams={(id, params) => {
                     if (this.appPluginStart && this.appPluginStart.pluginId === id) {
                         const tabKey = `${this.appPluginStart.conversationId}\n${this.appPluginStart.tabId}`;
@@ -53087,6 +54054,110 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onPickParamFile={(id, paramId, label) => void this.pickAppPluginParamFile(id, paramId, label)}
                 onStart={options => void this.confirmAppPluginStart(options, this.appPluginStart ? `${this.appPluginStart.conversationId}\n${this.appPluginStart.tabId}` : undefined)}
                 onCancel={() => this.closeAppPluginStart(this.appPluginStart ? `${this.appPluginStart.conversationId}\n${this.appPluginStart.tabId}` : undefined)} />}
+            {this.renderAppPluginWindowDialogs()}
+        </>;
+    }
+
+    protected renderAppPluginWindowDialogs(): React.ReactNode {
+        if (this.activeSection !== 'coding') return null;
+        const activeVisual = this.activeVisualTab?.();
+        const activeConvId = this.activeCodingSessionId;
+        if (!activeVisual || !activeConvId) return null;
+        const activeTabKey = `${activeConvId}\n${activeVisual.id}`;
+        const openWindowPluginId = this.appPluginOpenWindows?.get(activeTabKey);
+        const windowPlugin = openWindowPluginId
+            ? this.appPlugins.find(plugin => plugin.id === openWindowPluginId && plugin.ok && plugin.enabled !== false)
+            : undefined;
+        const windowBundleEntry = windowPlugin
+            ? (this.appPluginUiBundles?.get(`${windowPlugin.id}\n${this.desktopLocale}`)
+                || [...(this.appPluginUiBundles?.values() || [])].find(entry => entry.pluginId === windowPlugin.id))
+            : undefined;
+        const windowRun = windowPlugin
+            ? ([...this.appPluginRuns.values()].find(run => !run.ended && run.conversationId === activeConvId && run.tabId === activeVisual.id && run.pluginId === windowPlugin.id)
+                || [...this.appPluginRuns.values()].find(run => run.conversationId === activeConvId && run.tabId === activeVisual.id && run.pluginId === windowPlugin.id))
+            : undefined;
+        const windowRectKey = windowPlugin ? `${activeTabKey}\n${windowPlugin.id}` : '';
+        const windowOverlayVisible = Boolean(
+            (windowRun && !windowRun.ended && this.appPluginOverlays.has(windowRun.runId))
+            || ((this.appPluginCustomOverlayVisible?.get(activeTabKey) ?? false) && (this.appPluginCustomOverlays?.get(activeTabKey)?.length ?? 0) > 0)
+        );
+        const subModal = this.appPluginSubWindow
+            && this.appPluginSubWindow.tabKey === activeTabKey
+            && this.appPlugins.some(plugin => plugin.id === this.appPluginSubWindow!.pluginId && plugin.ok && plugin.enabled !== false)
+            ? this.appPluginSubWindow
+            : undefined;
+        const subModalBundleEntry = subModal
+            ? (this.appPluginUiBundles?.get(`${subModal.pluginId}\n${this.desktopLocale}`)
+                || [...(this.appPluginUiBundles?.values() || [])].find(entry => entry.pluginId === subModal.pluginId))
+            : undefined;
+        const subModalRun = subModal
+            ? ([...this.appPluginRuns.values()].find(run => !run.ended && run.conversationId === activeConvId && run.tabId === activeVisual.id && run.pluginId === subModal.pluginId)
+                || [...this.appPluginRuns.values()].find(run => run.conversationId === activeConvId && run.tabId === activeVisual.id && run.pluginId === subModal.pluginId))
+            : undefined;
+        const theme = this.resolvedDesktopTheme();
+        return <>
+            {windowPlugin && <AppPluginWindowDialog
+                key={`${activeTabKey}:${windowPlugin.id}`}
+                locale={this.desktopLocale}
+                theme={theme}
+                plugin={windowPlugin}
+                tabKey={activeTabKey}
+                tabTitle={activeVisual.target || activeVisual.title}
+                binding={{
+                    conversationId: activeConvId,
+                    tabId: activeVisual.id,
+                    pid: activeVisual.windowRef?.pid || 0,
+                    windowId: activeVisual.windowRef?.windowId || 0,
+                    pluginId: windowPlugin.id,
+                    ...(windowRun?.runId ? { runId: windowRun.runId } : {})
+                }}
+                run={windowRun}
+                bundle={windowBundleEntry?.bundle}
+                loading={Boolean(windowBundleEntry?.loading)}
+                error={windowBundleEntry?.error}
+                rect={windowRectKey ? this.appPluginWindowRects.get(windowRectKey) : undefined}
+                overlayVisible={windowOverlayVisible}
+                subModalOpen={Boolean(subModal)}
+                onChangeRect={rect => {
+                    if (windowRectKey) this.appPluginWindowRects.set(windowRectKey, rect);
+                    this.update();
+                }}
+                onRefresh={() => void this.ensureAppPluginUiLoaded(windowPlugin.id, true)}
+                onClose={() => {
+                    this.appPluginOpenWindows.delete(activeTabKey);
+                    if (this.appPluginSubWindow?.tabKey === activeTabKey) this.appPluginSubWindow = undefined;
+                    this.update();
+                }}
+                onPostMessage={(msg, reply) => this.handleAppPluginWindowPostMessage({
+                    tabKey: activeTabKey,
+                    conversationId: activeConvId,
+                    tabId: activeVisual.id,
+                    pid: activeVisual.windowRef?.pid || 0,
+                    windowId: activeVisual.windowRef?.windowId || 0,
+                    pluginId: windowPlugin.id,
+                    runId: windowRun?.runId
+                }, msg, reply)}
+            />}
+            {subModal && <AppPluginSubWindowDialog
+                key={`${activeTabKey}:${subModal.pluginId}:${subModal.modal.title}`}
+                locale={this.desktopLocale}
+                theme={theme}
+                modal={subModal.modal}
+                assets={subModalBundleEntry?.bundle?.assets}
+                onClose={() => {
+                    this.appPluginSubWindow = undefined;
+                    this.update();
+                }}
+                onPostMessage={(msg, reply) => this.handleAppPluginWindowPostMessage({
+                    tabKey: activeTabKey,
+                    conversationId: activeConvId,
+                    tabId: activeVisual.id,
+                    pid: activeVisual.windowRef?.pid || 0,
+                    windowId: activeVisual.windowRef?.windowId || 0,
+                    pluginId: subModal.pluginId,
+                    runId: subModalRun?.runId
+                }, msg, reply)}
+            />}
         </>;
     }
 
@@ -62391,7 +63462,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         <div className='nmx-billing-table'><header><span>模型与线路</span><span>{usageAnalyticsText(this.desktopLocale, 'tokens')}</span><span title={localizeDesktopSurface(this.desktopLocale, '费用')}>费用</span><span>时间</span></header>{this.accountOverview.usage.map(item => <article key={item.id}><span><strong title={item.modelName || item.canonicalModel}>{item.modelName || item.canonicalModel}</strong><small title={item.providerName || '平台线路'}>{item.providerName || '平台线路'} · {item.routeMode === 'automatic' ? '自动最优' : '固定线路'}{item.failoverCount > 0 ? ` · 切换 ${item.failoverCount} 次` : ''}</small><small title={item.referenceModel && item.referenceModel !== item.canonicalModel ? dynamicLabel(this.desktopLocale, 'referencePrice', { model: item.referenceModel }) : item.pricingMode === 'direct' ? '商家直接报价' : '官方参考价格'}>{item.referenceModel && item.referenceModel !== item.canonicalModel ? dynamicLabel(this.desktopLocale, 'referencePrice', { model: item.referenceModel }) : item.pricingMode === 'direct' ? '商家直接报价' : '官方参考价格'}</small></span><span><strong title={String(usageRecordTotalTokens(item) ?? '—')}>{usageRecordTotalTokens(item) ?? '—'}</strong><small title={`${item.inputTokens} 输入 · ${item.cachedInputTokens} 缓存读取`}>{item.inputTokens} 输入 · {item.cachedInputTokens} 缓存读取</small><small title={`${item.cacheWriteTokens} 缓存写入 · ${item.outputTokens} 输出`}>{item.cacheWriteTokens} 缓存写入 · {item.outputTokens} 输出</small></span><span title={this.formatMoneyMicros(item.currency, item.chargedMicros)}><strong title={this.formatMoneyMicros(item.currency, item.chargedMicros)}>{this.formatMoneyMicros(item.currency, item.chargedMicros)}</strong><small title={`结算倍率 ${(item.settlementMultiplierBps / 10_000).toFixed(2)}× · 服务费 ${(item.platformFeeBps / 100).toFixed(2)}%`}>结算倍率 {(item.settlementMultiplierBps / 10_000).toFixed(2)}× · 服务费 {(item.platformFeeBps / 100).toFixed(2)}%</small><small title={item.status === 'completed' ? '已结算' : item.status === 'failed' ? (item.chargedMicros > 0 ? '失败 · 已扣费' : '未扣费') : item.status}>{item.status === 'completed' ? '已结算' : item.status === 'failed' ? (item.chargedMicros > 0 ? '失败 · 已扣费' : '未扣费') : item.status}</small></span><span><strong>{dateTime(item.completedAt || item.startedAt)}</strong><small>{item.durationMs > 0 ? `${Math.max(1, Math.round(item.durationMs / 1000))} 秒` : '—'}</small><small>{item.meteringSource === 'provider_reported' ? '上游用量' : '平台估算'}</small></span>{item.metrics.length > 0 && <details className='nmx-usage-breakdown'><summary>计费明细</summary><div>{item.metrics.map(line => <span key={line.metric}><b>{usageMetricName(line.metric)}</b><em>{line.quantity.toLocaleString(this.desktopLocale)}</em><strong>{this.formatMoneyMicros(item.currency, line.customerAmountMicros)}</strong></span>)}</div></details>}</article>)}{!this.accountOverviewLoading && this.accountOverview.usage.length === 0 && <div className='nmx-billing-empty'>暂无使用记录</div>}</div>
                     </>}
                     {this.billingTab === 'topups' && <div className='nmx-billing-table'><header><span>实付金额</span><span>到账余额</span><span>状态</span><span>时间</span></header>{this.accountOverview.topups.map(item => <article key={item.id}><span><strong>{new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency: item.currency }).format(item.payableAmountMinor / 100)}</strong><small>{item.amountOffsetMinor ? dynamicLabel(this.desktopLocale, 'topupOffset', { amount: new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency: item.currency }).format(item.baseAmountMinor / 100), offset: (item.amountOffsetMinor / 100).toFixed(2) }) : item.currency}</small></span><span><strong>{this.formatMoneyMicros(item.creditCurrency, item.creditAmountMicros)}</strong>{item.status === 'payment_pending' || item.status === 'expired' ? <small>订单未支付</small> : undefined}</span><span><strong>{item.status === 'credited' ? '已到账' : item.status === 'payment_pending' ? '等待支付' : item.status === 'expired' ? '已过期' : item.status === 'refunded' ? '已退款' : item.status}</strong><small>{item.creditedAt ? '余额已更新' : '—'}</small></span><span><strong>{dateTime(item.createdAt)}</strong><small>{item.paidAt ? dynamicLabel(this.desktopLocale, 'paidAt', { time: dateTime(item.paidAt) }) : ''}</small></span></article>)}{!this.accountOverviewLoading && this.accountOverview.topups.length === 0 && <div className='nmx-billing-empty'>暂无充值记录</div>}</div>}
-                    {this.billingTab === 'movements' && <div className='nmx-billing-table'><header><span>类型</span><span>可用余额</span><span>冻结金额</span><span>时间</span></header>{this.accountOverview.movements.map(item => <article key={item.id}><span><strong>{item.kind === 'topup' ? '充值到账' : item.kind === 'reserve' ? '用量预授权' : item.kind === 'capture' ? '实际消费' : item.kind === 'release' ? '释放冻结' : item.kind === 'refund' ? '退款' : '余额调整'}</strong><small>{item.referenceType}</small></span><span><strong>{item.availableDeltaMicros > 0 ? '+' : ''}{this.formatMoneyMicros(item.currency, item.availableDeltaMicros)}</strong><small>{item.currency}</small></span><span><strong>{item.reservedDeltaMicros > 0 ? '+' : ''}{this.formatMoneyMicros(item.currency, item.reservedDeltaMicros)}</strong><small>{item.spentDeltaMicros > 0 ? dynamicLabel(this.desktopLocale, 'spent', { amount: this.formatMoneyMicros(item.currency, item.spentDeltaMicros) }) : '—'}</small></span><span><strong>{dateTime(item.createdAt)}</strong><small>{item.referenceId.slice(0, 12)}</small></span></article>)}{!this.accountOverviewLoading && this.accountOverview.movements.length === 0 && <div className='nmx-billing-empty'>暂无余额变动</div>}</div>}
+                    {this.billingTab === 'movements' && <div className='nmx-billing-table'><header><span>类型</span><span>可用余额</span><span>冻结金额</span><span>时间</span></header>{this.accountOverview.movements.map(item => <article key={item.id}><span><strong>{item.kind === 'topup' ? '充值到账' : item.kind === 'reserve' ? '用量预授权' : item.kind === 'capture' ? '实际消费' : item.kind === 'release' ? '释放冻结' : item.kind === 'refund' ? '退款' : '余额调整'}</strong><small title={item.referenceType}>{billingMovementReferenceLabel(this.desktopLocale, item.referenceType)}</small></span><span><strong>{item.availableDeltaMicros > 0 ? '+' : ''}{this.formatMoneyMicros(item.currency, item.availableDeltaMicros)}</strong><small>{item.currency}</small></span><span><strong>{item.reservedDeltaMicros > 0 ? '+' : ''}{this.formatMoneyMicros(item.currency, item.reservedDeltaMicros)}</strong><small>{item.spentDeltaMicros > 0 ? dynamicLabel(this.desktopLocale, 'spent', { amount: this.formatMoneyMicros(item.currency, item.spentDeltaMicros) }) : '—'}</small></span><span><strong>{dateTime(item.createdAt)}</strong><small>{item.referenceId.slice(0, 12)}</small></span></article>)}{!this.accountOverviewLoading && this.accountOverview.movements.length === 0 && <div className='nmx-billing-empty'>暂无余额变动</div>}</div>}
                 </>}
             </section>;
         } else if (this.settingsPanel === 'models') {

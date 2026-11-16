@@ -99,7 +99,7 @@ interface NextMuxDesktopBridge {
     onComputerTabEvent?(callback: (event: { readonly type: 'window-added' | 'window-closed' | 'input-blocked' | 'state' | 'user-stop'; readonly conversationId: string; readonly pid: number; readonly windowId: number;
         readonly root?: number; readonly familyId?: string; readonly role?: 'launcher' | 'client' | 'game' | 'app'; readonly windows?: readonly import('./browser/nextmux-conversation-tabs').ConversationTabWindowItem[]; readonly title?: string; readonly app?: string; readonly placement?: 'tab' | 'desktop'; readonly sound?: boolean; readonly keyboardMouse?: boolean }) => void): () => void;
     openAppInTab?(conversationId: string, selector: string, options?: { readonly onlyIfRunning?: boolean; readonly probeOnly?: boolean; readonly checkOrOpen?: boolean; readonly restartIfRunning?: boolean;
-        /** Who opens it: only 'agent' and 'plugin' light the "controlling the computer" frame (and are refused after Esc). */
+        /** Who opens it: only 'agent' lights the "controlling the computer" frame (and is refused after Esc). */
         readonly source?: 'agent' | 'plugin' | 'user' | 'passive';
         /** 2: every failure carries `launched` (always), `wasRunningInOs`, `phase`, and `reopened` / `missing` where they apply. */
         readonly resultVersion?: 2 }): Promise<{ readonly ok: boolean; readonly running?: boolean; readonly requiresRestart?: boolean; readonly root?: number; readonly familyId?: string; readonly role?: 'launcher' | 'client' | 'game' | 'app'; readonly windows?: readonly import('./browser/nextmux-conversation-tabs').ConversationTabWindowItem[]; readonly pid?: number; readonly windowId?: number; readonly app?: string; readonly appId?: string; readonly programs?: readonly string[]; readonly launched?: boolean; readonly wasRunningInOs?: boolean; readonly canView?: boolean; readonly canPark?: boolean; readonly parkReason?: string; readonly title?: string; readonly placement?: 'tab' | 'desktop'; readonly error?: string;
@@ -182,6 +182,11 @@ interface NextMuxDesktopBridge {
     appPluginStatus?(runId: string): Promise<{ ok: boolean; error?: string } & Partial<import('./common/nextmux-app-plugins').AppPluginRunSnapshot>>;
     stopAppPlugin?(runId: string): Promise<{ ok: boolean; error?: string } & Partial<import('./common/nextmux-app-plugins').AppPluginRunSnapshot>>;
     appPluginRuns?(): Promise<import('./common/nextmux-app-plugins').AppPluginRunSnapshot[]>;
+    loadAppPluginUi?(id: string, locale: string): Promise<import('./common/nextmux-app-plugins').AppPluginUiBundleResult>;
+    /** A plugin window page, served from the nextmux-plugin-ui: scheme at `url` until released (apps/desktop/plugin-ui-scheme.cjs). */
+    registerAppPluginUiDocument?(html: string): Promise<{ readonly ok: true; readonly token: string; readonly url: string } | { readonly ok: false; readonly error: string }>;
+    releaseAppPluginUiDocument?(token: string): Promise<boolean>;
+    runAppPluginTabAction?(request: import('./common/nextmux-app-plugins').AppPluginTabActionRequest): Promise<import('./common/nextmux-app-plugins').AppPluginTabActionResult>;
     answerAppPlugin?(requestId: string, result: unknown): Promise<boolean>;
     onAppPluginEvent?(callback: (message: import('./common/nextmux-app-plugins').AppPluginMessage) => void): () => void;
     /** Apps NextMux opened for tabs: quit with their tab and with NextMux ("quit", default), or go back to the desktop. */

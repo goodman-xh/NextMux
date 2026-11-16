@@ -1656,10 +1656,22 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
     outline-offset: 1px;
 }
 
-/* Jev model bar: a titled strip with source, model and the way to the full settings. */
+/* Jev model bar: titled strip with dual API-source + decision-model drawers and the way to full settings. */
+.nmx-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 .nmx-shell .nmx-plugin-inline-model-bar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: end;
     gap: 8px 10px;
     min-width: 0;
@@ -1667,6 +1679,162 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
     border: 1px solid var(--nmxv-line);
     border-radius: 10px;
     background: var(--nmxv-surface-2);
+}
+
+.nmx-shell .nmx-plugin-dual-pickers {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+    gap: 8px;
+    min-width: 0;
+}
+
+.nmx-shell .nmx-plugin-dual-pickers.is-compact {
+    gap: 6px;
+}
+
+.nmx-shell .nmx-plugin-drawer-trigger {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+        "caption icon"
+        "value icon";
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 2px;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 6px 10px;
+    border: 1px solid var(--nmxv-line);
+    border-radius: 8px;
+    background: var(--nmxv-field);
+    color: var(--nmxv-fg);
+    text-align: start;
+    font: inherit;
+    cursor: pointer;
+    transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.nmx-shell .nmx-plugin-dual-pickers.is-compact .nmx-plugin-drawer-trigger {
+    min-height: 38px;
+    padding: 4px 9px;
+}
+
+.nmx-shell .nmx-plugin-drawer-trigger:hover:not(:disabled) {
+    border-color: var(--nmxv-line-strong, color-mix(in srgb, var(--nmxv-fg) 26%, transparent));
+    background: var(--nmxv-hover);
+}
+
+.nmx-shell .nmx-plugin-drawer-trigger:focus-visible {
+    outline: 2px solid var(--nmxv-focus);
+    outline-offset: 1px;
+}
+
+.nmx-shell .nmx-plugin-drawer-trigger:disabled {
+    opacity: .56;
+    cursor: not-allowed;
+}
+
+.nmx-shell .nmx-plugin-trigger-caption {
+    grid-area: caption;
+    color: var(--nmxv-fg-3);
+    font-size: 10.5px;
+    line-height: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nmx-shell .nmx-plugin-trigger-value {
+    grid-area: value;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--nmxv-fg);
+    font-size: 12.5px;
+    font-weight: 550;
+    line-height: 17px;
+}
+
+.nmx-shell .nmx-plugin-drawer-trigger > .codicon {
+    grid-area: icon;
+    color: var(--nmxv-fg-3);
+    font-size: 12px;
+}
+
+.nmx-shell .nmx-plugin-start-model {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+}
+
+.nmx-shell .nmx-plugin-start-model-label {
+    color: var(--nmxv-fg-2);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+}
+
+.nmx-model-picker-popover.nmx-plugin-drawer-popover > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.nmx-model-picker-popover.nmx-plugin-drawer-popover .nmx-plugin-drawer-refresh {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+
+.nmx-model-picker-popover.nmx-plugin-drawer-popover .nmx-plugin-drawer-refresh:hover:not(:disabled) {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.nmx-model-picker-popover.nmx-plugin-drawer-popover .nmx-plugin-drawer-option-copy {
+    display: grid;
+    gap: 1px;
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: start;
+}
+
+.nmx-model-picker-popover.nmx-plugin-drawer-popover .nmx-plugin-drawer-option-copy > strong {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+    font-weight: 550;
+    line-height: 17px;
+}
+
+.nmx-model-picker-popover.nmx-plugin-drawer-popover .nmx-plugin-drawer-option-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    line-height: 15px;
+    opacity: .74;
+}
+
+@media (max-width: 560px) {
+    .nmx-shell .nmx-plugin-dual-pickers {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 .nmx-shell .nmx-plugin-inline-model-title {

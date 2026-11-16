@@ -730,6 +730,7 @@ export function pictureFraction(video: HTMLVideoElement, clientX: number, client
 
 /** What a skill plugin adds to its tab: a header control, its status bar and its readings over the picture. */
 export interface ConversationTabPluginParts {
+    readonly headerControls?: React.ReactNode;
     readonly headerExtra?: React.ReactNode;
     readonly bar?: React.ReactNode;
     /** The open AI Console (AppPluginChatPanel): a dialog moved by its title bar and resized from every side. */
@@ -1340,6 +1341,25 @@ export function ConversationVisualTabView(props: { readonly locale: NextMuxDeskt
     return <LiveTabView key={owner} {...props} tab={effectiveTab} onSelectWindow={handleSelectWindow} />;
 }
 
+export function hasOpenPluginWindowSurface(): boolean {
+    if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return false;
+    const nodes = document.querySelectorAll('.nmx-plugin-window-dialog, .nmx-plugin-subwindow-backdrop');
+    for (let i = 0; i < nodes.length; i += 1) {
+        const el = nodes[i] as HTMLElement;
+        if (el.hidden || el.getAttribute?.('aria-hidden') === 'true') continue;
+        if (typeof el.closest === 'function' && el.closest('[hidden], [aria-hidden="true"]')) continue;
+        if (el.style && (el.style.display === 'none' || el.style.visibility === 'hidden')) continue;
+        if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+            try {
+                const computed = window.getComputedStyle(el);
+                if (computed.display === 'none' || computed.visibility === 'hidden') continue;
+            } catch { /* minimal test DOM */ }
+        }
+        return true;
+    }
+    return false;
+}
+
 export function hasOpenOverlayOrModal(sectionEl?: HTMLElement | null, localOverlayOpen = false): boolean {
     if (localOverlayOpen) return true;
     if (typeof document === 'undefined') return false;
@@ -1354,6 +1374,7 @@ export function hasOpenOverlayOrModal(sectionEl?: HTMLElement | null, localOverl
         '.nmx-plugin-hub',
         '.nmx-plugin-hub-backdrop',
         '.nmx-plugin-modal-backdrop',
+        '.nmx-plugin-subwindow-backdrop',
         '.nmx-model-picker-portal',
         '.nmx-composer-popover',
         '.nmx-popover',
@@ -1368,6 +1389,7 @@ export function hasOpenOverlayOrModal(sectionEl?: HTMLElement | null, localOverl
     const isVisibleNode = (node: Element): boolean => {
         const el = node as HTMLElement;
         if (el.hidden || el.getAttribute?.('aria-hidden') === 'true') return false;
+        if (el.classList?.contains?.('nmx-plugin-window-dialog') && el.getAttribute?.('aria-modal') !== 'true') return false;
         if (typeof el.closest === 'function' && el.closest('[hidden], [aria-hidden="true"]')) return false;
         const style = el.style;
         if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
@@ -1617,14 +1639,18 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             const box = element.getBoundingClientRect(), outer = container.getBoundingClientRect();
             const scale = Math.min(box.width / element.videoWidth, box.height / element.videoHeight);
             const width = element.videoWidth * scale, height = element.videoHeight * scale;
-            setPictureBox({ left: box.left - outer.left + (box.width - width) / 2, top: box.top - outer.top + (box.height - height) / 2, width, height });
+            const next = { left: box.left - outer.left + (box.width - width) / 2, top: box.top - outer.top + (box.height - height) / 2, width, height };
+            setPictureBox(prev => prev && prev.left === next.left && prev.top === next.top && prev.width === next.width && prev.height === next.height ? prev : next);
         };
         const observer = new ResizeObserver(measure);
         observer.observe(element);
         observer.observe(container);
+        // 'resize' fires when the stream's own size changes (the captured window was resized) while the element keeps
+        // its box: without it the readings would stay drawn over the old letterbox until the tab itself resized.
         element.addEventListener('loadedmetadata', measure);
+        element.addEventListener('resize', measure);
         measure();
-        return () => { observer.disconnect(); element.removeEventListener('loadedmetadata', measure); };
+        return () => { observer.disconnect(); element.removeEventListener('loadedmetadata', measure); element.removeEventListener('resize', measure); };
     }, [wantsOverlay, live]);
     // The window's size on screen (points): a capture on a Retina display has twice the pixels of the same window
     // parked off-screen, so the picture is shown at the window's own size, never at its pixel count, and scaled
@@ -2342,6 +2368,16 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             setNotice('terminateFailed');
         }).finally(() => setTerminating(false));
     };
+    const pluginWindowSurfaceOpen = (): boolean => {
+        if (typeof hasOpenPluginWindowSurface === 'function') return hasOpenPluginWindowSurface();
+        if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return false;
+        const nodes = document.querySelectorAll('.nmx-plugin-window-dialog, .nmx-plugin-subwindow-backdrop');
+        for (let i = 0; i < nodes.length; i += 1) {
+            const el = nodes[i] as HTMLElement;
+            if (!el.hidden && el.getAttribute?.('aria-hidden') !== 'true' && !el.closest?.('[hidden], [aria-hidden="true"]') && el.style?.display !== 'none' && el.style?.visibility !== 'hidden') return true;
+        }
+        return false;
+    };
     const pluginEscActive = Boolean(props.plugin?.running && typeof props.plugin.onStop === 'function');
     const pluginStopRef = React.useRef(props.plugin?.onStop);
     pluginStopRef.current = props.plugin?.onStop;
@@ -2349,9 +2385,12 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         if (!visible || mouse || !pluginEscActive || localOverlayOpen) return undefined;
         const onKeyDown = (event: KeyboardEvent): void => {
             if (event.key !== 'Escape' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.defaultPrevented || event.isComposing) return;
-            if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen)) return;
+            // A held Escape that just closed the plugin's window or modal must not go on to stop the run: only a fresh
+            // press stops it (the first keydown of a held key is never a repeat, so a deliberate stop still works).
+            if (event.repeat) return;
+            if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen) || pluginWindowSurfaceOpen()) return;
             const targetNode = event.target as HTMLElement | null;
-            if (targetNode?.closest?.('.nmx-plugin-chat-overlay, .nmx-plugin-chat-panel')) return;
+            if (targetNode?.closest?.('.nmx-plugin-chat-overlay, .nmx-plugin-chat-panel, .nmx-plugin-window-dialog, .nmx-plugin-subwindow-dialog')) return;
             const isTextInput = targetNode?.tagName === 'INPUT' && !['checkbox', 'radio'].includes(((targetNode as HTMLInputElement).type || 'text').toLowerCase());
             if (targetNode && (isTextInput || targetNode.tagName === 'TEXTAREA' || targetNode.tagName === 'SELECT' || targetNode.isContentEditable)) return;
             event.preventDefault();
@@ -2383,8 +2422,9 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         }
         const onWindowKeyDownCapture = (event: KeyboardEvent): void => {
             if (!keyboard.current || document.activeElement !== keyboard.current) return;
-            if ((event.target as HTMLElement | null)?.closest?.('.nmx-plugin-chat-overlay, .nmx-plugin-chat-panel')) return;
+            if ((event.target as HTMLElement | null)?.closest?.('.nmx-plugin-chat-overlay, .nmx-plugin-chat-panel, .nmx-plugin-window-dialog, .nmx-plugin-subwindow-dialog')) return;
             if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen)) return;
+            if (event.key === 'Escape' && pluginWindowSurfaceOpen()) return;
             if (event.isComposing || event.keyCode === 229) return;
             const target = latest.current;
             if (!target?.keys) return;
@@ -2401,7 +2441,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         const onKeyDown = (event: KeyboardEvent): void => {
             if (handledKeyEvents.current.has(event)) return;
             if (event.key !== 'Escape' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey || event.defaultPrevented || event.isComposing) return;
-            if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen)) return;
+            if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen) || pluginWindowSurfaceOpen()) return;
             const targetNode = event.target as HTMLElement | null;
             if (targetNode === keyboard.current || isTextEntryNode(targetNode)) return;
             const target = latest.current;
@@ -2498,9 +2538,10 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     const onSectionKeyDownCapture = (event: React.KeyboardEvent<HTMLElement>): void => {
         if (!live || !mouse || !latest.current?.keys) return;
         if (hasOpenOverlayOrModal(sectionRef.current, localOverlayOpen)) return;
+        if (event.key === 'Escape' && pluginWindowSurfaceOpen()) return;
         const targetNode = event.target as HTMLElement | null;
         if (targetNode === keyboard.current) return;
-        if (targetNode?.closest?.('.nmx-app-plugin-bar, .nmx-plugin-runbar, .nmx-plugin-chat-panel, .nmx-plugin-chat-overlay, .nmx-visual-tab-windows, .nmx-visual-tab-terminate-modal, .nmx-visual-tab-schedule-drawer')) return;
+        if (targetNode?.closest?.('.nmx-app-plugin-bar, .nmx-plugin-runbar, .nmx-plugin-chat-panel, .nmx-plugin-chat-overlay, .nmx-visual-tab-plugin-controls, .nmx-plugin-window-dialog, .nmx-plugin-subwindow-dialog, .nmx-visual-tab-windows, .nmx-visual-tab-terminate-modal, .nmx-visual-tab-schedule-drawer')) return;
         const tag = targetNode?.tagName;
         const isTextInput = tag === 'INPUT' && !['checkbox', 'radio'].includes(((targetNode as HTMLInputElement).type || 'text').toLowerCase());
         if (isTextInput || tag === 'TEXTAREA' || tag === 'SELECT' || (tag === 'BUTTON' && event.key !== 'Escape') || targetNode?.isContentEditable) return;
@@ -2606,6 +2647,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                     {glyph('on-desktop', 17)}
                 </button>
             </div>}
+            {props.plugin?.headerControls}
             {props.plugin?.headerExtra}
         </header>
         {props.plugin?.bar}
