@@ -4,10 +4,12 @@ import { desktopText, type NextMuxDesktopLocale } from './nextmux-locale';
 import { agentOutcomeText } from './nextmux-agent-outcome-locale';
 import { relayText } from './nextmux-relay-locale';
 import { transcriptionText } from './nextmux-transcription-locale';
+import { measuredModelFidelity } from '../common/nextmux-relay-evidence';
+import { ModelAuthenticityTag } from './nextmux-model-authenticity';
 import { OfferingPriceHover, offeringMultiplierBps, offeringPriceText } from './nextmux-offering-price';
 import { ImeInput } from './nextmux-ime-field';
 import { ModelTaxonomyTags } from './nextmux-model-taxonomy-tags';
-import { relayMultiplierTag } from './nextmux-relay-picker';
+import { modelPickerEvidenceText, relayMultiplierTag, relayPercentText } from './nextmux-relay-picker';
 import {
     COMIC_STEP_ICONS, ComicStepCandidate, ComicStepCapability, ComicStepRelay, ComicStepResolution, ComicStepSource,
     comicStepSourceLabel, comicStepText
@@ -599,14 +601,19 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
                     const allSet = others.every(capability => props.steps.find(item => item.capability === capability)?.resolution.candidate?.key === serves[capability]);
                     // A relay model shows how it is priced (multiplier, or the relay's own price); the hover card has every rate.
                     const priceTag = candidate.offering ? (bps => bps === null ? offeringPriceText(props.locale, 'ownTag') : relayMultiplierTag(props.locale, bps))(offeringMultiplierBps(candidate.offering)) : '';
+                    const fidelity = candidate.offering ? measuredModelFidelity(candidate.offering.fidelity) : undefined;
                     // "With audio" is a shared badge below; a silent video still says so in words (picture only).
                     const detail = [candidate.withSound === false ? comicStepText(props.locale, 'silent') : '', priceTag, candidate.note].filter(Boolean).join(' · ');
+                    const optionTitle = [candidate.label, detail, candidate.offering ? `${modelPickerEvidenceText(props.locale, 'authenticity')}: ${relayPercentText(props.locale, fidelity)}` : ''].filter(Boolean).join(' · ');
                     return <div key={candidate.key} className={`nmx-comic-setup-model ${isChosen ? 'is-selected' : ''}`}>
                         <OfferingPriceHover locale={props.locale} offering={candidate.offering} themeClass={props.themeClass}>
-                            <button type='button' role='option' aria-selected={isChosen} onClick={() => props.onStepSelect(current.capability, candidate.key)}>
+                            <button type='button' role='option' aria-selected={isChosen} aria-label={optionTitle} onClick={() => props.onStepSelect(current.capability, candidate.key)}>
                                 <span className='nmx-comic-setup-radio' aria-hidden='true'>{isChosen && <i className='codicon codicon-check'></i>}</span>
                                 <span className='nmx-comic-setup-option-copy'>
-                                    <strong data-nmx-literal>{candidate.label}{index === 0 && <em className='nmx-comic-setup-badge'>{p('recommended')}</em>}</strong>
+                                    <span className='nmx-comic-setup-option-head'>
+                                        <strong data-nmx-literal>{candidate.label}{index === 0 && <em className='nmx-comic-setup-badge'>{p('recommended')}</em>}</strong>
+                                        {candidate.offering && <ModelAuthenticityTag locale={props.locale} value={fidelity} />}
+                                    </span>
                                     {detail && <small data-nmx-literal>{detail}</small>}
                                     <ModelTaxonomyTags locale={props.locale} model={comicCandidateTaxonomyFacts(candidate, current.capability)} />
                                     {others.length > 0 && <span className='nmx-comic-setup-caps'>{(Object.keys(serves) as ComicStepCapability[]).map(capability =>

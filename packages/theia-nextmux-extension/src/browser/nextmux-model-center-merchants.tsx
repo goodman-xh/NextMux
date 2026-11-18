@@ -11,7 +11,7 @@ import { modelUsageText } from './nextmux-model-usage-locale';
 import { relayEvidenceText, relayMarketplaceText } from './nextmux-relay-marketplace-locale';
 import { relayDelistedText, relayText } from './nextmux-relay-locale';
 import { modelPickerEvidenceText, relayLatencyText, relayMeasurementNote, relayMultiplierTag, relayMultiplierText } from './nextmux-relay-picker';
-import { INITIAL_RELAY_QUALITY, measuredModelFidelity, measuredRelayLatency } from '../common/nextmux-relay-evidence';
+import { INITIAL_RELAY_QUALITY, isDefaultModelFidelity, measuredModelFidelity, measuredRelayLatency } from '../common/nextmux-relay-evidence';
 import { offeringMultiplierBps, offeringPriceSignature, offeringPriceText } from './nextmux-offering-price';
 import { ImeInput } from './nextmux-ime-field';
 import type { ModelPrimaryCategory } from '@nextmux/model-runtime/model-taxonomy';
@@ -44,18 +44,25 @@ export function modelCenterFilterLabel(locale: NextMuxDesktopLocale, filter: Mod
 }
 /**
  * The latency a store's model row shows: the model's TTFT of the past week, else its API's latest under ≈, with notes
- * saying whose value it is and, when over a day old, when it was measured. Nothing measured, nothing shown.
+ * saying whose value it is and when it was measured. Marks stale (>24h) consistently; nothing measured, nothing shown.
  */
 export function merchantModelLatency(locale: NextMuxDesktopLocale, model: Pick<PlatformOffering, 'network' | 'latencyObservedAt'>,
-    now = Date.now()): { readonly value: string; readonly note?: string } | undefined {
+    now = Date.now()): { readonly value: string; readonly note?: string; readonly stale?: boolean } | undefined {
     const own = measuredRelayLatency(model.network?.lastLatencyMs);
     const api = own === undefined ? measuredRelayLatency(model.network?.endpointLatencyMs) : undefined;
     const shown = own ?? api;
     if (shown === undefined) return undefined;
-    const at = own !== undefined ? model.latencyObservedAt : model.network?.endpointLatencyObservedAt;
+    const rawAt = own !== undefined ? model.latencyObservedAt : model.network?.endpointLatencyObservedAt;
+    const observedAt = typeof rawAt === 'number' && Number.isFinite(rawAt) && rawAt > 0 ? rawAt : undefined;
+    const stale = (own !== undefined && model.network?.state === 'stale')
+        || (observedAt !== undefined && observedAt < now - 86_400_000);
     const notes = [api !== undefined ? relayMeasurementNote(locale, 'latencyFromApi') : '',
-        typeof at === 'number' && at > 0 && at < now - 86_400_000 ? relayMeasurementNote(locale, 'latencyStale', at) : ''].filter(Boolean);
-    return { value: `${api !== undefined ? '≈' : ''}${relayLatencyText(locale, shown)}`, ...(notes.length ? { note: notes.join(' · ') } : {}) };
+        stale || observedAt !== undefined ? relayMeasurementNote(locale, 'latencyStale', observedAt) : ''].filter(Boolean);
+    return {
+        value: `${api !== undefined ? '≈' : ''}${relayLatencyText(locale, shown)}`,
+        ...(notes.length ? { note: notes.join(' · ') } : {}),
+        ...(stale ? { stale: true } : {})
+    };
 }
 type Service = Pick<NextMuxPlatformService, 'getPublicMerchantDirectory' | 'getMerchantSupportCatalog'>
     & Partial<Pick<NextMuxPlatformService, 'getPublicMerchantCapacity'>>;
@@ -552,8 +559,26 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
                 const apiState = api.state;
                 const statusLabel = `${text('apiStatus')} · ${modelCenterApiState(locale, apiState)}${availabilityText ? ` (${availabilityText})` : ''}${api.checksFailing ? ` · ${modelCenterChecksFailing(locale, 'hint')}` : ''}`;
                 // Values the directory supplies for want of current ones read quieter, and their hint says what they are.
-                const latencyStale = latencyValue !== undefined && merchant.measurement?.latency?.state === 'stale';
-                const authenticityListed = authenticityValue !== undefined && merchant.measurement?.authenticity?.scope === 'listed_offerings';
+                const latencyObservedAt = typeof merchant.measurement?.latency?.observedAt === 'number'
+                    && Number.isFinite(merchant.measurement.latency.observedAt)
+                    && merchant.measurement.latency.observedAt > 0
+                    ? merchant.measurement.latency.observedAt
+                    : undefined;
+                const latencyStale = latencyValue !== undefined && (
+                    merchant.measurement?.latency?.state === 'stale'
+                    || (latencyObservedAt !== undefined && latencyObservedAt < Date.now() - 86_400_000)
+                );
+                const latencyNote = latencyValue !== undefined && (latencyStale || latencyObservedAt !== undefined)
+                    ? relayMeasurementNote(locale, 'latencyStale', latencyObservedAt)
+                    : '';
+                const authenticityScope = merchant.measurement?.authenticity?.scope;
+                const authenticityListed = authenticityValue !== undefined && authenticityScope === 'listed_offerings';
+                const authenticityDefault = authenticityValue !== undefined && authenticityScope === 'default_unverifiable';
+                const authenticityNote = authenticityListed
+                    ? relayMeasurementNote(locale, 'authenticityListed')
+                    : authenticityDefault
+                        ? relayMeasurementNote(locale, 'authenticityDefault')
+                        : '';
                 const outputs = merchantOutputCategories(merchant.outputCategories);
                 const storeIntro = (merchant.storeTagline || merchant.storeDescription || '').trim();
                 const storeIntroDisplay = storeIntro || text('noStoreIntro');
@@ -581,8 +606,8 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
                         {hint(<><i className='codicon codicon-star-full' aria-hidden='true' /><strong data-metric='rating' data-unmeasured={ratingValue === undefined || undefined}>{percent(ratingValue === undefined ? undefined : ratingValue / 100)}</strong></>, `${market('rating')} · ${quality}`)}
                         {/* 真实性: the mean identity score of the relay's models that have one (availability stays in the platform's routing). */}
                         {hint(<><i className='codicon codicon-verified' aria-hidden='true' /><strong data-metric='authenticity' data-unmeasured={authenticityValue === undefined || undefined} data-fallback={authenticityListed || undefined}>{percent(authenticityValue === undefined ? undefined : authenticityValue / 100)}</strong></>,
-                            `${market('authenticity')} · ${authenticityValue === undefined ? relayText(locale, 'authenticityPending') : percent(authenticityValue / 100)}${authenticityListed ? ` · ${relayMeasurementNote(locale, 'authenticityListed')}` : ''}`)}
-                        {hint(<><i className='codicon codicon-watch' aria-hidden='true' /><strong data-metric='latency' dir='ltr' data-unmeasured={latencyValue === undefined || undefined} data-fallback={latencyStale || undefined}>{latencyValue === undefined ? '—' : `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(latencyValue)} ms`}</strong></>, `${market('latency')} · ${latencyValue === undefined ? relayEvidenceText(locale, 'unmeasured') : `${latencyValue} ms`}${latencyStale ? ` · ${relayMeasurementNote(locale, 'latencyStale', merchant.measurement?.latency?.observedAt)}` : ''}`)}
+                            `${market('authenticity')} · ${authenticityValue === undefined ? relayText(locale, 'authenticityPending') : percent(authenticityValue / 100)}${authenticityNote ? ` · ${authenticityNote}` : ''}`)}
+                        {hint(<><i className='codicon codicon-watch' aria-hidden='true' /><strong data-metric='latency' dir='ltr' data-unmeasured={latencyValue === undefined || undefined} data-fallback={latencyStale || undefined}>{latencyValue === undefined ? '—' : `${new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(latencyValue)} ms`}</strong></>, `${market('latency')} · ${latencyValue === undefined ? relayEvidenceText(locale, 'unmeasured') : `${latencyValue} ms`}${latencyNote ? ` · ${latencyNote}` : ''}`)}
                         {/* 平均倍率: the mean over the merchant's multiplier-priced models × APIs (its own prices have none). */}
                         {(() => {
                             const average = merchant.averageMultiplierBps === undefined ? merchant.metrics?.multiplierBps : merchant.averageMultiplierBps ?? undefined;
@@ -812,16 +837,14 @@ function MerchantModelDrawerBody({ service, merchant, locale, onClose, closing =
                         }).join(' · ') || text('pricePending');
                     };
                     const latency = merchantModelLatency(locale, model);
-                    const fullHint = `${model.displayName}\n${text('officialPrice')}: ${priceText('official', false)}\n${offeringPriceText(locale, 'multiplier')}: ${multiplier === null ? offeringPriceText(locale, 'none') : `${relayMultiplierText(locale, multiplier)}`}\n${text('yourPrice')}: ${priceText('user', false)}${latency ? `\n${relayText(locale, 'latency')}: ${latency.value}${latency.note ? ` · ${latency.note}` : ''}` : ''}`;
+                    const score = measuredModelFidelity(model.fidelity);
+                    const scoreIsDefault = score !== undefined && isDefaultModelFidelity(model.fidelity);
+                    const fullHint = `${model.displayName}\n${text('officialPrice')}: ${priceText('official', false)}\n${offeringPriceText(locale, 'multiplier')}: ${multiplier === null ? offeringPriceText(locale, 'none') : `${relayMultiplierText(locale, multiplier)}`}\n${text('yourPrice')}: ${priceText('user', false)}${score !== undefined ? `\n${modelPickerEvidenceText(locale, 'authenticity')}: ${score}%${scoreIsDefault ? ` · ${modelPickerEvidenceText(locale, 'authenticityDefaultHint')}` : ''}` : `\n${modelPickerEvidenceText(locale, 'authenticity')}: — · ${modelPickerEvidenceText(locale, 'authenticityPendingHint')}`}${latency ? `\n${relayText(locale, 'latency')}: ${latency.value}${latency.note ? ` · ${latency.note}` : ''}` : ''}`;
                     const preview = (side: 'official' | 'user'): React.ReactNode => <ModelCenterPricePreview model={model} side={side} locale={locale} />;
                     return <article className='nmx-mc-model' key={model.id} data-supported-model={model.registryModelId} data-price-mode={multiplier === null ? 'direct' : 'multiplier'}>
                         <ModelCenterHint locale={locale} text={fullHint}>
                             <button type='button' className='nmx-mc-model-row' aria-expanded={expanded === model.id} aria-label={fullHint} onClick={() => setExpanded(expanded === model.id ? '' : model.id)}>
-                                <span className='nmx-mc-model-name'><strong>{model.displayName}</strong><ModelTaxonomyTags locale={locale} model={model} showCategory /><small>{multiplier === null ? offeringPriceText(locale, 'ownTag') : <bdi dir='ltr'>{relayMultiplierTag(locale, multiplier) || '—'}</bdi>}{(() => {
-                                    // Authenticity appears once it has been measured, label and value kept on one line.
-                                    const score = measuredModelFidelity(model.fidelity);
-                                    return score === undefined ? undefined : <> · <span className='nmx-mc-model-evidence'>{modelPickerEvidenceText(locale, 'authenticity')} <bdi dir='ltr'>{score}%</bdi></span></>;
-                                })()}{latency && <> · <span className='nmx-mc-model-evidence'>{relayText(locale, 'latency')} <bdi dir='ltr'>{latency.value}</bdi></span></>}</small></span>
+                                <span className='nmx-mc-model-name'><strong>{model.displayName}</strong><ModelTaxonomyTags locale={locale} model={model} showCategory /><small>{multiplier === null ? offeringPriceText(locale, 'ownTag') : <bdi dir='ltr'>{relayMultiplierTag(locale, multiplier) || '—'}</bdi>}{score === undefined ? <> · <span className='nmx-mc-model-evidence' data-fallback>{modelPickerEvidenceText(locale, 'authenticity')} <bdi dir='ltr'>—</bdi></span></> : <> · <span className='nmx-mc-model-evidence'>{modelPickerEvidenceText(locale, 'authenticity')} <bdi dir='ltr'>{score}%</bdi></span></>}{latency && <> · <span className='nmx-mc-model-evidence' data-fallback={latency.stale || undefined}>{relayText(locale, 'latency')} <bdi dir='ltr'>{latency.value}</bdi></span></>}</small></span>
                                 <span className='nmx-mc-price-preview'>{preview('official')}</span><span className='nmx-mc-price-preview'>{preview('user')}</span>
                             </button>
                         </ModelCenterHint>

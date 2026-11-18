@@ -1956,6 +1956,8 @@ interface RelayOption {
     readonly latencyObservedAt?: number;
     /** The authenticity is that of the store's other listed models: none of those on sale is scored yet. */
     readonly authenticityListed?: boolean;
+    /** The store carries the default 100% score because its models aren't eligible for fingerprint checks. */
+    readonly authenticityDefault?: boolean;
     /**
      * The store holds the platform's security deposit: its name is gold in the relay drawers (no seal there) and its hint
      * says so. The directory's word decides while it lists the store, else the store's offerings.
@@ -8524,14 +8526,20 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const contextShown = contextMaximum !== undefined && contextChoices.length > 1;
         const offering = optionRoute?.kind === 'managed_gateway' ? optionRoute.offering : undefined;
         const officialOffering = !offering && optionRoute?.kind === 'official_connection' ? this.officialRoutePriceOffering?.(optionRoute, candidate.label) : undefined;
-        const fidelity = measuredModelFidelity(offering?.fidelity || modelOption?.fidelity);
+        const rawFidelity = offering?.fidelity || modelOption?.fidelity;
+        const fidelity = measuredModelFidelity(rawFidelity);
         const authenticityPending = Boolean(offering) && fidelity === undefined;
-        const authenticityHint = authenticityPending ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint') : undefined;
+        const authenticityDefault = Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
+        const authenticityHint = authenticityPending
+            ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint')
+            : authenticityDefault
+                ? modelPickerEvidenceText(this.desktopLocale, 'authenticityDefaultHint')
+                : undefined;
         const quality = offering ? measuredRelayQuality([offering]) : undefined;
         const ownPriced = Boolean(offering && offeringIsOwnPriced(offering));
         const multiplier = offering ? offeringMultiplierBps(offering) : modelOption?.discoveredMultiplierBps;
         const metrics: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = [
-            { label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'), value: authenticityPending ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPending') : relayPercentText(this.desktopLocale, fidelity), unmeasured: authenticityPending, hint: authenticityHint },
+            { label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'), value: relayPercentText(this.desktopLocale, fidelity), unmeasured: authenticityPending, hint: authenticityHint },
             { label: relayText(this.desktopLocale, 'quality'), value: relayPercentText(this.desktopLocale, quality) },
             { label: relayText(this.desktopLocale, 'price'), value: ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag')
                 : relayMultiplierTag(this.desktopLocale, multiplier) || '—' }
@@ -14925,11 +14933,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                     const variantTag = offering
                                         ? (ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering)))
                                         : '';
-                                    const fidelity = offering ? measuredModelFidelity(offering.fidelity) : undefined;
+                                    const rawFidelity = offering?.fidelity;
+                                    const fidelity = measuredModelFidelity(rawFidelity);
+                                    const authenticityPending = Boolean(offering) && fidelity === undefined;
+                                    const authenticityDefault = Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
+                                    const authenticityHint = authenticityPending
+                                        ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint')
+                                        : authenticityDefault
+                                            ? modelPickerEvidenceText(this.desktopLocale, 'authenticityDefaultHint')
+                                            : undefined;
                                     const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
                                     const hoverOpen = this.comicModelHoverKey === item.key;
                                     const hoverPlacement = hoverOpen ? this.comicModelHoverPlacement : undefined;
-                                    const evidenceRows: { readonly label: string; readonly value: string }[] = [
+                                    const evidenceRows: { readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }[] = [
                                         {
                                             label: item.source.kind === 'official'
                                                 ? relayText(this.desktopLocale, 'apiName')
@@ -14939,7 +14955,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                             value: offering?.providerName || comicStepSourceLabel(this.desktopLocale, item.source)
                                         }
                                     ];
-                                    if (offering) evidenceRows.push({ label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'), value: relayPercentText(this.desktopLocale, fidelity) });
+                                    if (offering) {
+                                        evidenceRows.push({
+                                            label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'),
+                                            value: relayPercentText(this.desktopLocale, fidelity),
+                                            unmeasured: authenticityPending,
+                                            hint: authenticityHint
+                                        });
+                                    }
                                     if (!offering) {
                                         evidenceRows.push({
                                             label: relayText(this.desktopLocale, 'price'),
@@ -15025,14 +15048,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                         onPointerLeave={() => this.scheduleComicModelHoverClose()}
                                                     >
                                                         <header><strong data-nmx-literal>{item.label}</strong></header>
-                                                        <dl className='nmx-model-evidence'>
-                                                            {evidenceRows.map(metric => (
-                                                                <div key={metric.label}>
-                                                                    <dt>{metric.label}</dt>
-                                                                    <dd data-nmx-literal>{metric.value}</dd>
-                                                                </div>
-                                                            ))}
-                                                        </dl>
+                                                        <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}
+                                                            role={metric.hint ? 'group' : undefined} aria-label={metric.hint ? `${metric.label}: ${metric.value}. ${metric.hint}` : undefined}
+                                                            tabIndex={metric.hint ? 0 : undefined}
+                                                            onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
+                                                            onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
+                                                            onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
+                                                            onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-nmx-literal data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd></div>)}</dl>
                                                         {offering && <OfferingPriceCard locale={this.desktopLocale} offering={offering} collapsible pullOutDrawer />}
                                                     </section>
                                                 </div>,
@@ -41047,6 +41069,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const offerings = this.managedOfferings('coding', relayKey?.startsWith('managed:') ? relayKey.slice('managed:'.length) : undefined, Boolean(capacityMerchant)).filter(offering => relayKey === undefined || relayKey === 'auto'
             || relayKey === managedRelayKey(this.offeringMerchantId(offering)));
         const merchantId = relayKey?.startsWith('managed:') ? relayKey.slice('managed:'.length) : undefined;
+        const fidelityRank = (value: CodingModelOption['fidelity']): number => {
+            if (!value || typeof value.index !== 'number' || !Number.isFinite(value.index) || value.index < 0 || value.index > 100) return 0;
+            const isDefault = value.defaultScore === true || value.confidence === 'default';
+            if (isDefault) return 2;
+            if (Number.isSafeInteger(value.sampleCount) && value.sampleCount > 0) return 3;
+            return 1;
+        };
         const models = new Map<string, CodingModelOption>();
         const add = (option: CodingModelOption): void => {
             // Keep media and utility models out even when a relay advertises them as coding routes.
@@ -41067,7 +41096,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 output: [...new Set([...current.output, ...option.output])],
                 capabilities: [...new Set([...current.capabilities, ...option.capabilities])],
                 contextTokens: Math.max(current.contextTokens || 0, option.contextTokens || 0) || null,
-                fidelity: option.fidelity || current.fidelity,
+                fidelity: fidelityRank(option.fidelity) > fidelityRank(current.fidelity) ? option.fidelity : (current.fidelity || option.fidelity),
                 ...(current.rank !== undefined || option.rank !== undefined ? { rank: Math.min(current.rank ?? Infinity, option.rank ?? Infinity) } : {})
             });
         };
@@ -41087,6 +41116,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 capabilities: offering.capabilities,
                 contextTokens: null,
                 sourceName: 'NextMux',
+                fidelity: offering.fidelity,
                 ...(Number.isFinite(offering.catalogRank) ? { rank: Number(offering.catalogRank) } : {})
             });
         }
@@ -41300,6 +41330,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // As for the merchant rows below: a selected store stands in only while the directory is pending.
         const directoryOf = (merchantId: string): PublicMerchantIdentity | undefined => directoryMerchants?.find(merchant => merchant.id === merchantId)
             || (directoryMerchants === undefined && this.selectedPublicMerchant?.id === merchantId ? this.selectedPublicMerchant : undefined);
+        const now = Date.now();
+        const isLatencyObservedAt = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0;
+        const isLatencyStaleEntry = (latency: { readonly state?: string; readonly observedAt?: unknown } | undefined): boolean =>
+            Boolean(latency && (latency.state === 'stale' || (isLatencyObservedAt(latency.observedAt) && latency.observedAt < now - 86_400_000)));
         if (offerings.length) {
             const automatic = aggregate('auto', 'automatic', relayText(this.desktopLocale, 'automaticBest'), offerings);
             // Pictures, video and sound have no TTFT of their own (only text is probed), so a comic list can have no measured
@@ -41307,12 +41341,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // stale when all of those are.
             const stores = [...new Set(offerings.map(offering => this.offeringMerchantId(offering)))].map(directoryOf)
                 .filter((merchant): merchant is PublicMerchantIdentity => merchant?.metrics?.latencyMs !== undefined);
-            const storeLatency = automatic.latencyMs === undefined && stores.length ? {
-                latencyMs: averageRelayLatency(stores.map(merchant => merchant.metrics?.latencyMs)),
-                ...(stores.every(merchant => merchant.measurement?.latency?.state === 'stale') ? { latencyStale: true,
-                    ...(() => { const times = stores.flatMap(merchant => merchant.measurement?.latency?.observedAt ?? []);
-                        return times.length ? { latencyObservedAt: Math.max(...times) } : {}; })() } : {})
-            } : {};
+            const storeLatency = automatic.latencyMs === undefined && stores.length ? (() => {
+                const times = stores.flatMap(merchant => {
+                    const at = merchant.measurement?.latency?.observedAt;
+                    return isLatencyObservedAt(at) ? [at] : [];
+                });
+                const allStale = stores.every(merchant => isLatencyStaleEntry(merchant.measurement?.latency));
+                return {
+                    latencyMs: averageRelayLatency(stores.map(merchant => merchant.metrics?.latencyMs)),
+                    ...(allStale ? { latencyStale: true } : {}),
+                    ...(times.length ? { latencyObservedAt: Math.max(...times) } : {})
+                };
+            })() : {};
             options.push({ ...automatic, ...storeLatency });
         }
         const merchants = new Map<string, PlatformOffering[]>();
@@ -41356,27 +41396,40 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const executableModels = (directory?.stats?.executableCount ?? 0) > 0;
             const checksFailed = directory?.metrics?.availability === 0 && (directory.measurement?.availability?.sampleCount ?? 0) > 0;
             const apiUnavailable = !executableModels && (checksFailed || (directory?.apiStatus?.unreachableApis ?? 0) > 0);
-            // Values the directory supplies for want of current ones, which the drawer says: the past week's latest
-            // probe latency, and the authenticity of the store's other listed models.
-            const latencyStale = directory?.metrics?.latencyMs !== undefined && directory.measurement?.latency?.state === 'stale';
-            const latencyObservedAt = latencyStale ? directory?.measurement?.latency?.observedAt : undefined;
+            // Values the directory supplies for want of current ones, which the drawer says: the latest probe latency,
+            // and the authenticity of the store's other listed models or default 100% for unverifiable model types.
+            const dirLatencyObservedAt = isLatencyObservedAt(directory?.measurement?.latency?.observedAt)
+                ? directory!.measurement!.latency!.observedAt : undefined;
+            const latencyStale = directory?.metrics?.latencyMs !== undefined && isLatencyStaleEntry(directory?.measurement?.latency);
+            const latencyObservedAt = directory?.metrics?.latencyMs !== undefined ? dirLatencyObservedAt : undefined;
             const authenticityListed = directory?.metrics?.authenticity !== undefined && directory.measurement?.authenticity?.scope === 'listed_offerings';
+            const hasRealOfferingFidelity = values.some(item => {
+                const f = item.fidelity;
+                return f && f.defaultScore !== true && (f as { confidence?: string }).confidence !== 'default'
+                    && Number.isSafeInteger(f.sampleCount) && f.sampleCount > 0
+                    && typeof f.index === 'number' && Number.isFinite(f.index) && f.index >= 0 && f.index <= 100;
+            });
             // An unmeasured directory value is absent, not zero: the offerings' own measurement stands.
             const directoryMetrics = Object.fromEntries(Object.entries(directory?.metrics || {})
                 .filter(([, value]) => value !== undefined)) as NonNullable<PublicMerchantIdentity['metrics']>;
             // The directory's latency, when it lists one, replaces the offerings' and their staleness with it.
             const { latencyStale: offeringsStale, latencyObservedAt: offeringsObservedAt, ...fromOfferings } = aggregate(
                 managedRelayKey(merchantId), 'managed', merchantLabels.get(merchantId) || values[0]?.providerName || merchantId, values, merchantId);
+            const authenticityDefault = directoryMetrics.authenticity !== undefined
+                ? directory?.measurement?.authenticity?.scope === 'default_unverifiable'
+                : fromOfferings.authenticity !== undefined && !hasRealOfferingFidelity;
             options.push({ ...fromOfferings, ...directoryMetrics,
-                ...(directoryMetrics.latencyMs === undefined && offeringsStale
-                    ? { latencyStale: true, ...(offeringsObservedAt !== undefined ? { latencyObservedAt: offeringsObservedAt } : {}) } : {}),
+                ...(directoryMetrics.latencyMs === undefined && offeringsStale ? { latencyStale: true } : {}),
+                ...(directoryMetrics.latencyMs === undefined && offeringsObservedAt !== undefined ? { latencyObservedAt: offeringsObservedAt } : {}),
                 // The directory's metrics.multiplierBps is its cheapest multiplier (a sort key); the drawer shows the average.
                 ...(directory && directory.averageMultiplierBps !== undefined ? { multiplierBps: directory.averageMultiplierBps ?? undefined } : {}),
                 publicCode: directory?.publicCode, measurement: directory?.measurement,
                 storeTagline: storeProfile?.storeTagline, storeDescription: storeProfile?.storeDescription,
                 qualityInitial, ...(qualityInitial ? { quality: INITIAL_RELAY_QUALITY } : {}),
-                ...(latencyStale ? { latencyStale, ...(latencyObservedAt !== undefined ? { latencyObservedAt } : {}) } : {}),
+                ...(latencyStale ? { latencyStale } : {}),
+                ...(latencyObservedAt !== undefined ? { latencyObservedAt } : {}),
                 ...(authenticityListed ? { authenticityListed } : {}),
+                ...(authenticityDefault ? { authenticityDefault } : {}),
                 // Paying or refunding the deposit reaches the drawer with the next directory page, or with the catalog
                 // for a store the loaded directory does not list.
                 ...((directory !== undefined ? directory.depositVerified === true : values.some(item => item.depositVerified === true))
@@ -49105,23 +49158,44 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const sourceTabs: readonly RelaySourceTab[] = ['merchant', 'favorite', 'my-api'];
         const sourceTabText = (tab: RelaySourceTab): string => relayText(this.desktopLocale,
             tab === 'merchant' ? 'merchantSources' : tab === 'favorite' ? 'favoriteSources' : 'myApiSources');
-        const metricsFor = (option: RelayOption) => option.kind === 'automatic' ? [] : [
-            { kind: 'quality' as const, icon: 'star-full', value: option.quality, text: relayPercentText(this.desktopLocale, option.quality) },
-            // A value the directory supplies for want of a current one carries a note saying so (relayMeasurementNote).
-            { kind: 'authenticity' as const, icon: 'verified', value: option.authenticity, text: relayPercentText(this.desktopLocale, option.authenticity),
-                note: option.authenticityListed && option.authenticity !== undefined ? relayMeasurementNote(this.desktopLocale, 'authenticityListed') : undefined },
-            // The tooltip keeps the exact milliseconds; the column shows "320 ms", or seconds from one ("1.25 s").
-            { kind: 'latency' as const, icon: 'clock', value: option.latencyMs, text: option.latencyMs === undefined ? '—' : `${Math.round(option.latencyMs)} ms`,
-                display: relayLatencyText(this.desktopLocale, option.latencyMs),
-                note: option.latencyStale && option.latencyMs !== undefined ? relayMeasurementNote(this.desktopLocale, 'latencyStale', option.latencyObservedAt) : undefined },
-            { kind: 'price' as const, icon: 'symbol-number', value: option.multiplierBps, text: relayMultiplierText(this.desktopLocale, option.multiplierBps),
-                display: relayMultiplierTag(this.desktopLocale, option.multiplierBps) || '—' }
-        // The drawer's multiplier is the merchant's average over its multiplier-priced models × APIs (平均倍率).
-        ].map(metric => ({ ...metric, display: metric.display ?? metric.text, label: `${metric.kind === 'price' ? offeringPriceText(this.desktopLocale, 'averageMultiplier') : relayText(this.desktopLocale, metric.kind)}: ${metric.kind === 'quality' && option.qualityInitial
-            ? modelCenterText(this.desktopLocale, 'initialRating') : metric.value === undefined && metric.kind !== 'price'
-            ? metric.kind === 'authenticity' ? relayText(this.desktopLocale, 'authenticityPending')
-                : relayMeasurementExplanation(this.desktopLocale, metric.kind === 'quality' ? option.measurement?.quality : option.measurement?.latency) : metric.text}${metric.note ? ` · ${metric.note}` : ''}`,
-            signal: relayMetricSignal(metric.kind, metric.value) }));
+        const now = Date.now();
+        const metricsFor = (option: RelayOption) => {
+            if (option.kind === 'automatic') return [];
+            const authenticityFallback = Boolean(option.authenticityListed && option.authenticity !== undefined);
+            const authenticityDefault = Boolean(!authenticityFallback && option.authenticity !== undefined
+                && (option.authenticityDefault || option.measurement?.authenticity?.scope === 'default_unverifiable'));
+            const rawLatencyObservedAt = option.latencyObservedAt ?? option.measurement?.latency?.observedAt;
+            const latencyObservedAt = typeof rawLatencyObservedAt === 'number' && Number.isFinite(rawLatencyObservedAt) && rawLatencyObservedAt > 0
+                ? rawLatencyObservedAt : undefined;
+            const latencyStale = option.latencyMs !== undefined && Boolean(
+                option.latencyStale
+                || option.measurement?.latency?.state === 'stale'
+                || (latencyObservedAt !== undefined && latencyObservedAt < now - 86_400_000)
+            );
+            const latencyNote = option.latencyMs !== undefined && (latencyStale || latencyObservedAt !== undefined)
+                ? relayMeasurementNote(this.desktopLocale, 'latencyStale', latencyObservedAt)
+                : undefined;
+            return [
+                { kind: 'quality' as const, icon: 'star-full', value: option.quality, text: relayPercentText(this.desktopLocale, option.quality), fallback: false },
+                // A value the directory supplies for want of a current one carries a note saying so (relayMeasurementNote).
+                { kind: 'authenticity' as const, icon: 'verified', value: option.authenticity, text: relayPercentText(this.desktopLocale, option.authenticity),
+                    fallback: authenticityFallback,
+                    note: authenticityFallback ? relayMeasurementNote(this.desktopLocale, 'authenticityListed')
+                        : authenticityDefault ? relayMeasurementNote(this.desktopLocale, 'authenticityDefault') : undefined },
+                // The tooltip keeps the exact milliseconds; the column shows "320 ms", or seconds from one ("1.25 s").
+                { kind: 'latency' as const, icon: 'clock', value: option.latencyMs, text: option.latencyMs === undefined ? '—' : `${Math.round(option.latencyMs)} ms`,
+                    display: relayLatencyText(this.desktopLocale, option.latencyMs),
+                    fallback: latencyStale,
+                    note: latencyNote },
+                { kind: 'price' as const, icon: 'symbol-number', value: option.multiplierBps, text: relayMultiplierText(this.desktopLocale, option.multiplierBps),
+                    display: relayMultiplierTag(this.desktopLocale, option.multiplierBps) || '—', fallback: false }
+            // The drawer's multiplier is the merchant's average over its multiplier-priced models × APIs (平均倍率).
+            ].map(metric => ({ ...metric, display: metric.display ?? metric.text, label: `${metric.kind === 'price' ? offeringPriceText(this.desktopLocale, 'averageMultiplier') : relayText(this.desktopLocale, metric.kind)}: ${metric.kind === 'quality' && option.qualityInitial
+                ? modelCenterText(this.desktopLocale, 'initialRating') : metric.value === undefined && metric.kind !== 'price'
+                ? metric.kind === 'authenticity' ? relayText(this.desktopLocale, 'authenticityPending')
+                    : relayMeasurementExplanation(this.desktopLocale, metric.kind === 'quality' ? option.measurement?.quality : option.measurement?.latency) : metric.text}${metric.note ? ` · ${metric.note}` : ''}`,
+                signal: relayMetricSignal(metric.kind, metric.value) }));
+        };
         // `seal`: the hint of a deposit-verified store's name, which leads with the gold seal (not a relay at capacity, which only says so).
         const showMetric = (key: string, text: string, anchor: HTMLElement, seal = false): void => {
             const option = relayOptions.find(item => item.key === key);
@@ -49135,7 +49209,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const preloadable = (option: RelayOption): boolean => option.kind === 'managed' && Boolean(option.merchantId) && !option.directoryOnly;
         // Every column shows its value, with four bars under it for the band the colour stands for (relayMetricSignal).
         const dial = (option: RelayOption, metric: ReturnType<typeof metricsFor>[number]): React.ReactNode => <span key={metric.kind} className={`nmx-relay-metric-dial is-${metric.signal.tone}`}
-                        data-relay-metric={metric.kind} data-signal-level={metric.signal.level} data-fallback={metric.note ? 'true' : undefined}
+                        data-relay-metric={metric.kind} data-signal-level={metric.signal.level} data-fallback={metric.fallback ? 'true' : undefined}
                         aria-label={metric.label}
                         onPointerEnter={event => showMetric(option.key, metric.label, event.currentTarget)} onPointerLeave={hideMetric}>
                         <span className='nmx-relay-metric-value'>{metric.display}</span>
@@ -50400,7 +50474,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 <header><div><span>{offering.modelFamily} · {offering.region}</span><h2>{offering.providerName}</h2><p>{offering.endpointName} · {offering.canonicalModel}</p></div><button onClick={() => this.closeOffering()} aria-label='关闭线路详情'>×</button></header>
                 <div className='nmx-purchase-metrics'>
                     <span title='线路综合指数' aria-label='线路综合指数'><i className='codicon codicon-graph-line' aria-hidden='true'></i><strong>{offering.routeScore}</strong></span>
-                    <span title='模型身份置信度' aria-label='模型身份置信度'><i className='codicon codicon-verified' aria-hidden='true'></i><strong>{offering.fidelity.sampleCount > 0 ? `${offering.fidelity.index}%` : '—'}</strong></span>
+                    <span title='模型身份置信度' aria-label='模型身份置信度'><i className='codicon codicon-verified' aria-hidden='true'></i><strong>{measuredModelFidelity(offering.fidelity) !== undefined ? `${measuredModelFidelity(offering.fidelity)}%` : '—'}</strong></span>
                     <span title='网络可用率' aria-label='网络可用率'><i className='codicon codicon-pulse' aria-hidden='true'></i><strong>{relayAvailabilityText(this.desktopLocale, averageRelayAvailability([offering.network]))}</strong></span>
                     <span title='该模型结算倍率' aria-label='该模型结算倍率'><i className='codicon codicon-symbol-number' aria-hidden='true'></i><strong>{offeringMultiplierBps(offering) === null ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering)) || '—'}</strong></span>
                 </div>
@@ -52972,6 +53046,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                     const selected = activeRoute?.id === candidate.routeId;
                                     const candidateRoute = activeRelayRoutes.find(route => route.id === candidate.routeId);
                                     const offering = candidateRoute?.kind === 'managed_gateway' ? candidateRoute.offering : undefined;
+                                    const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
+                                    const variantTag = candidate.variantTag;
+                                    const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
                                     const fidelity = candidate.authenticity?.value ?? (offering ? measuredModelFidelity(offering.fidelity) : undefined);
                                     const hoverOpen = this.appPluginChatHoverRouteId === candidate.routeId ? this.appPluginChatHoverPlacement : undefined;
                                     const openHover = (anchor: HTMLElement): void => this.openAppPluginChatModelHover(candidateRoute, candidate, anchor, placement);
@@ -53004,10 +53081,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                             >
                                                 <span>
                                                     <strong data-nmx-literal>{candidate.label}</strong>
-                                                    {candidate.variantTag && <small className='nmx-model-price-variant' dir='ltr'>{candidate.variantTag}</small>}
-                                                    {(offering || fidelity !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity}
-                                                        onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)}
-                                                        onLeave={() => this.hideModelEvidenceTooltip?.()} />}
+                                                    {variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
+                                                        onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)}
+                                                        onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
+                                                    {(offering || fidelity !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}
                                                 </span>
                                                 {selected && <i className='codicon codicon-check' aria-hidden='true' />}
                                             </button>
@@ -53023,8 +53100,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                 const contextShown = contextMaximum !== undefined && contextChoices.length > 1;
                                                 const activeContextTokens = this.contextWindowForRoute?.(candidateRoute) ?? contextMaximum;
                                                 const contextChecked = contextChoices.some(tokens => tokens === activeContextTokens);
+                                                const rawFidelity = offering?.fidelity;
                                                 const authenticityPending = Boolean(offering) && fidelity === undefined;
-                                                const authenticityHint = authenticityPending ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint') : undefined;
+                                                const authenticityDefault = Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
+                                                const authenticityHint = authenticityPending
+                                                    ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint')
+                                                    : authenticityDefault
+                                                        ? modelPickerEvidenceText(this.desktopLocale, 'authenticityDefaultHint')
+                                                        : undefined;
                                                 const quality = offering ? measuredRelayQuality([offering]) : undefined;
                                                 const ownPriced = Boolean(offering && offeringIsOwnPriced(offering));
                                                 const multiplier = offering ? offeringMultiplierBps(offering) : undefined;
@@ -53037,7 +53120,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                 const metrics: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = [
                                                     {
                                                         label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'),
-                                                        value: authenticityPending ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPending') : relayPercentText(this.desktopLocale, fidelity),
+                                                        value: relayPercentText(this.desktopLocale, fidelity),
                                                         unmeasured: authenticityPending,
                                                         hint: authenticityHint
                                                     },
@@ -55333,14 +55416,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         : 'modelGenerationUnverified');
             const unavailableLabel = model.listingPending ? modelPickerEvidenceText(this.desktopLocale, 'listingPending') : unavailableReasonText;
             const offering = optionRoute?.kind === 'managed_gateway' ? optionRoute.offering : undefined;
-            const fidelity = measuredModelFidelity(offering?.fidelity || model.fidelity);
-            const authenticityPending = Boolean(offering) && fidelity === undefined;
-            const authenticityHint = authenticityPending ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint') : undefined;
+            const rawFidelity = offering?.fidelity || model.fidelity;
+            const fidelity = measuredModelFidelity(rawFidelity);
+            const managedRow = Boolean(offering || model.sourceName === 'NextMux' || model.sourceName === 'API 模型目录');
+            const authenticityPending = managedRow && fidelity === undefined;
+            const authenticityDefault = Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
+            const authenticityHint = authenticityPending
+                ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint')
+                : authenticityDefault
+                    ? modelPickerEvidenceText(this.desktopLocale, 'authenticityDefaultHint')
+                    : undefined;
             const quality = offering ? measuredRelayQuality([offering]) : undefined;
             const ownPriced = Boolean(offering && offeringIsOwnPriced(offering));
             const multiplier = offering ? offeringMultiplierBps(offering) : model.discoveredMultiplierBps;
             const metrics: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = [
-                { label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'), value: authenticityPending ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPending') : relayPercentText(this.desktopLocale, fidelity), unmeasured: authenticityPending, hint: authenticityHint },
+                { label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'), value: relayPercentText(this.desktopLocale, fidelity), unmeasured: authenticityPending, hint: authenticityHint },
                 { label: relayText(this.desktopLocale, 'quality'), value: relayPercentText(this.desktopLocale, quality) },
                 { label: relayText(this.desktopLocale, 'price'), value: ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag')
                     : relayMultiplierTag(this.desktopLocale, multiplier) || '—' }
@@ -55367,7 +55457,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     this.update();
                 }} aria-label={optionTitle}><span><strong>{model.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
                     onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)} onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
-                    {(offering || fidelity !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}</span>{selected && <i className='codicon codicon-check'></i>}</button>
+                    {(managedRow || fidelity !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}</span>{selected && <i className='codicon codicon-check'></i>}</button>
                 {card && placement && (() => {
                     const { depth, learnedContextCap, contextChoices, contextCapped, contextShown } = card;
                     const activeDepth = this.activeReasoningDepthId(optionRoute, depth);
@@ -57430,17 +57520,32 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                     const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
                                     const variantTag = offering ? (ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering))) : '';
                                     const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
-                                    const fidelity = offering ? measuredModelFidelity(offering.fidelity) : undefined;
+                                    const rawFidelity = offering?.fidelity;
+                                    const fidelity = measuredModelFidelity(rawFidelity);
+                                    const authenticityPending = Boolean(offering) && fidelity === undefined;
+                                    const authenticityDefault = Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
+                                    const authenticityHint = authenticityPending
+                                        ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint')
+                                        : authenticityDefault
+                                            ? modelPickerEvidenceText(this.desktopLocale, 'authenticityDefaultHint')
+                                            : undefined;
                                     const hoverOpen = this.comicModelHoverKey === item.key;
                                     const hoverPlacement = hoverOpen ? this.comicModelHoverPlacement : undefined;
-                                    const evidenceRows: { readonly label: string; readonly value: string }[] = [
+                                    const evidenceRows: { readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }[] = [
                                         {
                                             label: item.source.kind === 'official' ? relayText(this.desktopLocale, 'apiName')
                                                 : item.source.kind === 'local' ? relayText(this.desktopLocale, 'local') : relayText(this.desktopLocale, 'relayTitle'),
                                             value: offering?.providerName || comicStepSourceLabel(this.desktopLocale, item.source)
                                         }
                                     ];
-                                    if (offering) evidenceRows.push({ label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'), value: relayPercentText(this.desktopLocale, fidelity) });
+                                    if (offering) {
+                                        evidenceRows.push({
+                                            label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'),
+                                            value: relayPercentText(this.desktopLocale, fidelity),
+                                            unmeasured: authenticityPending,
+                                            hint: authenticityHint
+                                        });
+                                    }
                                     if (!offering) {
                                         evidenceRows.push({
                                             label: relayText(this.desktopLocale, 'price'),
@@ -57503,9 +57608,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                     onPointerEnter={() => this.cancelComicModelHoverClose()}
                                                     onPointerLeave={() => this.scheduleComicModelHoverClose()}>
                                                     <header><strong data-nmx-literal>{item.label}</strong></header>
-                                                    <dl className='nmx-model-evidence'>
-                                                        {evidenceRows.map(metric => <div key={metric.label}><dt>{metric.label}</dt><dd data-nmx-literal>{metric.value}</dd></div>)}
-                                                    </dl>
+                                                    <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}
+                                                        role={metric.hint ? 'group' : undefined} aria-label={metric.hint ? `${metric.label}: ${metric.value}. ${metric.hint}` : undefined}
+                                                        tabIndex={metric.hint ? 0 : undefined}
+                                                        onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
+                                                        onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
+                                                        onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
+                                                        onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-nmx-literal data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd></div>)}</dl>
                                                     {offering && <OfferingPriceCard locale={this.desktopLocale} offering={offering} collapsible pullOutDrawer />}
                                                 </section>
                                             </div>,

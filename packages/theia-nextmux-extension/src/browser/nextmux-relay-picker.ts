@@ -30,52 +30,64 @@ export function relayMeasurementExplanation(locale: NextMuxDesktopLocale, measur
     return 'No measurement data yet';
 }
 
-const measurementNotes: Readonly<Record<NextMuxDesktopLocale, readonly [string, string, string, string]>> = {
-    en: ['No probe in the last day: the latest of the past 7 days', 'No probe in the last day: the latest of the past 7 days ({time})',
+const measurementNotes: Readonly<Record<NextMuxDesktopLocale, readonly [string, string, string, string, string]>> = {
+    en: ['Latest speed test result', 'Latest speed test result ({time})',
         'Its models on sale are not checked yet: this is the result of its other listed models',
-        'Not measured for this model yet: the latest first-token latency its API measured for another model'],
-    'zh-CN': ['近一天没有测速，这是 7 天内最近一次的结果', '近一天没有测速，这是 7 天内最近一次的结果（{time}）', '在售模型尚未检测，这是该商家其他已上架模型的结果',
-        '该模型尚未单独测速，这是同一 API 上其他模型最近测得的首字延迟'],
-    'zh-TW': ['近一天沒有測速，這是 7 天內最近一次的結果', '近一天沒有測速，這是 7 天內最近一次的結果（{time}）', '在售模型尚未檢測，這是該商家其他已上架模型的結果',
-        '該模型尚未單獨測速，這是同一 API 上其他模型最近測得的首字延遲'],
-    ja: ['直近 1 日の測定がないため、過去 7 日間で最新の結果です', '直近 1 日の測定がないため、過去 7 日間で最新の結果です（{time}）',
+        'Not measured for this model yet: the latest first-token latency its API measured for another model',
+        'Default 100%: this relay’s model types aren’t eligible for fingerprint authenticity checks'],
+    'zh-CN': ['最近一次测速结果', '最近一次测速结果（{time}）', '在售模型尚未检测，这是该商家其他已上架模型的结果',
+        '该模型尚未单独测速，这是同一 API 上其他模型最近测得的首字延迟',
+        '默认 100%：该中转商当前模型类型不支持真伪指纹检测'],
+    'zh-TW': ['最近一次測速結果', '最近一次測速結果（{time}）', '在售模型尚未檢測，這是該商家其他已上架模型的結果',
+        '該模型尚未單獨測速，這是同一 API 上其他模型最近測得的首字延遲',
+        '預設 100%：此中轉商目前模型類型不支援真偽指紋檢測'],
+    ja: ['最新の速度測定結果', '最新の速度測定結果（{time}）',
         '販売中のモデルはまだ検証されていないため、このストアの他の掲載モデルの結果です',
-        'このモデルはまだ個別に測定されていないため、同じ API の他のモデルで最近測定した最初のトークンまでの時間です'],
-    ko: ['최근 하루 동안 측정이 없어 지난 7일 중 가장 최근 결과입니다', '최근 하루 동안 측정이 없어 지난 7일 중 가장 최근 결과입니다({time})',
+        'このモデルはまだ個別に測定されていないため、同じ API の他のモデルで最近測定した最初のトークンまでの時間です',
+        '既定値（100%）：このリレーのモデル種別は真正性フィンガープリント検査の対象外です'],
+    ko: ['최근 속도 측정 결과', '최근 속도 측정 결과({time})',
         '판매 중인 모델은 아직 검증되지 않아 이 스토어의 다른 등록 모델 결과입니다',
-        '이 모델은 아직 따로 측정되지 않아 같은 API의 다른 모델에서 최근 측정한 첫 토큰 지연입니다'],
-    es: ['Sin medición en el último día: la más reciente de los últimos 7 días', 'Sin medición en el último día: la más reciente de los últimos 7 días ({time})',
+        '이 모델은 아직 따로 측정되지 않아 같은 API의 다른 모델에서 최근 측정한 첫 토큰 지연입니다',
+        '기본값(100%): 이 중계의 모델 유형은 지문 진위 검증 대상이 아닙니다'],
+    es: ['Último resultado de prueba de velocidad', 'Último resultado de prueba de velocidad ({time})',
         'Sus modelos a la venta aún no se han verificado: es el resultado de sus otros modelos publicados',
-        'Este modelo aún no se ha medido: es la latencia del primer token más reciente que su API midió con otro modelo'],
-    fr: ['Aucune mesure ce dernier jour : la plus récente des 7 derniers jours', 'Aucune mesure ce dernier jour : la plus récente des 7 derniers jours ({time})',
+        'Este modelo aún no se ha medido: es la latencia del primer token más reciente que su API midió con otro modelo',
+        'Valor por defecto (100 %): los tipos de modelo de este relay no admiten comprobaciones de huella'],
+    fr: ['Dernier résultat du test de vitesse', 'Dernier résultat du test de vitesse ({time})',
         'Ses modèles en vente ne sont pas encore vérifiés : c’est le résultat de ses autres modèles publiés',
-        'Ce modèle n’a pas encore été mesuré : c’est la latence du premier jeton la plus récente que son API a mesurée pour un autre modèle'],
-    de: ['Keine Messung am letzten Tag: die neueste der letzten 7 Tage', 'Keine Messung am letzten Tag: die neueste der letzten 7 Tage ({time})',
+        'Ce modèle n’a pas encore été mesuré : c’est la latence du premier jeton la plus récente que son API a mesurée pour un autre modèle',
+        'Valeur par défaut (100 %) : les types de modèles de ce relais ne sont pas éligibles au contrôle d’empreinte'],
+    de: ['Letztes Ergebnis des Geschwindigkeitstests', 'Letztes Ergebnis des Geschwindigkeitstests ({time})',
         'Die angebotenen Modelle sind noch nicht geprüft: Das ist das Ergebnis der übrigen gelisteten Modelle',
-        'Dieses Modell wurde noch nicht eigens gemessen: die jüngste Zeit bis zum ersten Token, die seine API für ein anderes Modell gemessen hat'],
-    'pt-BR': ['Sem medição no último dia: a mais recente dos últimos 7 dias', 'Sem medição no último dia: a mais recente dos últimos 7 dias ({time})',
+        'Dieses Modell wurde noch nicht eigens gemessen: die jüngste Zeit bis zum ersten Token, die seine API für ein anderes Modell gemessen hat',
+        'Standardwert (100 %): Die Modelltypen dieses Relays sind nicht für Fingerabdruck-Prüfungen geeignet'],
+    'pt-BR': ['Último resultado do teste de velocidade', 'Último resultado do teste de velocidade ({time})',
         'Os modelos à venda ainda não foram verificados: este é o resultado dos outros modelos publicados',
-        'Este modelo ainda não foi medido: é a latência do primeiro token mais recente que a API dele mediu para outro modelo'],
-    ru: ['За последние сутки замеров нет: последний результат за 7 дней', 'За последние сутки замеров нет: последний результат за 7 дней ({time})',
+        'Este modelo ainda não foi medido: é a latência do primeiro token mais recente que a API dele mediu para outro modelo',
+        'Padrão (100%): os tipos de modelo deste relay não são elegíveis para verificação de impressão digital'],
+    ru: ['Последний результат замера скорости', 'Последний результат замера скорости ({time})',
         'Модели в продаже ещё не проверены: это результат других размещённых моделей магазина',
-        'Эта модель ещё не измерялась отдельно: это последняя задержка до первого токена, измеренная её API для другой модели'],
-    ar: ['لا قياس خلال اليوم الأخير: أحدث نتيجة خلال آخر 7 أيام', 'لا قياس خلال اليوم الأخير: أحدث نتيجة خلال آخر 7 أيام ({time})',
+        'Эта модель ещё не измерялась отдельно: это последняя задержка до первого токена, измеренная её API для другой модели',
+        'По умолчанию 100%: типы моделей этого посредника не поддерживают проверку отпечатков'],
+    ar: ['أحدث نتيجة لاختبار السرعة', 'أحدث نتيجة لاختبار السرعة ({time})',
         'لم تُفحص النماذج المعروضة للبيع بعد: هذه نتيجة النماذج الأخرى المدرجة للمتجر',
-        'لم يُقَس هذا النموذج بعد: هذا أحدث زمن حتى أول رمز قاسته واجهة API الخاصة به لنموذج آخر'],
-    hi: ['पिछले एक दिन में कोई माप नहीं: पिछले 7 दिनों का सबसे नया परिणाम', 'पिछले एक दिन में कोई माप नहीं: पिछले 7 दिनों का सबसे नया परिणाम ({time})',
+        'لم يُقَس هذا النموذج بعد: هذا أحدث زمن حتى أول رمز قاسته واجهة API الخاصة به لنموذج آخر',
+        'الافتراضي (100%): أنواع النماذج لدى هذا الوسيط غير مؤهلة لفحص البصمة'],
+    hi: ['नवीनतम गति परीक्षण परिणाम', 'नवीनतम गति परीक्षण परिणाम ({time})',
         'बिक्री वाले मॉडल अभी जाँचे नहीं गए: यह इस स्टोर के अन्य सूचीबद्ध मॉडलों का परिणाम है',
-        'इस मॉडल को अभी अलग से नहीं मापा गया है: यह उसी API पर किसी दूसरे मॉडल के लिए हाल में मापी गई पहले टोकन की देरी है']
+        'इस मॉडल को अभी अलग से नहीं मापा गया है: यह उसी API पर किसी दूसरे मॉडल के लिए हाल में मापी गई पहले टोकन की देरी है',
+        'डिफ़ॉल्ट (100%): इस रिले के मॉडल प्रकार फ़िंगरप्रिंट प्रामाणिकता जाँच के लिए पात्र नहीं हैं']
 };
 
 /**
- * Why a shown value is not a current measurement of what the store sells (public-merchant-ranking.js): a latency with
- * no probe in the last day is the latest of the past 7 days (`observedAt` is when), and an authenticity with no model on
- * sale scored yet is that of the store's other listed models.
+ * Supplemental evidence notes for latency timestamps (`observedAt`), cross-listed store authenticity (`listed_offerings`),
+ * API-level latency fallbacks, and default 100% ratings on unverifiable model types (`default_unverifiable`).
  */
-export function relayMeasurementNote(locale: NextMuxDesktopLocale, kind: 'latencyStale' | 'authenticityListed' | 'latencyFromApi', observedAt?: number): string {
+export function relayMeasurementNote(locale: NextMuxDesktopLocale, kind: 'latencyStale' | 'authenticityListed' | 'authenticityDefault' | 'latencyFromApi', observedAt?: number): string {
     const notes = measurementNotes[locale] || measurementNotes.en;
     if (kind === 'authenticityListed') return notes[2];
     if (kind === 'latencyFromApi') return notes[3];
+    if (kind === 'authenticityDefault') return notes[4];
     if (typeof observedAt !== 'number' || !Number.isFinite(observedAt) || observedAt <= 0) return notes[0];
     const time = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(observedAt);
     return notes[1].replace('{time}', time);
@@ -249,86 +261,98 @@ export function filterRelayPickerSources<T extends RelayPickerSource>(
             .some(value => value.normalize('NFKC').toLocaleLowerCase().includes(normalized))));
 }
 
-const modelEvidenceLabels: Record<NextMuxDesktopLocale, readonly [string, string, string, string]> = {
+const modelEvidenceLabels: Record<NextMuxDesktopLocale, readonly [string, string, string, string, string]> = {
     en: [
         'Model authenticity',
         'Not yet published for use',
         'Pending',
-        'No live authenticity samples collected for this model yet. NextMux only displays real traffic and fingerprint verification results, never synthetic estimates. Updates automatically after first use or background probe.'
+        'No live authenticity samples collected for this model yet. NextMux only displays real traffic and fingerprint verification results, never synthetic estimates. Updates automatically after first use or background probe.',
+        'Default score (100%): this model isn’t eligible for fingerprint authenticity checks.'
     ],
     'zh-CN': [
         '模型真实度',
         '尚未上架使用',
         '待检测',
-        '该模型暂未积累实测真实度样本；平台仅展示真实调用与指纹核验结果，绝不虚构数据。首次调用或后台巡检完成后将自动更新。'
+        '该模型暂未积累实测真实度样本；平台仅展示真实调用与指纹核验结果，绝不虚构数据。首次调用或后台巡检完成后将自动更新。',
+        '默认 100%：该模型不支持真伪指纹检测。'
     ],
     'zh-TW': [
         '模型真實度',
         '尚未上架使用',
         '待檢測',
-        '此模型暫未累積實測真實度樣本；平台僅展示真實呼叫與指紋核驗結果，絕不虛構數據。首次呼叫或背景巡檢完成後將自動更新。'
+        '此模型暫未累積實測真實度樣本；平台僅展示真實呼叫與指紋核驗結果，絕不虛構數據。首次呼叫或背景巡檢完成後將自動更新。',
+        '預設 100%：此模型不支援真偽指紋檢測。'
     ],
     ja: [
         'モデルの真正性',
         'まだ利用公開されていません',
         '検証待ち',
-        'このモデルの実測真正性サンプルはまだ蓄積されていません。NextMux は実際の呼び出しとフィンガープリント検証結果のみを表示し、推定値は一切表示しません。初回利用またはバックグラウンド検証後に自動更新されます。'
+        'このモデルの実測真正性サンプルはまだ蓄積されていません。NextMux は実際の呼び出しとフィンガープリント検証結果のみを表示し、推定値は一切表示しません。初回利用またはバックグラウンド検証後に自動更新されます。',
+        '既定値（100%）：このモデルは真正性フィンガープリント対象外です。'
     ],
     ko: [
         '모델 진위',
         '아직 사용 가능하게 게시되지 않음',
         '검증 대기',
-        '이 모델의 실측 진위 샘플이 아직 수집되지 않았습니다. NextMux는 실제 호출 및 지문 검증 결과만 표시하며 가상 추정치를 표시하지 않습니다. 첫 호출 또는 백그라운드 점검 후 자동 업데이트됩니다.'
+        '이 모델의 실측 진위 샘플이 아직 수집되지 않았습니다. NextMux는 실제 호출 및 지문 검증 결과만 표시하며 가상 추정치를 표시하지 않습니다. 첫 호출 또는 백그라운드 점검 후 자동 업데이트됩니다.',
+        '기본값(100%): 이 모델은 지문 기반 진위 검증 대상이 아닙니다.'
     ],
     es: [
         'Autenticidad del modelo',
         'Aún no publicado para su uso',
         'Pendiente',
-        'Aún no se han recopilado muestras reales de autenticidad para este modelo. NextMux solo muestra resultados reales de tráfico y verificación de huella, nunca estimaciones sintéticas. Se actualiza automáticamente tras el primer uso o sondeo en segundo plano.'
+        'Aún no se han recopilado muestras reales de autenticidad para este modelo. NextMux solo muestra resultados reales de tráfico y verificación de huella, nunca estimaciones sintéticas. Se actualiza automáticamente tras el primer uso o sondeo en segundo plano.',
+        'Valor por defecto (100 %): este modelo no admite comprobaciones de huella.'
     ],
     fr: [
         'Authenticité du modèle',
         'Pas encore disponible à l’utilisation',
         'En attente',
-        'Aucun échantillon réel d’authenticité n’a encore été collecté pour ce modèle. NextMux affiche uniquement des résultats réels de trafic et d’empreinte, jamais d’estimations fictives. Mise à jour automatique après la première utilisation ou sonde en arrière-plan.'
+        'Aucun échantillon réel d’authenticité n’a encore été collecté pour ce modèle. NextMux affiche uniquement des résultats réels de trafic et d’empreinte, jamais d’estimations fictives. Mise à jour automatique après la première utilisation ou sonde en arrière-plan.',
+        'Valeur par défaut (100 %) : ce modèle n’est pas éligible au contrôle d’empreinte.'
     ],
     de: [
         'Modellauthentizität',
         'Noch nicht zur Nutzung veröffentlicht',
         'Ausstehend',
-        'Für dieses Modell liegen noch keine Live-Authentizitätsproben vor. NextMux zeigt ausschließlich echte Aufruf- und Fingerabdruckprüfungen an, niemals synthetische Schätzungen. Wird nach der ersten Nutzung oder Hintergrundprüfung automatisch aktualisiert.'
+        'Für dieses Modell liegen noch keine Live-Authentizitätsproben vor. NextMux zeigt ausschließlich echte Aufruf- und Fingerabdruckprüfungen an, niemals synthetische Schätzungen. Wird nach der ersten Nutzung oder Hintergrundprüfung automatisch aktualisiert.',
+        'Standardwert (100 %): Dieses Modell ist nicht für Fingerabdruck-Prüfungen geeignet.'
     ],
     'pt-BR': [
         'Autenticidade do modelo',
         'Ainda não publicado para uso',
         'Pendente',
-        'Ainda não há amostras reais de autenticidade para este modelo. O NextMux exibe apenas resultados reais de tráfego e verificação de impressão digital, nunca estimativas sintéticas. Atualiza automaticamente após o primeiro uso ou verificação em segundo plano.'
+        'Ainda não há amostras reais de autenticidade para este modelo. O NextMux exibe apenas resultados reais de tráfego e verificação de impressão digital, nunca estimativas sintéticas. Atualiza automaticamente após o primeiro uso ou verificação em segundo plano.',
+        'Padrão (100%): este modelo não é elegível para verificação por impressão digital.'
     ],
     ru: [
         'Подлинность модели',
         'Ещё не опубликовано для использования',
         'Ожидает проверки',
-        'Для этой модели ещё не собраны реальные замеры подлинности. NextMux показывает только результаты реальных вызовов и проверки отпечатков, без искусственных оценок. Обновится автоматически после первого вызова или фоновой проверки.'
+        'Для этой модели ещё не собраны реальные замеры подлинности. NextMux показывает только результаты реальных вызовов и проверки отпечатков, без искусственных оценок. Обновится автоматически после первого вызова или фоновой проверки.',
+        'По умолчанию 100%: эта модель не поддерживает проверку отпечатков.'
     ],
     ar: [
         'أصالة النموذج',
         'لم يُنشر للاستخدام بعد',
         'قيد الفحص',
-        'لم تُجمع عيّنات أصالة فعلية لهذا النموذج بعد. يعرض NextMux نتائج الاستدعاءات الحقيقية والتحقق من البصمة فقط دون أي تقديرات مصطنعة، ويتحدث تلقائياً بعد أول استخدام أو فحص خلفي.'
+        'لم تُجمع عيّنات أصالة فعلية لهذا النموذج بعد. يعرض NextMux نتائج الاستدعاءات الحقيقية والتحقق من البصمة فقط دون أي تقديرات مصطنعة، ويتحدث تلقائياً بعد أول استخدام أو فحص خلفي.',
+        'الافتراضي (100%): هذا النموذج غير مؤهل لفحص البصمة.'
     ],
     hi: [
         'मॉडल की प्रामाणिकता',
         'अभी उपयोग के लिए प्रकाशित नहीं',
         'जाँच लंबित',
-        'इस मॉडल के लिए अभी वास्तविक प्रामाणिकता नमूने एकत्र नहीं हुए हैं। NextMux केवल वास्तविक कॉल और फ़िंगरप्रिंट सत्यापन परिणाम दिखाता है, कभी कृत्रिम अनुमान नहीं। पहली बार उपयोग या बैकग्राउंड जाँच के बाद स्वतः अपडेट होगा।'
+        'इस मॉडल के लिए अभी वास्तविक प्रामाणिकता नमूने एकत्र नहीं हुए हैं। NextMux केवल वास्तविक कॉल और फ़िंगरप्रिंट सत्यापन परिणाम दिखाता है, कभी कृत्रिम अनुमान नहीं। पहली बार उपयोग या बैकग्राउंड जाँच के बाद स्वतः अपडेट होगा।',
+        'डिफ़ॉल्ट (100%): यह मॉडल फ़िंगरप्रिंट प्रामाणिकता जाँच के लिए पात्र नहीं है।'
     ]
 };
 
 export function modelPickerEvidenceText(
     locale: NextMuxDesktopLocale,
-    key: 'authenticity' | 'listingPending' | 'authenticityPending' | 'authenticityPendingHint'
+    key: 'authenticity' | 'listingPending' | 'authenticityPending' | 'authenticityPendingHint' | 'authenticityDefaultHint'
 ): string {
-    const idx = key === 'authenticity' ? 0 : key === 'listingPending' ? 1 : key === 'authenticityPending' ? 2 : 3;
+    const idx = key === 'authenticity' ? 0 : key === 'listingPending' ? 1 : key === 'authenticityPending' ? 2 : key === 'authenticityPendingHint' ? 3 : 4;
     return (modelEvidenceLabels[locale] || modelEvidenceLabels.en)[idx];
 }
 
