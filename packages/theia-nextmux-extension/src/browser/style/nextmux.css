@@ -6470,11 +6470,16 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
 
 .nmx-notification-list > article {
     display: grid;
-    grid-template-columns: 20px 1fr;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    align-items: start;
     gap: 7px;
     padding: 9px 8px;
     border-radius: 7px;
     color: #8f888b;
+}
+
+.nmx-notification-list > article.is-clickable {
+    cursor: pointer;
 }
 
 .nmx-notification-list > article:hover {
@@ -6486,13 +6491,76 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
 }
 
 .nmx-notification-list > article > i {
-    margin-top: 1px;
+    margin-top: 2px;
     color: #8b8588;
 }
 
 .nmx-notification-list > article.is-success > i { color: #58a77a; }
 .nmx-notification-list > article.is-warning > i { color: #c89a4e; }
 .nmx-notification-list > article.is-error > i { color: #d36b74; }
+.nmx-notification-list > article.is-platform.is-info > i { color: #7aa7e0; }
+
+.nmx-notification-item-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.nmx-notification-badge {
+    flex: 0 0 auto;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+    color: #a9c7ef;
+    background: rgba(122, 167, 224, .16);
+}
+
+.nmx-notification-badge.is-warning {
+    color: #e4ba72;
+    background: rgba(200, 154, 78, .18);
+}
+
+.nmx-notification-badge.is-critical {
+    color: #f0959d;
+    background: rgba(211, 107, 116, .2);
+}
+
+.nmx-notification-dismiss {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    color: #7d7679;
+    background: transparent;
+    opacity: .68;
+    cursor: pointer;
+}
+
+.nmx-notification-list > article:hover .nmx-notification-dismiss,
+.nmx-notification-dismiss:focus-visible {
+    opacity: 1;
+}
+
+.nmx-notification-dismiss:hover {
+    color: #ded9db;
+    background: rgba(255, 255, 255, .08);
+}
+
+.nmx-notification-link-hint {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+}
 
 .nmx-notification-list > article strong,
 .nmx-notification-list > article p,
@@ -6502,6 +6570,8 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
 }
 
 .nmx-notification-list > article strong {
+    min-width: 0;
+    flex: 1 1 auto;
     color: #d4d0d1;
     font-size: 13px;
     font-weight: 600;
@@ -6512,12 +6582,53 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     color: #aaa3a6;
     font-size: 14px;
     line-height: 1.45;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
 }
 
 .nmx-notification-list > article small {
     margin-top: 5px;
     color: #6f696c;
     font-size: 13px;
+}
+
+.nmx-global-transient-toast {
+    position: fixed;
+    z-index: 2150;
+    right: 18px;
+    bottom: 18px;
+    max-width: min(420px, calc(100vw - 36px));
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px 8px 12px;
+    border: 1px solid #4a4245;
+    border-radius: 10px;
+    color: #ddd9da;
+    background: #242123;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, .38);
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.nmx-global-transient-toast > i { flex: 0 0 auto; color: #8b8588; }
+.nmx-global-transient-toast.is-success > i { color: #58a77a; }
+.nmx-global-transient-toast.is-warning > i { color: #c89a4e; }
+.nmx-global-transient-toast.is-error > i { color: #d36b74; }
+.nmx-global-transient-toast > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nmx-global-transient-toast > button {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    border: 0;
+    border-radius: 5px;
+    color: #9d9699;
+    background: transparent;
+    cursor: pointer;
+}
+.nmx-global-transient-toast > button:hover {
+    color: #f0ebed;
+    background: rgba(255, 255, 255, .08);
 }
 
 .nmx-sidebar-search {
@@ -14563,11 +14674,14 @@ body.theia-dark .nmx-file-editor-tabs:hover::-webkit-scrollbar-thumb,
 }
 
 .nmx-coding-context,
-.nmx-coding-context > header {
+.nmx-coding-context > header,
+.nmx-comic-context,
+.nmx-comic-context > header {
     overflow: visible;
 }
 
-.nmx-coding-context {
+.nmx-coding-context,
+.nmx-comic-context {
     z-index: 110;
 }
 
@@ -19185,11 +19299,9 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
 }
 
 .nmx-theme-light .nmx-notification-list > article p {
-    display: -webkit-box;
-    overflow: hidden;
     color: #5c565a !important;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
 }
 
 .nmx-theme-light .nmx-notification-list > article small,
@@ -19199,6 +19311,46 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
 
 .nmx-theme-light .nmx-notification-empty > strong {
     color: #302c2f !important;
+}
+
+.nmx-theme-light .nmx-notification-badge {
+    color: #25589c !important;
+    background: rgba(37, 88, 156, .12) !important;
+}
+
+.nmx-theme-light .nmx-notification-badge.is-warning {
+    color: #936115 !important;
+    background: rgba(186, 127, 29, .14) !important;
+}
+
+.nmx-theme-light .nmx-notification-badge.is-critical {
+    color: #b42b3c !important;
+    background: rgba(207, 77, 99, .14) !important;
+}
+
+.nmx-theme-light .nmx-notification-dismiss {
+    color: #706a6e !important;
+}
+
+.nmx-theme-light .nmx-notification-dismiss:hover {
+    color: #292529 !important;
+    background: #e2dedb !important;
+}
+
+.nmx-theme-light .nmx-global-transient-toast {
+    color: #302c2f !important;
+    background: #f8f7f5 !important;
+    border-color: #d8d3cf !important;
+    box-shadow: 0 12px 30px rgba(40, 32, 36, .14);
+}
+
+.nmx-theme-light .nmx-global-transient-toast > button {
+    color: #6b6569 !important;
+}
+
+.nmx-theme-light .nmx-global-transient-toast > button:hover {
+    color: #292529 !important;
+    background: #e6e2df !important;
 }
 
 .nmx-theme-light .nmx-context-nav.nmx-settings-nav > button {
