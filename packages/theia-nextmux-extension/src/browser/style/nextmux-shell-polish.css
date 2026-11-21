@@ -543,13 +543,6 @@
     .nmx-shell .nmx-official-sheet button { transition: none; }
     .nmx-shell .nmx-official-sheet button:active { transform: none !important; }
 }
-/* A two-line cost note reads as a paragraph, not as a right-aligned caption. */
-.nmx-shell .nmx-official-sheet .nmx-test-cost-note {
-    margin-top: 10px;
-    font-size: 13px;
-    line-height: 1.55;
-    text-align: start;
-}
 
 /* One advanced section, with the same label/control rhythm as the connection form. */
 .nmx-shell .nmx-official-advanced { border-top: 1px solid var(--nmx-border); }
@@ -813,13 +806,19 @@
     margin: 0;
     padding: 0;
 }
-.nmx-shell .nmx-my-apis-page {
-    container: nmx-my-apis / inline-size;
+.nmx-shell .nmx-my-apis-page { container: nmx-my-apis / inline-size; }
+/* A row's actions are models, edit and delete (saving spends nothing, so there is no test button): three columns that
+   line up from row to row. The dialog's delete is a 28px icon. A row asking to confirm a delete widens to 308px so its
+   question keeps two lines. Each width is computed where its columns are set. */
+.nmx-shell :is(.nmx-my-apis-page, .nmx-my-apis) {
     --nmx-api-models-col: 112px;
-    --nmx-api-test-col: 62px;
     --nmx-api-edit-col: 58px;
     --nmx-api-remove-col: 58px;
-    --nmx-api-actions-width: calc(var(--nmx-api-models-col) + var(--nmx-api-test-col) + var(--nmx-api-edit-col) + var(--nmx-api-remove-col) + 18px);
+    --nmx-api-confirm-width: 308px;
+}
+.nmx-shell .nmx-my-apis { --nmx-api-remove-col: 28px; }
+.nmx-shell :is(.nmx-my-apis-page, .nmx-my-apis) {
+    --nmx-api-actions-width: calc(var(--nmx-api-models-col) + var(--nmx-api-edit-col) + var(--nmx-api-remove-col) + 12px);
 }
 .nmx-shell .nmx-my-apis-list {
     flex: 1 1 auto;
@@ -836,7 +835,7 @@
 }
 .nmx-shell .nmx-my-apis-list > li {
     display: grid;
-    grid-template-columns: 36px minmax(0, 1fr) var(--nmx-api-actions-width, 308px);
+    grid-template-columns: 36px minmax(0, 1fr) var(--nmx-api-actions-width, 240px);
     align-items: center;
     gap: 12px;
     padding: 12px;
@@ -848,6 +847,9 @@
 .nmx-shell .nmx-my-apis-list > li + li { box-shadow: none; }
 .nmx-shell .nmx-my-apis-list > li:hover:not(.is-highlighted) { background: var(--nmx-panel); border-color: var(--nmx-border); }
 .nmx-shell .nmx-my-apis-list > li.is-highlighted { background: var(--nmx-accent-soft); border-color: var(--nmx-accent); }
+.nmx-shell .nmx-my-apis-list > li:has(> .nmx-my-apis-actions.is-confirming) {
+    grid-template-columns: 36px minmax(0, 1fr) var(--nmx-api-confirm-width, 308px);
+}
 @keyframes nmx-my-apis-toast-in {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
@@ -913,12 +915,24 @@
 .nmx-shell .nmx-my-apis-status { min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--nmx-subtle); font-size: 12px; line-height: 18px; }
 .nmx-shell .nmx-my-apis-status > .nmx-connection-dot { flex: 0 0 6px; }
 .nmx-shell .nmx-connection-dot.is-verified.is-partial { background: #d6a23c; }
+/* A saved API's dot (myApiConnectionStatus), from its free model list only: green once its key read the list, the
+   default grey while only saved, a slow pulse while reading, amber when the latest read failed (the line says why). A 6px
+   dot is a graphic, so it needs 3:1 against the row: the light theme's amber is darker. */
+.nmx-shell .nmx-connection-dot.is-connected { background: var(--nmx-success); }
+.nmx-shell .nmx-connection-dot.is-reading {
+    background: var(--nmx-accent);
+    animation: nmx-api-dot-reading 1.4s ease-in-out infinite;
+}
+.nmx-shell .nmx-connection-dot.is-failed { background: #d6a23c; }
+.nmx-shell.nmx-theme-light .nmx-connection-dot.is-failed { background: #a86b12; }
+@keyframes nmx-api-dot-reading { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .nmx-shell .nmx-connection-dot.is-reading { animation: none; } }
 .nmx-shell .nmx-my-apis-actions:not(.is-confirming) {
     display: grid;
-    grid-template-columns: var(--nmx-api-models-col, 112px) var(--nmx-api-test-col, 62px) var(--nmx-api-edit-col, 58px) var(--nmx-api-remove-col, 58px);
+    grid-template-columns: var(--nmx-api-models-col, 112px) var(--nmx-api-edit-col, 58px) var(--nmx-api-remove-col, 58px);
     align-items: center;
     gap: 6px;
-    width: var(--nmx-api-actions-width, 308px);
+    width: var(--nmx-api-actions-width, 240px);
     justify-self: end;
 }
 .nmx-shell .nmx-my-apis-actions.is-confirming {
@@ -926,7 +940,7 @@
     grid-template-columns: minmax(0, 1fr) 58px 58px;
     align-items: center;
     gap: 6px;
-    width: var(--nmx-api-actions-width, 308px);
+    width: var(--nmx-api-confirm-width, 308px);
     justify-self: end;
 }
 .nmx-shell .nmx-my-apis-actions > button {
@@ -952,9 +966,8 @@
     cursor: pointer;
 }
 .nmx-shell .nmx-my-apis-actions [data-my-api-action='models'] { grid-column: 1; }
-.nmx-shell .nmx-my-apis-actions [data-my-api-action='test'] { grid-column: 2; }
-.nmx-shell .nmx-my-apis-actions [data-my-api-action='edit'] { grid-column: 3; }
-.nmx-shell .nmx-my-apis-actions [data-my-api-action='remove'] { grid-column: 4; }
+.nmx-shell .nmx-my-apis-actions [data-my-api-action='edit'] { grid-column: 2; }
+.nmx-shell .nmx-my-apis-actions [data-my-api-action='remove'] { grid-column: 3; }
 .nmx-shell .nmx-my-apis-actions > button:hover:not(:disabled) { color: var(--nmx-text); border-color: var(--nmx-border-strong); background: var(--nmx-control-background); }
 .nmx-shell .nmx-my-apis-actions > button:disabled { opacity: .5; cursor: default; }
 .nmx-shell .nmx-my-apis-actions > .nmx-my-apis-remove { width: 28px; padding: 0; display: grid; place-items: center; }
@@ -973,12 +986,12 @@
 .nmx-shell .nmx-my-apis-empty > strong { color: var(--nmx-text); font-size: 15px; font-weight: 600; }
 .nmx-shell .nmx-my-apis-empty > p { max-width: 460px; margin: 0; font-size: 13px; line-height: 1.6; }
 @container nmx-my-apis (max-width: 599px) {
-    .nmx-shell .nmx-my-apis-list > li { grid-template-columns: 36px minmax(0, 1fr); }
+    .nmx-shell .nmx-my-apis-list > :is(li, li:has(> .nmx-my-apis-actions.is-confirming)) { grid-template-columns: 36px minmax(0, 1fr); }
     .nmx-shell .nmx-my-apis-actions { grid-column: 1 / -1; justify-self: end; }
 }
 @media (max-width: 640px) {
     .nmx-shell .nmx-sheet-backdrop.nmx-my-apis-backdrop { padding: 12px; }
-    .nmx-shell .nmx-my-apis-list > li { grid-template-columns: 36px minmax(0, 1fr); }
+    .nmx-shell .nmx-my-apis-list > :is(li, li:has(> .nmx-my-apis-actions.is-confirming)) { grid-template-columns: 36px minmax(0, 1fr); }
     .nmx-shell .nmx-my-apis-actions { grid-column: 1 / -1; justify-self: end; }
     .nmx-shell .nmx-my-apis-toolbar > .nmx-my-apis-link { margin-left: 0; }
 }
@@ -1013,7 +1026,6 @@
 .nmx-shell .nmx-official-sheet .nmx-official-form button { font-size: 12.5px; }
 .nmx-shell .nmx-official-sheet .nmx-official-form > .nmx-subsection-heading { padding-bottom: 8px; border-bottom: 1px solid var(--nmx-border); }
 .nmx-shell .nmx-official-sheet .nmx-official-form > .nmx-connection-note,
-.nmx-shell .nmx-official-sheet .nmx-official-form > .nmx-test-cost-note,
 .nmx-shell .nmx-official-sheet > .nmx-oauth-note { margin-top: 12px; font-size: 12px; }
 .nmx-shell .nmx-official-sheet .nmx-official-advanced {
     margin-top: 18px; padding: 0; border: 0; border-top: 1px solid var(--nmx-border); border-radius: 0; background: transparent;
@@ -1620,7 +1632,6 @@
     .nmx-model-effort-menu .nmx-model-depth > button.is-active { outline: 2px solid Highlight; }
     .nmx-model-effort-menu .nmx-model-context-learned { border: 1px solid CanvasText; }
 }
-
 
 /* Conversation timeline: the prompt behind a bar, beside it (never over it). Portaled to the body. */
 .nmx-thread-timeline-preview {

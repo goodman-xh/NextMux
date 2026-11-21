@@ -6594,7 +6594,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
 
 .nmx-global-transient-toast {
     position: fixed;
-    z-index: 2150;
+    z-index: 3300;
     right: 18px;
     bottom: 18px;
     max-width: min(420px, calc(100vw - 36px));

@@ -95,6 +95,46 @@ export function isVerifiedModelRoute(
         : modelCapabilityHasVerifiedSupport(evidence, 'model:generatable');
 }
 
+/**
+ * What is still unproven about a model of the user's own API that a tool-using picker offers: nothing answered yet
+ * ('untested': saved (Save makes no model call), or its API's list could not be read or left it out), no check of its
+ * tool calls ('tools_unverified'), or an earlier check it answered without the tool call ('tools_failed'). It orders the
+ * picker (proven first) and is kept as diagnostics; the row shows no warning, since nothing in the app tests models.
+ */
+export type OwnApiRouteHint = 'untested' | 'tools_unverified' | 'tools_failed';
+
+/**
+ * Whether a tool-using picker (Coding, Council, the AI Console) offers a model of the user's own API, and what about it
+ * is unproven. A platform relay needs verified generation and tools (modelRouteCapabilityGate). An own API is the user's
+ * own choice and the backend runs any model it saved or listed (isDiscoveredInvocationAllowed), so, as VS Code's BYOK
+ * models, Continue and Open WebUI list a configured model and show its failure when used, a model saved untested or
+ * whose tool check failed (its save said it can still be used) is offered with what is unproven, after proven ones,
+ * instead of leaving an empty list. Only evidence that a request cannot work keeps one out: the API or its list says the
+ * model does not generate (embeddings, an unsupported interface), or its provider declares no tool support, so a request
+ * with tools is refused (Ollama answers "does not support tools"); the backend refuses those too.
+ */
+export function ownApiRouteAdmission(evidence: readonly ModelCapabilityEvidence[]): {
+    readonly selectable: boolean;
+    readonly hint?: OwnApiRouteHint;
+    readonly reason?: ModelRouteUnavailableReason;
+} {
+    const gate = modelRouteCapabilityGate(evidence, true);
+    if (gate.selectable) return { selectable: true };
+    if (gate.generation === 'unsupported') return { selectable: false, reason: 'generation_unsupported' };
+    if (gate.tools === 'unsupported') {
+        // Only a live check the model answered counts as "failed": a provider's declaration is a refusal.
+        return effectiveModelCapabilityEvidence(evidence, 'tools')?.source === 'live_probe'
+            ? { selectable: true, hint: 'tools_failed' }
+            : { selectable: false, reason: 'tools_unsupported' };
+    }
+    return { selectable: true, hint: gate.generation === 'verified' ? 'tools_unverified' : 'untested' };
+}
+
+/** Proven models first, then those whose tools are unchecked, then untested ones, then those whose tool check failed. */
+export function ownApiRouteHintRank(hint: OwnApiRouteHint | undefined): number {
+    return hint === undefined ? 0 : hint === 'tools_unverified' ? 1 : hint === 'untested' ? 2 : 3;
+}
+
 export function reasoningEffortLevelsForModel(input: ModelContract & {
     readonly reasoningSupported: boolean;
     readonly providerId: string;

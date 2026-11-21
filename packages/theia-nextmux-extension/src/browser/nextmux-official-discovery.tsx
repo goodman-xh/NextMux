@@ -10,7 +10,8 @@ import { OWN_MODEL_KINDS, ownModelCategories, ownModelKind, type OwnModelKind } 
 import { modelCategoryLabel, modelTaxonomyView } from './nextmux-model-taxonomy-locale';
 import { ModelTaxonomyTags } from './nextmux-model-taxonomy-tags';
 import { matchCatalogModel, type CatalogModel } from './nextmux-own-model-match';
-import { groupModelsByName } from '../common/nextmux-model-name';
+import { groupModelsByName, sameModelId } from '../common/nextmux-model-name';
+export { isDiscoveredInvocationAllowed } from '../common/nextmux-official-invocation';
 import { contextWindowTokenLabel } from '../common/nextmux-context-budget';
 import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
 
@@ -22,7 +23,7 @@ const isEmbeddingOnly = (model: Connection['discoveredModels'][number]): boolean
 /** Native declarations describe capability, while live probes still authorize coding routes. */
 export function officialDiscoveryCapabilityEvidence(connection: OfficialModelConnection, model: string,
     evidence: readonly ModelCapabilityEvidence[]): readonly ModelCapabilityEvidence[] {
-    const entry = connection.discoveredModels.find(candidate => candidate.id === model);
+    const entry = connection.discoveredModels.find(candidate => sameModelId(candidate.id, model));
     if (!entry || (entry.toolsSupported === undefined && !entry.capabilities && !entry.capabilityDeclarations)) return evidence;
     const observedAt = connection.lastSuccessfulModelDiscoveryAt || connection.lastModelDiscoveryAt || connection.updatedAt;
     const metadata: ModelCapabilityEvidence[] = [];
@@ -56,9 +57,20 @@ export function invokableOfficialDiscovery(connection: Connection): OfficialMode
     return isCatalogOnlyOfficialProvider(connection.providerId) ? [] : connection.discoveredModels.filter(model => isInvokableDiscoveredModel(model) && !isEmbeddingOnly(model));
 }
 
+/** One entry per model whatever its letter case (sameModelId); the first spelling, the configured model's, stays. */
+function uniqueModelIds(ids: readonly string[]): string[] {
+    const seen = new Set<string>();
+    return ids.filter(id => {
+        const key = id.toLowerCase();
+        if (!id || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
 export function officialInvokableModelIds(connection: Connection): readonly string[] {
-    const configured = connection.discoveredModels.find(model => model.id === connection.model);
-    return [...new Set([configured && isEmbeddingOnly(configured) ? '' : connection.model, ...invokableOfficialDiscovery(connection).map(model => model.id)].filter(Boolean))];
+    const configured = connection.discoveredModels.find(model => sameModelId(model.id, connection.model));
+    return uniqueModelIds([configured && isEmbeddingOnly(configured) ? '' : connection.model, ...invokableOfficialDiscovery(connection).map(model => model.id)]);
 }
 
 /**
@@ -69,9 +81,9 @@ export function officialInvokableModelIds(connection: Connection): readonly stri
  * a catalog entry alone cannot become an executable deployment/profile.
  */
 export function officialDiscoveredModelIds(connection: Connection): readonly string[] {
-    const configured = connection.discoveredModels.find(model => model.id === connection.model);
-    return [...new Set([configured && isEmbeddingOnly(configured) ? '' : connection.model,
-        ...connection.discoveredModels.filter(model => !isEmbeddingOnly(model)).map(model => model.id)].filter(Boolean))];
+    const configured = connection.discoveredModels.find(model => sameModelId(model.id, connection.model));
+    return uniqueModelIds([configured && isEmbeddingOnly(configured) ? '' : connection.model,
+        ...connection.discoveredModels.filter(model => !isEmbeddingOnly(model)).map(model => model.id)]);
 }
 
 const ollamaRunningText: Record<NextMuxDesktopLocale, string> = {
@@ -117,18 +129,18 @@ export function OfficialCatalogDetails({ locale, connection }: { readonly locale
 }
 
 const ownListText = {
-    en: { button: 'Model list', note: 'What this API reported comes first; anything it left out is matched against the public model directory on this computer. Nothing is uploaded.', search: 'Search models', empty: 'No models read from this API yet. Click Refresh models above or Test speed to connect and load the list.', loading: 'Reading the model list from this API…', none: 'No match', moderation: "Moderation", other: 'Other', context: '{n} context', price: 'In {input} · Out {output} per 1M tokens', priceApi: 'API price', priceReference: 'Official reference price' },
-    'zh-CN': { button: '模型列表', note: '先按这个 API 自己报告的信息分类；没报告的再对照公开模型目录，在本机匹配，不上传。', search: '搜索模型', empty: '还没有从这个 API 读到模型，可点右上角“刷新模型”或返回点击“测速”测试并获取列表。', loading: '正在从这个 API 读取模型列表…', none: '没有匹配的模型', moderation: "内容审核", other: '其他', context: '{n} 上下文', price: '输入 {input} · 输出 {output} / 百万 token', priceApi: 'API 报价', priceReference: '官方参考价' },
-    'zh-TW': { button: '模型清單', note: '先依這個 API 自己回報的資訊分類；沒回報的再對照公開模型目錄，在本機比對，不上傳。', search: '搜尋模型', empty: '尚未從這個 API 讀到模型，可點右上角「重新整理模型」或返回點擊「測速」測試並取得清單。', loading: '正在從這個 API 讀取模型清單…', none: '沒有符合的模型', moderation: "內容審核", other: '其他', context: '{n} 上下文', price: '輸入 {input} · 輸出 {output} / 百萬 token', priceApi: 'API 報價', priceReference: '官方參考價' },
-    ja: { button: 'モデル一覧', note: 'この API が報告した情報を優先し、足りない分は公開モデル一覧とこのコンピューター上で照合します。何も送信しません。', search: 'モデルを検索', empty: 'この API からまだモデルを読み取っていません。右上の「モデルを更新」または「速度テスト」を押して接続し、一覧を取得してください。', loading: 'この API からモデル一覧を読み込んでいます…', none: '一致するモデルはありません', moderation: "コンテンツ審査", other: 'その他', context: 'コンテキスト {n}', price: '入力 {input} · 出力 {output} / 100 万トークン', priceApi: 'API 価格', priceReference: '公式参考価格' },
-    ko: { button: '모델 목록', note: '이 API가 알려 준 정보를 먼저 쓰고, 빠진 정보는 이 컴퓨터에서 공개 모델 목록과 대조합니다. 아무것도 올리지 않습니다.', search: '모델 검색', empty: '아직 이 API에서 모델을 읽지 않았습니다. 오른쪽 위의 ‘모델 새로고침’이나 ‘속도 테스트’를 눌러 연결하고 목록을 가져오세요.', loading: '이 API에서 모델 목록을 읽는 중…', none: '일치하는 모델 없음', moderation: "콘텐츠 검토", other: '기타', context: '컨텍스트 {n}', price: '입력 {input} · 출력 {output} / 100만 토큰', priceApi: 'API 가격', priceReference: '공식 참고 가격' },
-    es: { button: 'Lista de modelos', note: 'Primero lo que informa esta API; lo que falte se compara en este equipo con el directorio público de modelos. No se sube nada.', search: 'Buscar modelos', empty: 'Aún no se leyeron modelos de esta API. Pulsa Actualizar modelos arriba o Probar velocidad para conectar y cargar la lista.', loading: 'Leyendo la lista de modelos de esta API…', none: 'Sin coincidencias', moderation: "Moderación", other: 'Otros', context: 'Contexto {n}', price: 'Entrada {input} · Salida {output} por 1 M de tokens', priceApi: 'Precio de la API', priceReference: 'Precio oficial de referencia' },
-    fr: { button: 'Liste des modèles', note: 'Ce que cette API indique passe en premier ; le reste est comparé sur cet ordinateur à l’annuaire public des modèles. Rien n’est envoyé.', search: 'Rechercher un modèle', empty: 'Aucun modèle lu pour cette API. Cliquez sur Actualiser les modèles ci-dessus ou Tester la vitesse pour vous connecter et charger la liste.', loading: 'Lecture de la liste des modèles de cette API…', none: 'Aucun résultat', moderation: "Modération", other: 'Autre', context: 'Contexte {n}', price: 'Entrée {input} · Sortie {output} par million de jetons', priceApi: 'Prix de l’API', priceReference: 'Prix officiel de référence' },
-    de: { button: 'Modellliste', note: 'Zuerst zählt, was diese API meldet; Fehlendes wird auf diesem Computer mit dem öffentlichen Modellverzeichnis abgeglichen. Nichts wird hochgeladen.', search: 'Modelle suchen', empty: 'Noch keine Modelle von dieser API gelesen. Klicken Sie oben auf Modelle aktualisieren oder Geschwindigkeit testen, um eine Verbindung herzustellen und die Liste zu laden.', loading: 'Modellliste dieser API wird gelesen …', none: 'Keine Treffer', moderation: "Moderation", other: 'Sonstiges', context: 'Kontext {n}', price: 'Eingabe {input} · Ausgabe {output} pro 1 Mio. Tokens', priceApi: 'API-Preis', priceReference: 'Offizieller Referenzpreis' },
-    'pt-BR': { button: 'Lista de modelos', note: 'Primeiro vale o que esta API informou; o que faltar é comparado neste computador com o diretório público de modelos. Nada é enviado.', search: 'Pesquisar modelos', empty: 'Nenhum modelo lido desta API ainda. Clique em Atualizar modelos acima ou Testar velocidade para conectar e carregar a lista.', loading: 'Lendo a lista de modelos desta API…', none: 'Nenhum resultado', moderation: "Moderação", other: 'Outros', context: 'Contexto {n}', price: 'Entrada {input} · Saída {output} por 1 mi de tokens', priceApi: 'Preço da API', priceReference: 'Preço oficial de referência' },
-    ru: { button: 'Список моделей', note: 'Сначала используется то, что сообщил этот API; недостающее сверяется на этом компьютере с открытым каталогом моделей. Ничего не отправляется.', search: 'Поиск моделей', empty: 'Модели этого API ещё не прочитаны. Нажмите «Обновить модели» выше или «Тест скорости», чтобы подключиться и загрузить список.', loading: 'Читаем список моделей этого API…', none: 'Нет совпадений', moderation: "Модерация", other: 'Другое', context: 'Контекст {n}', price: 'Ввод {input} · Вывод {output} за 1 млн токенов', priceApi: 'Цена API', priceReference: 'Официальная справочная цена' },
-    ar: { button: 'قائمة النماذج', note: 'ما أبلغت عنه هذه الواجهة أولًا؛ وما لم تذكره يُطابَق على هذا الجهاز مع دليل النماذج العام. لا يُرفع شيء.', search: 'ابحث في النماذج', empty: 'لم تُقرأ نماذج من هذه الواجهة بعد. انقر على «تحديث النماذج» في الأعلى أو «اختبار السرعة» للاتصال وجلب القائمة.', loading: 'جارٍ قراءة قائمة النماذج من هذه الواجهة…', none: 'لا نتائج', moderation: "الإشراف على المحتوى", other: 'أخرى', context: 'سياق {n}', price: 'الإدخال {input} · الإخراج {output} لكل مليون رمز', priceApi: 'سعر الواجهة', priceReference: 'السعر الرسمي المرجعي' },
-    hi: { button: 'मॉडल सूची', note: 'पहले वह जो यह API बताता है; जो छूटा है उसे इसी कंप्यूटर पर सार्वजनिक मॉडल सूची से मिलाया जाता है। कुछ भी अपलोड नहीं होता।', search: 'मॉडल खोजें', empty: 'इस API से अभी कोई मॉडल नहीं पढ़ा गया। कनेक्ट करके सूची लोड करने के लिए ऊपर “मॉडल रीफ़्रेश करें” या “स्पीड टेस्ट” चुनें।', loading: 'इस API से मॉडल सूची पढ़ी जा रही है…', none: 'कोई मेल नहीं', moderation: "मॉडरेशन", other: 'अन्य', context: '{n} संदर्भ', price: 'इनपुट {input} · आउटपुट {output} प्रति 10 लाख टोकन', priceApi: 'API मूल्य', priceReference: 'आधिकारिक संदर्भ मूल्य' }
+    en: { button: 'Model list', note: 'What this API reported comes first; anything it left out is matched against the public model directory on this computer. Nothing is uploaded.', search: 'Search models', empty: 'No models read from this API yet. Click Refresh models above to load its list.', loading: 'Reading the model list from this API…', none: 'No match', moderation: "Moderation", other: 'Other', context: '{n} context', price: 'In {input} · Out {output} per 1M tokens', priceInputOnly: 'In {input} per 1M tokens', priceImage: '{price} / image', priceSecond: '{price} / s', priceCharacters: '{price} / 1M chars', priceRequest: '{price} / request', priceApi: 'API price', priceReference: 'Official reference price' },
+    'zh-CN': { button: '模型列表', note: '先按这个 API 自己报告的信息分类；没报告的再对照公开模型目录，在本机匹配，不上传。', search: '搜索模型', empty: '还没有从这个 API 读到模型，可点右上角“刷新模型”获取列表。', loading: '正在从这个 API 读取模型列表…', none: '没有匹配的模型', moderation: "内容审核", other: '其他', context: '{n} 上下文', price: '输入 {input} · 输出 {output} / 百万 token', priceInputOnly: '输入 {input} / 百万 token', priceImage: '{price} / 张', priceSecond: '{price} / 秒', priceCharacters: '{price} / 百万字符', priceRequest: '{price} / 次', priceApi: 'API 报价', priceReference: '官方参考价' },
+    'zh-TW': { button: '模型清單', note: '先依這個 API 自己回報的資訊分類；沒回報的再對照公開模型目錄，在本機比對，不上傳。', search: '搜尋模型', empty: '尚未從這個 API 讀到模型，可點右上角「重新整理模型」取得清單。', loading: '正在從這個 API 讀取模型清單…', none: '沒有符合的模型', moderation: "內容審核", other: '其他', context: '{n} 上下文', price: '輸入 {input} · 輸出 {output} / 百萬 token', priceInputOnly: '輸入 {input} / 百萬 token', priceImage: '{price} / 張', priceSecond: '{price} / 秒', priceCharacters: '{price} / 百萬字元', priceRequest: '{price} / 次', priceApi: 'API 報價', priceReference: '官方參考價' },
+    ja: { button: 'モデル一覧', note: 'この API が報告した情報を優先し、足りない分は公開モデル一覧とこのコンピューター上で照合します。何も送信しません。', search: 'モデルを検索', empty: 'この API からまだモデルを読み取っていません。右上の「モデルを更新」を押して一覧を取得してください。', loading: 'この API からモデル一覧を読み込んでいます…', none: '一致するモデルはありません', moderation: "コンテンツ審査", other: 'その他', context: 'コンテキスト {n}', price: '入力 {input} · 出力 {output} / 100 万トークン', priceInputOnly: '入力 {input} / 100 万トークン', priceImage: '{price} / 枚', priceSecond: '{price} / 秒', priceCharacters: '{price} / 100 万文字', priceRequest: '{price} / 回', priceApi: 'API 価格', priceReference: '公式参考価格' },
+    ko: { button: '모델 목록', note: '이 API가 알려 준 정보를 먼저 쓰고, 빠진 정보는 이 컴퓨터에서 공개 모델 목록과 대조합니다. 아무것도 올리지 않습니다.', search: '모델 검색', empty: '아직 이 API에서 모델을 읽지 않았습니다. 오른쪽 위의 ‘모델 새로고침’을 눌러 목록을 가져오세요.', loading: '이 API에서 모델 목록을 읽는 중…', none: '일치하는 모델 없음', moderation: "콘텐츠 검토", other: '기타', context: '컨텍스트 {n}', price: '입력 {input} · 출력 {output} / 100만 토큰', priceInputOnly: '입력 {input} / 100만 토큰', priceImage: '{price} / 장', priceSecond: '{price} / 초', priceCharacters: '{price} / 100만 자', priceRequest: '{price} / 회', priceApi: 'API 가격', priceReference: '공식 참고 가격' },
+    es: { button: 'Lista de modelos', note: 'Primero lo que informa esta API; lo que falte se compara en este equipo con el directorio público de modelos. No se sube nada.', search: 'Buscar modelos', empty: 'Aún no se leyeron modelos de esta API. Pulsa Actualizar modelos arriba para cargar la lista.', loading: 'Leyendo la lista de modelos de esta API…', none: 'Sin coincidencias', moderation: "Moderación", other: 'Otros', context: 'Contexto {n}', price: 'Entrada {input} · Salida {output} por 1 M de tokens', priceInputOnly: 'Entrada {input} por 1 M de tokens', priceImage: '{price} / imagen', priceSecond: '{price} / s', priceCharacters: '{price} / 1 M de caracteres', priceRequest: '{price} / solicitud', priceApi: 'Precio de la API', priceReference: 'Precio oficial de referencia' },
+    fr: { button: 'Liste des modèles', note: 'Ce que cette API indique passe en premier ; le reste est comparé sur cet ordinateur à l’annuaire public des modèles. Rien n’est envoyé.', search: 'Rechercher un modèle', empty: 'Aucun modèle lu pour cette API. Cliquez sur Actualiser les modèles ci-dessus pour charger la liste.', loading: 'Lecture de la liste des modèles de cette API…', none: 'Aucun résultat', moderation: "Modération", other: 'Autre', context: 'Contexte {n}', price: 'Entrée {input} · Sortie {output} par million de jetons', priceInputOnly: 'Entrée {input} par million de jetons', priceImage: '{price} / image', priceSecond: '{price} / s', priceCharacters: '{price} / million de car.', priceRequest: '{price} / requête', priceApi: 'Prix de l’API', priceReference: 'Prix officiel de référence' },
+    de: { button: 'Modellliste', note: 'Zuerst zählt, was diese API meldet; Fehlendes wird auf diesem Computer mit dem öffentlichen Modellverzeichnis abgeglichen. Nichts wird hochgeladen.', search: 'Modelle suchen', empty: 'Noch keine Modelle von dieser API gelesen. Klicken Sie oben auf Modelle aktualisieren, um die Liste zu laden.', loading: 'Modellliste dieser API wird gelesen …', none: 'Keine Treffer', moderation: "Moderation", other: 'Sonstiges', context: 'Kontext {n}', price: 'Eingabe {input} · Ausgabe {output} pro 1 Mio. Tokens', priceInputOnly: 'Eingabe {input} pro 1 Mio. Tokens', priceImage: '{price} / Bild', priceSecond: '{price} / s', priceCharacters: '{price} / 1 Mio. Zeichen', priceRequest: '{price} / Anfrage', priceApi: 'API-Preis', priceReference: 'Offizieller Referenzpreis' },
+    'pt-BR': { button: 'Lista de modelos', note: 'Primeiro vale o que esta API informou; o que faltar é comparado neste computador com o diretório público de modelos. Nada é enviado.', search: 'Pesquisar modelos', empty: 'Nenhum modelo lido desta API ainda. Clique em Atualizar modelos acima para carregar a lista.', loading: 'Lendo a lista de modelos desta API…', none: 'Nenhum resultado', moderation: "Moderação", other: 'Outros', context: 'Contexto {n}', price: 'Entrada {input} · Saída {output} por 1 mi de tokens', priceInputOnly: 'Entrada {input} por 1 mi de tokens', priceImage: '{price} / imagem', priceSecond: '{price} / s', priceCharacters: '{price} / 1 mi de car.', priceRequest: '{price} / requisição', priceApi: 'Preço da API', priceReference: 'Preço oficial de referência' },
+    ru: { button: 'Список моделей', note: 'Сначала используется то, что сообщил этот API; недостающее сверяется на этом компьютере с открытым каталогом моделей. Ничего не отправляется.', search: 'Поиск моделей', empty: 'Модели этого API ещё не прочитаны. Нажмите «Обновить модели» выше, чтобы загрузить список.', loading: 'Читаем список моделей этого API…', none: 'Нет совпадений', moderation: "Модерация", other: 'Другое', context: 'Контекст {n}', price: 'Ввод {input} · Вывод {output} за 1 млн токенов', priceInputOnly: 'Ввод {input} за 1 млн токенов', priceImage: '{price} / изобр.', priceSecond: '{price} / с', priceCharacters: '{price} / 1 млн симв.', priceRequest: '{price} / запрос', priceApi: 'Цена API', priceReference: 'Официальная справочная цена' },
+    ar: { button: 'قائمة النماذج', note: 'ما أبلغت عنه هذه الواجهة أولًا؛ وما لم تذكره يُطابَق على هذا الجهاز مع دليل النماذج العام. لا يُرفع شيء.', search: 'ابحث في النماذج', empty: 'لم تُقرأ نماذج من هذه الواجهة بعد. انقر على «تحديث النماذج» في الأعلى لجلب القائمة.', loading: 'جارٍ قراءة قائمة النماذج من هذه الواجهة…', none: 'لا نتائج', moderation: "الإشراف على المحتوى", other: 'أخرى', context: 'سياق {n}', price: 'الإدخال {input} · الإخراج {output} لكل مليون رمز', priceInputOnly: 'الإدخال {input} لكل مليون رمز', priceImage: '{price} / صورة', priceSecond: '{price} / ث', priceCharacters: '{price} / مليون حرف', priceRequest: '{price} / طلب', priceApi: 'سعر الواجهة', priceReference: 'السعر الرسمي المرجعي' },
+    hi: { button: 'मॉडल सूची', note: 'पहले वह जो यह API बताता है; जो छूटा है उसे इसी कंप्यूटर पर सार्वजनिक मॉडल सूची से मिलाया जाता है। कुछ भी अपलोड नहीं होता।', search: 'मॉडल खोजें', empty: 'इस API से अभी कोई मॉडल नहीं पढ़ा गया। सूची लोड करने के लिए ऊपर “मॉडल रीफ़्रेश करें” चुनें।', loading: 'इस API से मॉडल सूची पढ़ी जा रही है…', none: 'कोई मेल नहीं', moderation: "मॉडरेशन", other: 'अन्य', context: '{n} संदर्भ', price: 'इनपुट {input} · आउटपुट {output} प्रति 10 लाख टोकन', priceInputOnly: 'इनपुट {input} प्रति 10 लाख टोकन', priceImage: '{price} / छवि', priceSecond: '{price} / सेकंड', priceCharacters: '{price} / 10 लाख वर्ण', priceRequest: '{price} / अनुरोध', priceApi: 'API मूल्य', priceReference: 'आधिकारिक संदर्भ मूल्य' }
 } as const satisfies Record<NextMuxDesktopLocale, Record<string, string>>;
 
 function uncheckedOwnModelListText(locale: NextMuxDesktopLocale, key: keyof typeof ownListText.en): string {
@@ -136,27 +148,58 @@ function uncheckedOwnModelListText(locale: NextMuxDesktopLocale, key: keyof type
 }
 
 /** Every model this own API listed, grouped by what it is (classified locally). */
-const priceText = (value: number): string => `$${value >= 1 ? value.toFixed(2).replace(/\.?0+$/, '') : Number(value.toPrecision(3)).toString()}`;
+const priceText = (value: number): string => {
+    if (!Number.isFinite(value) || value <= 0) return '$0';
+    if (value >= 1) return `$${value.toFixed(2).replace(/\.?0+$/, '')}`;
+    const digits = Math.min(12, Math.max(0, 3 - Math.floor(Math.log10(value)) - 1));
+    return `$${Number(value.toPrecision(3)).toFixed(digits).replace(/\.?0+$/, '')}`;
+};
 const tokenText = (value: number): string => contextWindowTokenLabel(value);
+const formatOwnListText = (locale: NextMuxDesktopLocale, key: keyof typeof ownListText.en, values: Record<string, string> = {}): string =>
+    ownModelListText(locale, key).replace(/\{(\w+)\}/g, (match, name: string) => values[name] ?? match);
+
+/** Format a public directory reference price across token, image, second, character and per-request units. */
+export function formatOwnModelReferencePrice(locale: NextMuxDesktopLocale, reference: CatalogModel['referencePrice'] | undefined): string | undefined {
+    if (!reference) return undefined;
+    const valid = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+    if (reference.unit === 'per_image') return valid(reference.image) ? formatOwnListText(locale, 'priceImage', { price: priceText(reference.image) }) : undefined;
+    if (reference.unit === 'per_second') {
+        const rate = valid(reference.videoSecond) ? reference.videoSecond : valid(reference.audioSecond) ? reference.audioSecond : undefined;
+        return rate !== undefined ? formatOwnListText(locale, 'priceSecond', { price: priceText(rate) }) : undefined;
+    }
+    if (reference.unit === 'per_million_characters') return valid(reference.audioCharacter) ? formatOwnListText(locale, 'priceCharacters', { price: priceText(reference.audioCharacter) }) : undefined;
+    if (reference.unit === 'per_request') return valid(reference.request) ? formatOwnListText(locale, 'priceRequest', { price: priceText(reference.request) }) : undefined;
+    if (valid(reference.input) && valid(reference.output)) return formatOwnListText(locale, 'price', { input: priceText(reference.input), output: priceText(reference.output) });
+    if (valid(reference.input)) return formatOwnListText(locale, 'priceInputOnly', { input: priceText(reference.input) });
+    return undefined;
+}
 
 /** Context, price and capabilities: what this API reported first, the public directory's entry only for what it left out. */
 const OwnModelFactsLine = React.memo(function OwnModelFactsLine({ locale, model, catalog }: { readonly locale: NextMuxDesktopLocale; readonly model: OfficialModelConnection['discoveredModels'][number]; readonly catalog?: CatalogModel }): React.ReactElement | null {
-    const t = (key: keyof typeof ownListText.en, values: Record<string, string> = {}): string => ownModelListText(locale, key).replace(/\{(\w+)\}/g, (match, name: string) => values[name] ?? match);
     const context = model.contextTokens || catalog?.contextTokens || undefined;
-    const apiPrice = model.inputPricePerMillion !== undefined && model.outputPricePerMillion !== undefined;
-    const reference = !apiPrice ? catalog?.referencePrice : undefined;
-    const input = apiPrice ? model.inputPricePerMillion! : reference?.input, output = apiPrice ? model.outputPricePerMillion! : reference?.output;
+    // An API's per-token prices stand for a token-billed model only: for one the directory bills per image, second,
+    // character or request (NextMux /v1/models lists speech and transcription in tokens), that unit's price is shown.
+    const referenceUnit = catalog?.referencePrice?.unit;
+    const apiInput = model.inputPricePerMillion !== undefined && (!referenceUnit || referenceUnit === 'per_million_tokens');
+    const apiFull = apiInput && model.outputPricePerMillion !== undefined;
+    // A complete API price, else the directory's reference, else the API's input price alone (embeddings, rerankers).
+    const referenceLabel = !apiFull ? formatOwnModelReferencePrice(locale, catalog?.referencePrice) : undefined;
+    const apiPrice = apiFull || (apiInput && !referenceLabel);
+    const reference = referenceLabel ? catalog?.referencePrice : undefined;
+    const priceLabel = apiFull
+        ? formatOwnListText(locale, 'price', { input: priceText(model.inputPricePerMillion!), output: priceText(model.outputPricePerMillion!) })
+        : referenceLabel ?? (apiPrice ? formatOwnListText(locale, 'priceInputOnly', { input: priceText(model.inputPricePerMillion!) }) : undefined);
     // The shared badges (model-taxonomy) from what this API reported, the directory entry filling only the gaps.
     const capabilities = new Set(catalog?.capabilities || []);
     if (model.toolsSupported === false) { capabilities.delete('tools'); capabilities.delete('coding'); } else if (model.toolsSupported) capabilities.add('tools');
     if (model.reasoningEfforts?.length) capabilities.add('reasoning');
     const facts = { id: model.id, label: model.label, kind: ownModelKind(model, catalog), capabilities: [...capabilities],
         input: model.inputModalities || catalog?.input || [], output: model.outputModalities?.length ? model.outputModalities : catalog?.output || [] };
-    if (!context && (input === undefined || output === undefined) && !modelTaxonomyView(locale, facts).badges.length) return null;
+    if (!context && !priceLabel && !modelTaxonomyView(locale, facts).badges.length) return null;
     return <small className='nmx-own-model-facts' dir='auto'>
-        {context ? <span>{t('context', { n: tokenText(context) })}</span> : null}
-        {input !== undefined && output !== undefined ? <span title={apiPrice ? t('priceApi') : `${t('priceReference')} · ${reference!.source}`}>
-            {t('price', { input: priceText(input), output: priceText(output) })}<em>{apiPrice ? t('priceApi') : t('priceReference')}</em></span> : null}
+        {context ? <span>{formatOwnListText(locale, 'context', { n: tokenText(context) })}</span> : null}
+        {priceLabel ? <span title={apiPrice ? formatOwnListText(locale, 'priceApi') : `${formatOwnListText(locale, 'priceReference')} · ${reference!.source}`}>
+            {priceLabel}<em>{apiPrice ? formatOwnListText(locale, 'priceApi') : formatOwnListText(locale, 'priceReference')}</em></span> : null}
         <ModelTaxonomyTags locale={locale} model={facts} />
     </small>;
 });

@@ -1,15 +1,16 @@
 import * as React from '@theia/core/shared/react';
 import type { NextMuxDesktopLocale } from './nextmux-locale';
 import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
+import type { OfficialModelConnection } from '../common/nextmux-platform-protocol';
 
-/** 我的 API: every connection the user added on this computer, managed in one dialog (add, edit, test, delete). */
+/** 我的 API: every connection the user added on this computer, managed in one dialog (add, edit, delete, its models). */
 const en = {
     title: 'My APIs', lead: 'API connections saved on this computer. Keys stay in {store}; prompts do not pass through NextMux.',
     count: '{count} connections', add: 'Add API', local: 'Ollama (this computer)', official: 'Official providers',
     empty: 'No APIs yet', emptyBody: 'Click Add API to connect any official provider, OpenAI-compatible API or relay, a generation API (video, image, music), or Ollama.',
     test: 'Test speed', testing: 'Testing…', edit: 'Edit', remove: 'Delete', removing: 'Deleting…', confirmRemove: 'Delete this connection and its saved API key?',
     confirm: 'Delete', cancel: 'Cancel', close: 'Close',
-    verified: 'Tool calls verified', reachable: 'Reachable · tool calls not verified', unverified: 'Not tested yet', latency: '{ms} ms',
+    verified: 'Tool calls verified', reachable: 'Reachable · tool calls not verified', unverified: 'Not tested yet', latency: '{ms} ms', connected: "Connected", saved: "Saved", reading: "Reading models…", listFailed: "Couldn't read the model list",
     storeMac: 'encrypted storage on this Mac', storeWindows: 'Windows Credential Manager', storeOther: 'the system keyring',
     storeMacShort: 'Encrypted on this Mac', storeWindowsShort: 'Windows Credential Manager', storeOtherShort: 'System keyring',
     compatibleTitle: 'Compatible API', ownApi: 'My API', mediaTitle: 'Generation API', ready: 'Connection verified', connectionFailed: "Unable to connect to the model service.", chatProtocol: "Provider / chat protocol", models: 'Models', refresh: 'Refresh models', refreshing: 'Refreshing…',
@@ -25,7 +26,7 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, s
         empty: '还没有添加 API', emptyBody: '点击右上角“添加 API”，可自由选择 OpenAI、Anthropic、Gemini、DeepSeek 等官方提供商、任意 OpenAI 兼容接口或中转商、生成类接口（视频、图片、音乐）或 Ollama。',
         test: '测速', testing: '测速中…', edit: '编辑', remove: '删除', removing: '删除中…', confirmRemove: '删除这个连接以及保存的 API Key？',
         confirm: '删除', cancel: '取消', close: '关闭',
-        verified: '工具调用已验证', reachable: '可连接 · 工具调用未通过', unverified: '尚未检测', latency: '{ms} ms',
+        verified: '工具调用已验证', reachable: '可连接 · 工具调用未通过', unverified: '尚未检测', latency: '{ms} ms', connected: "已连接", saved: "已保存", reading: "正在读取模型…", listFailed: "未能读取模型列表",
         storeMac: '本机加密存储', storeWindows: 'Windows 凭据管理器', storeOther: '系统密钥环',
         storeMacShort: '本机加密存储', storeWindowsShort: 'Windows 凭据管理器', storeOtherShort: '系统密钥环',
         compatibleTitle: '兼容 API', ownApi: '自有 API', mediaTitle: '生成接口', ready: '连接已验证', connectionFailed: "无法连接模型服务。", chatProtocol: "提供商 / 对话接口协议", models: '模型列表', refresh: '刷新模型', refreshing: '刷新中…',
@@ -38,7 +39,7 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, s
         empty: '還沒有新增 API', emptyBody: '點擊右上角「新增 API」，可自由選擇官方供應商、OpenAI 相容介面或中轉商、生成類介面（影片、圖片、音樂）或 Ollama。',
         test: '測速', testing: '測速中…', edit: '編輯', remove: '刪除', removing: '刪除中…', confirmRemove: '刪除這個連線以及儲存的 API Key？',
         confirm: '刪除', cancel: '取消', close: '關閉',
-        verified: '工具呼叫已驗證', reachable: '可連線 · 工具呼叫未通過', unverified: '尚未檢測', latency: '{ms} ms',
+        verified: '工具呼叫已驗證', reachable: '可連線 · 工具呼叫未通過', unverified: '尚未檢測', latency: '{ms} ms', connected: "已連線", saved: "已儲存", reading: "正在讀取模型…", listFailed: "未能讀取模型清單",
         storeMac: '本機加密儲存', storeWindows: 'Windows 認證管理員', storeOther: '系統金鑰環',
         storeMacShort: '本機加密儲存', storeWindowsShort: 'Windows 認證管理員', storeOtherShort: '系統金鑰環',
         compatibleTitle: '相容 API', ownApi: '自有 API', mediaTitle: '生成介面', ready: '連線已驗證', connectionFailed: "無法連線至模型服務。", chatProtocol: "供應商 / 對話介面協定", models: '模型清單', refresh: '重新整理模型', refreshing: '重新整理中…',
@@ -51,7 +52,7 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, s
         empty: 'まだ API がありません', emptyBody: 'OpenAI 互換 API や中継サービス、生成系 API（動画・画像・音楽）、Ollama を追加できます。公式プロバイダーは「直接接続 API」から接続できます。',
         test: '速度テスト', testing: 'テスト中…', edit: '編集', remove: '削除', removing: '削除中…', confirmRemove: 'この接続と保存済みの API キーを削除しますか？',
         confirm: '削除', cancel: 'キャンセル', close: '閉じる',
-        verified: 'ツール呼び出し確認済み', reachable: '接続可能 · ツール呼び出し未確認', unverified: '未テスト', latency: '{ms} ms',
+        verified: 'ツール呼び出し確認済み', reachable: '接続可能 · ツール呼び出し未確認', unverified: '未テスト', latency: '{ms} ms', connected: "接続済み", saved: "保存済み", reading: "モデルを読み込み中…", listFailed: "モデル一覧を読み込めませんでした",
         storeMac: 'この Mac の暗号化ストレージ', storeWindows: 'Windows 資格情報マネージャー', storeOther: 'システムのキーリング',
         storeMacShort: 'この Mac に暗号化して保存', storeWindowsShort: 'Windows 資格情報マネージャー', storeOtherShort: 'システムのキーリング',
         compatibleTitle: '互換 API', ownApi: 'マイ API', mediaTitle: '生成 API', ready: '接続確認済み', connectionFailed: "モデルサービスに接続できません。", chatProtocol: "プロバイダー / チャットプロトコル", models: 'モデル一覧', refresh: 'モデルを更新', refreshing: '更新中…',
@@ -64,7 +65,7 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, s
         empty: '아직 API가 없습니다', emptyBody: 'OpenAI 호환 API나 중계 서비스, 생성 API(동영상·이미지·음악) 또는 Ollama를 추가할 수 있습니다. 공식 제공업체는 “직접 연결 API”에서 연결하세요.',
         test: '속도 테스트', testing: '테스트 중…', edit: '편집', remove: '삭제', removing: '삭제 중…', confirmRemove: '이 연결과 저장된 API 키를 삭제할까요?',
         confirm: '삭제', cancel: '취소', close: '닫기',
-        verified: '도구 호출 확인됨', reachable: '연결 가능 · 도구 호출 미확인', unverified: '아직 테스트하지 않음', latency: '{ms} ms',
+        verified: '도구 호출 확인됨', reachable: '연결 가능 · 도구 호출 미확인', unverified: '아직 테스트하지 않음', latency: '{ms} ms', connected: "연결됨", saved: "저장됨", reading: "모델을 읽는 중…", listFailed: "모델 목록을 읽지 못했습니다",
         storeMac: '이 Mac의 암호화된 저장소', storeWindows: 'Windows 자격 증명 관리자', storeOther: '시스템 키링',
         storeMacShort: '이 Mac에 암호화해 저장', storeWindowsShort: 'Windows 자격 증명 관리자', storeOtherShort: '시스템 키링',
         compatibleTitle: '호환 API', ownApi: '내 API', mediaTitle: '생성 API', ready: '연결 확인됨', connectionFailed: "모델 서비스에 연결할 수 없습니다.", chatProtocol: "제공업체 / 채팅 프로토콜", models: '모델 목록', refresh: '모델 새로 고침', refreshing: '새로 고치는 중…',
@@ -77,7 +78,7 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, s
         empty: 'Aún no hay API', emptyBody: 'Añade cualquier API compatible con OpenAI o un intermediario, una API de generación (vídeo, imagen, música) u Ollama. Los proveedores oficiales se conectan desde API directa.',
         test: 'Probar velocidad', testing: 'Probando…', edit: 'Editar', remove: 'Eliminar', removing: 'Eliminando…', confirmRemove: '¿Eliminar esta conexión y su clave de API guardada?',
         confirm: 'Eliminar', cancel: 'Cancelar', close: 'Cerrar',
-        verified: 'Llamadas a herramientas verificadas', reachable: 'Accesible · herramientas sin verificar', unverified: 'Sin probar', latency: '{ms} ms',
+        verified: 'Llamadas a herramientas verificadas', reachable: 'Accesible · herramientas sin verificar', unverified: 'Sin probar', latency: '{ms} ms', connected: "Conectada", saved: "Guardada", reading: "Leyendo modelos…", listFailed: "No se pudo leer la lista de modelos",
         storeMac: 'el almacenamiento cifrado de este Mac', storeWindows: 'el Administrador de credenciales de Windows', storeOther: 'el llavero del sistema',
         storeMacShort: 'Cifrado en este Mac', storeWindowsShort: 'Administrador de credenciales de Windows', storeOtherShort: 'Llavero del sistema',
         compatibleTitle: 'API compatible', ownApi: 'Mi API', mediaTitle: 'API de generación', ready: 'Conexión verificada', connectionFailed: "No se puede conectar al servicio de modelos.", chatProtocol: "Proveedor / protocolo de chat", models: 'Modelos', refresh: 'Actualizar modelos', refreshing: 'Actualizando…',
@@ -90,7 +91,7 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, s
         empty: 'Aucune API pour l’instant', emptyBody: 'Ajoutez une API compatible OpenAI ou un relais, une API de génération (vidéo, image, musique) ou Ollama. Les fournisseurs officiels se connectent depuis API directe.',
         test: 'Tester la vitesse', testing: 'Test…', edit: 'Modifier', remove: 'Supprimer', removing: 'Suppression…', confirmRemove: 'Supprimer cette connexion et sa clé API enregistrée ?',
         confirm: 'Supprimer', cancel: 'Annuler', close: 'Fermer',
-        verified: 'Appels d’outils vérifiés', reachable: 'Accessible · outils non vérifiés', unverified: 'Pas encore testée', latency: '{ms} ms',
+        verified: 'Appels d’outils vérifiés', reachable: 'Accessible · outils non vérifiés', unverified: 'Pas encore testée', latency: '{ms} ms', connected: "Connectée", saved: "Enregistrée", reading: "Lecture des modèles…", listFailed: "Impossible de lire la liste des modèles",
         storeMac: 'le stockage chiffré de ce Mac', storeWindows: 'le Gestionnaire d’identification Windows', storeOther: 'le trousseau du système',
         storeMacShort: 'Chiffré sur ce Mac', storeWindowsShort: 'Gestionnaire d’identification Windows', storeOtherShort: 'Trousseau du système',
         compatibleTitle: 'API compatible', ownApi: 'Mon API', mediaTitle: 'API de génération', ready: 'Connexion vérifiée', connectionFailed: "Impossible de se connecter au service de modèles.", chatProtocol: "Fournisseur / protocole de discussion", models: 'Modèles', refresh: 'Actualiser les modèles', refreshing: 'Actualisation…',
@@ -103,7 +104,7 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, s
         empty: 'Noch keine APIs', emptyBody: 'Fügen Sie eine OpenAI-kompatible API oder einen Relay-Dienst, eine Generierungs-API (Video, Bild, Musik) oder Ollama hinzu. Offizielle Anbieter verbinden Sie unter „Direkte API“.',
         test: 'Geschwindigkeit testen', testing: 'Wird getestet…', edit: 'Bearbeiten', remove: 'Löschen', removing: 'Wird gelöscht…', confirmRemove: 'Diese Verbindung und ihren gespeicherten API-Schlüssel löschen?',
         confirm: 'Löschen', cancel: 'Abbrechen', close: 'Schließen',
-        verified: 'Tool-Aufrufe bestätigt', reachable: 'Erreichbar · Tool-Aufrufe nicht bestätigt', unverified: 'Noch nicht getestet', latency: '{ms} ms',
+        verified: 'Tool-Aufrufe bestätigt', reachable: 'Erreichbar · Tool-Aufrufe nicht bestätigt', unverified: 'Noch nicht getestet', latency: '{ms} ms', connected: "Verbunden", saved: "Gespeichert", reading: "Modelle werden gelesen …", listFailed: "Modellliste konnte nicht gelesen werden",
         storeMac: 'dem verschlüsselten Speicher dieses Macs', storeWindows: 'der Windows-Anmeldeinformationsverwaltung', storeOther: 'dem Systemschlüsselbund',
         storeMacShort: 'Verschlüsselt auf diesem Mac', storeWindowsShort: 'Windows-Anmeldeinformationsverwaltung', storeOtherShort: 'Systemschlüsselbund',
         compatibleTitle: 'Kompatible API', ownApi: 'Meine API', mediaTitle: 'Generierungs-API', ready: 'Verbindung bestätigt', connectionFailed: "Verbindung zum Modelldienst nicht möglich.", chatProtocol: "Anbieter / Chatprotokoll", models: 'Modelle', refresh: 'Modelle aktualisieren', refreshing: 'Wird aktualisiert…',
@@ -116,7 +117,7 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, s
         empty: 'Nenhuma API ainda', emptyBody: 'Adicione qualquer API compatível com OpenAI ou intermediário, uma API de geração (vídeo, imagem, música) ou Ollama. Provedores oficiais são conectados em API direta.',
         test: 'Testar velocidade', testing: 'Testando…', edit: 'Editar', remove: 'Excluir', removing: 'Excluindo…', confirmRemove: 'Excluir esta conexão e a chave de API salva?',
         confirm: 'Excluir', cancel: 'Cancelar', close: 'Fechar',
-        verified: 'Chamadas de ferramentas verificadas', reachable: 'Acessível · ferramentas não verificadas', unverified: 'Ainda não testada', latency: '{ms} ms',
+        verified: 'Chamadas de ferramentas verificadas', reachable: 'Acessível · ferramentas não verificadas', unverified: 'Ainda não testada', latency: '{ms} ms', connected: "Conectada", saved: "Salva", reading: "Lendo modelos…", listFailed: "Não foi possível ler a lista de modelos",
         storeMac: 'no armazenamento criptografado deste Mac', storeWindows: 'no Gerenciador de Credenciais do Windows', storeOther: 'no chaveiro do sistema',
         storeMacShort: 'Criptografado neste Mac', storeWindowsShort: 'Gerenciador de Credenciais do Windows', storeOtherShort: 'Chaveiro do sistema',
         compatibleTitle: 'API compatível', ownApi: 'Minha API', mediaTitle: 'API de geração', ready: 'Conexão verificada', connectionFailed: "Não foi possível conectar ao serviço de modelos.", chatProtocol: "Provedor / protocolo de chat", models: 'Modelos', refresh: 'Atualizar modelos', refreshing: 'Atualizando…',
@@ -129,7 +130,7 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, s
         empty: 'API пока нет', emptyBody: 'Добавьте любой OpenAI-совместимый API или ретранслятор, API генерации (видео, изображения, музыка) или Ollama. Официальных провайдеров подключайте в разделе «Прямой API».',
         test: 'Проверить скорость', testing: 'Проверка…', edit: 'Изменить', remove: 'Удалить', removing: 'Удаление…', confirmRemove: 'Удалить это подключение и сохранённый ключ API?',
         confirm: 'Удалить', cancel: 'Отмена', close: 'Закрыть',
-        verified: 'Вызовы инструментов подтверждены', reachable: 'Доступно · инструменты не подтверждены', unverified: 'Ещё не проверено', latency: '{ms} мс',
+        verified: 'Вызовы инструментов подтверждены', reachable: 'Доступно · инструменты не подтверждены', unverified: 'Ещё не проверено', latency: '{ms} мс', connected: "Подключено", saved: "Сохранено", reading: "Чтение моделей…", listFailed: "Не удалось прочитать список моделей",
         storeMac: 'зашифрованном хранилище этого Mac', storeWindows: 'диспетчере учётных данных Windows', storeOther: 'системном хранилище ключей',
         storeMacShort: 'Зашифровано на этом Mac', storeWindowsShort: 'Диспетчер учётных данных Windows', storeOtherShort: 'Системное хранилище ключей',
         compatibleTitle: 'Совместимый API', ownApi: 'Мой API', mediaTitle: 'API генерации', ready: 'Подключение проверено', connectionFailed: "Не удалось подключиться к сервису моделей.", chatProtocol: "Провайдер / протокол чата", models: 'Модели', refresh: 'Обновить модели', refreshing: 'Обновление…',
@@ -142,7 +143,7 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, s
         empty: 'لا توجد واجهات API بعد', emptyBody: 'أضف أي API متوافقة مع OpenAI أو وسيطًا، أو API للتوليد (فيديو، صور، موسيقى) أو Ollama. يمكن ربط المزوّدين الرسميين من «API المباشرة».',
         test: 'اختبار السرعة', testing: 'جارٍ الاختبار…', edit: 'تعديل', remove: 'حذف', removing: 'جارٍ الحذف…', confirmRemove: 'هل تريد حذف هذا الاتصال ومفتاح API المحفوظ؟',
         confirm: 'حذف', cancel: 'إلغاء', close: 'إغلاق',
-        verified: 'تم التحقق من استدعاء الأدوات', reachable: 'متاح · لم يتم التحقق من الأدوات', unverified: 'لم يُختبر بعد', latency: '{ms} مللي ثانية',
+        verified: 'تم التحقق من استدعاء الأدوات', reachable: 'متاح · لم يتم التحقق من الأدوات', unverified: 'لم يُختبر بعد', latency: '{ms} مللي ثانية', connected: "متصل", saved: "محفوظ", reading: "جارٍ قراءة النماذج…", listFailed: "تعذّرت قراءة قائمة النماذج",
         storeMac: 'التخزين المشفّر على جهاز Mac هذا', storeWindows: 'مدير بيانات الاعتماد في Windows', storeOther: 'حلقة مفاتيح النظام',
         storeMacShort: 'مشفّرة على جهاز Mac هذا', storeWindowsShort: 'مدير بيانات الاعتماد في Windows', storeOtherShort: 'حلقة مفاتيح النظام',
         compatibleTitle: 'API متوافقة', ownApi: 'API الخاصة بي', mediaTitle: 'API للتوليد', ready: 'تم التحقق من الاتصال', connectionFailed: "تعذر الاتصال بخدمة النماذج.", chatProtocol: "المزوّد / بروتوكول المحادثة", models: 'النماذج', refresh: 'تحديث النماذج', refreshing: 'جارٍ التحديث…',
@@ -155,7 +156,7 @@ const translations: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, s
         empty: 'अभी कोई API नहीं', emptyBody: 'कोई भी OpenAI-संगत API या रिले, जनरेशन API (वीडियो, चित्र, संगीत) या Ollama जोड़ें। आधिकारिक प्रदाता “डायरेक्ट API” से जोड़े जाते हैं।',
         test: 'गति जाँचें', testing: 'जाँच हो रही है…', edit: 'संपादित करें', remove: 'हटाएँ', removing: 'हटाया जा रहा है…', confirmRemove: 'यह कनेक्शन और इसकी सहेजी गई API कुंजी हटाएँ?',
         confirm: 'हटाएँ', cancel: 'रद्द करें', close: 'बंद करें',
-        verified: 'टूल कॉल सत्यापित', reachable: 'पहुँच योग्य · टूल कॉल सत्यापित नहीं', unverified: 'अभी जाँचा नहीं गया', latency: '{ms} ms',
+        verified: 'टूल कॉल सत्यापित', reachable: 'पहुँच योग्य · टूल कॉल सत्यापित नहीं', unverified: 'अभी जाँचा नहीं गया', latency: '{ms} ms', connected: "कनेक्टेड", saved: "सहेजा गया", reading: "मॉडल पढ़े जा रहे हैं…", listFailed: "मॉडल सूची नहीं पढ़ी जा सकी",
         storeMac: 'इस Mac के एन्क्रिप्टेड स्टोरेज', storeWindows: 'Windows क्रेडेंशियल मैनेजर', storeOther: 'सिस्टम कीरिंग',
         storeMacShort: 'इस Mac पर एन्क्रिप्टेड', storeWindowsShort: 'Windows क्रेडेंशियल मैनेजर', storeOtherShort: 'सिस्टम कीरिंग',
         compatibleTitle: 'संगत API', ownApi: 'मेरा API', mediaTitle: 'जनरेशन API', ready: 'कनेक्शन सत्यापित', connectionFailed: "मॉडल सेवा से कनेक्ट नहीं हो सका।", chatProtocol: "प्रदाता / चैट प्रोटोकॉल", models: 'मॉडल', refresh: 'मॉडल ताज़ा करें', refreshing: 'ताज़ा हो रहा है…',
@@ -182,19 +183,49 @@ export function credentialStoreName(locale: NextMuxDesktopLocale, platform: Cred
     return myApisText(locale, (short ? `${key}Short` : key) as Key);
 }
 
+/**
+ * What 我的 API says about a saved connection without spending anything (as Cherry Studio, Open WebUI and Cline list
+ * providers: saved, then its free model list): 'connected' once its key read the model list or a call answered,
+ * 'reading' while the list is read, 'failed' when the latest read failed, else 'saved'. No paid test is asked for.
+ */
+export type MyApiStatus = 'connected' | 'saved' | 'reading' | 'failed';
+
+export function myApiConnectionStatus(
+    connection: Pick<OfficialModelConnection, 'status' | 'modelDiscoveryStatus' | 'modelDiscoveryError' | 'modelDiscoveryFailure'>,
+    reading = false
+): MyApiStatus {
+    if (reading) return 'reading';
+    if (connection.modelDiscoveryStatus === 'failed' || connection.modelDiscoveryError || connection.modelDiscoveryFailure) return 'failed';
+    return connection.status === 'verified' || connection.modelDiscoveryStatus === 'verified' ? 'connected' : 'saved';
+}
+
+/** The row's status line: the state, then what the model list said (count, or why it could not be read). */
+export function myApiStatusLine(locale: NextMuxDesktopLocale, row: Pick<MyApiRow, 'status' | 'summary'>): string {
+    const state = myApisText(locale, row.status === 'failed' ? 'listFailed' : row.status);
+    return row.summary && row.status !== 'reading' ? `${state} · ${row.summary}` : state;
+}
+
 export interface MyApiRow {
     readonly id: string;
     readonly name: string;
     readonly providerName: string;
     readonly host: string;
     readonly summary: string;
-    readonly status: 'verified' | 'reachable' | 'ready' | 'unverified';
+    readonly status: MyApiStatus;
     /** chat: an OpenAI-compatible or official chat API; media: a generation API (video, image, music); local: Ollama. */
     readonly kind?: 'chat' | 'media' | 'local';
-    readonly latencyMs?: number;
     readonly logo?: React.ReactNode;
     /** Models this API listed (0 when not read yet). */
     readonly modelCount?: number;
+}
+
+/** The status dot and line of a row, shared by the 我的 API dialog and the Model Center page. */
+export function MyApiStatusLabel({ locale, row }: { readonly locale: NextMuxDesktopLocale; readonly row: Pick<MyApiRow, 'status' | 'summary'> }): React.ReactElement {
+    const line = myApiStatusLine(locale, row);
+    return <span className='nmx-my-apis-status' data-api-status={row.status} title={line}>
+        <i className={`nmx-connection-dot is-${row.status}`} aria-hidden='true' />
+        <span data-nmx-literal>{line}</span>
+    </span>;
 }
 
 export interface MyApisDialogProps {
@@ -215,7 +246,8 @@ export interface MyApisDialogProps {
     readonly onAddLocal?: () => void;
     readonly onOfficial: () => void;
     readonly onEdit: (id: string) => void;
-    readonly onTest: (id: string) => void;
+    /** Kept for callers of the paid check; the dialog itself offers no test button (saving never spends anything). */
+    readonly onTest?: (id: string) => void;
     readonly onRemove: (id: string) => void;
     readonly onCancelRemove: () => void;
     /** The grouped model list of one connection (classified locally), shown under its row. */
@@ -307,7 +339,6 @@ export function MyApisDialog(props: MyApisDialogProps): React.ReactElement {
         if (highlighted) highlighted.scrollIntoView({ block: 'nearest' });
         (panel.current?.querySelector<HTMLElement>('.nmx-my-apis-toolbar button') || panel.current)?.focus();
     }, []);
-    const status = (row: MyApiRow): string => [t(row.status), row.latencyMs && row.status !== 'unverified' ? t('latency', { ms: row.latencyMs }) : ''].filter(Boolean).join(' · ');
     return <div className='nmx-sheet-backdrop nmx-my-apis-backdrop' onMouseDown={() => { if (!props.busy) props.onClose(); }}>
         <section ref={panel} tabIndex={-1} className='nmx-my-apis' role='dialog' aria-modal='true' aria-labelledby='nmx-my-apis-title'
             onMouseDown={event => event.stopPropagation()}
@@ -333,8 +364,7 @@ export function MyApisDialog(props: MyApisDialogProps): React.ReactElement {
                         <div className='nmx-my-apis-main'>
                             <strong data-nmx-literal title={row.name}>{row.name}</strong>
                             <small data-nmx-literal title={`${row.providerName} · ${row.host}`}>{row.providerName}{row.host ? ` · ${row.host}` : ''}</small>
-                            <span className='nmx-my-apis-status'><i className={`nmx-connection-dot is-${row.status === 'unverified' ? 'unverified' : 'verified'}${row.status === 'reachable' ? ' is-partial' : ''}`} aria-hidden='true' />
-                                <span data-nmx-literal>{status(row)}{row.summary ? ` · ${row.summary}` : ''}</span></span>
+                            <MyApiStatusLabel locale={props.locale} row={row} />
                         </div>
                         {confirming
                             ? <div className='nmx-my-apis-actions is-confirming' role='group' aria-label={t('confirmRemove')}>
@@ -345,7 +375,6 @@ export function MyApisDialog(props: MyApisDialogProps): React.ReactElement {
                             : <div className='nmx-my-apis-actions'>
                                 {(props.renderModels || props.onOpenModels) && <button type='button' data-api-action='models' aria-haspopup={props.onOpenModels ? 'dialog' : undefined} aria-expanded={modelsOpen === row.id}
                                     onClick={event => props.onOpenModels ? props.onOpenModels(row.id, event.currentTarget) : setModelsOpen(modelsOpen === row.id ? '' : row.id)}>{t('models')}<span className='nmx-my-apis-model-count'><span data-nmx-literal>{row.modelCount ?? 0}</span></span></button>}
-                                <button type='button' data-api-action='speed' disabled={props.busy} onClick={() => props.onTest(row.id)}>{mine && props.busyStage === 'testing' ? t('testing') : t('test')}</button>
                                 <button type='button' data-api-action='edit' disabled={props.busy} onClick={() => props.onEdit(row.id)}>{t('edit')}</button>
                                 <button type='button' data-api-action='delete' className='nmx-my-apis-remove' disabled={props.busy} onClick={() => props.onRemove(row.id)} aria-label={`${t('remove')} ${row.name}`} title={t('remove')}><i className='codicon codicon-trash' aria-hidden='true' /></button>
                             </div>}

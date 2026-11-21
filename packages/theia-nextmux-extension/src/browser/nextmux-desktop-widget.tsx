@@ -194,12 +194,12 @@ import { installInactiveWindowButtons } from './nextmux-inactive-window-buttons'
 import { AgentInstructionsSettings, agentInstructionsText } from './nextmux-agent-instructions-panel';
 import { projectMemoryText } from './nextmux-project-memory-locale';
 import { communitySkillInstalledLabel, communitySkillListText } from './nextmux-community-skill-locale';
-import { officialInvokableModelIds, officialDiscoveredModelIds, officialDiscoverySummary, officialDiscoveryCapabilityEvidence, OfficialCatalogDetails, OwnModelList, ownModelListModels, ownModelListText, isCatalogOnlyOfficialProvider, ownApiSaveText } from './nextmux-official-discovery';
-import { credentialStoreName, MyApisDialog, MyApisErrorToast, myApisText, type MyApiRow } from './nextmux-my-apis';
+import { isDiscoveredInvocationAllowed, officialInvokableModelIds, officialDiscoveredModelIds, officialDiscoverySummary, officialDiscoveryCapabilityEvidence, OfficialCatalogDetails, OwnModelList, ownModelListModels, ownModelListText, isCatalogOnlyOfficialProvider, ownApiSaveText } from './nextmux-official-discovery';
+import { credentialStoreName, myApiConnectionStatus, MyApisDialog, MyApisErrorToast, MyApiStatusLabel, myApiStatusLine, myApisText, type MyApiRow } from './nextmux-my-apis';
 import { reasoningControlText } from './nextmux-reasoning-controls-locale';
 import { ComicImagePicker, type ComicImageChoice } from './nextmux-comic-image-picker';
 import { matchCatalogModel } from './nextmux-own-model-match';
-import { groupModelsByName } from '../common/nextmux-model-name';
+import { groupModelsByName, sameModelId } from '../common/nextmux-model-name';
 import { ownModelCategories, ownModelKind, ownModelMediaFacts } from './nextmux-own-model-kind';
 import { officialDiscoveryText } from './nextmux-official-discovery-locale';
 import { isOfficialPickerCredentialFailure } from './nextmux-official-picker-validation';
@@ -617,7 +617,7 @@ import { assetLibraryOperations, runAssetLibraryOperation } from './nextmux-comi
 import { privacyText } from './nextmux-privacy-text';
 import { comicHomeText } from './nextmux-comic-home-text';
 import { managedCanvasImageEstimate, managedCanvasImageEstimateMicros, managedCanvasVideoEstimate, managedCanvasVideoEstimateMicros } from './nextmux-comic-canvas-price';
-import { estimateManagedImageCostMicros, estimateManagedMediaJobMicros, estimateManagedTextCostMicros, estimateManagedVideoCostMicros, resolveEffectiveOfferingPrice } from '../common/nextmux-media-cost-estimator';
+import { estimateManagedImageCostMicros, estimateManagedMediaJobMicros, estimateManagedTextCostMicros, estimateManagedVideoCostMicros, resolveEffectiveOfferingPrice, speechBillableCharacters } from '../common/nextmux-media-cost-estimator';
 import { LocalMediaBudgetLedger, computeWalletSpendableMicros, type LocalMediaBudgetReserveResult } from '../common/nextmux-media-budget-ledger';
 import { mediaBudgetText } from './nextmux-media-budget-locale';
 import { formatManagedVideoEstimate, formatManagedVideoPrice } from './nextmux-video-price';
@@ -706,17 +706,17 @@ import {
 import { mediaRuntimeText } from './nextmux-media-runtime-locale';
 import { isSyntheticModelId, knownModelName, modelDisplayNameOnly } from './nextmux-model-display-name';
 import {
-    isVerifiedModelRoute,
     managedRelayKey,
     migrateManagedRelayKey,
     migrateOfficialRelayKey,
-    modelRouteCapabilityGate,
     officialConnectionRelayKey,
+    ownApiRouteAdmission,
+    ownApiRouteHintRank,
     partitionModelPickerCandidates,
     resolveModelRelay,
     resolveModelRouteId
 } from './nextmux-model-route-selection';
-import type { ModelRouteUnavailableReason, OfficialRelayConnectionReference } from './nextmux-model-route-selection';
+import type { ModelRouteUnavailableReason, OfficialRelayConnectionReference, OwnApiRouteHint } from './nextmux-model-route-selection';
 import { conversationTimeLabel, formatConversationTime as formatLocalizedConversationTime } from './nextmux-conversation-time';
 import { conversationMessageTime, latestConversationMessageTime } from './nextmux-conversation-message-time';
 import { terminalSurfaceText } from './nextmux-terminal-locale';
@@ -5981,7 +5981,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }
             }
         }));
-        this.toDispose.push({ dispose: () => this.comicFileWatcher?.dispose() });
+        this.toDispose.push({ dispose: () => {
+            this.comicFileWatcher?.dispose();
+            this.platformDefaultMerchantLoads?.clear();
+            this.platformDefaultMerchantLoadTokens?.clear();
+        } });
         const mediaTimer = setInterval(() => {
             if (document.visibilityState === 'visible' && this.activeComicWorkspaceRoot
                 && (this.activeSection === 'comic' || this.activeSection === 'settings')) {
@@ -17204,7 +17208,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** One library read at a time; the comic page asks for it whenever it shows without one (e.g. restored at startup). */
     protected comicLibraryReading = false;
     protected ensureComicLibrary(): void {
-        if (!this.comicPlatformDefaultsAt || Date.now() - this.comicPlatformDefaultsAt > 10 * 60_000) void this.loadComicPlatformDefaults();
+        if (!this.comicPlatformDefaultsAt || Date.now() - this.comicPlatformDefaultsAt > 10 * 60_000) void this.loadComicPlatformDefaults?.();
         if (this.comicLibraryLoaded || this.comicLibraryReading) return;
         this.comicLibraryReading = true;
         window.setTimeout(() => void this.loadComicLibrary().finally(() => { this.comicLibraryReading = false; }), 0);
@@ -17792,6 +17796,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected comicPlatformDefaultsLoading = false;
     protected comicPlatformDefaultsAt = 0;
     protected platformDefaultMerchantLoads = new Set<string>();
+    protected platformDefaultMerchantLoadTokens = new Map<string, number>();
+    protected platformDefaultMerchantLoadSeq = 0;
+    protected platformDefaultMerchantLoadRevision?: number;
     protected async loadComicPlatformDefaults(): Promise<void> {
         if (this.comicPlatformDefaultsLoading) return;
         this.comicPlatformDefaultsLoading = true;
@@ -17811,8 +17818,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** Preload merchant catalogs referenced by platform defaults when their target models are not yet in the platform catalog slice. */
     protected preloadPlatformDefaultMerchants(defaults: readonly ComicStepDefault[] = this.comicPlatformDefaults): void {
         if (this.isDisposed || !defaults?.length || typeof this.platformService?.getMerchantCatalog !== 'function') return;
-        const loadedMerchantIds = new Set<string>([...this.merchantPickerSnapshots.keys()]);
-        if (this.selectedMerchantCatalog?.merchantId) loadedMerchantIds.add(this.selectedMerchantCatalog.merchantId);
+        const loads = (this.platformDefaultMerchantLoads ??= new Set<string>());
+        const snapshots = (this.merchantPickerSnapshots ??= new Map());
+        const revision = this.catalogSnapshotRevision;
+        if (this.platformDefaultMerchantLoadRevision !== undefined && this.platformDefaultMerchantLoadRevision !== revision) {
+            loads.clear();
+            this.platformDefaultMerchantLoadTokens?.clear();
+        }
+        this.platformDefaultMerchantLoadRevision = revision;
+        const loadedMerchantIds = new Set<string>();
+        for (const [id, entry] of snapshots) {
+            if (entry.updatedAt !== 0 && !entry.catalog.nextCursor) loadedMerchantIds.add(id);
+        }
+        if (this.selectedMerchantCatalog?.merchantId && !this.selectedMerchantCatalog.nextCursor) {
+            loadedMerchantIds.add(this.selectedMerchantCatalog.merchantId);
+        }
         const missing = missingPlatformDefaultMerchantIds({
             defaults,
             platformOfferings: this.platformCatalog?.offerings || [],
@@ -17821,22 +17841,51 @@ export class NextMuxDesktopWidget extends ReactWidget {
             offeringMerchantId: offering => this.offeringMerchantId(offering),
             normalizeModel: value => this.normalizedModelId(value)
         });
-        const revision = this.catalogSnapshotRevision;
         for (const merchantId of missing.slice(0, 6)) {
-            if (this.platformDefaultMerchantLoads.has(merchantId)) continue;
-            this.platformDefaultMerchantLoads.add(merchantId);
-            void this.fetchComicMerchantCatalog(merchantId, undefined, 'platform-default').then(catalog => {
-                if (this.isDisposed || revision !== this.catalogSnapshotRevision || this.catalogRemovedMerchants?.has(merchantId)) return;
-                if (catalog.merchantId !== merchantId || catalog.online === false || !Array.isArray(catalog.offerings)) return;
-                this.merchantPickerSnapshots.set(merchantId, { catalog, updatedAt: Date.now() });
-                this.applyCodingPlatformDefaultIfUnselected?.();
-                this.update();
-            }).catch(() => undefined).finally(() => {
-                this.platformDefaultMerchantLoads.delete(merchantId);
+            if (loads.has(merchantId)) continue;
+            loads.add(merchantId);
+            const token = (this.platformDefaultMerchantLoadSeq = (this.platformDefaultMerchantLoadSeq ?? 0) + 1);
+            this.platformDefaultMerchantLoadTokens?.set(merchantId, token);
+            let pageOneHandled = false;
+            let pageTwoOrMoreArrived = false;
+            let paginationDone = false;
+            let finished = false;
+            const finish = (): void => {
+                if (finished) return;
+                finished = true;
+                const ownsLoad = !this.platformDefaultMerchantLoadTokens || this.platformDefaultMerchantLoadTokens.get(merchantId) === token;
+                if (ownsLoad) {
+                    this.platformDefaultMerchantLoadTokens?.delete(merchantId);
+                    loads.delete(merchantId);
+                }
                 if (!this.isDisposed && revision === this.catalogSnapshotRevision) {
                     // If the preferred coding default merchant failed to load or lacked the model, allow fallback across healthy relays.
                     if (this.applyCodingPlatformDefaultIfUnselected?.()) this.update();
                 }
+            };
+            const onMore = (): void => {
+                if (this.isDisposed || revision !== this.catalogSnapshotRevision || this.catalogRemovedMerchants?.has(merchantId)) return;
+                pageTwoOrMoreArrived = true;
+                if (this.applyCodingPlatformDefaultIfUnselected?.()) this.update();
+            };
+            const onDone = (): void => {
+                paginationDone = true;
+                if (pageOneHandled) finish();
+            };
+            void this.fetchComicMerchantCatalog(merchantId, onMore, 'platform-default', onDone).then(catalog => {
+                pageOneHandled = true;
+                if (!this.isDisposed && revision === this.catalogSnapshotRevision && !this.catalogRemovedMerchants?.has(merchantId)
+                    && catalog.merchantId === merchantId && catalog.online !== false && Array.isArray(catalog.offerings)) {
+                    if (!pageTwoOrMoreArrived) {
+                        snapshots.set(merchantId, { catalog, updatedAt: Date.now() });
+                    }
+                    this.applyCodingPlatformDefaultIfUnselected?.();
+                    this.update();
+                }
+                if (paginationDone) finish();
+            }).catch(() => {
+                pageOneHandled = true;
+                finish();
             });
         }
     }
@@ -18222,40 +18271,102 @@ export class NextMuxDesktopWidget extends ReactWidget {
      * stored at once (the menus fill in right away); later pages are appended as they arrive, off the waiting path.
      * Pagination cursors are keyed by `${kind}:${step}:${merchantId}` so switching project kinds never mixes stale pages.
      */
-    protected async fetchComicMerchantCatalog(merchantId: string, onMore?: () => void, scopeKey = `${this.comicModelKind?.() ?? 'novel'}:setup`): Promise<PlatformMerchantCatalogPage> {
+    protected async fetchComicMerchantCatalog(
+        merchantId: string,
+        onMore?: () => void,
+        scopeKey = `${this.comicModelKind?.() ?? 'novel'}:setup`,
+        onDone?: () => void
+    ): Promise<PlatformMerchantCatalogPage> {
         const revision = this.catalogSnapshotRevision;
         const cursorKey = `${scopeKey}:${merchantId}`;
         this.comicStepPaginationCursors?.delete(cursorKey);
-        const first = await this.platformService.getMerchantCatalog(merchantId);
+        let doneCalled = false;
+        const finishDone = (): void => {
+            if (doneCalled) return;
+            doneCalled = true;
+            onDone?.();
+        };
+        let first: PlatformMerchantCatalogPage;
+        try {
+            first = await this.platformService.getMerchantCatalog(merchantId);
+        } catch (error) {
+            finishDone();
+            throw error;
+        }
+        if (this.isDisposed || revision !== this.catalogSnapshotRevision || this.catalogRemovedMerchants?.has(merchantId)) {
+            finishDone();
+            return first;
+        }
+        if ((first.merchantId && first.merchantId !== merchantId) || first.online === false || !Array.isArray(first.offerings)) {
+            finishDone();
+            return first;
+        }
         this.merchantCatalogCutShort?.delete(merchantId);
         if (first.nextCursor) {
             this.comicStepPaginationCursors?.set(cursorKey, first.nextCursor);
             void (async () => {
-                const offerings = [...first.offerings];
-                let page = first;
-                for (let more = 0; page.nextCursor && more < 9; more++) {
-                    const expectedCursor = page.nextCursor;
-                    if (this.comicStepPaginationCursors && this.comicStepPaginationCursors.get(cursorKey) !== expectedCursor) return;
-                    try { page = await this.platformService.getMerchantCatalog(merchantId, expectedCursor); } catch {
+                try {
+                    const ownsCursor = (expected: string): boolean =>
+                        !this.comicStepPaginationCursors || this.comicStepPaginationCursors.get(cursorKey) === expected;
+                    const offerings = [...first.offerings];
+                    let page = first;
+                    for (let more = 0; page.nextCursor && more < 9; more++) {
+                        const expectedCursor = page.nextCursor;
+                        if (this.isDisposed || revision !== this.catalogSnapshotRevision || this.catalogRemovedMerchants?.has(merchantId)) {
+                            if (revision === this.catalogSnapshotRevision && ownsCursor(expectedCursor)) {
+                                this.comicStepPaginationCursors?.delete(cursorKey);
+                            }
+                            return;
+                        }
+                        if (!ownsCursor(expectedCursor)) return;
+                        try { page = await this.platformService.getMerchantCatalog(merchantId, expectedCursor); } catch {
+                            if (revision === this.catalogSnapshotRevision && ownsCursor(expectedCursor)) {
+                                this.comicStepPaginationCursors?.delete(cursorKey);
+                                if (!this.isDisposed && !this.catalogRemovedMerchants?.has(merchantId)) {
+                                    // The pages stored so far are not the whole list (merchantCatalogComplete).
+                                    this.merchantCatalogCutShort?.add(merchantId);
+                                }
+                            }
+                            return;
+                        }
+                        if (this.isDisposed || revision !== this.catalogSnapshotRevision || this.catalogRemovedMerchants?.has(merchantId)) {
+                            if (revision === this.catalogSnapshotRevision && ownsCursor(expectedCursor)) {
+                                this.comicStepPaginationCursors?.delete(cursorKey);
+                            }
+                            return;
+                        }
+                        if (!ownsCursor(expectedCursor)) return;
+                        if ((page.merchantId && page.merchantId !== merchantId) || page.online === false || !Array.isArray(page.offerings)) {
+                            if (revision === this.catalogSnapshotRevision && ownsCursor(expectedCursor)) {
+                                this.comicStepPaginationCursors?.delete(cursorKey);
+                                this.merchantCatalogCutShort?.add(merchantId);
+                            }
+                            return;
+                        }
+                        if (page.nextCursor && page.nextCursor !== expectedCursor) this.comicStepPaginationCursors?.set(cursorKey, page.nextCursor);
+                        else {
+                            this.comicStepPaginationCursors?.delete(cursorKey);
+                            if (page.nextCursor === expectedCursor) this.merchantCatalogCutShort?.add(merchantId);
+                        }
+                        const known = new Set(offerings.map(offering => offering.id));
+                        offerings.push(...page.offerings.filter(offering => !known.has(offering.id)));
+                        const { nextCursor: _next, ...rest } = page;
+                        this.merchantPickerSnapshots?.set(merchantId, { catalog: { ...rest, offerings: [...offerings] }, updatedAt: Date.now() });
+                        onMore?.();
+                        this.update?.();
+                        if (page.nextCursor === expectedCursor) return;
+                    }
+                    if (page.nextCursor && !this.isDisposed && revision === this.catalogSnapshotRevision
+                        && !this.catalogRemovedMerchants?.has(merchantId) && ownsCursor(page.nextCursor)) {
                         this.comicStepPaginationCursors?.delete(cursorKey);
-                        // The pages stored so far are not the whole list (merchantCatalogComplete).
                         this.merchantCatalogCutShort?.add(merchantId);
-                        return;
                     }
-                    if (revision !== this.catalogSnapshotRevision || this.catalogRemovedMerchants.has(merchantId)) {
-                        this.comicStepPaginationCursors?.delete(cursorKey);
-                        return;
-                    }
-                    if (page.nextCursor) this.comicStepPaginationCursors?.set(cursorKey, page.nextCursor);
-                    else this.comicStepPaginationCursors?.delete(cursorKey);
-                    const known = new Set(offerings.map(offering => offering.id));
-                    offerings.push(...page.offerings.filter(offering => !known.has(offering.id)));
-                    const { nextCursor: _next, ...rest } = page;
-                    this.merchantPickerSnapshots.set(merchantId, { catalog: { ...rest, offerings: [...offerings] }, updatedAt: Date.now() });
-                    onMore?.();
-                    this.update();
+                } finally {
+                    finishDone();
                 }
             })();
+        } else {
+            finishDone();
         }
         return first;
     }
@@ -37055,7 +37166,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
 
         if (section === 'comic') {
-            if (!this.comicPlatformDefaultsAt || Date.now() - this.comicPlatformDefaultsAt > 10 * 60_000) void this.loadComicPlatformDefaults();
+            if (!this.comicPlatformDefaultsAt || Date.now() - this.comicPlatformDefaultsAt > 10 * 60_000) void this.loadComicPlatformDefaults?.();
             else this.preloadPlatformDefaultMerchants?.(this.comicPlatformDefaults);
             this.ensureComicChatDirectories?.();
             void this.loadComicLibrary();
@@ -40466,7 +40577,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected async loadCatalog(forceRegistry = false, sources: readonly ('catalog' | 'registry' | 'global')[] = ['catalog', 'registry', 'global']): Promise<boolean> {
-        if (!this.comicPlatformDefaultsAt || Date.now() - this.comicPlatformDefaultsAt > 10 * 60_000) void this.loadComicPlatformDefaults();
+        if (!this.comicPlatformDefaultsAt || Date.now() - this.comicPlatformDefaultsAt > 10 * 60_000) void this.loadComicPlatformDefaults?.();
         const results = await Promise.all(sources.map(source => this.loadCatalogSource(source, () => source === 'catalog'
             ? this.loadPlatformCatalog() : source === 'registry' ? this.loadRegistryModels(forceRegistry) : this.loadGlobalModels(forceRegistry))));
         return results.every(Boolean);
@@ -40540,6 +40651,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.selectedPublicMerchant = undefined;
             if (previousUserId) {
                 this.catalogSnapshotRevision++;
+                this.platformDefaultMerchantLoads?.clear();
+                this.platformDefaultMerchantLoadTokens?.clear();
                 this.catalogSnapshotRefresh.reset();
                 this.pendingCatalogVersion = '';
                 this.publicMerchantDirectoryVersion = '';
@@ -40978,6 +41091,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** An explicit withdrawal is a fresh empty result, so it cannot block the whole revision. */
     protected forgetMerchantCatalogSnapshot(merchantId: string): void {
         this.catalogRemovedMerchants.add(merchantId);
+        this.platformDefaultMerchantLoads?.delete(merchantId);
+        this.platformDefaultMerchantLoadTokens?.delete(merchantId);
         this.merchantPickerSnapshots.delete(merchantId);
         this.merchantDiscoveredModels.delete(merchantId);
         if (this.selectedMerchantCatalog?.merchantId === merchantId) {
@@ -41108,6 +41223,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.pendingCatalogVersion = version;
                 this.catalogRemovedMerchants.clear();
                 this.catalogSnapshotRevision++;
+                this.platformDefaultMerchantLoads?.clear();
+                this.platformDefaultMerchantLoadTokens?.clear();
                 this.pendingComicDirectories = new Set(this.comicStepDirectory.keys());
                 this.merchantCatalogRequest++;
                 this.scheduleCatalogRequest++;
@@ -41287,16 +41404,23 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const models = officialInvokableModelIds(connection);
             return models.flatMap(model => {
                 const virtual = this.connectionForDiscoveredModel(connection, model);
-                if (!isVerifiedModelRoute(virtual.capabilityEvidence, true)) return [];
+                // A model the user saved or the API listed is offered even unproven (ownApiRouteAdmission: 仅保存, a list
+                // that failed or left it out, a failed tool check), after proven ones; only one the API says cannot
+                // answer this request stays out, and never one a run would refuse (isDiscoveredInvocationAllowed).
+                const admission = ownApiRouteAdmission(virtual.capabilityEvidence);
+                if (!admission.selectable || !isDiscoveredInvocationAllowed(connection, model)) return [];
                 // A picture or voice model an OpenAI-style API also lists (gpt-image-1, tts-1) never answers a chat.
                 const media = this.comicConnectionMetadata(virtual);
                 if (media && !media.output.includes('text')) return [];
                 return [{
-                    id: model === connection.model
-                        ? `official:${connection.id}`
-                        : `official:${connection.id}:${encodeURIComponent(model)}`,
-                    kind: 'official_connection' as const,
-                    connection: virtual
+                    proof: ownApiRouteHintRank(admission.hint),
+                    route: {
+                        id: sameModelId(model, connection.model)
+                            ? `official:${connection.id}`
+                            : `official:${connection.id}:${encodeURIComponent(model)}`,
+                        kind: 'official_connection' as const,
+                        connection: virtual
+                    }
                 }];
             });
         })
@@ -41305,17 +41429,33 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     route.connection.status === 'verified'
                         ? route.connection.toolCapability === 'verified' ? 0 : 1
                         : 2;
-                return score(left) - score(right) || left.connection.label.localeCompare(right.connection.label);
-            });
+                return left.proof - right.proof || score(left.route) - score(right.route)
+                    || left.route.connection.label.localeCompare(right.route.connection.label);
+            })
+            .map(item => item.route);
         this.officialModelRoutesCache = { key, value };
         return value;
     }
 
+    /** What is still unproven about an own API's route (ownApiRouteAdmission), for its picker row; nothing for a relay. */
+    protected ownRouteHint(route: DesktopModelRoute | undefined): OwnApiRouteHint | undefined {
+        return route?.kind === 'official_connection' ? ownApiRouteAdmission(route.connection.capabilityEvidence).hint : undefined;
+    }
+
+    /** A picker's order for an own API's routes: proven first (ownApiRouteHintRank). */
+    protected ownRouteProof(route: DesktopModelRoute | undefined): number {
+        return ownApiRouteHintRank(this.ownRouteHint(route));
+    }
+
     protected connectionForDiscoveredModel(connection: OfficialModelConnection, model: string): OfficialModelConnection {
-        const catalogEntry = connection.discoveredModels.find(candidate => candidate.id === model);
+        // Model IDs match without regard to case, as the backend's own checks do (isDiscoveredInvocationAllowed).
+        const catalogEntry = connection.discoveredModels.find(candidate => sameModelId(candidate.id, model));
         const validation = catalogEntry?.validation;
         const observedAt = validation?.checkedAt || connection.lastSuccessfulModelDiscoveryAt || connection.updatedAt;
-        const configured = model === connection.model;
+        const configured = sameModelId(model, connection.model);
+        // Only a list the API returned vouches for a model; models typed into 仅保存 sit in the same list before any read.
+        const listRead = Boolean(connection.lastSuccessfulModelDiscoveryAt)
+            || connection.modelDiscoveryStatus === 'verified' || connection.modelDiscoveryStatus === 'catalog_discovered';
         return {
             ...connection,
             model,
@@ -41329,7 +41469,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 model,
                 observedAt,
                 connectionVerified: Boolean(validation),
-                discoveredByModelsEndpoint: true,
+                discoveredByModelsEndpoint: listRead,
                 interfaceSupport: catalogEntry?.interfaceSupport,
                 toolCalling: validation ? validation.toolCalling ? 'verified' : 'failed' : 'untested'
             })))
@@ -41520,29 +41660,33 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         for (const connection of connections) {
             const directoryLabels = new Map(officialDiscoveredModelIds(connection).map(model => [model,
-                connection.discoveredModels.find(candidate => candidate.id === model)?.label || model]));
-            // Discovery drives per-model verification; only verified, enabled
-            // routes from this directory enter the picker below.
+                connection.discoveredModels.find(candidate => sameModelId(candidate.id, model))?.label || model]));
+            // Discovery drives per-model verification; only models a route can call (officialInvokableModelIds: not an
+            // Azure/Bedrock catalogue entry) enter the picker below.
+            const invokable = new Set(officialInvokableModelIds(connection).map(model => model.toLowerCase()));
             for (const model of officialDiscoveredModelIds(connection)) {
-                const discovered = connection.discoveredModels.find(candidate => candidate.id === model);
+                const discovered = connection.discoveredModels.find(candidate => sameModelId(candidate.id, model));
                 const ownCategories = ownModelCategories({ ...discovered, id: model, label: discovered?.label, inputModalities: discovered?.inputModalities,
                     outputModalities: discovered?.outputModalities }, matchCatalogModel(model, discovered?.label, this.globalModels || []));
                 if (!ownCategories.includes('llm') && !ownCategories.includes('3d' as never)) continue;
                 const virtual = this.connectionForDiscoveredModel(connection, model);
                 const id = this.modelKeyForConnection(virtual);
-                const capabilityGate = modelRouteCapabilityGate(virtual.capabilityEvidence, true);
+                // The same rule as officialModelRoutes: unproven models are offered (their row says what is unproven).
+                const admission = !invokable.has(model.toLowerCase()) ? { selectable: false, reason: 'generation_unverified' as const }
+                    : !isDiscoveredInvocationAllowed(connection, model) ? { selectable: false, reason: 'tools_unsupported' as const }
+                    : ownApiRouteAdmission(virtual.capabilityEvidence);
                 add({
                     id,
                     label: this.modelOnlyDisplayName(directoryLabels.get(model) || '', connection.providerName, model, connection.modelFamily),
                     providerName: connection.providerName,
                     model,
-                    available: capabilityGate.selectable,
+                    available: admission.selectable,
                     input: this.connectionInputModalities(virtual),
                     output: ['text'],
                     capabilities: this.connectionCapabilityLabels(virtual),
-                    contextTokens: connection.discoveredModels.find(candidate => candidate.id === model)?.contextTokens ?? null,
-                    sourceName: model === connection.model ? '本机连接' : '官方目录',
-                    availabilityReason: capabilityGate.reason
+                    contextTokens: discovered?.contextTokens ?? null,
+                    sourceName: sameModelId(model, connection.model) ? '本机连接' : '官方目录',
+                    availabilityReason: admission.reason
                 });
             }
         }
@@ -42439,28 +42583,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** Synthesize a reference-only official price offering for an own-API route from catalog/registry pricing. */
     protected officialRoutePriceOffering(route: DesktopModelRoute | undefined, label?: string): PlatformOffering | undefined {
         if (!route || route.kind !== 'official_connection') return undefined;
-        const rawModel = String(route.connection.model || '').trim().toLowerCase();
-        const bareModel = rawModel.replace(/^models\//, '').replace(/^(?:openai|anthropic|google|deepseek|xai|moonshot|zhipu|qwen|mistral|meta)\//, '');
-        const claudeVariant = /^(?:claude-)?(opus|sonnet|haiku|fable)-?(\d{1,2})(?:[.-](\d{1,2}))?/.exec(bareModel.replace(/[\s_]+/g, '-'));
-        const claudeBase = claudeVariant ? `claude-${claudeVariant[1]}-${claudeVariant[2]}${claudeVariant[3] ? `-${claudeVariant[3]}` : ''}` : '';
-        const compactModel = (claudeBase || bareModel).replace(/[-_.\s]+/g, '');
-        const matchesModel = (candidateModel: string | undefined): boolean => {
-            const candRaw = String(candidateModel || '').trim().toLowerCase();
-            if (!candRaw) return false;
-            const candBare = candRaw.replace(/^models\//, '').replace(/^(?:openai|anthropic|google|deepseek|xai|moonshot|zhipu|qwen|mistral|meta)\//, '');
-            const candClaude = /^(?:claude-)?(opus|sonnet|haiku|fable)-?(\d{1,2})(?:[.-](\d{1,2}))?/.exec(candBare.replace(/[\s_]+/g, '-'));
-            const candBase = candClaude ? `claude-${candClaude[1]}-${candClaude[2]}${candClaude[3] ? `-${candClaude[3]}` : ''}` : '';
-            const candCompact = (candBase || candBare).replace(/[-_.\s]+/g, '');
-            return candRaw === rawModel
-                || candBare === bareModel
-                || Boolean(claudeBase && candBase && claudeBase === candBase)
-                || (candCompact.length >= 4 && (candCompact === compactModel || compactModel.startsWith(candCompact) || candCompact.startsWith(compactModel)));
-        };
+        const model = String(route.connection.model || '').trim();
+        if (!model) return undefined;
+        const discovered = route.connection.discoveredModels?.find(item => item.id === route.connection.model || item.label === route.connection.model);
+        const hint = label || discovered?.label;
+        // Which model the route names: the matcher the model list uses, on the same catalog arrays (one cached index, one
+        // answer). It refuses an ambiguous or different-variant name, so this card never borrows a sibling's price
+        // (gpt-4o-mini from gpt-4o, veo-3.1 from a fast variant, wan-3.0 from wan-3.0-prime).
+        const globalMatch = matchCatalogModel(model, hint, this.globalModels || []);
+        const regModel = globalMatch?.referencePrice ? globalMatch : matchCatalogModel(model, hint, this.registryModels || []) ?? globalMatch;
+        // A platform offering of that same model carries the official price sheet (tiers included): its canonical name,
+        // compared with every spelling of the matched model, or with the route's own name when nothing matched.
+        const tail = (name: string): string => name.slice(name.lastIndexOf('/') + 1);
+        const spellings = new Set([model, ...(regModel ? [regModel.canonicalModel, regModel.id, ...(regModel.aliases || [])] : [])]
+            .filter(Boolean).map(name => tail(name.toLowerCase())));
         const catalogOffering = (this.platformCatalog?.offerings || []).find(offering =>
-            Boolean(offering.officialPrice || offering.price) && matchesModel(offering.canonicalModel || offering.providerModelCode || offering.displayName)
+            Boolean(offering.officialPrice && offering.canonicalModel) && spellings.has(tail(offering.canonicalModel.toLowerCase()))
         );
         if (catalogOffering) {
-            const refPrice = catalogOffering.officialPrice ?? catalogOffering.price;
+            const refPrice = catalogOffering.officialPrice!;
             return {
                 ...catalogOffering,
                 displayName: label || catalogOffering.displayName,
@@ -42468,33 +42609,35 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 officialPrice: refPrice
             } as unknown as PlatformOffering;
         }
-        const discovered = route.connection.discoveredModels?.find(item => item.id === route.connection.model || item.label === route.connection.model);
-        const allCatalogModels = [...(this.globalModels || []), ...(this.registryModels || [])];
-        const regModel = (typeof matchCatalogModel === 'function' ? matchCatalogModel(route.connection.model, label || discovered?.label, allCatalogModels) : undefined)
-            ?? allCatalogModels.find(candidate => Boolean(candidate.referencePrice) && (
-                matchesModel(candidate.canonicalModel || candidate.id || candidate.displayName)
-                || (candidate.aliases || []).some(alias => matchesModel(alias))
-            ));
         const ref = regModel?.referencePrice;
-        const inputPerMillion = discovered?.inputPricePerMillion ?? ref?.input;
-        const outputPerMillion = discovered?.outputPricePerMillion ?? ref?.output;
-        if (inputPerMillion === undefined && outputPerMillion === undefined) return undefined;
+        const refUnit = ref?.unit || 'per_million_tokens';
+        const refIsToken = refUnit === 'per_million_tokens';
+        // An API's per-token prices stand for a token-billed model only. A model the directory bills per image, second,
+        // character or request costs that unit; a token figure listed for it (NextMux /v1/models lists speech and
+        // transcription that way) is not what a call costs.
+        const apiTokens = refIsToken ? discovered : undefined;
+        const toMicros = (value: number | undefined): number | null => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.round(value * 1_000_000) : null;
         const dims = {
             currency: 'USD' as const,
             mode: 'direct' as const,
             multiplierBps: null,
-            inputPerMillionMicros: inputPerMillion !== undefined ? Math.round(inputPerMillion * 1_000_000) : null,
-            outputPerMillionMicros: outputPerMillion !== undefined ? Math.round(outputPerMillion * 1_000_000) : null,
-            cachedInputPerMillionMicros: ref?.cachedInput !== undefined ? Math.round(ref.cachedInput * 1_000_000) : null,
-            cacheWritePerMillionMicros: ref?.cacheWrite !== undefined ? Math.round(ref.cacheWrite * 1_000_000) : null,
-            imageOutputPerMillionMicros: null,
-            imageEachMicros: null,
-            videoSecondMicros: null,
+            inputPerMillionMicros: refIsToken ? toMicros(apiTokens?.inputPricePerMillion ?? ref?.input) : null,
+            outputPerMillionMicros: refIsToken ? toMicros(apiTokens?.outputPricePerMillion ?? ref?.output) : null,
+            cachedInputPerMillionMicros: refIsToken ? toMicros(apiTokens?.cachedInputPricePerMillion ?? ref?.cachedInput) : null,
+            cacheWritePerMillionMicros: refIsToken ? toMicros(apiTokens?.cacheWritePricePerMillion ?? ref?.cacheWrite) : null,
+            imageOutputPerMillionMicros: toMicros(ref?.imageOutputToken),
+            imageEachMicros: toMicros(ref?.image),
+            videoSecondMicros: toMicros(ref?.videoSecond),
             videoInputImageEachMicros: null,
-            audioPerMillionCharactersMicros: null,
-            audioSecondMicros: null,
-            requestEachMicros: null
+            audioPerMillionCharactersMicros: toMicros(ref?.audioCharacter),
+            audioSecondMicros: toMicros(ref?.audioSecond),
+            requestEachMicros: toMicros(ref?.request),
+            ...(ref?.characterCounting ? { characterCounting: ref.characterCounting } : {})
         };
+        if ([dims.inputPerMillionMicros, dims.outputPerMillionMicros, dims.cachedInputPerMillionMicros, dims.cacheWritePerMillionMicros,
+            dims.imageOutputPerMillionMicros, dims.imageEachMicros, dims.videoSecondMicros, dims.audioPerMillionCharactersMicros,
+            dims.audioSecondMicros, dims.requestEachMicros].every(value => value === null)) return undefined;
+        const outModalities = regModel?.output || [];
         return {
             id: `official-ref:${route.connection.id}:${route.connection.model}`,
             registryModelId: regModel?.id,
@@ -42504,12 +42647,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
             displayName: label || regModel?.displayName || route.connection.model,
             canonicalModel: regModel?.canonicalModel || route.connection.model,
             providerModelCode: route.connection.model,
-            modality: 'text',
+            modality: dims.videoSecondMicros !== null ? 'video' : dims.imageEachMicros !== null ? 'image'
+                : (dims.audioPerMillionCharactersMicros !== null || dims.audioSecondMicros !== null
+                    || (dims.requestEachMicros !== null && outModalities.some(item => ['audio', 'speech', 'music', 'sound_effect'].includes(item)))) ? 'audio' : 'text',
             Description: '',
             description: '',
             price: dims,
             officialPrice: dims,
-            billingUnit: '1M tokens',
+            billingUnit: refUnit === 'per_image' ? 'image' : refUnit === 'per_second' ? 'second'
+                : refUnit === 'per_million_characters' ? '1M chars' : refUnit === 'per_request' ? 'request' : '1M tokens',
             unitPriceLabel: '',
             upstreamStatus: 'verified',
             fidelity: { status: 'verified', percentage: 100, summary: '' },
@@ -44127,17 +44273,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 providerName: media && connection.providerId === 'custom_media' ? myApisText(this.desktopLocale, 'mediaTitle')
                     : connection.providerId === 'custom_openai' ? myApisText(this.desktopLocale, 'compatibleTitle') : connection.providerName,
                 host,
-                // 仅保存 reads the list in the background: say so instead of stale/empty failure text while reading.
-                summary: this.officialPickerValidations?.has(connection.id)
-                    ? ownModelListText(this.desktopLocale, 'loading')
-                    : connection.modelDiscoveryError ? '' : officialDiscoverySummary(this.desktopLocale, connection),
-                status: connection.status === 'unverified' ? 'unverified' as const : media ? 'ready' as const
-                    : connection.toolCapability === 'verified' ? 'verified' as const : 'reachable' as const,
-                ...(connection.lastLatencyMs ? { latencyMs: connection.lastLatencyMs } : {}),
+                ...this.ownApiRowStatus(connection),
                 modelCount: ownModelListModels(connection).length,
                 ...(provider ? { logo: this.renderOfficialProviderLogo(provider) } : {})
             };
         });
+    }
+
+    /**
+     * A saved API's status, said from its free model list only (saving makes no paid call): connected, saved, reading,
+     * or why the latest read failed. While a save or refresh reads the list, no earlier failure is shown.
+     */
+    protected ownApiRowStatus(connection: OfficialModelConnection): Pick<MyApiRow, 'status' | 'summary'> {
+        const reading = Boolean(this.officialPickerValidations?.has(connection.id))
+            || (this.officialBusyConnectionId === connection.id && this.officialConnectionStage === 'discovering');
+        const status = myApiConnectionStatus(connection, reading);
+        // A read that threw (offline, a proxy that refused it) is remembered here, not on the stored connection.
+        if (status === 'saved' || status === 'connected') {
+            if (this.officialPickerValidationFailures?.has(connection.id)) return { status: 'failed', summary: '' };
+        }
+        return { status, summary: officialDiscoverySummary(this.desktopLocale, connection) };
     }
 
     protected renderMyApis(): React.ReactNode {
@@ -44155,7 +44310,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
             {...(local ? { onAddLocal: () => this.openOfficialProviderFromMyApis(local) } : {})}
             onOfficial={() => { this.closeMyApis(); this.selectModelCenterView('official'); }}
             onEdit={id => { const item = connection(id); if (item) this.openOfficialProviderFromMyApis(provider(item.providerId), item); }}
-            onTest={id => { const item = connection(id); if (item) void this.validateExistingOfficialConnection(item); }}
             onRemove={id => void this.removeOfficialConnection(id)}
             onCancelRemove={() => { this.officialDeleteConfirmId = ''; this.update(); }}
             onOpenModels={(id, trigger) => this.toggleOwnModelList(id, trigger)}
@@ -44665,9 +44819,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     /**
-     * What saving a chat API established, said in 我的 API once the drawer closes. “测试并保存” whose paid call failed
+     * What saving a chat API established, said in 我的 API once the drawer closes. The form's one Save never validates
+     * (no paid call: validate=false); the validate=true branch serves programmatic callers. A test whose paid call failed
      * (no balance, a used-up quota, rate limits) is still saved with the models its list returned, and says so instead
-     * of a bare “已保存模型”; “仅保存” never presents an earlier test as this one.
+     * of a bare “已保存模型”; Save never presents an earlier test as this one.
      */
     protected ownApiSaveMessage(result: SaveOfficialModelConnectionResult, validate: boolean, startedAt: number): string {
         const { connection, validation } = result;
@@ -44682,6 +44837,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return listed ? ownApiSaveText(this.desktopLocale, 'saved', { ...values, count: String(listed) }) : localizeDesktopSurface(this.desktopLocale, '已保存模型');
     }
 
+    /**
+     * The paid check of a saved API (one tool-calling request). No button starts it: saving and managing an own API
+     * spend nothing, as in Cherry Studio, Open WebUI and Cline. Kept for programmatic callers and its tests.
+     */
     protected async validateExistingOfficialConnection(connection: OfficialModelConnection): Promise<void> {
         if (this.officialConnectionStage !== 'idle') {
             return;
@@ -44967,7 +45126,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         );
     }
 
-    /** A failed or refused list read is forgotten once its API is removed or lists models again (a later read, 测速). */
+    /** A failed or refused list read is forgotten once its API is removed or lists models again (a later read). */
     protected pruneOfficialPickerFailures(): void {
         const unlisted = new Set((this.officialModels?.connections || [])
             .filter(connection => !connection.discoveredModels.length).map(connection => connection.id));
@@ -45010,6 +45169,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         try {
             const merchants = this.catalogMerchantSources();
             this.catalogSnapshotRevision++;
+            this.platformDefaultMerchantLoads?.clear();
+            this.platformDefaultMerchantLoadTokens?.clear();
             // The merchant table and an open support list read again too (audit A03-03).
             this.modelCenterRefreshToken++;
             this.catalogRemovedMerchants.clear();
@@ -49554,10 +49715,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     onPreviewTheme={theme => this.setDesktopTheme(theme)}
                     onAppearanceDone={(locale, theme) => this.finishOnboardingAppearance(locale, theme)}
                     onFinish={() => this.setOnboardingStep('done')} />}
+                {(this.activeSection !== 'coding' || this.codingPanel !== 'thread' || Boolean(this.activeVisualTab?.()) || Boolean(this.activeCouncilChildId)) && this.renderGlobalTransientToast?.()}
                 {/* The model tooltip (a tag's 倍率 or 真实性, a depth, a context size or an evidence note) has one mount for the
                     whole window: every model picker, its hover card and the Council dialog show it from here. */}
                 {this.renderModelEvidenceTooltipPortal?.()}
-                {(this.activeSection !== 'coding' || this.codingPanel !== 'thread' || Boolean(this.activeVisualTab?.()) || Boolean(this.activeCouncilChildId)) && this.renderGlobalTransientToast?.()}
         </>;
     }
 
@@ -50704,6 +50865,29 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
         }
         const seenLegacyRunLevelExecutions = new Set<string>();
+        const estimatePersonalTokenUsd = (
+            connection: OfficialModelConnection | undefined,
+            modelId: string | undefined,
+            inputCount: number | undefined,
+            outputCount: number | undefined
+        ): { readonly estimateUsd?: number; readonly estimateSource?: 'api' | 'reference' } => {
+            if (!modelId) return {};
+            const discovered = connection?.discoveredModels.find(item => item.id === modelId || item.label === modelId);
+            const apiPrice = discovered?.inputPricePerMillion !== undefined && discovered.outputPricePerMillion !== undefined
+                ? { input: discovered.inputPricePerMillion, output: discovered.outputPricePerMillion } : undefined;
+            const reference = !apiPrice ? matchCatalogModel(modelId, discovered?.label, this.globalModels)?.referencePrice : undefined;
+            const tokenReference = reference && (!reference.unit || reference.unit === 'per_million_tokens')
+                && typeof reference.input === 'number' && Number.isFinite(reference.input)
+                ? { input: reference.input, output: typeof reference.output === 'number' && Number.isFinite(reference.output) ? reference.output : 0 } : undefined;
+            const price = apiPrice || tokenReference;
+            if (!price || typeof price.input !== 'number' || !Number.isFinite(price.input)
+                || inputCount === undefined || outputCount === undefined) return {};
+            const outRate = typeof price.output === 'number' && Number.isFinite(price.output) ? price.output : 0;
+            return {
+                estimateUsd: (inputCount * price.input + outputCount * outRate) / 1_000_000,
+                estimateSource: apiPrice ? 'api' as const : 'reference' as const
+            };
+        };
         for (const session of this.codingSessions) for (const turn of session.turns) {
             if (!turn.routeId?.startsWith('official:')) continue;
             // When per-call JSONL entries (`:call:N`) exist for this turn's run, they are authoritative
@@ -50722,13 +50906,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const tokens = /^(\d+) 输入 · (\d+) 输出$/.exec(turn.usageLabel || '');
             const inputTokens = tokens ? Number(tokens[1]) : undefined, outputTokens = tokens ? Number(tokens[2]) : undefined;
             const local = connection ? connection.providerId === 'ollama' : turn.billingLabel === LOCAL_MODEL_BILLING_LABEL;
-            const discovered = model ? connection?.discoveredModels.find(item => item.id === model || item.label === model) : undefined;
-            const apiPrice = discovered?.inputPricePerMillion !== undefined && discovered.outputPricePerMillion !== undefined
-                ? { input: discovered.inputPricePerMillion, output: discovered.outputPricePerMillion } : undefined;
-            const reference = !apiPrice && model ? matchCatalogModel(model, discovered?.label, this.globalModels)?.referencePrice : undefined;
-            const price = apiPrice || reference;
-            const estimateUsd = !local && price && inputTokens !== undefined && outputTokens !== undefined
-                ? (inputTokens * price.input + outputTokens * (price.output ?? 0)) / 1_000_000 : undefined;
+            const estimate = local ? {} : estimatePersonalTokenUsd(connection, model, inputTokens, outputTokens);
             records.push({
                 id: `${session.id}:${turn.id}`,
                 conversationTitle: session.title,
@@ -50737,7 +50915,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 billingLabel: turn.billingLabel,
                 ...(inputTokens !== undefined && outputTokens !== undefined ? { inputTokens, outputTokens } : {}),
                 ...(local ? { local } : {}),
-                ...(estimateUsd !== undefined ? { estimateUsd, estimateSource: apiPrice ? 'api' as const : 'reference' as const } : {}),
+                ...(estimate.estimateUsd !== undefined ? estimate : {}),
                 startedAt: turn.createdAt,
                 completedAt: turn.completedAt,
                 status: turn.stage
@@ -50751,12 +50929,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const connection = this.officialModels.connections.find(item => item.id === entry.connectionId);
             const local = connection?.providerId === 'ollama';
             const discovered = connection?.discoveredModels.find(item => item.id === entry.model || item.label === entry.model);
-            const apiPrice = discovered?.inputPricePerMillion !== undefined && discovered.outputPricePerMillion !== undefined
-                ? { input: discovered.inputPricePerMillion, output: discovered.outputPricePerMillion } : undefined;
-            const reference = !apiPrice && entry.model ? matchCatalogModel(entry.model, discovered?.label, this.globalModels)?.referencePrice : undefined;
-            const price = apiPrice || reference;
-            const estimateUsd = !local && price && entry.inputTokens !== undefined && entry.outputTokens !== undefined
-                ? (entry.inputTokens * price.input + entry.outputTokens * (price.output ?? 0)) / 1_000_000 : undefined;
+            const estimate = local ? {} : estimatePersonalTokenUsd(connection, entry.model, entry.inputTokens, entry.outputTokens);
             const matchedSessionTitle = entry.source.kind === 'coding'
                 ? sessionTitleByRunId.get(baseOwnApiRunId(entry.id))
                 : undefined;
@@ -50769,7 +50942,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 ...(entry.kind !== 'text' ? { amountLabel: localizeDesktopSurface(this.desktopLocale, this.mediaKindLabel(entry.kind)) } : {}),
                 note: desktopText(this.desktopLocale, entry.source.kind === 'coding' ? 'coding' : 'comic'),
                 ...(local ? { local } : {}),
-                ...(estimateUsd !== undefined ? { estimateUsd, estimateSource: apiPrice ? 'api' as const : 'reference' as const } : {}),
+                ...(estimate.estimateUsd !== undefined ? estimate : {}),
                 startedAt: entry.at, completedAt: entry.at, status: entry.status === 'completed' ? 'complete' : 'error'
             });
         }
@@ -50789,10 +50962,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
             [row.name, row.providerName, row.host, row.summary].join(' ').toLocaleLowerCase().includes(query)
         );
         const busy = this.officialConnectionStage !== 'idle';
-        const statusText = (row: MyApiRow): string => [
-            myApisText(this.desktopLocale, row.status),
-            row.latencyMs && row.status !== 'unverified' ? myApisText(this.desktopLocale, 'latency', { ms: row.latencyMs }) : ''
-        ].filter(Boolean).join(' · ');
         const activeMyApisError = showOfficial ? this.officialConnectionError : '';
         return <>
             <header className='nmx-workspace-topbar nmx-model-center-topbar'>
@@ -50854,8 +51023,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 <div className='nmx-my-apis-main'>
                                     <strong data-nmx-literal title={row.name}>{row.name}</strong>
                                     <small data-nmx-literal title={`${row.providerName}${row.host ? ` · ${row.host}` : ''}`}>{row.providerName}{row.host ? ` · ${row.host}` : ''}</small>
-                                    <span className='nmx-my-apis-status'><i className={`nmx-connection-dot is-${row.status === 'unverified' ? 'unverified' : 'verified'}${row.status === 'reachable' ? ' is-partial' : ''}`} aria-hidden='true' />
-                                        <span data-nmx-literal>{statusText(row)}{row.summary ? ` · ${row.summary}` : ''}</span></span>
+                                    <MyApiStatusLabel locale={this.desktopLocale} row={row} />
                                 </div>
                                 {confirming
                                     ? <div className='nmx-my-apis-actions is-confirming' role='group' aria-label={myApisText(this.desktopLocale, 'confirmRemove')}>
@@ -50867,9 +51035,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         <button type='button' data-my-api-action='models' data-api-action='models' aria-expanded={this.officialModelListOpenId === row.id}
                                             onClick={event => this.toggleOwnModelList(row.id, event.currentTarget)}>
                                             {myApisText(this.desktopLocale, 'models')}<span className='nmx-my-apis-model-count'><span data-nmx-literal>{row.modelCount ?? 0}</span></span>
-                                        </button>
-                                        <button type='button' data-my-api-action='test' data-api-action='speed' disabled={busy} onClick={() => { if (conn) void this.validateExistingOfficialConnection(conn); }}>
-                                            {mine && this.officialConnectionStage === 'testing' ? myApisText(this.desktopLocale, 'testing') : myApisText(this.desktopLocale, 'test')}
                                         </button>
                                         <button type='button' data-my-api-action='edit' data-api-action='edit' disabled={busy} onClick={() => { if (conn && prov) this.openOfficialProviderFromMyApis(prov, conn); }}>
                                             {myApisText(this.desktopLocale, 'edit')}
@@ -51032,23 +51197,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 <header><div><span>{local ? localModelText(this.desktopLocale, 'title') : custom ? myApisText(this.desktopLocale, 'ownApi') : '本机官方直连'}</span><h2>{provider.id === 'custom_openai' ? myApisText(this.desktopLocale, 'compatibleTitle') : custom ? provider.name : provider.modelFamily}</h2>{!local && <p>{custom ? provider.description : `${provider.name} · ${provider.description}`}</p>}</div><button disabled={busy} onClick={() => this.closeOfficialProvider()} aria-label='关闭官方连接窗口'>×</button></header>
                 {showSaved && <section className='nmx-saved-connections'>
                     <div className='nmx-subsection-heading'><strong>已保存连接</strong><span>{officialModelSurfaceText(this.desktopLocale, 'savedConnectionCount', { count: String(connections.length) })}</span><button type='button' disabled={busy} data-official-action='add' onClick={() => this.openOfficialProvider(provider, undefined, true)}>添加连接</button></div>
-                    {connections.map(connection => <article key={connection.id} data-connection-id={connection.id}>
-                        <span className={`nmx-connection-dot is-${connection.status}`}></span>
-                        <div><strong>{connection.label}</strong><small>{connection.model} · {officialCredentialHint(this.desktopLocale, connection)}</small><p>{connection.status === 'unverified' ? '尚未检测' : connection.toolCapability === 'verified' ? `工具调用已通过 · ${connection.lastLatencyMs ?? 0} ms` : 'API 可连接 · 工具调用未通过'} · {officialDiscoverySummary(this.desktopLocale, connection)}</p><OfficialCatalogDetails locale={this.desktopLocale} connection={connection} /></div>
-                        <div className='nmx-connection-actions'>
-                            <button data-official-action='model-list' aria-expanded={this.officialModelListOpenId === connection.id} onClick={() => {
-                                const opening = this.officialModelListOpenId !== connection.id;
-                                this.officialModelListOpenId = opening ? connection.id : '';
-                                this.update();
-                                if (opening) this.maybeRefreshOfficialConnectionModelsOnOpen?.(connection);
-                            }}>{ownModelListText(this.desktopLocale, 'button')}</button>
-                            <button data-official-action='configure' disabled={busy} onClick={() => this.openOfficialProvider(provider, connection, true)}>重新配置</button>
-                            <button data-official-action='refresh-models' disabled={busy} onClick={() => void this.refreshOfficialConnectionModels(connection)}>{this.officialBusyConnectionId === connection.id && this.officialConnectionStage === 'discovering' ? '刷新中' : '刷新模型'}</button>
-                            <button data-official-action='speed-test' disabled={busy} onClick={() => void this.validateExistingOfficialConnection(connection)}>{this.officialBusyConnectionId === connection.id && this.officialConnectionStage === 'testing' ? '测速中' : '测速'}</button>
-                            <button data-official-action='disconnect' className={this.officialDeleteConfirmId === connection.id ? 'is-danger' : ''} disabled={busy} onClick={() => void this.removeOfficialConnection(connection.id)}>{this.officialBusyConnectionId === connection.id && this.officialConnectionStage === 'removing' ? '断开中' : this.officialDeleteConfirmId === connection.id ? '确认断开' : '断开'}</button>
-                        </div>
-                        {this.officialModelListOpenId === connection.id && <OwnModelList locale={this.desktopLocale} connection={connection} loading={(this.officialBusyConnectionId === connection.id && this.officialConnectionStage === 'discovering') || Boolean(this.officialPickerValidations?.has(connection.id))} catalog={this.globalModels} />}
-                    </article>)}
+                    {connections.map(connection => {
+                        const savedStatus = this.ownApiRowStatus(connection);
+                        const reading = savedStatus.status === 'reading';
+                        return <article key={connection.id} data-connection-id={connection.id}>
+                            <span className={`nmx-connection-dot is-${savedStatus.status}`}></span>
+                            <div><strong>{connection.label}</strong><small>{connection.model} · {officialCredentialHint(this.desktopLocale, connection)}</small><p data-api-status={savedStatus.status}>{myApiStatusLine(this.desktopLocale, savedStatus)}</p><OfficialCatalogDetails locale={this.desktopLocale} connection={connection} /></div>
+                            <div className='nmx-connection-actions'>
+                                <button data-official-action='model-list' aria-expanded={this.officialModelListOpenId === connection.id} onClick={() => {
+                                    const opening = this.officialModelListOpenId !== connection.id;
+                                    this.officialModelListOpenId = opening ? connection.id : '';
+                                    this.update();
+                                    if (opening) this.maybeRefreshOfficialConnectionModelsOnOpen?.(connection);
+                                }}>{ownModelListText(this.desktopLocale, 'button')}</button>
+                                <button data-official-action='configure' disabled={busy} onClick={() => this.openOfficialProvider(provider, connection, true)}>重新配置</button>
+                                <button data-official-action='refresh-models' disabled={busy} onClick={() => void this.refreshOfficialConnectionModels(connection)}>{this.officialBusyConnectionId === connection.id && this.officialConnectionStage === 'discovering' ? '刷新中' : '刷新模型'}</button>
+                                <button data-official-action='disconnect' className={this.officialDeleteConfirmId === connection.id ? 'is-danger' : ''} disabled={busy} onClick={() => void this.removeOfficialConnection(connection.id)}>{this.officialBusyConnectionId === connection.id && this.officialConnectionStage === 'removing' ? '断开中' : this.officialDeleteConfirmId === connection.id ? '确认断开' : '断开'}</button>
+                            </div>
+                            {this.officialModelListOpenId === connection.id && <OwnModelList locale={this.desktopLocale} connection={connection} loading={reading} catalog={this.globalModels} />}
+                        </article>;
+                    })}
                 </section>}
                 {(this.officialConnectionEditorOpen || !showSaved) && <section className='nmx-official-form'>
                     <div className='nmx-subsection-heading'><strong>{draft.connectionId ? '编辑连接' : '添加连接'}</strong>{!local && <span>{credentialSource === 'environment' ? '系统环境凭据' : credentialStoreName(this.desktopLocale)}</span>}{showSaved && <button type='button' disabled={busy} onClick={() => { this.officialConnectionEditorOpen = false; this.officialConnectionError = ''; this.update(); }}>取消</button>}</div>
@@ -51114,9 +51282,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     <MyApisErrorToast locale={this.desktopLocale} toastKey={`${this.officialConnectionRequestToken}:${this.officialConnectionError}`} error={this.officialConnectionError} onDismiss={() => { this.officialConnectionError = ''; this.officialConnectionErrorDetail = ''; this.update(); }} />
                     <div className='nmx-official-form-actions'>
                         <div>{provider.consoleUrl && <button disabled={busy} onClick={() => this.openExternalUrl(provider.consoleUrl)}>打开官方控制台</button>}{provider.documentationUrl && <button disabled={busy} onClick={() => this.openExternalUrl(provider.documentationUrl)}>API 文档</button>}</div>
-                        <div><button disabled={busy || !canSave} onClick={() => void this.saveOfficialConnection(false)}>{this.officialConnectionStage === 'saving' ? '保存中…' : '仅保存'}</button><button className='nmx-primary-button' disabled={busy || !canSave} onClick={() => void this.saveOfficialConnection(true)}>{this.officialConnectionStage === 'testing' && !this.officialBusyConnectionId ? '检测中…' : '测试并保存'}</button></div>
+                        <div><button className='nmx-primary-button' data-official-action='save' disabled={busy || !canSave} onClick={() => void this.saveOfficialConnection(false)}>{this.officialConnectionStage === 'saving' ? localizeDesktopSurface(this.desktopLocale, '保存中…') : localizeDesktopSurface(this.desktopLocale, '保存')}</button></div>
                     </div>
-                    <small className='nmx-test-cost-note'>{local ? localModelText(this.desktopLocale, 'test') : '“测试并保存”会发起一次轻量调用验证连通性；“仅保存”不调用模型。'}</small>
                 </section>}
                 {!local && !custom && <p className='nmx-oauth-note'>此供应商当前使用 API Key 连接；登录密码不会由 NextMux 请求或保存。</p>}
             </section>
@@ -55756,8 +55923,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
             [...visibleModelOptions, ...moreModelOptions].filter(matchesPickerQuery).map(model => ({ id: model.id, identity: model.id, model })),
             new Set(modelRouteById.keys()), Boolean(pickerConnection), this.selectedModelIds.coding
         ).selectable.map(candidate => candidate.model)
-            .sort((left, right) => (left.rank ?? Infinity) - (right.rank ?? Infinity)
-                || left.label.localeCompare(right.label, undefined, { numeric: true, sensitivity: 'base' })));
+            // An own API's unproven models (ownRouteHint) follow its proven ones; relay rows have no hint.
+            .map(model => ({ model, proof: pickerConnection ? this.ownRouteProof?.(modelRouteById.get(model.id)) ?? 0 : 0 }))
+            .sort((left, right) => left.proof - right.proof || (left.model.rank ?? Infinity) - (right.model.rank ?? Infinity)
+                || left.model.label.localeCompare(right.model.label, undefined, { numeric: true, sensitivity: 'base' }))
+            .map(item => item.model));
         const pickerSearchable = Boolean(pickerQuery) || visibleModelOptions.length + moreModelOptions.length > 12;
         // An own API whose list could not be read and has nothing to show: the failure takes the empty list's place.
         const officialFailureInPlace = officialPickerFailed && !officialPickerPending && !pickerQuery && pickerRows.length === 0;
@@ -55916,6 +56086,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         ? 'modelToolsUnverified'
                         : 'modelGenerationUnverified');
             const unavailableLabel = model.listingPending ? modelPickerEvidenceText(this.desktopLocale, 'listingPending') : unavailableReasonText;
+            // An own API's model offered unproven (ownApiRouteAdmission) is listed after its proven ones and carries no warning:
+            // nothing in the app tests models (saving spends nothing), so a tag could never go away. Kept for diagnostics only.
+            const routeHint = supported ? this.ownRouteHint?.(optionRoute) : undefined;
             const offering = optionRoute?.kind === 'managed_gateway' ? optionRoute.offering : undefined;
             const rawFidelity = offering?.fidelity || model.fidelity;
             const fidelity = measuredModelFidelity(rawFidelity);
@@ -55943,7 +56116,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const contextRow: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
             const optionTitle = [model.label, optionRouteLabel, ...[...metrics, ...contextRow].map(metric => `${metric.label}: ${metric.value}`), !supported && unavailableLabel].filter(Boolean).join(' · ');
             return <div className={`nmx-model-option ${supported ? '' : 'is-unsupported'} ${selected ? 'is-selected' : ''}`} key={model.id} data-model-id={model.id}
-                data-capability-gate={supported ? 'verified_generation_and_tools' : model.listingPending ? 'listing_pending' : unavailableReason}
+                data-capability-gate={supported ? routeHint ? `own_api_${routeHint}` : 'verified_generation_and_tools' : model.listingPending ? 'listing_pending' : unavailableReason}
                 onPointerEnter={hover}
                 onPointerMove={hover}
                 onFocus={event => this.openModelEffortPicker(model.id, event.currentTarget, cardSettings().settingsRowCount)}
@@ -58307,7 +58480,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const each = tiers ? tier?.customerMicros : price.imageEachMicros ?? undefined;
         const micros = mode === 'image' ? each === undefined ? undefined : each * (params.count || 1)
             : mode === 'music' ? price.requestEachMicros ?? undefined
-                    : price.audioPerMillionCharactersMicros == null ? undefined : price.audioPerMillionCharactersMicros * Math.max(1, text.length) / 1_000_000;
+                    // Speech: per character as the gateway counts them (MiniMax: a Chinese character is 2), or one call.
+                    : price.audioPerMillionCharactersMicros == null ? price.requestEachMicros ?? undefined
+                        : price.audioPerMillionCharactersMicros * Math.max(1, speechBillableCharacters(text, price.characterCounting)) / 1_000_000;
         if (micros === undefined) return this.comicChatT('priceUnknown');
         const estimate = this.comicChatT('estimate', { price: new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency: price.currency, maximumFractionDigits: 4 }).format(micros / 1_000_000) });
         const tokenFees = tiers?.kind === 'image' && offering && mediaTierInputRates({ price, officialPrice: offering.officialPrice, mediaTiers: tiers,
@@ -59755,7 +59930,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         self.comicChatDirectoriesFor = this.catalogSnapshotRevision;
         for (const capability of ['text', 'image', 'video', 'speech', 'music'] as const) void this.loadComicStepDirectory(capability);
         // 推荐模型 follows the defaults set in the platform admin (refreshed at most every ten minutes).
-        if (Date.now() - this.comicPlatformDefaultsAt > 600_000) void this.loadComicPlatformDefaults();
+        if (Date.now() - this.comicPlatformDefaultsAt > 600_000) void this.loadComicPlatformDefaults?.();
     }
 
     protected renderComicChatDeleteDialog(): React.ReactNode {

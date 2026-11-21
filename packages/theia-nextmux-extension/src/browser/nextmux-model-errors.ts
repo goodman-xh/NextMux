@@ -47,7 +47,8 @@ function compactOwnApiNetworkText(
     failure: ReturnType<typeof formatModelError>,
     surface?: 'thread' | 'my_api_card'
 ): ReturnType<typeof formatModelError> {
-    if (surface !== 'thread' && failure.kind === 'network' && failure.source === 'own_api') {
+    // A proxy that refused the tunnel keeps its advice: the proxy's rules, not the API, are what to check.
+    if (surface !== 'thread' && failure.kind === 'network' && failure.source === 'own_api' && failure.code !== 'proxy_connection_failed') {
         const text = locale === 'zh-CN' ? '无法连接模型服务。' : locale === 'zh-TW' ? '無法連線模型服務。' : failure.text;
         if (text !== failure.text) return { ...failure, text };
     }
@@ -249,7 +250,7 @@ export function modelFailureText(locale: NextMuxDesktopLocale, value: unknown, c
             ...(failure.kind === 'billing_review_required' && failure.source === 'relay' && failure.causeKind === 'provider_quota_exhausted'
                 ? { causeKind: failure.causeKind } : {}),
             retryAfterSeconds: failure.retryAfterSeconds, retryCount: failure.retryCount, relaySwitchCount: failure.relaySwitchCount,
-            ...(/^(?:route_privacy_unavailable|device[_\s-]*link[_\s-]*required|device[_\s-]*auth[_\s-]*required|account[_\s-]*auth[_\s-]*required|sign[_\s-]*in[_\s-]*required)$/i.test(failure.code ?? '')
+            ...(/^(?:route_privacy_unavailable|proxy_connection_failed|device[_\s-]*link[_\s-]*required|device[_\s-]*auth[_\s-]*required|account[_\s-]*auth[_\s-]*required|sign[_\s-]*in[_\s-]*required)$/i.test(failure.code ?? '')
                 ? { code: failure.code }
                 : /link this desktop to your nextmux account|device[_\s-]*link[_\s-]*required|device[_\s-]*auth[_\s-]*required|account[_\s-]*auth[_\s-]*required|sign[_\s-]*in[_\s-]*required|desktop device link required|platform sign-in required|请先登录|需要先登录/i.test(failure.detail)
                     ? { code: 'device_link_required' } : {}),
