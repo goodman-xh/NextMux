@@ -1,20 +1,124 @@
-/* USD top-up sheet (Whop checkout). Base sheet, field, presets and footer rules live in nextmux.css. */
+/* Unified USD top-up sheet (/checkout-embed Elements flow).
+ * Pure solid/tinted surfaces without glass blur; inherits Dark & Light --nmx-* tokens. */
+
+.nmx-shell .nmx-topup-sheet > header {
+    min-height: 56px;
+    padding: 12px 18px;
+}
+
+.nmx-shell .nmx-topup-sheet > form,
+.nmx-shell .nmx-topup-sheet > .nmx-topup-payment {
+    padding: 16px 20px 18px;
+}
+
+.nmx-shell .nmx-topup-sheet .nmx-topup-amount-field {
+    height: 46px;
+}
+
+.nmx-shell .nmx-topup-sheet .nmx-topup-amount-field input {
+    font-size: 22px;
+}
 
 .nmx-topup-sheet .nmx-topup-limits {
-    margin: 8px 0 0;
-    color: var(--nmx-muted);
+    margin: 7px 0 0;
+    color: var(--nmx-subtle);
+    font-size: 12.5px;
+    line-height: 1.4;
+}
+
+.nmx-topup-method-section {
+    margin-top: 13px;
+}
+
+.nmx-topup-method-label {
+    display: block;
+    margin-bottom: 7px;
+    color: var(--nmx-subtle);
     font-size: 13px;
+    font-weight: 600;
+}
+
+.nmx-topup-method-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.nmx-shell .nmx-topup-method-btn {
+    flex: 1 0 auto;
+    min-height: 36px;
+    padding: 7px 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid var(--nmx-border-strong);
+    border-radius: 9px;
+    color: var(--nmx-text);
+    background: var(--nmx-control-background);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.25;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+.nmx-shell .nmx-topup-method-btn:hover {
+    border-color: var(--nmx-focus-ring);
+    color: var(--nmx-text);
+    background: var(--nmx-control-hover);
+}
+
+.nmx-shell .nmx-topup-method-btn.is-active,
+.nmx-shell .nmx-topup-method-btn[aria-checked='true'] {
+    border-color: var(--nmx-text);
+    box-shadow: inset 0 0 0 1px var(--nmx-text);
+    color: var(--nmx-text);
+    background: color-mix(in srgb, var(--nmx-text) 10%, var(--nmx-control-background));
+    font-weight: 600;
+}
+
+.nmx-shell.nmx-theme-light .nmx-topup-method-btn.is-active,
+.nmx-shell.nmx-theme-light .nmx-topup-method-btn[aria-checked='true'] {
+    border-color: var(--nmx-text);
+    box-shadow: inset 0 0 0 1px var(--nmx-text);
+    color: var(--nmx-text);
+    background-color: #e6e2e4;
+}
+
+.nmx-topup-method-icons {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+
+.nmx-topup-method-icons svg {
+    display: block;
+    flex-shrink: 0;
+}
+
+.nmx-topup-method-text {
+    white-space: nowrap;
+}
+
+.nmx-topup-method-hint {
+    margin: 7px 0 0;
+    color: var(--nmx-subtle);
+    font-size: 12.5px;
+    line-height: 1.45;
 }
 
 .nmx-topup-summary {
     display: grid;
-    gap: 8px;
-    margin: 16px 0 0;
-    padding: 12px 14px;
-    border: 1px solid var(--nmx-border);
+    gap: 7px;
+    margin: 14px 0 0;
+    padding: 11px 14px;
+    border: 1px solid var(--nmx-border-strong);
     border-radius: 10px;
     background: color-mix(in srgb, var(--nmx-text) 3%, var(--nmx-panel));
-    font-size: 14px;
+    font-size: 13.5px;
     text-align: start;
 }
 
@@ -29,6 +133,12 @@
     color: var(--nmx-subtle);
 }
 
+.nmx-topup-fee-rate {
+    color: var(--nmx-subtle);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
 .nmx-topup-summary dd {
     margin: 0;
     color: var(--nmx-text);
@@ -37,7 +147,7 @@
 }
 
 .nmx-topup-summary > .is-total {
-    padding-top: 8px;
+    padding-top: 7px;
     border-top: 1px solid var(--nmx-border);
 }
 
@@ -51,19 +161,26 @@
     font-weight: 650;
 }
 
+.nmx-topup-summary > .is-reference dt,
+.nmx-topup-summary > .is-reference dd {
+    font-size: 12.5px;
+    color: var(--nmx-subtle);
+}
+
 .nmx-topup-sheet .nmx-topup-note {
     display: flex;
     align-items: flex-start;
     gap: 7px;
-    margin: 12px 0 0;
-    color: var(--nmx-muted);
-    font-size: 13px;
-    line-height: 1.55;
+    margin: 11px 0 0;
+    color: var(--nmx-subtle);
+    font-size: 12.5px;
+    line-height: 1.5;
 }
 
 .nmx-topup-note .codicon {
     margin-top: 2px;
     font-size: 13px;
+    flex-shrink: 0;
 }
 
 .nmx-topup-payment.nmx-topup-checkout {
@@ -77,7 +194,7 @@
 
 .nmx-topup-checkout .nmx-topup-payment-copy > span {
     color: var(--nmx-subtle);
-    line-height: 1.55;
+    line-height: 1.5;
 }
 
 .nmx-topup-checkout .nmx-topup-summary {
@@ -90,19 +207,19 @@
 }
 
 .nmx-topup-checkout-mark {
-    width: 52px;
-    height: 52px;
+    width: 48px;
+    height: 48px;
     display: grid;
     place-items: center;
-    margin: 0 auto 14px;
-    border-radius: 16px;
+    margin: 0 auto 12px;
+    border-radius: 14px;
     color: var(--nmx-text);
     background: color-mix(in srgb, var(--nmx-text) 7%, var(--nmx-panel));
     animation: nmx-topup-mark-in 220ms cubic-bezier(.22, 1, .36, 1) both;
 }
 
 .nmx-topup-checkout-mark .codicon {
-    font-size: 24px;
+    font-size: 22px;
 }
 
 .nmx-topup-checkout.is-credited .nmx-topup-checkout-mark {
@@ -114,6 +231,68 @@
     flex-wrap: wrap;
 }
 
+.nmx-topup-sheet.is-embedded {
+    width: min(500px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    display: flex;
+    flex-direction: column;
+}
+
+.nmx-topup-payment.is-embedded {
+    overflow-y: auto;
+    min-height: 0;
+    text-align: start;
+}
+
+.nmx-topup-payment.is-embedded .nmx-topup-payment-copy {
+    text-align: start;
+}
+
+.nmx-topup-payment.is-embedded .nmx-topup-payment-copy > strong {
+    font-size: 20px;
+}
+
+.nmx-topup-embed-shell {
+    position: relative;
+    margin-top: 12px;
+    border: 1px solid var(--nmx-border-strong);
+    border-radius: 10px;
+    background: var(--nmx-control-background);
+    overflow: hidden;
+    min-height: 160px;
+}
+
+.nmx-topup-embed-loading {
+    display: grid;
+    place-items: center;
+    padding: 16px 14px;
+    color: var(--nmx-subtle);
+    font-size: 13px;
+    border-bottom: 1px solid var(--nmx-border);
+}
+
+.nmx-topup-embed-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid color-mix(in srgb, var(--nmx-danger) 40%, var(--nmx-border));
+    color: var(--nmx-danger);
+    background: color-mix(in srgb, var(--nmx-danger) 8%, var(--nmx-panel));
+    font-size: 12.5px;
+    line-height: 1.45;
+    text-align: start;
+}
+
+.nmx-topup-embed-frame {
+    display: block;
+    width: 100%;
+    min-height: 160px;
+    max-height: 560px;
+    border: 0;
+    background: transparent;
+}
+
 @keyframes nmx-topup-mark-in {
     from { opacity: 0; transform: scale(.9); }
     to { opacity: 1; transform: scale(1); }
@@ -122,5 +301,9 @@
 @media (prefers-reduced-motion: reduce) {
     .nmx-topup-checkout-mark {
         animation: none;
+    }
+
+    .nmx-shell .nmx-topup-method-btn {
+        transition: none;
     }
 }

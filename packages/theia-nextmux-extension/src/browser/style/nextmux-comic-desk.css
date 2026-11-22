@@ -6,7 +6,7 @@
 
 .nmx-desk-backdrop {
     position: absolute; inset: 0; z-index: 40; display: flex; align-items: stretch; justify-content: center;
-    padding: 14px; background: color-mix(in srgb, var(--nmx-bg) 55%, transparent); backdrop-filter: blur(10px);
+    padding: 14px; background: color-mix(in srgb, var(--nmx-bg) 84%, transparent);
     animation: nmx-desk-in 180ms ease-out;
 }
 @keyframes nmx-desk-in { from { opacity: 0; } to { opacity: 1; } }
@@ -258,7 +258,7 @@
 /* Carousel cards are painted in z-index order in their own flat layer (perspective moves onto the carousel):
    a card tilted toward the viewer no longer cuts through the arrows. */
 .nmx-desk-carousel { transform-style: flat; perspective: 1400px; }
-.nmx-desk-arrow { color: var(--nmx-text); background: color-mix(in srgb, var(--nmx-panel) 88%, transparent); backdrop-filter: blur(8px); cursor: pointer; transition: background-color .14s ease, transform .14s ease; }
+.nmx-desk-arrow { color: var(--nmx-text); background: var(--nmx-panel); border: 1px solid var(--nmx-border); cursor: pointer; transition: background-color .14s ease, transform .14s ease; }
 .nmx-desk-arrow:hover:not(:disabled) { background: var(--nmx-panel-2); transform: scale(1.06); }
 .nmx-desk-arrow:disabled { cursor: default; }
 
@@ -615,4 +615,9 @@
 .nmx-shell .nmx-desk-editor { gap: 10px; margin: 0 18px 14px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--nmx-text) 3%, var(--nmx-panel)); }
 .nmx-shell .nmx-desk-editor textarea { padding: 10px 12px; border-radius: 10px; font-size: 13.5px; line-height: 1.7; }
 .nmx-shell .nmx-desk-editor > .nmx-primary-button { height: 34px; min-height: 34px; }
-@media (prefers-reduced-motion: reduce) { .nmx-desk-filmstrip > button:is(.is-video, .is-picture)::before { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+    .nmx-desk-filmstrip > button:is(.is-video, .is-picture)::before,
+    .nmx-desk-card.is-clip.is-video .nmx-desk-card-back::after,
+    .nmx-desk-card.is-clip.is-picture .nmx-desk-card-back::after,
+    .nmx-desk-card.is-drawing .nmx-desk-card-back::after { animation: none; }
+}

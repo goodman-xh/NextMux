@@ -638,11 +638,14 @@ import { goalFileBody, goalFileObjective, isGoalFilePath } from './nextmux-goal-
 import { finalTextAlreadyInActivity, appendAgentActivityEvents, agentThinkingPresentation, autoResumeDelayMs, autoResumeDecision, BUSY_RETRY_DELAYS_MS, isBusyFailure, isVisibleAssistantProgress, modelAttemptPresentation, userCancelledActivityEvents, modelPhasePresentation, shouldShowAgentTaskProgress, summarizeAgentTaskProgress, toolActivitySucceeded, toolCompletionTitle, userQueuedPrompts } from './nextmux-agent-activity';
 import { mergeAgentEventPollSnapshot } from './nextmux-agent-event-poll';
 import { agentOutcomeText, canonicalRuntimeFinal, desktopFailureMessage, isMerchantApiDeletedFailure, normalizeDesktopFailure, normalizePendingManagedReceipt, originalReceiptText, normalizeRuntimeFinalMessage, runtimeFinalText } from './nextmux-agent-outcome-locale';
-import { relayDelistedText, relayText, type RelayUnavailableReason } from './nextmux-relay-locale';
+import { relayDelistedText, relayFreeHintText, relayText, type RelayUnavailableReason } from './nextmux-relay-locale';
 import { RelayCapacityPoller, RelayCapacityRefresh } from './nextmux-relay-capacity';
 import { relayMerchantIsFull, relayOfferingIsFull, type PublicMerchantCapacityScope, type PublicMerchantCapacitySnapshot } from '../common/nextmux-relay-capacity';
 import {
+    comicRelayFreeScope,
     filterRelayPickerSources,
+    merchantHasScopedFreeModel,
+    type MerchantFreeScope,
     modelPickerEvidenceText,
     modelPickerListText,
     relayMetricSignal,
@@ -668,7 +671,7 @@ import { relayAvailabilityText, relayMarketplaceText } from './nextmux-relay-mar
 import { averageRelayAvailability, averageRelayLatency, INITIAL_RELAY_QUALITY, measuredModelFidelity, measuredRelayAuthenticity, measuredRelayLatency, measuredRelayQuality, relayFeedbackVotes, relayLatencyEvidence } from '../common/nextmux-relay-evidence';
 import { NextMuxLinkOpeningPolicy, type LinkOpeningDecision, type LinkOpeningDestination } from './nextmux-link-opening';
 import { linkOpeningText } from './nextmux-link-opening-locale';
-import { WalletTopupSheet, walletTopupAmountMinor, walletTopupErrorText, walletTopupRangeText, walletTopupText, type WalletTopupStage } from './nextmux-wallet-topup';
+import { WalletTopupSheet, resolveCheckoutPlatformOrigin, walletTopupAmountMinor, walletTopupErrorText, walletTopupRangeText, walletTopupText, type WalletTopupPaymentMethod, type WalletTopupStage } from './nextmux-wallet-topup';
 import {
     classifyDesktopPlatform,
     getMicrophoneSettingsStrategy,
@@ -1987,6 +1990,11 @@ interface RelayOption {
      * says so. The directory's word decides while it lists the store, else the store's offerings.
      */
     readonly depositVerified?: boolean;
+    /**
+     * What the store's 0× models do (the directory's freeCapabilities: 'coding', 'image', …): a drawer marks the row
+     * "free" for its own function only (merchantHasScopedFreeModel), so free text never reads free in 漫剧.
+     */
+    readonly freeCapabilities?: readonly string[];
 }
 
 interface PendingRelaySwitch {
@@ -3968,6 +3976,19 @@ function usageRecordTotalTokens(record: BillingUsageRecord): number | null {
 
 const COMIC_EXPORT_DIRECTORY_KEY = 'nextmux.desktop.comicExportDirectory.v1';
 
+/**
+ * Direct user input (React's discrete events). An update raised while one of these is dispatched renders without waiting
+ * for the next frame, as it did before frame coalescing: its handler may focus, select or scroll what it just revealed
+ * (`update(); requestAnimationFrame(() => input.focus())`), and a controlled field must not show its old value for a
+ * frame. Continuous input (pointer moves, wheel, scroll) and background work (streams, timers, IPC) are coalesced.
+ */
+const IMMEDIATE_RENDER_EVENT_TYPES: ReadonlySet<string> = new Set([
+    'auxclick', 'beforeinput', 'blur', 'change', 'click', 'compositionend', 'compositionstart', 'compositionupdate',
+    'contextmenu', 'copy', 'cut', 'dblclick', 'dragend', 'dragstart', 'drop', 'focus', 'focusin', 'focusout', 'input',
+    'keydown', 'keypress', 'keyup', 'mousedown', 'mouseup', 'paste', 'pointercancel', 'pointerdown', 'pointerup',
+    'reset', 'select', 'submit', 'touchcancel', 'touchend', 'touchstart'
+]);
+
 @injectable()
 export class NextMuxDesktopWidget extends ReactWidget {
     static readonly ID = 'nextmux.desktop.widget';
@@ -4445,6 +4466,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected billingTab: BillingTab = 'usage';
     protected walletTopupSheetOpen = false;
     protected walletTopupAmount = '20';
+    protected walletTopupRail: WalletTopupPaymentMethod = 'card';
+    protected walletTopupPlatformOrigin = 'https://nextmux.app';
     protected walletTopupStage: WalletTopupStage = 'idle';
     protected walletTopupOrder: PlatformWalletTopupOrder | undefined;
     protected walletTopupOptions: PlatformWalletTopupOptions | undefined;
@@ -5511,6 +5534,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected readonly modelListRefreshAttempts = new Map<string, number>();
     protected modelListRefreshRunning = false;
     protected modelListRefreshTimer: number | undefined;
+    protected renderUpdateFrame: number | undefined;
+    protected relativeTimeRenderAt = 0;
+    protected relativeTimeRenderKey = '';
 
     @postConstruct()
     protected init(): void {
@@ -5641,7 +5667,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // Which picture or clip a click opens, noted before React's handlers open a viewer: ‹ › then step through its gallery.
         this.node.addEventListener('click', this.noteMediaGalleryClick, true);
         this.toDispose.push({ dispose: () => this.node.removeEventListener('click', this.noteMediaGalleryClick, true) });
-        const modelListInterval = window.setInterval(() => this.scheduleOwnApiModelListRefresh(), MODEL_LIST_RETRY_MS);
+        const modelListInterval = window.setInterval(() => {
+            if (this.isDisposed || (typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden'))) return;
+            if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+            if (!this.officialModels?.connections?.some(connection => !isOfficialMediaProtocol(connection.protocol))) return;
+            this.scheduleOwnApiModelListRefresh();
+        }, MODEL_LIST_RETRY_MS);
         this.toDispose.push({ dispose: () => { window.clearInterval(modelListInterval); window.clearTimeout(this.modelListRefreshTimer); this.ownApiRefreshState = undefined; } });
         // The cloud model list and prices: ask a tiny edge-cached version every ~30 minutes (with jitter,
         // so millions of clients never arrive together) and download again only when it changed.
@@ -5824,7 +5855,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const platformNotificationsPollTimer = !this.detachedConversationId
             ? window.setInterval(() => {
                 if (this.isDisposed || !this.platformSession?.linked) return;
-                if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+                if (typeof document !== 'undefined' && (document.hidden || document.visibilityState !== 'visible')) return;
                 if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
                 void this.refreshPlatformNotifications(false);
             }, 5 * 60_000)
@@ -5851,9 +5882,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         window.addEventListener(THEIA_CONFIRMATION_EVENT, onTheiaConfirmation);
         window.addEventListener('focus', onWindowFocusWorkspaceCheck);
         const workspaceHealthTimer = window.setInterval(() => {
-            if (document.visibilityState === 'visible' && this.missingProjectWorkspacePaths.size > 0) {
-                void this.checkActiveProjectWorkspaceHealth(false);
-            }
+            if (this.isDisposed || this.missingProjectWorkspacePaths.size === 0) return;
+            if (typeof document !== 'undefined' && (document.hidden || document.visibilityState !== 'visible')) return;
+            void this.checkActiveProjectWorkspaceHealth(false);
         }, 3_000);
         this.toDispose.push({
             dispose: () => {
@@ -5987,18 +6018,34 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.platformDefaultMerchantLoadTokens?.clear();
         } });
         const mediaTimer = setInterval(() => {
-            if (document.visibilityState === 'visible' && this.activeComicWorkspaceRoot
-                && (this.activeSection === 'comic' || this.activeSection === 'settings')) {
-                void this.loadMediaState(true, true);
-                void this.loadComicExportState(true, true);
-            }
+            if (this.isDisposed || !this.activeComicWorkspaceRoot) return;
+            if (typeof document !== 'undefined' && (document.hidden || document.visibilityState !== 'visible')) return;
+            if (this.activeSection !== 'comic' && this.activeSection !== 'settings') return;
+            const canvas = this.comicCanvas;
+            const hasActiveMedia = this.mediaWorkspaceRoot !== this.activeComicWorkspaceRoot
+                || this.comicExportWorkspaceRoot !== this.activeComicWorkspaceRoot
+                || this.mediaState.jobs.some(job => ['awaiting_confirmation', 'queued', 'running', 'paused'].includes(job.status))
+                || Boolean(this.comicExportState.active)
+                || this.comicStage !== 'idle'
+                || this.mediaStage !== 'idle'
+                || this.comicExportStage !== 'idle'
+                || this.comicBatchRunning
+                || Boolean(this.comicDesk?.shooting || this.comicDesk?.splitting || this.comicDesk?.countdown)
+                || Boolean(canvas && (canvas.tools.size || canvas.waiting.size || canvas.submitting.size || canvas.composing));
+            if (!hasActiveMedia) return;
+            void this.loadMediaState(true, true);
+            void this.loadComicExportState(true, true);
         }, 5_000);
         this.toDispose.push({ dispose: () => clearInterval(mediaTimer) });
         const siteTimer = setInterval(() => {
-            if (document.visibilityState === 'visible' && this.activeSection === 'coding' && this.activeWorkspaceRoot
-                && (this.codingPanel === 'sites' || this.workContextOpen && this.workContextMode === 'browser')) {
-                void this.loadSiteState(true, true);
-            }
+            if (this.isDisposed || this.activeSection !== 'coding' || !this.activeWorkspaceRoot) return;
+            if (typeof document !== 'undefined' && (document.hidden || document.visibilityState !== 'visible')) return;
+            if (this.codingPanel !== 'sites' && !(this.workContextOpen && this.workContextMode === 'browser')) return;
+            const hasActiveSite = this.siteStateWorkspace !== this.activeWorkspaceRoot
+                || Boolean(this.siteBusyProcessId)
+                || this.siteState.processes.some(process => process.status === 'starting' || process.status === 'running');
+            if (!hasActiveSite) return;
+            void this.loadSiteState(true, true);
         }, 4_000);
         this.toDispose.push({ dispose: () => clearInterval(siteTimer) });
         this.accountLinkCoordinator = new DesktopAccountLinkCoordinator({
@@ -6118,17 +6165,36 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (this.publicMerchantSearchTimer) window.clearTimeout(this.publicMerchantSearchTimer);
         } });
         const relativeTimeTimer = setInterval(() => {
-            // Relative labels are only worth a full render when someone can see them.
-            if (document.visibilityState === 'visible' && this.activeSection === 'coding'
-                && this.activeCodingSession()?.turns.some(turn => turn.stage === 'complete')) this.update();
+            // Relative labels are only worth a full render when someone can see them and at least one changed.
+            if (this.isDisposed || this.activeSection !== 'coding' || this.codingPanel !== 'thread') return;
+            if (typeof document !== 'undefined' && (document.hidden || document.visibilityState !== 'visible')) return;
+            const session = this.activeCodingSession();
+            if (!session) return;
+            // Every settled reply shows its time (failed and stopped ones too); only a running one shows its duration.
+            const completed = session.turns.filter(turn => turn.stage !== 'running');
+            if (!completed.length) return;
+            const now = Date.now();
+            if (!completed.some(turn => now - (conversationMessageTime(turn) ?? turn.createdAt) < 49 * 3_600_000)) return;
+            const previousAt = this.relativeTimeRenderAt;
+            const renderKey = `${session.id}|${this.desktopLocale}`;
+            const changed = !previousAt || this.relativeTimeRenderKey !== renderKey || completed.some(turn => {
+                const stamp = conversationMessageTime(turn) ?? turn.createdAt;
+                if (now - stamp >= 49 * 3_600_000 && previousAt - stamp >= 49 * 3_600_000) return false;
+                return formatLocalizedConversationTime(this.desktopLocale, stamp, now)
+                    !== formatLocalizedConversationTime(this.desktopLocale, stamp, previousAt);
+            });
+            if (!changed) return;
+            this.relativeTimeRenderAt = now;
+            this.relativeTimeRenderKey = renderKey;
+            this.update();
         }, 60_000);
         this.toDispose.push({ dispose: () => clearInterval(relativeTimeTimer) });
         // The full cloud catalogue is downloaded only when its version changes (checkModelCatalogVersion) or
         // Settings opens — never on a timer: with millions of clients an hourly 1 MB download each would be the
         // load. The small, edge-cached lists (the open merchant's page, video model profiles) refresh hourly.
         const modelListTimer = setInterval(() => {
-            if (this.detachedConversationId || this.catalogLoading) return;
-            if ((typeof document !== 'undefined' && document.visibilityState === 'hidden')
+            if (this.isDisposed || this.detachedConversationId || this.catalogLoading) return;
+            if ((typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden'))
                 || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
                 this.pendingModelListRefresh = true;
                 return;
@@ -6138,7 +6204,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             void this.loadVideoProfiles(true);
         }, 60 * 60_000 + Math.round(Math.random() * 10 * 60_000));
         this.toDispose.push({ dispose: () => clearInterval(modelListTimer) });
-        const scheduledTaskTimer = setInterval(() => { if (!this.detachedConversationId) void this.runDueScheduledTasks(); }, 30_000);
+        const scheduledTaskTimer = setInterval(() => {
+            if (!this.isDisposed && !this.detachedConversationId && !this.applicationExitPreparing) void this.runDueScheduledTasks();
+        }, 30_000);
         const firstScheduledTaskCheck = setTimeout(() => { if (!this.detachedConversationId) void this.runDueScheduledTasks(); }, 5_000);
         this.toDispose.push({ dispose: () => { clearInterval(scheduledTaskTimer); clearTimeout(firstScheduledTaskCheck); } });
         this.toDispose.push({ dispose: () => this.releaseComicVisualPreview() });
@@ -8687,6 +8755,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 renderRelayDrawer={() => this.renderRelayPopover({
                     selectedKey: relayKey,
                     capacityScope: 'coding',
+                    freeScope: 'council',
                     onSelect: key => this.selectCouncilModalRelay(key)
                 })}
                 onDismissDropdowns={() => {
@@ -14840,6 +14909,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 {this.renderRelayPopover({
                                     selectedKey: activeRelayKey,
                                     capacityScope: 'comic',
+                                    // The step's own function: 图片, 视频, 配音, 音乐 or 字幕; the 剧本 step has no pill.
+                                    freeScope: comicRelayFreeScope(capability, 'studio'),
                                     onSelect: key => {
                                         this.selectComicStepRelayForKind(kind, capability, key);
                                         this.closeComicStudioIsolatedPicker(true);
@@ -15859,11 +15930,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 if (!agentRoute) throw new Error(this.ct('noTextModel'));
                 const levels = this.reasoningEffortLevels(textChoice.route);
                 const reasoningEffort = levels.includes('medium') ? 'medium' : levels[0];
+                // The window and relay policy every comic text run sends (comicTextRunOptions); this run keeps its own
+                // thinking settings.
+                const { contextWindowTokens: topicWindowTokens, switchPolicy: topicSwitchPolicy } = this.comicTextRunOptions?.(agentRoute, textChoice.route, { kind: 'topic' }) ?? {};
                 const started = await this.platformService.startAgentRun({
                     route: agentRoute,
                     conversationId,
                     workbench: 'comic',
                     ...this.reasoningSettingsForRoute(textChoice.route, false),
+                    ...(topicWindowTokens !== undefined ? { contextWindowTokens: topicWindowTokens } : {}),
+                    ...(topicSwitchPolicy ? { switchPolicy: topicSwitchPolicy } : {}),
                     toolScope: 'comic-shots',
                     ...(reasoningEffort ? { reasoningEffort } : {}),
                     prompt: adaptPrompt,
@@ -18882,7 +18958,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected comicDeskTick(): void {
         const desk = this.comicDesk;
-        if (!desk) return;
+        if (this.isDisposed || !desk) return;
+        const hasActiveJobs = Boolean(desk.countdown || desk.splitting || desk.shooting);
+        if (this.activeSection !== 'comic' && !hasActiveJobs) return;
+        const uiVisible = desk.visible && this.activeSection === 'comic'
+            && !(typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden'));
         if (desk.countdown) {
             if (Date.now() >= desk.countdown.endsAt) {
                 const target = desk.countdown.target;
@@ -18890,8 +18970,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 if (target === 'cast') void this.deskStartPortraits();
                 else this.deskStartShooting();
             }
-            if (desk.visible) this.update();
-        } else if (desk.splitting && desk.visible && desk.step === 'cast') this.update();
+            if (uiVisible) this.update();
+        } else if (desk.splitting && uiVisible && desk.step === 'cast') this.update();
         if (desk.shooting && Date.now() - desk.lastPump > 5_000) void this.deskPump();
     }
 
@@ -21863,9 +21943,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
         session.tools.set(nodeId, { requestId });
         this.update();
         const progress = window.setInterval(() => {
+            if (this.isDisposed || !session.tools.has(nodeId) || this.activeSection !== 'comic') return;
+            if (typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden')) return;
             void this.platformService.getComicCanvasToolJob(session.workspaceRoot, requestId, session.canvasId).then(result => {
+                if (this.isDisposed) return;
                 const entry = session.tools.get(nodeId);
-                if (entry && result.job && Number.isFinite(result.job.percent)) { entry.fraction = result.job.percent / 100; this.update(); }
+                if (entry && result.job && Number.isFinite(result.job.percent)) {
+                    const nextFraction = result.job.percent / 100;
+                    if (nextFraction !== entry.fraction) { entry.fraction = nextFraction; this.update(); }
+                }
             }, () => undefined);
         }, 1_000);
         const before = new Set(session.doc?.nodes.map(item => item.id));
@@ -36602,6 +36688,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         else if (surface.kind === 'topup') {
             this.walletTopupSheetOpen = true;
             this.walletTopupAmount = typeof surface.data === 'string' ? surface.data : '20';
+            this.walletTopupRail = 'card';
+            this.refreshWalletTopupPlatformOrigin();
             void this.platformService.getWalletTopupOptions().then(options => {
                 this.walletTopupOptions = options;
                 if (this.walletTopupSheetOpen) this.update();
@@ -39471,7 +39559,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.microphoneAnalyser = analyser;
         const levels = new Uint8Array(analyser.frequencyBinCount);
         const paint = (): void => {
-            if (this.microphoneAnalyser !== analyser) return;
+            if (this.isDisposed || this.microphoneAnalyser !== analyser) {
+                if (this.microphoneMeterTimer) window.clearInterval(this.microphoneMeterTimer);
+                this.microphoneMeterTimer = 0;
+                return;
+            }
+            if (typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden')) return;
             analyser.getByteFrequencyData(levels);
             const peak = levels.reduce((value, current) => Math.max(value, current), 0) / 255;
             this.voiceLevel = Math.max(.08, Math.min(1, peak));
@@ -40914,6 +41007,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.openExternalUrl(links.account);
     }
 
+    protected refreshWalletTopupPlatformOrigin(): void {
+        void Promise.resolve(this.platformService?.getPlatformWebLinks?.()).then(links => {
+            const origin = links?.account ? resolveCheckoutPlatformOrigin(links.account) : '';
+            if (origin && origin !== this.walletTopupPlatformOrigin) {
+                this.walletTopupPlatformOrigin = origin;
+                if (this.walletTopupSheetOpen) this.update();
+            }
+        }).catch(() => undefined);
+    }
+
     protected openWalletTopup(): void {
         if (!this.platformSession.linked) {
             void this.startDeviceLink();
@@ -40921,10 +41024,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         if (!this.walletTopupSheetOpen) this.rememberNavigation();
         this.walletTopupSheetOpen = true;
+        this.walletTopupRail = 'card';
         this.walletTopupStage = 'idle';
         this.walletTopupOrder = undefined;
         this.walletTopupError = '';
         this.clearWalletTopupPoll();
+        this.refreshWalletTopupPlatformOrigin();
         this.update();
         requestAnimationFrame(() => this.node.querySelector<HTMLInputElement>('.nmx-topup-amount-input')?.focus());
         void this.platformService.getWalletTopupOptions().then(options => {
@@ -40972,7 +41077,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.walletTopupPendingResume = false;
         this.update();
         try {
-            const order = await this.platformService.createWalletTopup(amountMinor, 'USD');
+            const order = await this.platformService.createWalletTopup(amountMinor, 'USD', this.walletTopupRail);
             if (!this.walletTopupSheetOpen) return;
             this.walletTopupOrder = order;
             this.walletTopupStage = order.topup.status === 'credited' ? 'credited' : 'waiting';
@@ -40980,8 +41085,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (order.topup.status === 'credited') {
                 await this.loadAccountOverview(true);
             } else {
-                // Pay in the system browser (saved cards, Apple Pay); this sheet keeps polling.
-                if (order.payment.checkoutUrl) this.openExternalUrl(order.payment.checkoutUrl);
+                // Embedded /checkout-embed renders inline inside the modal when planId + whopAccountId are present; open browser automatically only when no embed target exists.
+                if (!(order.payment.planId && order.payment.whopAccountId) && order.payment.checkoutUrl) this.openExternalUrl(order.payment.checkoutUrl);
                 this.scheduleWalletTopupPoll();
             }
         } catch (error) {
@@ -41046,6 +41151,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.walletTopupConsecutiveErrors = 0;
         this.walletTopupPendingResume = false;
         this.walletTopupSheetOpen = false;
+        this.walletTopupRail = 'card';
         this.walletTopupStage = 'idle';
         this.walletTopupOrder = undefined;
         this.walletTopupError = '';
@@ -41937,6 +42043,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 // for a store the loaded directory does not list.
                 ...((directory !== undefined ? directory.depositVerified === true : values.some(item => item.depositVerified === true))
                     ? { depositVerified: true } : {}),
+                ...(directory?.freeCapabilities?.length ? { freeCapabilities: directory.freeCapabilities } : {}),
                 ...(executableModels && checksFailed ? { checksFailing: true } : {}),
                 ...(this.relaySourceTab === 'favorite' && (confirmedMissingFavorite || !values.length && directoryMerchants === undefined) ? {
                     directoryStatus: confirmedMissingFavorite ? 'unavailable' as const : 'unknown' as const,
@@ -42585,7 +42692,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!route || route.kind !== 'official_connection') return undefined;
         const model = String(route.connection.model || '').trim();
         if (!model) return undefined;
-        const discovered = route.connection.discoveredModels?.find(item => item.id === route.connection.model || item.label === route.connection.model);
+        const matchModelId = typeof sameModelId === 'function'
+            ? sameModelId
+            : (left: string | undefined, right: string | undefined) => typeof left === 'string' && typeof right === 'string' && left.toLowerCase() === right.toLowerCase();
+        const discovered = route.connection.discoveredModels?.find(item => matchModelId(item.id, route.connection.model) || matchModelId(item.label, route.connection.model));
         const hint = label || discovered?.label;
         // Which model the route names: the matcher the model list uses, on the same catalog arrays (one cached index, one
         // answer). It refuses an ambiguous or different-variant name, so this card never borrows a sibling's price
@@ -43057,6 +43167,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return { capability, candidates: studio ? this.comicStepCandidatesForKind(studio.kind, capability) : this.comicStepCandidatesByRoute(capability),
             // The platform's read for 配音 answers for any sound, so it says nothing about speech.
             ...(directory && !directory.loading && capability !== 'speech' ? { listed: new Set(directory.relays.map(relay => relay.key)) } : {}) };
+    }
+
+    /**
+     * What the relay drawer's "free" pill counts when its caller names nothing: text models outside 漫剧, and in 漫剧 the
+     * function the drawer is open for, as comicRelayDrawerScope reads it (never free text there).
+     */
+    protected relayDrawerFreeScope(capacityScope: PublicMerchantCapacityScope): MerchantFreeScope | null {
+        if (capacityScope !== 'comic') return 'coding';
+        const studio = this.comicStudioIsolatedPicker?.mode === 'relay' ? this.comicStudioIsolatedPicker : undefined;
+        return comicRelayFreeScope(studio ? studio.capability : this.comicChatCapability(this.comicChatUi().mode), studio ? 'studio' : 'conversation');
     }
 
     /**
@@ -45791,7 +45911,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void this.saveGoalDrawer(); }
                     else this.trapDialogFocus(event); }}>
                 <header className='nmx-goal-drawer-header'><span className='nmx-goal-drawer-icon'><i className='codicon codicon-target'/></span><div className='nmx-goal-drawer-titles'><h2 id='nmx-goal-drawer-title'>{t('edit')}</h2><p>{goalScheduleText(this.desktopLocale, goal.status === 'completed' ? 'completedGoal' : goal.status === 'paused' ? 'pausedGoal' : 'activeGoal')} · <GoalElapsed goal={goal} turns={session?.turns || []}/></p></div><button className='nmx-goal-drawer-close' aria-label={t('close')} onClick={() => this.closeGoalDrawer()}><i className='codicon codicon-close'/></button></header>
-                <div className='nmx-goal-drawer-body'><textarea className='nmx-goal-drawer-input' aria-label={t('edit')} autoFocus maxLength={200_000} spellCheck={false} autoCorrect='off' autoCapitalize='off' value={drawer.draft} disabled={drawer.saving} onChange={event => { drawer.draft = event.target.value; drawer.error = ''; this.update(); }}/><div className='nmx-goal-drawer-meta'><span data-nmx-literal>{drawer.draft.length.toLocaleString(this.desktopLocale)}/{(200_000).toLocaleString(this.desktopLocale)}</span><span>{t('savedHint')}</span></div>{drawer.error && <div className='nmx-goal-drawer-error' role='alert'>{drawer.error}</div>}</div>
+                <div className='nmx-goal-drawer-body'><textarea className='nmx-goal-drawer-input' aria-label={t('edit')} autoFocus maxLength={200_000} spellCheck={false} autoCorrect='off' autoCapitalize='off' value={drawer.draft} disabled={drawer.saving} onChange={event => { drawer.draft = event.target.value; drawer.error = ''; if (typeof this.updateNow === 'function') this.updateNow(); else this.update(); }}/><div className='nmx-goal-drawer-meta'><span data-nmx-literal>{drawer.draft.length.toLocaleString(this.desktopLocale)}/{(200_000).toLocaleString(this.desktopLocale)}</span><span>{t('savedHint')}</span></div>{drawer.error && <div className='nmx-goal-drawer-error' role='alert'>{drawer.error}</div>}</div>
                 <footer className='nmx-goal-drawer-footer'><button className='nmx-goal-drawer-cancel' onClick={() => this.closeGoalDrawer()}>{t('cancel')}</button><button className='nmx-goal-drawer-save' disabled={!dirty || !drawer.draft.trim() || drawer.saving} onClick={() => void this.saveGoalDrawer()}>{t('save')}</button></footer>
             </aside></>;
     }
@@ -47282,7 +47402,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** Re-renders once a second while a countdown is on screen. */
     protected syncAutomaticResumeTicker(): void {
         if (this.automaticResumeSchedule.size && this.automaticResumeTicker === undefined) {
-            this.automaticResumeTicker = window.setInterval(() => this.update(), 1_000);
+            this.automaticResumeTicker = window.setInterval(() => {
+                if (this.isDisposed || !this.automaticResumeSchedule.size) {
+                    if (this.automaticResumeTicker !== undefined) window.clearInterval(this.automaticResumeTicker);
+                    this.automaticResumeTicker = undefined;
+                    return;
+                }
+                if (typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden')) return;
+                if (this.activeSection !== 'coding') return;
+                const activeSessionPrefix = `${this.activeCodingSessionId || ''}:`;
+                if (![...this.automaticResumeSchedule.keys()].some(key => key.startsWith(activeSessionPrefix))) return;
+                this.update();
+            }, 1_000);
         } else if (!this.automaticResumeSchedule.size && this.automaticResumeTicker !== undefined) {
             window.clearInterval(this.automaticResumeTicker);
             this.automaticResumeTicker = undefined;
@@ -47986,6 +48117,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
         let runReasoningEffort: AgentReasoningEffort | undefined;
         let runReasoningSettings: ModelReasoningSettings = {};
         let runContextWindowTokens: number | undefined;
+        let initialCandidateReasoningEffort: AgentReasoningEffort | undefined;
+        let initialCandidateContextTokens: number | undefined;
+        const deriveReasoningEffort = (targetRoute: DesktopModelRoute, preferredEffort?: AgentReasoningEffort): AgentReasoningEffort | undefined => {
+            const supported = typeof this.reasoningEffortLevels === 'function' ? this.reasoningEffortLevels(targetRoute) : undefined;
+            if (!supported) return preferredEffort;
+            if (supported.length === 0) return undefined;
+            if (preferredEffort && supported.includes(preferredEffort)) return preferredEffort;
+            const fallback = this.reasoningEffortForRoute(targetRoute);
+            return fallback && supported.includes(fallback) ? fallback : undefined;
+        };
+        const deriveReasoningSettings = (targetRoute: DesktopModelRoute, preferredSettings?: ModelReasoningSettings): ModelReasoningSettings =>
+            declaredReasoningSettings(this.modelReasoningContract(targetRoute)?.reasoningControls, preferredSettings ?? this.reasoningSettingsForRoute(targetRoute));
         try {
             const currentSession = mutationSessionId
                 ? this.codingSessions.find(candidate => candidate.id === mutationSessionId)
@@ -48028,17 +48171,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 currentConversation: currentSession?.permissionMode || submission?.permissionMode || this.permissionMode,
                 selected: submission?.permissionMode || this.permissionMode
             });
-            const supportedReasoningEfforts = typeof this.reasoningEffortLevels === 'function' ? this.reasoningEffortLevels(route) : undefined;
             const candidateReasoningEffort = historicalExecution?.reasoningEffort
                 ?? queuedExecution?.task.reasoningEffort ?? (submission ? submission.reasoningEffort : this.reasoningEffortForRoute(route));
-            runReasoningEffort = !supportedReasoningEfforts
-                ? candidateReasoningEffort
-                : supportedReasoningEfforts.length === 0
-                    ? undefined
-                    : candidateReasoningEffort && supportedReasoningEfforts.includes(candidateReasoningEffort)
-                        ? candidateReasoningEffort
-                        : this.reasoningEffortForRoute(route);
-            runReasoningSettings = declaredReasoningSettings(this.modelReasoningContract(route)?.reasoningControls,
+            initialCandidateReasoningEffort = candidateReasoningEffort;
+            runReasoningEffort = deriveReasoningEffort(route, candidateReasoningEffort);
+            runReasoningSettings = deriveReasoningSettings(route,
                 queuedExecution?.task.reasoningSettings || resumedExecution?.turn.reasoningSettings || submission?.reasoningSettings || this.reasoningSettingsForRoute(route));
             const isBackgroundSession = Boolean(currentSession && this.activeCodingSessionId && currentSession.id !== this.activeCodingSessionId);
             runContextWindowTokens = effectiveContextWindowTokens(
@@ -48052,6 +48189,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 ),
                 this.modelContextWindowTokens?.(route)
             );
+            initialCandidateContextTokens = runContextWindowTokens;
             const routeSummary = route.kind === 'official_connection'
                 ? `${route.connection.modelFamily} · ${route.connection.providerName}`
                 : `${route.offering.modelFamily} · ${route.offering.providerName}`;
@@ -48262,6 +48400,109 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const councilLeadSlot = activeCouncilConfig && activeCouncilConfig.enabled !== false && activeCouncilConfig.slots.length >= 3
                 ? (activeCouncilConfig.slots.find(slot => slot.roles.includes('lead')) || activeCouncilConfig.slots[0])
                 : undefined;
+            type CouncilLeadSlotOptions = DesktopAgentCouncilSlot & {
+                readonly reasoningEffort?: string;
+                readonly reasoningEnabled?: boolean;
+                readonly reasoningMode?: 'auto' | 'enabled' | 'disabled';
+                readonly reasoningBudgetTokens?: number;
+                readonly contextWindowTokens?: number;
+            };
+            const matchesCouncilSlotRoute = (candidate: DesktopModelRoute, slotRoute: DesktopAgentCouncilSlot['route']): boolean => {
+                if (candidate.kind === 'managed_gateway' && slotRoute.kind === 'managed_gateway') {
+                    return slotRoute.route.mode === 'fixed'
+                        ? !candidate.automatic && candidate.offering.id === slotRoute.route.offeringId
+                        : candidate.automatic && candidate.registryModelId === slotRoute.route.registryModelId;
+                }
+                if (candidate.kind === 'official_connection' && slotRoute.kind === 'official_connection') {
+                    const slotModel = slotRoute.model || '';
+                    if (!slotModel || candidate.connection.id !== slotRoute.connectionId) return false;
+                    return typeof sameModelId === 'function'
+                        ? sameModelId(candidate.connection.model, slotModel)
+                        : candidate.connection.model.toLowerCase() === slotModel.toLowerCase();
+                }
+                return false;
+            };
+            let councilSwitchPolicy: ModelSwitchPolicy | undefined;
+            if (councilLeadSlot) {
+                const leadSlot = councilLeadSlot as CouncilLeadSlotOptions;
+                const sameAsComposerRoute = matchesCouncilSlotRoute(route, leadSlot.route);
+                let leadDesktopRoute: DesktopModelRoute | undefined = sameAsComposerRoute ? route : undefined;
+                if (!leadDesktopRoute) {
+                    const leadRelayKey = leadSlot.relayKey || activeCouncilConfig?.relayKey || '';
+                    const searchPools: DesktopModelRoute[] = [
+                        ...(leadRelayKey ? this.councilRoutesForRelay?.(leadRelayKey) || [] : []),
+                        ...(leadRelayKey ? this.routesForRelay?.(leadRelayKey, 'coding', true) || [] : []),
+                        ...(leadSlot.route.kind === 'managed_gateway'
+                            ? this.managedModelRoutes?.('coding', leadSlot.route.route.mode === 'automatic') || []
+                            : this.officialModelRoutes?.() || [])
+                    ];
+                    const found = searchPools.find(candidate => matchesCouncilSlotRoute(candidate, leadSlot.route))
+                        || (leadSlot.routeId ? searchPools.find(candidate => candidate.id === leadSlot.routeId) : undefined);
+                    if (found && leadSlot.route.kind === 'managed_gateway') {
+                        const rawQuoteId = leadSlot.route.route.keyPriceQuoteId;
+                        const quoteId = typeof optionalKeyPriceQuoteId === 'function'
+                            ? optionalKeyPriceQuoteId(rawQuoteId)
+                            : rawQuoteId;
+                        leadDesktopRoute = quoteId && typeof bindPriceQuote === 'function' ? bindPriceQuote(found, quoteId) : found;
+                    } else if (found) {
+                        leadDesktopRoute = found;
+                    } else if (leadSlot.route.kind === 'official_connection') {
+                        const slotOfficial = leadSlot.route;
+                        const conn = this.officialModels?.connections?.find(item => item.id === slotOfficial.connectionId);
+                        if (conn) {
+                            const slotModel = slotOfficial.model || conn.model || '';
+                            leadDesktopRoute = {
+                                kind: 'official_connection',
+                                id: leadSlot.routeId || `official:${conn.id}:${encodeURIComponent(slotModel)}`,
+                                connection: { ...conn, model: slotModel }
+                            } as DesktopModelRoute;
+                        }
+                    }
+                }
+                const normalizedLeadMode: ModelReasoningSettings['reasoningMode'] = leadSlot.reasoningMode === 'auto'
+                    ? 'adaptive' : leadSlot.reasoningMode;
+                const slotReasoningSettings: ModelReasoningSettings | undefined =
+                    leadSlot.reasoningEnabled !== undefined || normalizedLeadMode !== undefined || leadSlot.reasoningBudgetTokens !== undefined
+                        ? {
+                            ...(leadSlot.reasoningEnabled !== undefined ? { reasoningEnabled: leadSlot.reasoningEnabled } : {}),
+                            ...(normalizedLeadMode !== undefined ? { reasoningMode: normalizedLeadMode } : {}),
+                            ...(leadSlot.reasoningBudgetTokens !== undefined ? { reasoningBudgetTokens: leadSlot.reasoningBudgetTokens } : {})
+                        }
+                        : undefined;
+                const slotEffort = typeof leadSlot.reasoningEffort === 'string' && leadSlot.reasoningEffort.trim()
+                    ? leadSlot.reasoningEffort.trim() as AgentReasoningEffort
+                    : undefined;
+                if (leadDesktopRoute) {
+                    const preferredEffort = slotEffort ?? (sameAsComposerRoute
+                        ? initialCandidateReasoningEffort
+                        : this.reasoningEffortForRoute(leadDesktopRoute));
+                    runReasoningEffort = deriveReasoningEffort(leadDesktopRoute, preferredEffort);
+                    const baseSettings = sameAsComposerRoute
+                        ? (queuedExecution?.task.reasoningSettings || resumedExecution?.turn.reasoningSettings || submission?.reasoningSettings || this.reasoningSettingsForRoute(leadDesktopRoute))
+                        : this.reasoningSettingsForRoute(leadDesktopRoute);
+                    runReasoningSettings = deriveReasoningSettings(leadDesktopRoute,
+                        slotReasoningSettings ? { ...baseSettings, ...slotReasoningSettings } : baseSettings);
+                    const slotContextTokens = normalizeContextWindowTokens(leadSlot.contextWindowTokens);
+                    const candidateContextTokens = slotContextTokens
+                        ?? (sameAsComposerRoute
+                            ? initialCandidateContextTokens
+                            : this.contextWindowForRoute?.(leadDesktopRoute, undefined, true));
+                    runContextWindowTokens = effectiveContextWindowTokens(
+                        normalizeContextWindowTokens(candidateContextTokens),
+                        this.modelContextWindowTokens?.(leadDesktopRoute)
+                    );
+                } else {
+                    // Lead route could not be resolved locally; never leak the composer route's parameters.
+                    runReasoningEffort = slotEffort && ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(slotEffort)
+                        ? slotEffort : undefined;
+                    runReasoningSettings = slotReasoningSettings ?? {};
+                    runContextWindowTokens = normalizeContextWindowTokens(leadSlot.contextWindowTokens);
+                }
+                const leadManagedRoute = leadSlot.route.kind === 'managed_gateway' ? leadSlot.route.route : undefined;
+                councilSwitchPolicy = leadManagedRoute && typeof sameModelRelayPolicy === 'function'
+                    ? sameModelRelayPolicy(leadManagedRoute, submittedRelaySource, this.modelSwitchSettings?.get(leadManagedRoute))
+                    : undefined;
+            }
             const startRequest: DesktopAgentRunRequest = {
                 ...(queuedRequestId ? { queuedRequestId } : {}),
                 ...(this.creativityRunField?.() ?? {}),
@@ -48314,6 +48555,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         resumeStrategy: agentManualResumeStrategy(resumedExecution.turn)!
                     } : {})
             };
+            if (councilLeadSlot) {
+                if (councilSwitchPolicy) (startRequest as { switchPolicy?: ModelSwitchPolicy }).switchPolicy = councilSwitchPolicy;
+                else delete (startRequest as { switchPolicy?: ModelSwitchPolicy }).switchPolicy;
+            }
             // The sidebar gives each specialist of this run's roster a row from the start (sessionCouncilRoleChildren);
             // a single-model run records an empty roster, so a Council config enabled meanwhile seeds nothing for it.
             if (workbench === 'coding' && codingSession) this.councilRunRosters?.set(codingSession.id, startRequest.councilConfig?.slots ?? []);
@@ -49795,12 +50040,20 @@ export class NextMuxDesktopWidget extends ReactWidget {
         </nav>;
     }
 
-    protected renderRelayPopover(overrideSelection?: { readonly selectedKey: string; readonly onSelect: (key: string) => void; readonly capacityScope?: PublicMerchantCapacityScope }): React.ReactNode {
+    /**
+     * `freeScope`: what the rows' "free" pill counts, the function the drawer chooses a relay for (null: no pill). Left
+     * out, it follows the drawer's scope (relayDrawerFreeScope).
+     */
+    protected renderRelayPopover(overrideSelection?: { readonly selectedKey: string; readonly onSelect: (key: string) => void; readonly capacityScope?: PublicMerchantCapacityScope; readonly freeScope?: MerchantFreeScope | null }): React.ReactNode {
         // The provider drawer chooses a concrete merchant. Automatic routing
         // remains available as a model policy, but is intentionally not a
         // provider row so the merchant grid stays focused and predictable.
         const capacityScope: PublicMerchantCapacityScope = overrideSelection?.capacityScope ?? (this.activeSection === 'comic' ? 'comic' : 'coding');
         const relayOptions = this.relayPickerOptions(capacityScope).filter(option => option.kind !== 'automatic');
+        const freeScope = overrideSelection?.freeScope !== undefined ? overrideSelection.freeScope : this.relayDrawerFreeScope?.(capacityScope) ?? null;
+        // A store with a 0× model for that function; a row that cannot be chosen offers nothing.
+        const showsFree = (option: RelayOption): boolean => option.kind === 'managed' && !option.directoryOnly && freeScope !== null
+            && Boolean(option.freeCapabilities?.length) && merchantHasScopedFreeModel(option.freeCapabilities, freeScope);
         // Opened from the 漫剧 conversation: the same drawer, choosing the conversation's relay.
         const comicScope = !overrideSelection && this.activeSection === 'comic';
         const activeRelayKey = overrideSelection ? overrideSelection.selectedKey : comicScope ? this.comicChatRelayKey() : this.activeRelayKey;
@@ -49875,7 +50128,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         </svg>
                         <i className={`codicon codicon-${metric.icon}`} aria-hidden='true' />
                     </span>;
-        const tooltip = this.relayMetricTooltip && (this.relayMetricTooltip.key.startsWith('sort:') || this.relayMetricTooltip.key.startsWith('head:') || relayOptions.some(option => option.key === this.relayMetricTooltip!.key)) ? this.relayMetricTooltip : undefined;
+        // A row's tip (its name, a dial, its heart or its "free" pill) lasts while the row is listed.
+        const tooltipRowKey = this.relayMetricTooltip?.key.replace(/^(?:favorite|free):/, '');
+        const tooltip = this.relayMetricTooltip && (this.relayMetricTooltip.key.startsWith('sort:') || this.relayMetricTooltip.key.startsWith('head:') || relayOptions.some(option => option.key === tooltipRowKey)) ? this.relayMetricTooltip : undefined;
         const tooltipRect = tooltip?.anchor.getBoundingClientRect();
         const tooltipWidth = Math.min(tooltip?.key.startsWith('head:') || tooltip?.key.startsWith('sort:') || tooltip?.text === relayText(this.desktopLocale, 'relayFull') ? 260 : 204, window.innerWidth - 16);
         // Every language has its own explanations (nextmux-relay-locale.ts); quality is the smoothed approval rating.
@@ -49941,6 +50196,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 <span onPointerEnter={event => showMetric('head:own-latency', relayColumnExplanation('latency'), event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(relayText(this.desktopLocale, 'latency'))}</span>
             </div>}{relayOptions.map(option => {
                 const optionFull = this.relayOptionIsFull(option, capacityScope);
+                const free = showsFree(option);
+                // The public merchant number tells same-named stores apart; the store intro follows it.
+                const name = <strong className={`nmx-relay-option-name${option.checksFailing ? ' is-failing' : ''}${option.depositVerified ? ' is-deposit-verified' : ''}`} aria-label={(option.kind === 'managed'
+                    ? [option.label, option.publicCode, (option.storeTagline || option.storeDescription || '').trim() || modelCenterText(this.desktopLocale, 'noStoreIntro'),
+                        option.checksFailing ? relayText(this.desktopLocale, 'checksFailing') : '',
+                        option.depositVerified ? publicMerchantDepositText(this.desktopLocale) : '']
+                    : [option.label, option.kind === 'official' ? option.detail : '']).filter(Boolean).join('\n')}
+                    onPointerEnter={event => showMetric(option.key, event.currentTarget.getAttribute('aria-label') || option.label, event.currentTarget, option.depositVerified === true)}
+                    onPointerLeave={hideMetric}>{option.checksFailing && <i className='codicon codicon-warning' data-relay-checks='failing' aria-hidden='true'></i>}{option.label}</strong>;
                 return <div data-relay-capacity={optionFull ? 'full' : undefined}
                 tabIndex={optionFull ? 0 : undefined}
                 onPointerEnter={event => { if (optionFull) showMetric(option.key, relayText(this.desktopLocale, 'relayFull'), event.currentTarget); else if (preloadable(option)) this.scheduleMerchantCatalogPreload?.(option.merchantId); }}
@@ -49949,17 +50213,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onBlur={() => { hideMetric(); this.cancelMerchantCatalogPreload?.(option.merchantId); }}
                 className={`nmx-relay-option-row${optionFull ? ' is-full' : ''}${option.directoryOnly ? option.directoryStatus === 'unknown' ? ' is-unknown' : ' is-unavailable' : ''}`} key={option.key}>
                 <button className={`nmx-relay-option-select${option.kind === 'automatic' ? ' is-automatic' : ''}${option.key === activeRelayKey ? ' is-selected' : ''}`} data-relay-key={option.key} aria-pressed={option.key === activeRelayKey} disabled={option.directoryOnly || optionFull}
-                    aria-label={[option.label, optionFull ? relayText(this.desktopLocale, 'relayFull') : '', option.directoryStatus === 'unknown' ? relayText(this.desktopLocale, 'directoryUnavailable') : option.directoryStatus === 'unavailable' ? relayDelistedText(this.desktopLocale, option.unavailableReason) : option.directoryOnly ? modelCenterText(this.desktopLocale, 'unavailable') : '', option.checksFailing ? relayText(this.desktopLocale, 'checksFailing') : '', ...metricsFor(option).map(metric => metric.label)].filter(Boolean).join(' · ')}
+                    aria-label={[option.label, optionFull ? relayText(this.desktopLocale, 'relayFull') : '', free ? relayFreeHintText(this.desktopLocale) : '', option.directoryStatus === 'unknown' ? relayText(this.desktopLocale, 'directoryUnavailable') : option.directoryStatus === 'unavailable' ? relayDelistedText(this.desktopLocale, option.unavailableReason) : option.directoryOnly ? modelCenterText(this.desktopLocale, 'unavailable') : '', option.checksFailing ? relayText(this.desktopLocale, 'checksFailing') : '', ...metricsFor(option).map(metric => metric.label)].filter(Boolean).join(' · ')}
                     onFocus={event => { if (option.kind !== 'automatic') showMetric(option.key, metricsFor(option).map(metric => metric.label).join('\n'), event.currentTarget); }}
                     onBlur={hideMetric} onPointerLeave={hideMetric} onClick={() => { if (option.directoryOnly || optionFull) return; hideMetric(); if (overrideSelection) overrideSelection.onSelect(option.key); else if (comicScope) this.selectComicChatRelay(option.key); else this.selectRelay(option.key); }}>
-                {/* The public merchant number tells same-named stores apart; the store intro follows it. */}
-                <strong className={`nmx-relay-option-name${option.checksFailing ? ' is-failing' : ''}${option.depositVerified ? ' is-deposit-verified' : ''}`} aria-label={(option.kind === 'managed'
-                    ? [option.label, option.publicCode, (option.storeTagline || option.storeDescription || '').trim() || modelCenterText(this.desktopLocale, 'noStoreIntro'),
-                        option.checksFailing ? relayText(this.desktopLocale, 'checksFailing') : '',
-                        option.depositVerified ? publicMerchantDepositText(this.desktopLocale) : '']
-                    : [option.label, option.kind === 'official' ? option.detail : '']).filter(Boolean).join('\n')}
-                    onPointerEnter={event => showMetric(option.key, event.currentTarget.getAttribute('aria-label') || option.label, event.currentTarget, option.depositVerified === true)}
-                    onPointerLeave={hideMetric}>{option.checksFailing && <i className='codicon codicon-warning' data-relay-checks='failing' aria-hidden='true'></i>}{option.label}</strong>
+                {/* A store with a 0× model for this drawer's function ends its name cell in a "free" pill: beside the name, never
+                    in it, where the deposit's clipped rainbow would paint over the pill. */}
+                {free ? <span className='nmx-relay-option-title'>{name}<span className='nmx-relay-free-pill' data-relay-free='true'
+                    onPointerEnter={event => showMetric(`free:${option.key}`, relayFreeHintText(this.desktopLocale), event.currentTarget)}
+                    onPointerLeave={hideMetric}>free</span></span> : name}
                 {option.kind !== 'automatic' && option.directoryStatus === 'unavailable' && <span className='nmx-relay-option-metrics is-delisted'>
                     <em data-relay-delisted={option.unavailableReason || 'delisted'}>{relayDelistedText(this.desktopLocale, option.unavailableReason)}</em>
                 </span>}
@@ -50770,20 +51031,30 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (offering.category === 'video') return formatManagedVideoPrice(this.desktopLocale, offering.price);
         const text = (key: Parameters<typeof offeringPriceText>[1]): string => offeringPriceText(this.desktopLocale, key);
         const format = (value: number) => new Intl.NumberFormat(this.desktopLocale, {
-            style: 'currency', currency: offering.price.currency, maximumFractionDigits: 4
+            style: 'currency', currency: offering.price.currency || 'USD', maximumFractionDigits: 4
         }).format(value / 1_000_000);
         if (offering.category === 'image') {
             // The flat price is the default tier; quality × size or the output class can bill another one.
             const tiers = offeringMediaTiers(offering)?.tiers.map(tier => tier.customerMicros);
             if (tiers && tiers.length > 1 && Math.min(...tiers) !== Math.max(...tiers)) return `${format(Math.min(...tiers))}–${format(Math.max(...tiers))} / ${text('imageUnit')}`;
-            return offering.price.imageEachMicros === null || offering.price.imageEachMicros === undefined ? text('pricePending') : `${format(offering.price.imageEachMicros)} / ${text('imageUnit')}`;
+            if (offering.price.imageEachMicros !== null && offering.price.imageEachMicros !== undefined) return `${format(offering.price.imageEachMicros)} / ${text('imageUnit')}`;
+            if (tiers && tiers.length >= 1) return `${format(tiers[0])} / ${text('imageUnit')}`;
+            return offering.price.requestEachMicros != null ? `${format(offering.price.requestEachMicros)} / ${text('requestUnit')}` : text('pricePending');
         }
-        if (offering.category === 'audio') return offering.price.audioPerMillionCharactersMicros === null || offering.price.audioPerMillionCharactersMicros === undefined
-            ? text('pricePending') : `${format(offering.price.audioPerMillionCharactersMicros)} / ${text('mchar')}`;
+        if (offering.category === 'audio') {
+            if (offering.price.audioPerMillionCharactersMicros != null) return `${format(offering.price.audioPerMillionCharactersMicros)} / ${text('mchar')}`;
+            if (offering.price.audioSecondMicros != null) return `${format(offering.price.audioSecondMicros)} / ${text('second')}`;
+            if (offering.price.requestEachMicros != null) {
+                return `${format(offering.price.requestEachMicros)} / ${text(offering.capabilities?.includes('music_generation') ? 'songUnit' : 'requestUnit')}`;
+            }
+            return text('pricePending');
+        }
         const input = offering.price.inputPerMillionMicros;
         const output = offering.price.outputPerMillionMicros;
-        if (input === null || input === undefined || output === null || output === undefined) return text('pricePending');
-        return `${text('input')} ${format(input)} · ${text('output')} ${format(output)} / ${text('mtok')}`;
+        if (input !== null && input !== undefined && output !== null && output !== undefined) {
+            return `${text('input')} ${format(input)} · ${text('output')} ${format(output)} / ${text('mtok')}`;
+        }
+        return offering.price.requestEachMicros != null ? `${format(offering.price.requestEachMicros)} / ${text('requestUnit')}` : text('pricePending');
     }
 
     protected offeringMerchantId(offering: PlatformOffering): string {
@@ -51231,7 +51502,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     })()}</label>
                     {local ? null : credentialSource === 'environment' && supportsEnvironmentCredentials
                         ? <div className='nmx-connection-note nmx-environment-credential-note' data-credential-source='environment'><strong>使用系统环境凭据</strong><p>{provider.id === 'vertex' ? 'Vertex 将使用 GOOGLE_VERTEX_API_KEY，或 Google Application Default Credentials（ADC）。' : provider.id === 'bedrock' ? 'Bedrock 将使用 AWS_BEARER_TOKEN_BEDROCK，或 AWS 默认凭据链进行 SigV4 签名。' : 'Azure 将使用 AZURE_API_KEY；如需 Microsoft Entra，请在系统环境中配置对应的令牌入口。'}</p></div>
-                        : <label data-credential-source='api_key'><span>{desktopDomainMessage(this.desktopLocale, desktopStatus('API_KEY_LABEL'))}<small>{draft.connectionId ? '留空则保留原 Key' : '必填'}</small></span><input disabled={busy} type={this.officialApiKeyFocused ? 'text' : 'password'} autoComplete='off' spellCheck={false} value={draft.apiKey} maxLength={8192} placeholder={provider.apiKeyPlaceholder} onFocus={() => { if (!this.officialApiKeyFocused) { this.officialApiKeyFocused = true; this.update(); } }} onClick={() => { if (!this.officialApiKeyFocused) { this.officialApiKeyFocused = true; this.update(); } }} onBlur={() => { if (this.officialApiKeyFocused) { this.officialApiKeyFocused = false; this.update(); } }} onChange={event => this.setOfficialDraft({ apiKey: event.currentTarget.value })} /></label>}
+                        : <label data-credential-source='api_key'><span>{desktopDomainMessage(this.desktopLocale, desktopStatus('API_KEY_LABEL'))}<small>{draft.connectionId ? '留空则保留原 Key' : '必填'}</small></span><input disabled={busy} type={this.officialApiKeyFocused ? 'text' : 'password'} autoComplete='off' spellCheck={false} value={draft.apiKey} maxLength={8192} placeholder={provider.apiKeyPlaceholder} onFocus={() => { if (!this.officialApiKeyFocused) { this.officialApiKeyFocused = true; if (typeof this.updateNow === 'function') this.updateNow(); else this.update(); } }} onClick={() => { if (!this.officialApiKeyFocused) { this.officialApiKeyFocused = true; if (typeof this.updateNow === 'function') this.updateNow(); else this.update(); } }} onBlur={() => { if (this.officialApiKeyFocused) { this.officialApiKeyFocused = false; if (typeof this.updateNow === 'function') this.updateNow(); else this.update(); } }} onChange={event => this.setOfficialDraft({ apiKey: event.currentTarget.value })} /></label>}
                     {isCatalogOnlyOfficialProvider(provider.id) && <p className='nmx-connection-note' data-nmx-literal>{officialDiscoveryText(this.desktopLocale, 'catalogNote')}</p>}
                     <details className='nmx-official-advanced' data-official-advanced-model='true'>
                         <summary><strong>{localizeDesktopSurface(this.desktopLocale, '高级')}</strong></summary>
@@ -52566,7 +52837,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.appPluginClock = window.setInterval(() => {
             if (this.isDisposed || ![...this.appPluginRuns.values()].some(run => !run.ended)) { stop(); return; }
             // A hidden window has no bar to tick; the next visible second catches up (audit A21-05).
-            if (document.visibilityState === 'hidden') return;
+            if (typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden')) return;
+            if (this.activeSection && this.activeSection !== 'coding') return;
             this.update();
         }, 1000);
         this.toDispose.push({ dispose: stop });
@@ -53576,6 +53848,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 {this.renderRelayPopover({
                                     selectedKey: activeRelayKey,
                                     capacityScope: 'coding',
+                                    freeScope: 'chat',
                                     onSelect: nextKey => this.selectAppPluginChatRelay(tabKey, nextKey)
                                 })}
                             </div>
@@ -56453,7 +56726,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                     <textarea key={`${codingSession?.id || this.activeCodingSessionId}:${turn.id}`} autoFocus spellCheck={false} autoCorrect='off' autoCapitalize='off' value={this.editingTurnValue} aria-label={conversationText(this.desktopLocale, 'editMessage')}
                                         onChange={event => {
                                             if (this.activeCodingSessionId !== codingSession?.id || this.editingTurnId !== turn.id) return;
-                                            this.editingTurnValue = event.currentTarget.value; this.update();
+                                            this.editingTurnValue = event.currentTarget.value;
+                                            if (typeof this.updateNow === 'function') this.updateNow(); else this.update();
                                         }}
                                         onKeyDown={event => {
                                             if (this.pendingTurnEdit) { if (event.key === 'Enter') event.preventDefault(); return; }
@@ -56923,7 +57197,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 if (this.composerUiUpdateTimer !== undefined) window.clearTimeout(this.composerUiUpdateTimer);
                                 this.composerUiUpdateTimer = undefined;
                                 this.syncComposerDomControls();
-                                this.update();
+                                if (typeof this.updateNow === 'function') this.updateNow(); else this.update();
                             }}
                             onScroll={event => { if (!this.ownsComposerInput(event.currentTarget)) return; const overlay = this.composerMarkdownOverlayRef.current; if (overlay) { overlay.scrollTop = event.currentTarget.scrollTop; overlay.scrollLeft = event.currentTarget.scrollLeft; } }}
                             onKeyDown={event => this.handleComposerKeyDown(event)}
@@ -58008,7 +58282,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             top: `${placement.top}px`, left: `${placement.left}px`, width: `${placement.width}px`,
                             height: `${placement.height}px`, maxHeight: `${placement.maxHeight}px`
                         } as React.CSSProperties}>
-                        <div className='nmx-model-picker-relay-view'>{this.renderRelayPopover({ selectedKey: this.comicChatRelayKey(), onSelect: key => this.selectComicChatRelay(key), capacityScope: 'comic' })}</div>
+                        <div className='nmx-model-picker-relay-view'>{this.renderRelayPopover({ selectedKey: this.comicChatRelayKey(), onSelect: key => this.selectComicChatRelay(key), capacityScope: 'comic',
+                            freeScope: comicRelayFreeScope(this.comicChatCapability(this.comicChatUi().mode), 'conversation') })}</div>
                     </section>
                 </div>
             </div>,
@@ -60687,15 +60962,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const route = this.comicStepMediaRoute('video');
         if (route?.kind === 'local') return musicMvText(this.desktopLocale, 'free');
         const price = route?.offering?.price;
-        if (!route || route.kind !== 'managed' || price?.videoSecondMicros == null) return musicMvText(this.desktopLocale, 'priceUnknown');
+        if (!route || route.kind !== 'managed' || (price?.videoSecondMicros == null && price?.requestEachMicros == null)) return musicMvText(this.desktopLocale, 'priceUnknown');
         const segments = (project.music?.mv?.segments || []).filter(segment => ids.includes(segment.id) && segment.source === 'ai-video');
         const seconds = segments.reduce((total, segment) => total + musicMvRequestSeconds(segment, route.model,
             project.canvas.height >= 1080 && project.canvas.width >= 1080), 0);
         const portrait = project.music?.mv?.singerPortraitAssetId;
         const images = segments.filter(segment => segment.performance && portrait
             && project.assets.some(asset => asset.id === portrait && asset.kind === 'image' && asset.status === 'ready')).length;
-        return segments.length ? formatManagedVideoEstimate(this.desktopLocale, price, seconds, images)
-            : new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency: price.currency, maximumFractionDigits: 6 }).format(0);
+        if (!segments.length) return new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency: price.currency || 'USD', maximumFractionDigits: 6 }).format(0);
+        const scopedPrice = price.videoSecondMicros != null ? price : { ...price, requestEachMicros: price.requestEachMicros! * segments.length };
+        return formatManagedVideoEstimate(this.desktopLocale, scopedPrice, seconds, images);
     }
 
     protected async musicMvVisualInput(project: ComicProject, mv: ComicMusicMvSettings, segment: ComicMusicMvSegment, route: ComicMediaRoute): Promise<Record<string, unknown>> {
@@ -62055,10 +62331,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!offering) return '';
         if (kind === 'video') return formatManagedVideoPrice(this.desktopLocale, offering.price);
         if (kind === 'image') return this.formatOfferingPrice(offering);
-        const micros = kind === 'music' ? offering.price.requestEachMicros : offering.price.audioPerMillionCharactersMicros;
+        const [micros, unitKey] = kind === 'music'
+            ? (offering.price.requestEachMicros != null ? [offering.price.requestEachMicros, 'songUnit'] as const
+                : offering.price.audioSecondMicros != null ? [offering.price.audioSecondMicros, 'second'] as const
+                    : [offering.price.audioPerMillionCharactersMicros, 'mchar'] as const)
+            : (offering.price.audioPerMillionCharactersMicros != null ? [offering.price.audioPerMillionCharactersMicros, 'mchar'] as const
+                : offering.price.audioSecondMicros != null ? [offering.price.audioSecondMicros, 'second'] as const
+                    : [offering.price.requestEachMicros, 'requestUnit'] as const);
         if (micros === null || micros === undefined) return offeringPriceText(this.desktopLocale, 'pricePending');
-        const unit = offeringPriceText(this.desktopLocale, kind === 'music' ? 'songUnit' : 'mchar');
-        return `${new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency: offering.price.currency, maximumFractionDigits: 4 }).format(micros / 1_000_000)} / ${unit}`;
+        const unit = offeringPriceText(this.desktopLocale, unitKey);
+        return `${new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency: offering.price.currency || 'USD', maximumFractionDigits: 4 }).format(micros / 1_000_000)} / ${unit}`;
     }
 
     protected renderComicExportSheet(): React.ReactNode {
@@ -64320,14 +64602,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected renderWalletTopupSheet(): React.ReactNode {
         if (!this.walletTopupSheetOpen) return undefined;
         return <WalletTopupSheet locale={this.desktopLocale} stage={this.walletTopupStage} amount={this.walletTopupAmount}
+            paymentMethod={this.walletTopupRail} theme={this.resolvedDesktopTheme?.()}
+            platformOrigin={this.walletTopupPlatformOrigin || 'https://nextmux.app'}
             options={this.walletTopupOptions} order={this.walletTopupOrder} error={this.walletTopupError} now={Date.now()}
             formatMicros={(currency, micros) => this.formatMoneyMicros(currency, micros)}
             onAmountChange={value => { this.walletTopupAmount = value; this.walletTopupError = ''; this.update(); }}
+            onPaymentMethodChange={method => { this.walletTopupRail = method; this.walletTopupError = ''; this.update(); }}
+            onConfirmToken={(orderId, confirmationToken, returnUrl) => this.platformService.confirmWalletTopup(orderId, confirmationToken, returnUrl)}
             onSubmit={() => void this.createWalletTopup()}
             onClose={() => this.closeNavigationSurface()}
             onOpenCheckout={() => this.openExternalUrl(this.walletTopupOrder?.payment.checkoutUrl)}
             onCheck={() => void this.refreshWalletTopupStatus()}
-            onRestart={() => { this.resetWalletTopupSurface(); this.walletTopupSheetOpen = true; this.update(); }}
+            onRestart={() => { const method = this.walletTopupRail; this.resetWalletTopupSurface(); this.walletTopupRail = method; this.walletTopupSheetOpen = true; this.update(); }}
             onDone={() => { this.billingTab = 'topups'; this.completeNavigationSurface(); }} />;
     }
 
@@ -65009,6 +65295,73 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (stage.style.getPropertyValue('--nmx-float-bottom') !== `${bottom}px`) stage.style.setProperty('--nmx-float-bottom', `${bottom}px`);
     }
 
+    protected cancelScheduledRenderUpdate(): void {
+        if (this.renderUpdateFrame === undefined) return;
+        const frame = this.renderUpdateFrame;
+        this.renderUpdateFrame = undefined;
+        if (frame === -1) return;
+        if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frame);
+        else if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(frame);
+    }
+
+    /** Drops any pending frame-coalesced update and posts Lumino's update right away (rendered a task later, not a frame). */
+    protected updateNow(): void {
+        this.cancelScheduledRenderUpdate();
+        if (this.isDisposed) return;
+        super.update();
+    }
+
+    /** Coalesce multiple updates within the same animation frame while keeping non-browser/IME/disposed paths safe. */
+    protected scheduleRenderUpdate(): void {
+        if (this.isDisposed) {
+            this.cancelScheduledRenderUpdate();
+            return;
+        }
+        const scheduleFrame = typeof window !== 'undefined' && typeof requestAnimationFrame === 'function'
+            ? requestAnimationFrame
+            : typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function'
+                ? window.requestAnimationFrame.bind(window)
+                : undefined;
+        if (!scheduleFrame) {
+            this.updateNow();
+            return;
+        }
+        const activeElement = typeof document !== 'undefined' ? document.activeElement : null;
+        const activeImeInput = activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement
+            ? activeElement
+            : undefined;
+        if (this.composerComposing || (activeImeInput && typeof isImeFieldComposing === 'function' && isImeFieldComposing(activeImeInput))) {
+            this.updateNow();
+            return;
+        }
+        const currentEvent = typeof window !== 'undefined' ? window.event : undefined;
+        if (currentEvent && IMMEDIATE_RENDER_EVENT_TYPES.has(currentEvent.type)) {
+            this.updateNow();
+            return;
+        }
+        if (this.renderUpdateFrame !== undefined) return;
+        let fired = false;
+        this.renderUpdateFrame = -1;
+        const frame = scheduleFrame(() => {
+            fired = true;
+            this.renderUpdateFrame = undefined;
+            if (this.isDisposed) return;
+            // Commit inside this frame rather than a task later: code that revealed an element with update() and reaches
+            // for it from its own requestAnimationFrame callback (queued after this one) must find it rendered.
+            ReactDOM.flushSync(() => MessageLoop.sendMessage(this, Widget.Msg.UpdateRequest));
+        });
+        if (!fired && this.renderUpdateFrame === -1) this.renderUpdateFrame = frame;
+    }
+
+    override update(): void {
+        this.scheduleRenderUpdate();
+    }
+
+    override dispose(): void {
+        this.cancelScheduledRenderUpdate();
+        super.dispose();
+    }
+
     protected override onUpdateRequest(message: Message): void {
         // History, restore and deep links can change activeSection without selectSection.
         if (this.activeSection !== 'comic') this.clearComicLibrarySurfaces();
@@ -65035,6 +65388,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (sameView) this.lockThreadReadingAnchorForDrawerTransition?.();
         }
         super.onUpdateRequest(message);
+        if (this.activeSection === 'coding' && this.codingPanel === 'thread') {
+            this.relativeTimeRenderAt = Date.now();
+            this.relativeTimeRenderKey = `${this.activeCodingSessionId}|${this.desktopLocale}`;
+        }
         // ReactWidget renders through a React 18 root, which commits in a later task, so measuring here would read
         // the previous layout. Re-measure the floats' column on the next frame, after new turns or file rows are on
         // screen and before that frame paints. One pending frame at a time, however many updates arrive.

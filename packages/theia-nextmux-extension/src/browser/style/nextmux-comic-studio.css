@@ -473,7 +473,7 @@
 .nmx-comic-editor-frame:hover .nmx-zoom-button, .nmx-comic-editor-frame .nmx-zoom-button:focus-visible { opacity: 1; }
 .nmx-comic-editor-frame:fullscreen { width: 100vw; height: 100vh; max-width: none; aspect-ratio: auto !important; background: #000; }
 .nmx-comic-studio .nmx-canvas { position: relative; }
-.nmx-comic-studio .nmx-comic-preview-badge { position: absolute; top: 10px; inset-inline-start: 10px; z-index: 2; max-width: calc(100% - 20px); padding: 3px 10px; overflow: hidden; border-radius: 999px; color: #fff; background: rgb(20 18 26 / 70%); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; backdrop-filter: blur(6px); }
+.nmx-comic-studio .nmx-comic-preview-badge { position: absolute; top: 10px; inset-inline-start: 10px; z-index: 2; max-width: calc(100% - 20px); padding: 3px 10px; overflow: hidden; border: 1px solid rgb(255 255 255 / 14%); border-radius: 999px; color: #fff; background: rgb(16 15 22 / 90%); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 
 /* Shot/scene inspector: titled groups (timing, camera, transitions and sound, picture, dialogue) instead of one long
    column; short fields share a row. */

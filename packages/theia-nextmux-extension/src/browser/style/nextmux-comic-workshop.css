@@ -222,7 +222,7 @@
 @keyframes nmx-home-glow { from { transform: translate(0, 0) scale(1); } to { transform: translate(-40px, 30px) scale(1.12); } }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-hero-copy { position: relative; min-width: 0; }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-overline { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border: 1px solid rgba(255, 255, 255, .28); border-radius: 999px;
-    color: #fff; background: rgba(255, 255, 255, .14); font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; backdrop-filter: blur(6px); }
+    color: #fff; background: rgba(20, 14, 46, .46); font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-hero-copy h1 { margin: 10px 0 6px; font-size: clamp(24px, 3.4cqw, 36px); font-weight: 900; line-height: 1.1; letter-spacing: -.01em; overflow-wrap: anywhere;
     color: #fff; background: linear-gradient(92deg, #ffffff 10%, #ffe6a8 55%, #ffb8cc 95%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; text-shadow: none; }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-hero-copy p { max-width: 520px; margin: 0; color: rgba(255, 255, 255, .84); font-size: 13.5px; line-height: 1.6; }
@@ -233,7 +233,7 @@
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-primary-cta:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 16px 32px rgba(0, 0, 0, .32), inset 0 -2px 0 rgba(0, 0, 0, .08); }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-primary-cta:disabled { opacity: .6; cursor: default; }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-ghost-cta { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 15px; border: 1px solid rgba(255, 255, 255, .34); border-radius: 11px;
-    color: #fff; background: rgba(255, 255, 255, .1); font-size: 13.5px; font-weight: 600; cursor: pointer; backdrop-filter: blur(6px); }
+    color: #fff; background: rgba(20, 14, 46, .38); font-size: 13.5px; font-weight: 600; cursor: pointer; }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-ghost-cta:hover { background: rgba(255, 255, 255, .18); }
 /* Hero art: three comic panels, a speech bubble and sparkles. */
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-hero-art { position: relative; height: 150px; min-width: 0; }
@@ -995,7 +995,7 @@
 .nmx-shell .nmx-cast-close:disabled { opacity: .45; cursor: default; }
 .nmx-shell .nmx-cast-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .nmx-shell .nmx-cast-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 16px; margin: 0; padding: 20px 22px 22px; list-style: none; }
-.nmx-shell .nmx-cast-card { display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid var(--nmx-border); border-radius: 14px; background: var(--nmx-panel); transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+.nmx-shell .nmx-cast-card { display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid var(--nmx-border); border-radius: 14px; background: var(--nmx-panel); transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; content-visibility: auto; contain-intrinsic-size: auto 240px; }
 .nmx-shell .nmx-cast-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, #d74470 40%, var(--nmx-border)); box-shadow: 0 12px 28px rgb(0 0 0 / 18%); }
 .nmx-shell .nmx-cast-card.is-editing { grid-column: span 2; flex-direction: row; transform: none; }
 .nmx-shell .nmx-cast-card.is-editing .nmx-cast-picture { flex: 0 0 42%; align-self: flex-start; }
@@ -1003,12 +1003,12 @@
 .nmx-shell .nmx-cast-picture { position: relative; display: grid; place-items: center; aspect-ratio: 3 / 4; overflow: hidden; background: color-mix(in srgb, var(--nmx-panel-2) 65%, #fff); }
 .nmx-shell .nmx-cast-picture img { width: 100%; height: 100%; object-fit: contain; object-position: center bottom; }
 .nmx-shell .nmx-cast-picture > span { display: grid; place-items: center; width: 100%; height: 100%; color: #fff; background: linear-gradient(160deg, #8e4ec6, #d74470); font-size: 40px; font-weight: 800; }
-.nmx-shell .nmx-cast-count { position: absolute; top: 8px; inset-inline-start: 8px; display: inline-flex; align-items: center; gap: 4px; max-width: calc(100% - 16px); padding: 3px 8px; overflow: hidden; border-radius: 999px; color: #fff; background: rgb(22 18 26 / 58%); font-size: 10.5px; font-style: normal; font-weight: 600; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; backdrop-filter: blur(8px); }
+.nmx-shell .nmx-cast-count { position: absolute; top: 8px; inset-inline-start: 8px; display: inline-flex; align-items: center; gap: 4px; max-width: calc(100% - 16px); padding: 3px 8px; overflow: hidden; border: 1px solid rgb(255 255 255 / 14%); border-radius: 999px; color: #fff; background: rgb(18 16 24 / 88%); font-size: 10.5px; font-style: normal; font-weight: 600; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
 .nmx-shell .nmx-cast-count .codicon { font-size: 11px; }
 .nmx-shell .nmx-cast-tools { position: absolute; top: 8px; inset-inline-end: 8px; display: flex; gap: 6px; opacity: 0; transform: translateY(-3px); transition: opacity .14s ease, transform .14s ease; }
 .nmx-shell .nmx-cast-card:hover .nmx-cast-tools, .nmx-shell .nmx-cast-tools:focus-within, .nmx-shell .nmx-cast-tools:has(.is-confirm) { opacity: 1; transform: none; }
-.nmx-shell .nmx-cast-tools button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 28px; height: 28px; padding: 0 7px; border: 0; border-radius: 8px; color: #fff; background: rgb(22 18 26 / 62%); font-size: 12px; cursor: pointer; backdrop-filter: blur(8px); transition: background-color .14s ease; }
-.nmx-shell .nmx-cast-tools button:hover:not(:disabled) { background: rgb(22 18 26 / 82%); }
+.nmx-shell .nmx-cast-tools button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 28px; height: 28px; padding: 0 7px; border: 1px solid rgb(255 255 255 / 14%); border-radius: 8px; color: #fff; background: rgb(18 16 24 / 88%); font-size: 12px; cursor: pointer; transition: background-color .14s ease; }
+.nmx-shell .nmx-cast-tools button:hover:not(:disabled) { background: rgb(22 18 26 / 96%); }
 .nmx-shell .nmx-cast-tools button.is-danger:hover:not(:disabled), .nmx-shell .nmx-cast-tools button.is-confirm { background: #e5484d; }
 .nmx-shell .nmx-cast-tools button:disabled { opacity: .5; cursor: default; }
 .nmx-shell .nmx-cast-copy { display: grid; gap: 3px; min-width: 0; padding: 10px 12px 12px; }
@@ -1032,7 +1032,7 @@
 
 /* 新建人物: a layer over the library (not over the app), with its own close. */
 .nmx-shell .nmx-cast-library:has(.nmx-cast-create-layer) { min-height: min(600px, calc(100vh - 64px)); }
-.nmx-shell .nmx-cast-create-layer { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; padding: 20px; overflow-y: auto; background: rgb(14 12 16 / 46%); backdrop-filter: blur(3px); animation: nmx-cast-fade .16s ease; }
+.nmx-shell .nmx-cast-create-layer { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; padding: 20px; overflow-y: auto; background: rgb(14 12 16 / 74%); animation: nmx-cast-fade .16s ease; }
 .nmx-shell .nmx-cast-create { display: flex; flex-direction: column; width: min(640px, 100%); max-height: 100%; overflow: hidden; border: 1px solid var(--nmx-border-strong, var(--nmx-border)); border-radius: 16px; color: var(--nmx-text); background: var(--nmx-dialog-background, var(--nmx-panel)); box-shadow: 0 24px 60px rgb(0 0 0 / 38%); animation: nmx-cast-rise .18s ease; }
 .nmx-shell .nmx-cast-create > header { display: flex; align-items: flex-start; gap: 12px; padding: 16px 16px 4px 20px; }
 .nmx-shell .nmx-cast-create > header > div { flex: 1; min-width: 0; }
@@ -1432,13 +1432,14 @@
 .nmx-shell .nmx-comic-context .nmx-comic-library-item.is-drop-after::after { bottom: -2px; }
 
 /* Home cards: the delete button sits on the cover's top-right corner on hover or focus. */
+/* No content-visibility here: its paint containment would clip the card's outer focus ring and hover shadow. */
 .nmx-shell .nmx-comic-cats-item { position: relative; display: grid; min-width: 0; }
 .nmx-shell .nmx-comic-cats-item > .nmx-comic-cats-card { width: 100%; height: 100%; }
 .nmx-shell .nmx-comic-cats-item > .nmx-comic-cats-delete {
     position: absolute; top: 8px; inset-inline-end: 8px; z-index: 2;
     display: grid; place-items: center; width: 30px; min-width: 0; height: 30px; min-height: 0; margin: 0; padding: 0;
-    border: 0; border-radius: 9px; color: #fff; background: rgba(18, 18, 22, .62); opacity: 0; cursor: pointer;
-    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); transition: opacity 120ms ease, background-color 120ms ease;
+    border: 1px solid rgb(255 255 255 / 14%); border-radius: 9px; color: #fff; background: rgba(18, 18, 22, .88); opacity: 0; cursor: pointer;
+    transition: opacity 120ms ease, background-color 120ms ease;
 }
 .nmx-shell .nmx-comic-cats-item:is(:hover, :focus-within) > .nmx-comic-cats-delete { opacity: 1; }
 .nmx-shell .nmx-comic-cats-item > .nmx-comic-cats-delete:is(:hover, :focus-visible) { background: #e5484d; }
@@ -1531,8 +1532,8 @@
 .nmx-shell .nmx-music-mv-placeholder { display: grid; justify-items: center; gap: 8px; padding: 18px; color: rgba(255, 255, 255, .62); font-size: 12.5px; text-align: center; }
 .nmx-shell .nmx-music-mv-placeholder > .codicon { font-size: 26px; opacity: .8; }
 .nmx-shell .nmx-music-mv-frame-index {
-    position: absolute; top: 10px; inset-inline-start: 10px; z-index: 1; padding: 3px 9px; border-radius: 999px;
-    color: #fff; background: rgba(8, 10, 16, .55); font-size: 11px; font-weight: 700; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    position: absolute; top: 10px; inset-inline-start: 10px; z-index: 1; padding: 3px 9px; border: 1px solid rgb(255 255 255 / 14%); border-radius: 999px;
+    color: #fff; background: rgba(8, 10, 16, .88); font-size: 11px; font-weight: 700;
 }
 .nmx-shell .nmx-music-mv-subtitle {
     position: absolute; inset-inline: 6%; bottom: 7%; z-index: 1; justify-self: center; margin: 0 auto; width: fit-content; max-width: 88%;
@@ -1608,6 +1609,7 @@
 .nmx-shell .nmx-music-mv-segment {
     display: flex; flex-direction: column; gap: 9px; min-width: 0; padding: 12px; border: 1px solid var(--nmx-border); border-radius: 14px; background: var(--nmx-panel);
     transition: border-color 120ms ease, box-shadow 120ms ease;
+    content-visibility: auto; contain-intrinsic-size: auto 240px;
 }
 .nmx-shell .nmx-music-mv-segment:focus-within { border-color: color-mix(in srgb, var(--music-a) 55%, var(--nmx-border)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--music-a) 12%, transparent); }
 .nmx-shell .nmx-music-mv-segment > header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
@@ -1619,7 +1621,7 @@
 }
 .nmx-shell .nmx-music-mv-thumbnail > :is(img, video) { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .nmx-shell .nmx-music-mv-thumbnail > .codicon { font-size: 24px; }
-.nmx-shell .nmx-music-mv-thumbnail > .nmx-music-mv-badge { position: absolute; top: 8px; inset-inline-end: 8px; z-index: 1; color: #fff; background: rgba(8, 10, 16, .6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.nmx-shell .nmx-music-mv-thumbnail > .nmx-music-mv-badge { position: absolute; top: 8px; inset-inline-end: 8px; z-index: 1; border: 1px solid rgb(255 255 255 / 14%); color: #fff; background: rgba(8, 10, 16, .88); }
 .nmx-shell .nmx-music-mv-thumbnail > .nmx-music-mv-badge.is-ready { background: rgba(4, 120, 87, .82); }
 .nmx-shell .nmx-music-mv-thumbnail > .nmx-music-mv-badge.is-generating { background: color-mix(in srgb, var(--music-b) 82%, transparent); }
 .nmx-shell .nmx-music-mv-range { color: var(--nmx-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }

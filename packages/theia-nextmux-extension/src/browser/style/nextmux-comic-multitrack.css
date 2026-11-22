@@ -142,6 +142,7 @@
     position: relative; display: flex; flex-direction: column; min-width: 0; padding: 0; overflow: hidden; text-align: start;
     border: 1px solid var(--mt-line); border-radius: 9px; background: var(--mt-bg); cursor: grab;
     transition: border-color .12s ease, box-shadow .12s ease, transform .12s ease;
+    content-visibility: auto; contain-intrinsic-size: auto 160px;
 }
 .nmx-mt-bin .nmx-mt-asset:active:not(:disabled) { cursor: grabbing; }
 .nmx-shell .nmx-mt .nmx-mt-bin .nmx-mt-asset:hover:not(:disabled) {

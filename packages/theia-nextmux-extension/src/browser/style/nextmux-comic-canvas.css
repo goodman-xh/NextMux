@@ -39,7 +39,10 @@
 .nmx-canvas-tab[data-save-state='failed'] .nmx-canvas-tab-state { color: var(--nmx-danger, #e5484d); }
 .nmx-canvas-tab[data-save-state='saving'] .nmx-canvas-tab-state { animation: nmx-canvas-tab-saving 1s ease-in-out infinite alternate; }
 @keyframes nmx-canvas-tab-saving { from { opacity: .35; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .nmx-canvas-tab[data-save-state='saving'] .nmx-canvas-tab-state { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+    .nmx-canvas-tab[data-save-state='saving'] .nmx-canvas-tab-state,
+    .nmx-board-node.is-busy::after { animation: none; }
+}
 .nmx-canvas-tab-close {
     display: grid; place-items: center; box-sizing: border-box; width: 20px; min-width: 0; height: 20px; min-height: 0; margin: 0 5px 0 0; padding: 0;
     border: 0; border-radius: 6px; color: var(--nmx-muted); background: transparent; font-size: 14px; line-height: 1; cursor: pointer; opacity: .55;
@@ -99,8 +102,8 @@
     --cv-grid: #3d3d42; --cv-sequence: #36aaa0; --cv-running: var(--nmx-text);
     --cv-text: #9aa3b2; --cv-image: #4c8dff; --cv-video: #a06bff; --cv-audio: #2fbf71; --cv-character: #ff5f8a; --cv-group: #8a94a6;
     --cv-brand: var(--nmx-text);
-    --cv-card: rgb(24 24 27 / 80%);
-    --cv-float: color-mix(in srgb, var(--nmx-panel) 94%, transparent);
+    --cv-card: rgb(24 24 27 / 96%);
+    --cv-float: color-mix(in srgb, var(--nmx-panel) 98%, var(--nmx-bg));
     /* Surfaces, focus and elevation shared by every canvas control, popover and dialog. */
     --cv-control: color-mix(in srgb, var(--nmx-panel-2) 82%, transparent); --cv-control-border: var(--nmx-border);
     --cv-hover-soft: color-mix(in srgb, var(--nmx-text) 7%, transparent); --cv-field: color-mix(in srgb, var(--nmx-bg) 55%, var(--nmx-panel));
@@ -213,7 +216,7 @@
 .nmx-board-placeholder small { max-width: 260px; font-size: 11px; line-height: 1.5; }
 .nmx-board-progress {
     position: absolute; left: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
-    color: #fff; font-size: 11.5px; font-variant-numeric: tabular-nums; background: rgb(0 0 0 / 58%); backdrop-filter: blur(6px);
+    border: 1px solid rgb(255 255 255 / 14%); color: #fff; font-size: 11.5px; font-variant-numeric: tabular-nums; background: rgb(14 15 20 / 90%);
 }
 .nmx-board-error {
     position: absolute; left: 8px; right: 8px; bottom: 8px; max-height: 64px; overflow: hidden; padding: 6px 9px; border-radius: 9px; font-size: 11.5px; line-height: 1.4;
@@ -222,7 +225,7 @@
 .nmx-board-orphaned { position: absolute; top: 8px; left: 8px; right: 8px; padding: 4px 9px; border: 1px solid var(--nmx-border); border-radius: 9px; font-size: 11px; color: var(--nmx-muted); background: var(--cv-float); }
 .nmx-board-versions {
     position: absolute; right: 8px; top: 8px; display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 999px;
-    color: #fff; font-size: 11px; font-variant-numeric: tabular-nums; background: rgb(0 0 0 / 56%); backdrop-filter: blur(6px);
+    border: 1px solid rgb(255 255 255 / 14%); color: #fff; font-size: 11px; font-variant-numeric: tabular-nums; background: rgb(14 15 20 / 90%);
 }
 .nmx-board-versions button { display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; color: inherit; background: transparent; cursor: pointer; }
 .nmx-board-versions button:hover { background: rgb(255 255 255 / 18%); }
@@ -279,7 +282,7 @@
 /* ——— the node's top actions and its settings bar ——— */
 .nmx-board-toolbar {
     display: flex; gap: 2px; padding: 4px; border: 1px solid var(--nmx-border); border-radius: 12px; background: var(--cv-float);
-    box-shadow: var(--cv-shadow-2); backdrop-filter: blur(12px);
+    box-shadow: var(--cv-shadow-2);
 }
 .nmx-board-toolbar > button {
     display: inline-flex; align-items: center; justify-content: center; flex: 0 0 30px; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px;
@@ -292,7 +295,7 @@
 
 .nmx-board-panel {
     position: relative; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; width: 600px; padding: 12px; border: 1px solid var(--nmx-border); border-radius: 18px;
-    color: var(--nmx-text); background: var(--cv-float); box-shadow: var(--cv-shadow-2); backdrop-filter: blur(14px); cursor: default;
+    color: var(--nmx-text); background: var(--cv-float); box-shadow: var(--cv-shadow-2); cursor: default;
 }
 .nmx-board-panel.is-text { width: 420px; }
 .nmx-board-panel.is-frame { width: 360px; max-width: calc(100vw - 32px); }
@@ -373,7 +376,7 @@
 /* ——— floating chrome ——— */
 .nmx-board-dock {
     position: absolute; left: 50%; bottom: 12px; z-index: 20; display: flex; align-items: center; gap: 2px; padding: 4px; transform: translateX(-50%);
-    border: 1px solid var(--nmx-border); border-radius: 999px; color: var(--nmx-text); background: var(--cv-float); box-shadow: var(--cv-shadow-2); backdrop-filter: blur(14px);
+    border: 1px solid var(--nmx-border); border-radius: 999px; color: var(--nmx-text); background: var(--cv-float); box-shadow: var(--cv-shadow-2);
 }
 .nmx-board-dock button {
     display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 38px; height: 38px; padding: 0 8px; border: 0; border-radius: 999px;
@@ -391,14 +394,14 @@
 
 .nmx-board-save {
     position: absolute; left: 16px; top: 14px; z-index: 6; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
-    color: var(--nmx-muted); font-size: 11.5px; background: var(--cv-float); border: 1px solid var(--nmx-border); box-shadow: var(--cv-shadow-0); backdrop-filter: blur(10px);
+    color: var(--nmx-muted); font-size: 11.5px; background: var(--cv-float); border: 1px solid var(--nmx-border); box-shadow: var(--cv-shadow-0);
 }
 .nmx-board-save.is-saved .codicon { color: var(--nmx-success, #2fbf71); }
 .nmx-board-save.is-failed { color: var(--nmx-danger, #e5484d); border-color: color-mix(in srgb, var(--nmx-danger, #e5484d) 50%, transparent); }
 
 .nmx-board-selection {
     position: absolute; left: 50%; top: 14px; z-index: 6; display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 12px; transform: translateX(-50%);
-    border: 1px solid var(--nmx-border); border-radius: 12px; color: var(--nmx-text); background: var(--cv-float); box-shadow: var(--cv-shadow-2); backdrop-filter: blur(12px);
+    border: 1px solid var(--nmx-border); border-radius: 12px; color: var(--nmx-text); background: var(--cv-float); box-shadow: var(--cv-shadow-2);
 }
 .nmx-board-selection > span { margin-right: 6px; font-size: 12px; color: var(--nmx-muted); font-variant-numeric: tabular-nums; }
 .nmx-board-selection button {
@@ -460,13 +463,13 @@
 .nmx-shell.nmx-theme-light .nmx-desk-canvas-notice.has-action { border-color: color-mix(in srgb, var(--nmx-danger, #c92a32) 30%, #e4e0dd) !important; }
 .nmx-shell.nmx-theme-light .nmx-desk-canvas-notice-action { border-color: color-mix(in srgb, var(--nmx-accent) 42%, #e4e0dd) !important; }
 
-.nmx-board-lightbox { position: absolute; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 32px; background: rgb(0 0 0 / 72%); backdrop-filter: blur(6px); }
+.nmx-board-lightbox { position: absolute; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; padding: 32px; background: rgb(7 8 12 / 94%); }
 .nmx-board-lightbox :is(img, video) { max-width: 100%; max-height: 100%; border-radius: 12px; box-shadow: 0 20px 60px rgb(0 0 0 / 50%); }
 .nmx-board-lightbox-close { position: absolute; top: 16px; right: 16px; display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; color: #fff; background: rgb(255 255 255 / 14%); cursor: pointer; }
 .nmx-board-lightbox-close:hover { background: rgb(255 255 255 / 24%); }
 
 /* ——— 批量导入提示词 ——— */
-.nmx-board-modal-backdrop { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgb(0 0 0 / 46%); backdrop-filter: blur(4px); }
+.nmx-board-modal-backdrop { position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgb(0 0 0 / 60%); }
 .nmx-board-modal {
     display: flex; flex-direction: column; width: min(1180px, 100%); max-height: 100%; min-height: 0; border: 1px solid var(--nmx-border); border-radius: 16px;
     background: var(--nmx-panel); box-shadow: 0 30px 80px rgb(0 0 0 / 40%); overflow: hidden;
@@ -528,7 +531,7 @@
 
 .nmx-board-side {
     position: absolute; left: 16px; top: 52px; bottom: 76px; z-index: 14; display: flex; flex-direction: column; gap: 10px; width: 300px; padding: 12px;
-    border: 1px solid var(--nmx-border); border-radius: 14px; color: var(--nmx-text); background: var(--cv-float); box-shadow: var(--cv-shadow-2); backdrop-filter: blur(14px);
+    border: 1px solid var(--nmx-border); border-radius: 14px; color: var(--nmx-text); background: var(--cv-float); box-shadow: var(--cv-shadow-2);
 }
 .nmx-board-side.is-settings { left: auto; right: 16px; width: 320px; }
 .nmx-board-side > header { display: flex; align-items: center; gap: 8px; }
@@ -542,6 +545,7 @@
 .nmx-board-chips button.is-active { color: var(--nmx-bg); border-color: var(--nmx-text); background: var(--nmx-text); font-weight: 600; }
 .nmx-board-chips button.is-active:hover:not(:disabled) { background: color-mix(in srgb, var(--nmx-text) 85%, var(--nmx-bg)); color: var(--nmx-bg); border-color: color-mix(in srgb, var(--nmx-text) 85%, var(--nmx-bg)); }
 .nmx-board-side-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; overflow: auto; min-height: 0; }
+.nmx-board-side-list > * { content-visibility: auto; contain-intrinsic-size: auto 38px; }
 .nmx-board-side-list button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 34px; padding: 4px 8px; border: 0; border-radius: 8px; color: var(--nmx-text); background: transparent; text-align: left; cursor: pointer; }
 .nmx-board-side-list button:hover { background: var(--nmx-hover, var(--nmx-panel-2)); }
 .nmx-board-side-list img { width: 26px; height: 26px; border-radius: 6px; object-fit: cover; flex: 0 0 auto; }

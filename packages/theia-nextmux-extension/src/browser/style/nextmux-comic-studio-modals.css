@@ -41,9 +41,7 @@
     justify-content: center;
     padding: 16px;
     box-sizing: border-box;
-    background: rgba(7, 7, 11, 0.64);
-    -webkit-backdrop-filter: blur(7px);
-    backdrop-filter: blur(7px);
+    background: rgba(7, 7, 11, 0.82);
     color: var(--st-text);
     color-scheme: dark;
     animation: nmx-studio-backdrop-in 140ms ease-out;
@@ -916,11 +914,9 @@
     border: 1px solid rgba(255, 255, 255, 0.22) !important;
     border-radius: 999px;
     background: rgba(16, 16, 20, 0.78) !important;
-    background-color: rgba(16, 16, 20, 0.78) !important;
+    background-color: rgba(16, 16, 20, 0.9) !important;
     color: #ffffff !important;
     cursor: zoom-in;
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
     transition: background-color 120ms ease, transform 120ms ease, border-color 120ms ease;
 }
 
@@ -960,11 +956,9 @@
     border: 1px solid rgba(255, 255, 255, 0.22) !important;
     border-radius: 999px;
     background: rgba(16, 16, 20, 0.78) !important;
-    background-color: rgba(16, 16, 20, 0.78) !important;
+    background-color: rgba(16, 16, 20, 0.9) !important;
     color: #ffffff !important;
     cursor: pointer;
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
     transition: background-color 120ms ease, transform 120ms ease, border-color 120ms ease;
 }
 
@@ -1087,6 +1081,8 @@
     color: var(--st-text);
     cursor: pointer;
     min-width: 0;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 120px;
 }
 
 .nmx-comic-studio-modal .nmx-comic-studio-lib-item:hover:not(.is-selected),
@@ -1154,9 +1150,7 @@
     background: rgba(15, 23, 42, 0.76);
     color: #ffffff !important;
     cursor: zoom-in;
-    opacity: 0.86;
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
+    opacity: 0.9;
     transition: opacity 120ms ease, background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
 }
 
@@ -1800,9 +1794,7 @@
     padding: 6px 14px;
     border: 1px solid color-mix(in srgb, var(--st-accent) 45%, var(--st-border-strong));
     border-radius: 999px;
-    background: color-mix(in srgb, var(--st-panel) 90%, transparent);
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
+    background: color-mix(in srgb, var(--st-panel) 97%, var(--st-bg));
     color: var(--st-text);
     font-size: 12px;
     font-weight: 600;
@@ -2356,9 +2348,7 @@
     z-index: 3200;
     display: flex;
     flex-direction: column;
-    background: rgba(8, 8, 12, 0.92);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
+    background: rgba(8, 8, 12, 0.97);
     color: #f4f4f6;
     color-scheme: dark;
     cursor: zoom-out;
@@ -2592,11 +2582,9 @@
     padding: 0;
     border: 0;
     border-radius: 9px;
-    background: rgba(229, 72, 77, 0.88);
+    background: rgba(229, 72, 77, 0.94);
     color: #ffffff !important;
     cursor: pointer;
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
     transition: background-color 120ms ease;
 }
 

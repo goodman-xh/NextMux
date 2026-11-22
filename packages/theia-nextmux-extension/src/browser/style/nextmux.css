@@ -12013,10 +12013,9 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     padding: 2px;
     border: 1px solid rgba(255, 255, 255, .035);
     border-radius: 8px;
-    background: rgba(24, 24, 24, .82);
+    background: rgba(24, 24, 24, .95);
     transform: none;
     -webkit-app-region: no-drag;
-    backdrop-filter: blur(12px);
 }
 
 .nmx-titlebar-primary-nav button {
@@ -12520,9 +12519,8 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     padding: 3px;
     border-color: rgba(255, 255, 255, .045);
     border-radius: 11px;
-    background: rgba(25, 24, 24, .78);
+    background: rgba(25, 24, 24, .95);
     box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
-    backdrop-filter: blur(14px);
     transition: width 150ms cubic-bezier(.2, .8, .2, 1), border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
 }
 
@@ -14483,8 +14481,7 @@ body.theia-dark .nmx-file-editor-tabs:hover::-webkit-scrollbar-thumb,
     display: grid;
     place-items: center;
     padding: 20px;
-    background: rgba(8, 8, 8, .58);
-    backdrop-filter: blur(2px);
+    background: rgba(8, 8, 8, .76);
 }
 
 .nmx-file-save-confirm > section {
@@ -17775,8 +17772,7 @@ time {
     width: 100vw;
     height: 100vh;
     padding: 0;
-    background: rgba(7, 7, 8, .78);
-    backdrop-filter: blur(7px);
+    background: rgba(7, 7, 8, .92);
     cursor: zoom-out;
 }
 
@@ -21970,6 +21966,52 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     background: rgba(245, 158, 11, .12);
     border-color: rgba(217, 119, 6, .34) !important;
 }
+/* 免费: a store with a 0× model for the drawer's function ends its name cell in a "free" pill. Name and pill share the
+   cell as a row of their own: the name gives way first (its fade, or a gold name's ellipsis), the pill keeps the cell's
+   inline end, so pills line up down the list, and the 14px pill sits inside the name's 18px line, so the row stays 32px.
+   The pill is the name's sibling, never its child: a deposit-verified name clips the rainbow to its glyphs and makes
+   its own text transparent, which would paint over anything inside it. */
+.nmx-relay-option-title {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+.nmx-model-picker-relay-view .nmx-relay-option-title { grid-column: 1; }
+.nmx-relay-option-title > .nmx-relay-option-name { flex: 1 1 auto; min-width: 0; }
+/* A gold name stays as wide as its text, so all seven stops of the rainbow still fall on it. */
+.nmx-relay-option-title > .nmx-relay-option-name.is-deposit-verified { flex: 0 1 auto; }
+/* Restates its type over the pickers' blanket 13px / 18px (both !important). The band green is made for marks; mixed
+   toward the text, on its own wash, it reads 4.9:1 or better on every dark row (6.0:1 at rest, 4.9:1 on the selected
+   #393239), and the light theme's deeper green 4.7:1 or better (6.0:1 on white, 5.3:1 selected, 4.7:1 on the Council
+   list's hovered #e6e1de). */
+.nmx-relay-option-select .nmx-relay-free-pill {
+    --nmx-free-tone: var(--nmx-signal-good, #1fbc9b);
+    flex: none;
+    margin-inline-start: auto;
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    height: 14px;
+    padding: 0 4px;
+    border: 1px solid color-mix(in srgb, var(--nmx-free-tone) 36%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--nmx-free-tone) 14%, transparent);
+    color: color-mix(in oklab, var(--nmx-free-tone) 78%, var(--nmx-text, #f0edf0));
+    font-size: 9px !important;
+    font-weight: 650;
+    line-height: 12px !important;
+    letter-spacing: .02em;
+    white-space: nowrap;
+    cursor: default;
+}
+.nmx-theme-light .nmx-relay-option-select .nmx-relay-free-pill {
+    border-color: color-mix(in srgb, var(--nmx-free-tone) 32%, transparent);
+    background: color-mix(in srgb, var(--nmx-free-tone) 10%, transparent);
+    color: color-mix(in oklab, var(--nmx-free-tone) 64%, var(--nmx-text, #302b34));
+}
+/* A relay at capacity dims its pill with its name and values. */
+.nmx-model-picker-relay-view .nmx-relay-option-row.is-full .nmx-relay-free-pill { opacity: .72; }
 
 /* Shared, quiet picker chrome. These scoped rules intentionally replace the
    generic composer button styling without affecting the Model Center. */
@@ -23037,9 +23079,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     border: 1px solid rgb(255 255 255 / 20%) !important;
     border-radius: 999px;
     color: #f5f5f7 !important;
-    background: rgb(22 22 26 / 62%) !important;
-    -webkit-backdrop-filter: blur(12px) saturate(140%);
-    backdrop-filter: blur(12px) saturate(140%);
+    background: rgb(22 22 26 / 88%) !important;
     box-shadow: 0 8px 24px rgb(0 0 0 / 34%);
     cursor: pointer;
     pointer-events: auto;
@@ -23062,7 +23102,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
 :is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav:hover:not(:disabled) {
     border-color: rgb(255 255 255 / 40%) !important;
     color: #ffffff !important;
-    background: rgb(48 48 56 / 90%) !important;
+    background: rgb(48 48 56 / 94%) !important;
     transform: translateY(-50%) scale(1.04);
 }
 :is(.nmx-attachment-lightbox, .nmx-library-lightbox) .nmx-lightbox-nav:active:not(:disabled) { transform: translateY(-50%) scale(.95); }
@@ -23081,9 +23121,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     border: 1px solid rgb(255 255 255 / 14%);
     border-radius: 999px;
     color: #f4f4f6;
-    background: rgb(24 24 30 / 78%);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
+    background: rgb(24 24 30 / 90%);
     font-size: 12px;
     font-weight: 600;
     line-height: 1;
@@ -23139,9 +23177,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     border: 1px solid rgb(255 255 255 / 14%);
     border-radius: 999px;
     color: #f4f4f6;
-    background: rgb(24 24 30 / 82%);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
+    background: rgb(24 24 30 / 92%);
     box-shadow: 0 10px 28px rgb(0 0 0 / 38%);
     transform: translateX(-50%);
     cursor: default;
@@ -23284,9 +23320,7 @@ span.nmx-md-video[data-nmx-video] {
     border: 1px solid rgba(255, 255, 255, .24);
     border-radius: 999px;
     color: #ffffff;
-    background: rgba(15, 17, 23, .64);
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
+    background: rgba(15, 17, 23, .86);
     box-shadow: 0 6px 18px rgba(0, 0, 0, .32);
     pointer-events: none;
     transition: transform 140ms ease, background-color 140ms ease;
@@ -23306,7 +23340,7 @@ span.nmx-md-video[data-nmx-video] {
 
 .nmx-video-card:is(:hover, :focus-visible) .nmx-video-card-play {
     transform: scale(1.06);
-    background: rgba(15, 17, 23, .78);
+    background: rgba(15, 17, 23, .94);
 }
 
 .nmx-video-card-time {
@@ -23318,11 +23352,10 @@ span.nmx-md-video[data-nmx-video] {
     align-items: center;
     height: 20px;
     padding: 0 7px;
+    border: 1px solid rgba(255, 255, 255, .14);
     border-radius: 6px;
     color: #f8fafc;
-    background: rgba(15, 17, 23, .72);
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
+    background: rgba(15, 17, 23, .88);
     font-size: 11px;
     font-weight: 600;
     line-height: 1;

@@ -244,6 +244,18 @@ const relayUnavailable: Readonly<Record<RelayUnavailableReason, Readonly<Record<
     }
 };
 
+const freeHint: Readonly<Record<NextMuxDesktopLocale, string>> = {
+    en: 'Free models (0×) available here', 'zh-CN': '这家有免费模型（0×）可用', 'zh-TW': '這家有免費模型（0×）可用',
+    ja: 'ここで使える無料モデル（0×）があります', ko: '여기서 쓸 수 있는 무료 모델(0×)이 있어요', es: 'Hay modelos gratis (0×) aquí',
+    fr: 'Modèles gratuits (0×) disponibles ici', de: 'Kostenlose Modelle (0×) verfügbar', 'pt-BR': 'Modelos grátis (0×) disponíveis aqui',
+    ru: 'Здесь есть бесплатные модели (0×)', ar: 'تتوفر هنا نماذج مجانية (0×)', hi: 'यहाँ मुफ़्त मॉडल (0×) उपलब्ध हैं'
+};
+
+/** What the "free" pill of a relay row says on hover and to a screen reader: the store has a 0× model for this drawer's function. */
+export function relayFreeHintText(locale: NextMuxDesktopLocale): string {
+    return freeHint[locale] ?? freeHint.en;
+}
+
 /** The label of a relay row that cannot be chosen: delisted from the public directory, or the reason it is listed but unusable. */
 export function relayDelistedText(locale: NextMuxDesktopLocale, reason?: RelayUnavailableReason): string {
     return (reason ? relayUnavailable[reason] : delisted)[locale];

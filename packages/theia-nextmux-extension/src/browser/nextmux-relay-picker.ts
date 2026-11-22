@@ -1,5 +1,6 @@
 import type { NextMuxDesktopLocale } from './nextmux-locale';
 import type { PublicMerchantMeasurement } from '../common/nextmux-public-merchants';
+import type { ComicStepCapability } from './nextmux-comic-step-models';
 
 export type RelaySourceTab = 'merchant' | 'favorite' | 'my-api';
 export type RelayMetricKind = 'quality' | 'authenticity' | 'availability' | 'latency' | 'price';
@@ -113,20 +114,61 @@ export function relayPercentText(locale: NextMuxDesktopLocale, value: number | u
         ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 }).format(value / 100) : '—';
 }
 
-/** A multiplier with its "×", or nothing when there is none, so a missing value never reads "—×". */
+/** A multiplier with its "×", "free" when 0×, or nothing when there is none, so a missing value never reads "—×". */
 export function relayMultiplierTag(locale: NextMuxDesktopLocale, value: number | undefined | null): string {
     const text = relayMultiplierText(locale, value);
-    return text === '—' ? '' : `${text}×`;
+    if (text === '—') return '';
+    return text === 'free' ? 'free' : `${text}×`;
 }
 
 /**
- * A multiplier for display: at most two decimals (0.6666× reads 0.67×). Display only; billing keeps every basis point.
+ * A multiplier for display: at most two decimals (0.6666× reads 0.67×), or "free" when 0×. Display only; billing keeps every basis point.
  * A paid quote under 0.005× reads "<0.01", never "0", so it cannot pass for free.
  */
 export function relayMultiplierText(locale: NextMuxDesktopLocale, value: number | undefined | null): string {
     if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) return '—';
+    if (value === 0) return 'free';
     const format = (multiplier: number): string => new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(multiplier);
-    return value > 0 && value < 50 ? `<${format(0.01)}` : format(value / 10_000);
+    return value < 50 ? `<${format(0.01)}` : format(value / 10_000);
+}
+
+export type MerchantFreeScope = 'coding' | 'chat' | 'console' | 'council' | 'comic' | 'image' | 'video' | 'audio' | 'music' | 'transcription' | '3d';
+
+const MERCHANT_FREE_CAPABILITY_BY_SCOPE: Readonly<Record<MerchantFreeScope, readonly string[]>> = {
+    coding: ['coding', 'reasoning'],
+    chat: ['coding', 'reasoning'],
+    console: ['coding', 'reasoning'],
+    council: ['coding', 'reasoning'],
+    image: ['image'],
+    video: ['video'],
+    audio: ['audio'],
+    music: ['music_generation', 'audio'],
+    transcription: ['transcription', 'audio'],
+    '3d': ['3d'],
+    comic: ['image', 'video', 'audio', 'music_generation', 'transcription', '3d']
+};
+
+/**
+ * Whether a merchant offers at least one 0× free model in the given UI scope.
+ * Text capabilities ('coding', 'reasoning') never satisfy 'comic' or media scopes.
+ */
+export function merchantHasScopedFreeModel(freeCapabilities: readonly string[] | undefined, scope: MerchantFreeScope): boolean {
+    if (!Array.isArray(freeCapabilities) || !freeCapabilities.length) return false;
+    const allowed = MERCHANT_FREE_CAPABILITY_BY_SCOPE[scope];
+    return freeCapabilities.some(capability => allowed.includes(capability));
+}
+
+/**
+ * The scope of a 漫剧 relay drawer's "free" pill: the function it chooses a relay for. Free text never shows in 漫剧: a
+ * studio's 剧本 step has no pill, and the conversation's agent counts every 漫剧 medium, as the relay it picks also makes
+ * the conversation's media. Speech and sound effects share the platform's one audio capability.
+ */
+export function comicRelayFreeScope(capability: ComicStepCapability, surface: 'studio' | 'conversation'): MerchantFreeScope | null {
+    switch (capability) {
+        case 'image': case 'video': case 'music': case 'transcription': return capability;
+        case 'speech': case 'sound_effect': return 'audio';
+        default: return surface === 'conversation' ? 'comic' : null;
+    }
 }
 
 /**

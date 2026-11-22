@@ -180,8 +180,9 @@ const OwnModelFactsLine = React.memo(function OwnModelFactsLine({ locale, model,
     // An API's per-token prices stand for a token-billed model only: for one the directory bills per image, second,
     // character or request (NextMux /v1/models lists speech and transcription in tokens), that unit's price is shown.
     const referenceUnit = catalog?.referencePrice?.unit;
-    const apiInput = model.inputPricePerMillion !== undefined && (!referenceUnit || referenceUnit === 'per_million_tokens');
-    const apiFull = apiInput && model.outputPricePerMillion !== undefined;
+    const validApiRate = (value: number | undefined | null): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+    const apiInput = validApiRate(model.inputPricePerMillion) && (!referenceUnit || referenceUnit === 'per_million_tokens');
+    const apiFull = apiInput && validApiRate(model.outputPricePerMillion);
     // A complete API price, else the directory's reference, else the API's input price alone (embeddings, rerankers).
     const referenceLabel = !apiFull ? formatOwnModelReferencePrice(locale, catalog?.referencePrice) : undefined;
     const apiPrice = apiFull || (apiInput && !referenceLabel);
@@ -209,7 +210,9 @@ const OwnModelFactsLine = React.memo(function OwnModelFactsLine({ locale, model,
  */
 export function ownModelListModels(connection: Pick<OfficialModelConnection, 'model' | 'discoveredModels'>, query = ''): OfficialModelConnection['discoveredModels'] {
     const models = new Map(connection.discoveredModels.map(model => [model.id, model]));
-    if (connection.model && !models.has(connection.model)) models.set(connection.model, { id: connection.model, label: connection.model });
+    if (connection.model && !connection.discoveredModels.some(item => sameModelId(item.id, connection.model))) {
+        models.set(connection.model, { id: connection.model, label: connection.model });
+    }
     // Search all original IDs before grouping, so a hidden snapshot is still findable.
     const needle = query.trim().toLowerCase();
     return groupModelsByName([...models.values()].filter(model => !needle || `${model.id} ${model.label}`.toLowerCase().includes(needle)), model => model.id);

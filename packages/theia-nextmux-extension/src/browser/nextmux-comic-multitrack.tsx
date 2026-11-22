@@ -62,6 +62,71 @@ const easings: readonly ComicCompositionEasing[] = ['linear', 'easeIn', 'easeOut
 const uid = (prefix: string): string => `${prefix}-${crypto.randomUUID()}`;
 const compatible = (track: ComicCompositionTrack, clip: ComicCompositionClip): boolean => track.kind === (clip.kind === 'audio' ? 'audio' : clip.kind === 'text' ? 'text' : 'video');
 
+const MultitrackAssetCard = React.memo(function MultitrackAssetCard(props: {
+    readonly asset: ComicCutAsset;
+    readonly blocked: boolean;
+    readonly hintTitle: string;
+    readonly usedLabel: string;
+    readonly addLabel: string;
+    readonly durationLabel?: string;
+    readonly onDragStartAsset: (event: React.DragEvent<HTMLButtonElement>, asset: ComicCutAsset) => void;
+    readonly onDragEndAsset: () => void;
+    readonly onInsertAsset: (asset: ComicCutAsset) => void;
+}): React.ReactElement {
+    const { asset, blocked } = props;
+    return <button type='button' className={`nmx-mt-asset${asset.used ? ' is-used' : ''}`} draggable={!blocked} disabled={blocked} title={props.hintTitle}
+        onDragStart={event => props.onDragStartAsset(event, asset)}
+        onDragEnd={props.onDragEndAsset}
+        onDoubleClick={() => props.onInsertAsset(asset)}
+        onKeyDown={event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault(); event.stopPropagation();
+                if (!event.repeat && !blocked) props.onInsertAsset(asset);
+            }
+        }}>
+        <span className='nmx-mt-asset-thumb'>
+            {asset.url && asset.kind === 'image'
+                ? <img src={asset.url} alt='' loading='lazy' decoding='async' />
+                : asset.url && asset.kind === 'video'
+                    ? <video src={asset.url} muted preload='metadata' />
+                    : <i className={`codicon codicon-${asset.kind === 'image' ? 'file-media' : asset.kind === 'video' ? 'device-camera-video' : 'music'}`} />}
+            {props.durationLabel ? <span className='nmx-mt-asset-duration'>{props.durationLabel}</span> : null}
+            {asset.used ? <span className='nmx-mt-asset-used'>{props.usedLabel}</span> : null}
+        </span>
+        <span className='nmx-mt-asset-title'>{asset.title}</span>
+        {asset.origin ? <span className='nmx-mt-asset-origin' title={asset.origin}>{asset.origin}</span> : null}
+        <span className='nmx-mt-asset-add' role='button' title={props.addLabel} aria-label={props.addLabel} onClick={event => { event.stopPropagation(); props.onInsertAsset(asset); }}>+</span>
+    </button>;
+});
+
+const MultitrackClip = React.memo(function MultitrackClip(props: {
+    readonly clip: ComicCompositionClip;
+    readonly lane: number;
+    readonly selected: boolean;
+    readonly pixels: number;
+    readonly fps: number;
+    readonly property?: ComicCompositionProperty;
+    readonly clipLabel: string;
+    readonly keyframeTitle: (clip: ComicCompositionClip, property: ComicCompositionProperty, frame: number) => string;
+    readonly onBegin: (event: React.PointerEvent<HTMLElement>, clip: ComicCompositionClip, edge?: 'start' | 'end') => void;
+    readonly onMove: (event: React.PointerEvent<HTMLElement>) => void;
+    readonly onEnd: (event: React.PointerEvent<HTMLElement>) => void;
+    readonly onCancel: () => void;
+    readonly onSelect: (clipId: string, shiftKey: boolean) => void;
+    readonly onBeginKeyframe: (event: React.PointerEvent<HTMLButtonElement>, clip: ComicCompositionClip, property: ComicCompositionProperty, frame: number) => void;
+    readonly onSeekKeyframe: (frame: number) => void;
+}): React.ReactElement {
+    const { clip, lane, selected, pixels, fps, property } = props;
+    return <div className={`nmx-mt-clip is-${clip.kind}${selected ? ' is-selected' : ''}`} data-clip-id={clip.id} role='button' tabIndex={0} aria-label={clip.title || clip.text || props.clipLabel} aria-pressed={selected} style={{ top: 7 + lane * 54, left: clip.from * pixels, width: Math.max(4, clip.durationFrames * pixels) }}
+        onPointerDown={event => props.onBegin(event, clip)} onPointerMove={props.onMove} onPointerUp={props.onEnd} onPointerCancel={props.onCancel} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); props.onSelect(clip.id, event.shiftKey); } }}>
+        <span className='nmx-mt-trim is-start' onPointerDown={event => props.onBegin(event, clip, 'start')} onPointerMove={props.onMove} onPointerUp={props.onEnd} />
+        <strong>{props.clipLabel}</strong>
+        <span className='nmx-mt-clip-duration'>{(clip.durationFrames / fps).toFixed(1)}s</span>
+        {selected && property && (clip.keyframes || []).filter(key => key.property === property).map(key => <button type='button' className='nmx-mt-key-diamond' key={`${key.property}:${key.frame}`} title={props.keyframeTitle(clip, key.property, key.frame)} style={{ left: key.frame * pixels }} onPointerDown={event => props.onBeginKeyframe(event, clip, key.property, key.frame)} onClick={event => { event.stopPropagation(); props.onSeekKeyframe(clip.from + key.frame); }}>◆</button>)}
+        <span className='nmx-mt-trim is-end' onPointerDown={event => props.onBegin(event, clip, 'end')} onPointerMove={props.onMove} onPointerUp={props.onEnd} />
+    </div>;
+});
+
 /** Independent clips, not shot-linked sound lanes. Every completed gesture is one persisted undo step. */
 export class ComicMultitrack extends React.Component<ComicMultitrackProps, State> {
     protected controller?: ComicEditorController;
@@ -457,21 +522,45 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
         if (!query) return true;
         return asset.title.toLowerCase().includes(query) || Boolean(asset.origin && asset.origin.toLowerCase().includes(query));
     }
+    protected handleAssetDragStart = (event: React.DragEvent<HTMLButtonElement>, asset: ComicCutAsset): void => {
+        event.dataTransfer.setData(ASSET_MIME, asset.id);
+        event.dataTransfer.effectAllowed = 'copy';
+    };
+    protected handleAssetDragEnd = (): void => {
+        if (this.state.dropTrackId) this.setState({ dropTrackId: undefined });
+    };
+    protected handleAssetInsert = (asset: ComicCutAsset): void => {
+        void this.insert(asset);
+    };
+    protected handleBeginClip = (event: React.PointerEvent<HTMLElement>, clip: ComicCompositionClip, edge?: 'start' | 'end'): void => {
+        this.begin(event, clip, edge);
+    };
+    protected handleCancelClip = (): void => {
+        this.drag = undefined;
+        this.setState({ draft: undefined });
+    };
+    protected handleSelectClip = (clipId: string, shiftKey: boolean): void => {
+        this.select(clipId, shiftKey);
+    };
+    protected handleBeginKeyframe = (event: React.PointerEvent<HTMLButtonElement>, clip: ComicCompositionClip, property: ComicCompositionProperty, frame: number): void => {
+        event.stopPropagation();
+        if (event.button !== 0 || this.scrub || this.blocked() || !this.editable(clip)) return;
+        this.seek(clip.from + frame);
+        this.root?.setPointerCapture(event.pointerId);
+        this.keyDrag = { clip, property, frame, x: event.clientX, pointerId: event.pointerId, base: this.value() };
+    };
+    protected handleSeekKeyframe = (frame: number): void => {
+        this.seek(frame);
+    };
+    protected keyframeTitle = (clip: ComicCompositionClip, property: ComicCompositionProperty, frame: number): string =>
+        `${property.includes(':') ? comicVisualPropertyLabel(this.props.locale, clip, property) : this.t(property as ComicMultitrackTextKey)} · ${frame}`;
     protected renderAsset(asset: ComicCutAsset): React.ReactNode {
         if (!this.matchesAsset(asset)) return null;
-        return <button type='button' className={`nmx-mt-asset${asset.used ? ' is-used' : ''}`} key={asset.id} draggable={!this.blocked()} disabled={this.blocked()} title={`${asset.title}${asset.origin ? ` (${asset.origin})` : ''} · ${this.cut('addToTimeline')}`}
-            onDragStart={event => { event.dataTransfer.setData(ASSET_MIME, asset.id); event.dataTransfer.effectAllowed = 'copy'; }}
-            onDragEnd={() => { if (this.state.dropTrackId) this.setState({ dropTrackId: undefined }); }} onDoubleClick={() => void this.insert(asset)}
-            onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();if(!event.repeat&&!this.blocked())void this.insert(asset);}}}>
-            <span className='nmx-mt-asset-thumb'>
-                {asset.url && asset.kind === 'image' ? <img src={asset.url} alt='' /> : asset.url && asset.kind === 'video' ? <video src={asset.url} muted preload='metadata' /> : <i className={`codicon codicon-${asset.kind === 'image' ? 'file-media' : asset.kind === 'video' ? 'device-camera-video' : 'music'}`} />}
-                {asset.durationMs && asset.durationMs > 0 && asset.kind !== 'image' ? <span className='nmx-mt-asset-duration'>{formatEditorTime(asset.durationMs / 1000)}</span> : null}
-                {asset.used ? <span className='nmx-mt-asset-used'>{this.cut('used')}</span> : null}
-            </span>
-            <span className='nmx-mt-asset-title'>{asset.title}</span>
-            {asset.origin ? <span className='nmx-mt-asset-origin' title={asset.origin}>{asset.origin}</span> : null}
-            <span className='nmx-mt-asset-add' role='button' title={this.cut('addToTimeline')} aria-label={this.cut('addToTimeline')} onClick={event => { event.stopPropagation(); void this.insert(asset); }}>+</span>
-        </button>;
+        return <MultitrackAssetCard key={asset.id} asset={asset} blocked={this.blocked()}
+            hintTitle={`${asset.title}${asset.origin ? ` (${asset.origin})` : ''} · ${this.cut('addToTimeline')}`}
+            usedLabel={this.cut('used')} addLabel={this.cut('addToTimeline')}
+            durationLabel={asset.durationMs && asset.durationMs > 0 && asset.kind !== 'image' ? formatEditorTime(asset.durationMs / 1000) : undefined}
+            onDragStartAsset={this.handleAssetDragStart} onDragEndAsset={this.handleAssetDragEnd} onInsertAsset={this.handleAssetInsert} />;
     }
     protected renderBin(): React.ReactNode {
         const searchLabel = this.t('searchMaterials');
@@ -574,9 +663,12 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
     protected renderTimeline(): React.ReactNode {
         const value=this.value(), width=Math.max(640,(this.duration()+this.props.fps*5)*this.pixels()), step=Math.max(1,Math.ceil(55/this.state.zoom));
         const left=Math.max(0,this.state.scrollLeft-300), right=this.state.scrollLeft+this.state.viewportWidth+300, firstTick=Math.floor(left/this.state.zoom/step), lastTick=Math.ceil(right/this.state.zoom/step);
+        const pixels=this.pixels(), defaultClipLabel=this.cut('clip');
+        const assetTitles=new Map<string,string>();
+        for(const asset of this.props.mediaAssets)assetTitles.set(asset.id,asset.title);
         return <div className='nmx-mt-timeline' style={{height:this.state.trackHeight}} ref={this.bindScroller} onScroll={event=>{this.setState({scrollLeft:event.currentTarget.scrollLeft,scrollTop:event.currentTarget.scrollTop,viewportWidth:event.currentTarget.clientWidth});if(this.scrub)this.scrubTo(this.scrub.clientX);}}>
             <div className='nmx-mt-ruler-row'><div className='nmx-mt-track-label'><select aria-label={this.t('addTrack')} value='' disabled={this.blocked()} onChange={event=>{if(event.currentTarget.value)void this.addTrack(event.currentTarget.value as ComicCompositionTrack['kind']);}}><option value=''>{this.t('addTrack')}</option>{(['video','audio','text'] as const).map(kind=><option key={kind} value={kind}>{this.t(kind)}</option>)}</select><button type='button' disabled={this.blocked()} title={this.t('addText')} onClick={()=>void this.addText()}>T+</button></div>
-                <div className='nmx-mt-ruler' ref={element=>{this.ruler=element;}} style={{width}} onPointerDown={event=>this.beginScrub(event)}>{Array.from({length:Math.min(200,lastTick-firstTick+1)},(_,i)=><span key={i+firstTick} style={{left:(i+firstTick)*step*this.state.zoom}}>{formatEditorTime((i+firstTick)*step)}</span>)}<div className='nmx-mt-playhead nmx-mt-playhead-handle' style={{left:this.state.frame*this.pixels()}}
+                <div className='nmx-mt-ruler' ref={element=>{this.ruler=element;}} style={{width}} onPointerDown={event=>this.beginScrub(event)}>{Array.from({length:Math.min(200,lastTick-firstTick+1)},(_,i)=><span key={i+firstTick} style={{left:(i+firstTick)*step*this.state.zoom}}>{formatEditorTime((i+firstTick)*step)}</span>)}<div className='nmx-mt-playhead nmx-mt-playhead-handle' style={{left:this.state.frame*pixels}}
                     role='slider' tabIndex={0} aria-label={this.cut('playhead')} aria-orientation='horizontal' aria-valuemin={0} aria-valuemax={this.duration()} aria-valuenow={this.state.frame} aria-valuetext={formatEditorTime(this.state.frame/this.props.fps)} onPointerDown={event=>this.beginScrub(event,true)} /></div></div>
             {this.trackLayouts().map(({track,height,offset,clips},index)=><div className={`nmx-mt-track is-${track.kind}${track.locked?' is-locked':''}${track.hidden?' is-hidden':''}${this.state.dropTrackId===track.id?' is-drop-target':''}`} key={track.id} data-track-id={track.id} style={{height}}>
                 <div className='nmx-mt-track-label' onClick={()=>this.setState({trackId:track.id})}><input key={`${track.id}:${track.title}`} aria-label={this.t('rename')} defaultValue={this.trackTitle(track)} disabled={this.blocked()||track.locked} onBlur={event=>{if(event.currentTarget.value.trim()&&event.currentTarget.value!==this.trackTitle(track))this.patchTrack(track.id,{title:event.currentTarget.value.trim()});}} />
@@ -587,15 +679,15 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
                     <button type='button' title={this.t(track.solo?'unsolo':'solo')} aria-label={this.t(track.solo?'unsolo':'solo')} aria-pressed={Boolean(track.solo)} disabled={this.blocked()} onClick={()=>this.patchTrack(track.id,{solo:!track.solo})}>S</button>
                     {this.tool('trash',this.t('deleteTrack'),()=>this.removeTrack(track.id),track.locked)}</div>
                 </div><div className='nmx-mt-track-content' style={{width,height:height-1}} onDragOver={event=>{if(!track.locked&&!this.blocked()){event.preventDefault();event.dataTransfer.dropEffect='copy';if(this.state.dropTrackId!==track.id)this.setState({dropTrackId:track.id});}}}
-                    onDragLeave={event=>{if(this.state.dropTrackId===track.id&&!event.currentTarget.contains(event.relatedTarget as Node|null))this.setState({dropTrackId:undefined});}} onDrop={event=>this.drop(event,track)} onPointerDown={event=>{if(event.target===event.currentTarget){this.setState({selected:[],trackId:track.id});const rect=event.currentTarget.getBoundingClientRect();this.seek((event.clientX-rect.left)/this.pixels());}}}>
-                    {clips.filter(({clip,lane})=>((clip.from+clip.durationFrames)*this.pixels()>=left&&clip.from*this.pixels()<=right&&offset+lane*54+66>=this.state.scrollTop-100&&offset+lane*54<=this.state.scrollTop+this.state.trackHeight+100||Boolean(this.drag?.ids.includes(clip.id)))).map(({clip,lane})=><div key={clip.id} className={`nmx-mt-clip is-${clip.kind}${this.state.selected.includes(clip.id)?' is-selected':''}`} data-clip-id={clip.id} role='button' tabIndex={0} aria-label={clip.title||clip.text||this.cut('clip')} aria-pressed={this.state.selected.includes(clip.id)} style={{top:7+lane*54,left:clip.from*this.pixels(),width:Math.max(4,clip.durationFrames*this.pixels())}}
-                        onPointerDown={event=>this.begin(event,clip)} onPointerMove={this.move} onPointerUp={this.end} onPointerCancel={()=>{this.drag=undefined;this.setState({draft:undefined});}} onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();this.select(clip.id,event.shiftKey);}}}>
-                        <span className='nmx-mt-trim is-start' onPointerDown={event=>this.begin(event,clip,'start')} onPointerMove={this.move} onPointerUp={this.end} />
-                        <strong>{clip.title||clip.text||this.props.mediaAssets.find(asset=>asset.id===clip.assetId)?.title||this.cut('clip')}</strong>
-                        <span className='nmx-mt-clip-duration'>{(clip.durationFrames/this.props.fps).toFixed(1)}s</span>
-                        {this.state.selected.includes(clip.id)&&(clip.keyframes||[]).filter(key=>key.property===this.state.property).map(key=><button type='button' className='nmx-mt-key-diamond' key={`${key.property}:${key.frame}`} title={`${key.property.includes(':')?comicVisualPropertyLabel(this.props.locale,clip,key.property):this.t(key.property as ComicMultitrackTextKey)} · ${key.frame}`} style={{left:key.frame*this.pixels()}} onPointerDown={event=>{event.stopPropagation();if(event.button!==0||this.scrub||this.blocked()||!this.editable(clip))return;this.seek(clip.from+key.frame);this.root?.setPointerCapture(event.pointerId);this.keyDrag={clip,property:key.property,frame:key.frame,x:event.clientX,pointerId:event.pointerId,base:this.value()};}} onClick={event=>{event.stopPropagation();this.seek(clip.from+key.frame);}}>◆</button>)}
-                        <span className='nmx-mt-trim is-end' onPointerDown={event=>this.begin(event,clip,'end')} onPointerMove={this.move} onPointerUp={this.end} />
-                    </div>)}<div className='nmx-mt-playhead' style={{left:this.state.frame*this.pixels()}} aria-hidden='true' onPointerDown={event=>this.beginScrub(event,true)} /></div>
+                    onDragLeave={event=>{if(this.state.dropTrackId===track.id&&!event.currentTarget.contains(event.relatedTarget as Node|null))this.setState({dropTrackId:undefined});}} onDrop={event=>this.drop(event,track)} onPointerDown={event=>{if(event.target===event.currentTarget){this.setState({selected:[],trackId:track.id});const rect=event.currentTarget.getBoundingClientRect();this.seek((event.clientX-rect.left)/pixels);}}}>
+                    {clips.filter(({clip,lane})=>((clip.from+clip.durationFrames)*pixels>=left&&clip.from*pixels<=right&&offset+lane*54+66>=this.state.scrollTop-100&&offset+lane*54<=this.state.scrollTop+this.state.trackHeight+100||Boolean(this.drag?.ids.includes(clip.id)))).map(({clip,lane})=>{
+                        const isSelected=this.state.selected.includes(clip.id);
+                        const clipLabel=clip.title||clip.text||(clip.assetId?assetTitles.get(clip.assetId):undefined)||defaultClipLabel;
+                        return <MultitrackClip key={clip.id} clip={clip} lane={lane} selected={isSelected} pixels={pixels} fps={this.props.fps}
+                            property={isSelected?this.state.property:undefined} clipLabel={clipLabel} keyframeTitle={this.keyframeTitle}
+                            onBegin={this.handleBeginClip} onMove={this.move} onEnd={this.end} onCancel={this.handleCancelClip}
+                            onSelect={this.handleSelectClip} onBeginKeyframe={this.handleBeginKeyframe} onSeekKeyframe={this.handleSeekKeyframe} />;
+                    })}<div className='nmx-mt-playhead' style={{left:this.state.frame*pixels}} aria-hidden='true' onPointerDown={event=>this.beginScrub(event,true)} /></div>
             </div>)}
         </div>;
     }

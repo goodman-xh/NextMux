@@ -119,7 +119,7 @@ export function ComicChatSkills(props: { readonly locale: NextMuxDesktopLocale; 
 }
 
 /** One result: a picture or clip (click: view & play large) or a sound; right-click opens its menu. */
-export function ComicChatMediaTile(props: {
+export const ComicChatMediaTile = React.memo(function ComicChatMediaTile(props: {
     readonly locale: NextMuxDesktopLocale;
     readonly media: ComicChatMediaView;
     readonly onMenu: (media: ComicChatMediaView, event: React.MouseEvent) => void;
@@ -165,7 +165,7 @@ export function ComicChatMediaTile(props: {
     if (media.kind === 'image') {
         return <button type='button' className='nmx-comic-chat-media is-image is-done' style={aspectStyle(media.aspect)} title={t('openLarge')}
             data-nmx-gallery='image' onClick={() => props.onOpen(media)} onContextMenu={menu}>
-            <img src={media.url} alt='' loading='lazy' draggable={false} />
+            <img src={media.url} alt='' loading='lazy' decoding='async' draggable={false} />
         </button>;
     }
     if (media.kind === 'video') {
@@ -184,7 +184,7 @@ export function ComicChatMediaTile(props: {
         <i className={`codicon codicon-${media.kind === 'music' ? 'music' : 'mic'}`} aria-hidden='true'></i>
         <audio src={media.url} controls preload='metadata' />
     </div>;
-}
+});
 
 /**
  * Where the reader is: the deepest element under the reading line and how far into it (`beyond` when the line falls in a
@@ -298,7 +298,6 @@ export function ComicChatThread(props: {
     readonly feedbackSubmitting?: Readonly<Record<string, 'up' | 'down'>>;
     readonly children?: React.ReactNode;
 }): React.ReactElement {
-    const t = (key: ComicChatTextKey, values?: Readonly<Record<string, string | number>>): string => comicChatText(props.locale, key, values);
     const scroller = React.useRef<HTMLDivElement>(null);
     const last = props.turns[props.turns.length - 1];
     const reading = React.useRef<{ anchor?: ComicChatReadingAnchor; width: number; height: number; heldUntil: number; frame: number }>({ width: 0, height: 0, heldUntil: 0, frame: 0 });
@@ -377,8 +376,8 @@ export function ComicChatThread(props: {
             state.frame = 0;
         };
     }, []);
-    const tile = (media: ComicChatMediaView) => <ComicChatMediaTile key={media.key} locale={props.locale} media={media} onMenu={props.onMenu} onOpen={props.onOpen}
-        onRetry={props.onRetry} onCancel={props.onCancel} onSignIn={props.onSignIn} />;
+    const tile = React.useCallback((media: ComicChatMediaView) => <ComicChatMediaTile key={media.key} locale={props.locale} media={media} onMenu={props.onMenu} onOpen={props.onOpen}
+        onRetry={props.onRetry} onCancel={props.onCancel} onSignIn={props.onSignIn} />, [props.locale, props.onMenu, props.onOpen, props.onRetry, props.onCancel, props.onSignIn]);
     const toBottom = (): void => {
         const element = scroller.current;
         if (!element) return;
@@ -392,96 +391,15 @@ export function ComicChatThread(props: {
         {/* The viewer's gallery: results, a request's references and the pictures in the text, in thread order. */}
         <div className='nmx-comic-chat-column' data-nmx-gallery-root=''>
             {props.children}
-            {props.turns.map(view => {
-                const { turn } = view;
-                const settings = [
-                    turn.params.aspect, turn.params.count && turn.params.count > 1 ? t('count', { n: turn.params.count }) : '',
-                    turn.params.seconds && turn.mode === 'video' ? t('seconds', { n: turn.params.seconds }) : '',
-                    turn.mode === 'music' ? t(turn.params.instrumental ? 'instrumental' : 'withVocals') : '', turn.mode === 'speech' ? turn.params.voice : ''
-                ].filter(Boolean);
-                const pending = view.proposals.filter(item => !item.proposal.jobIds?.length && !item.blocked);
-                const turnTimeLabel = turn.createdAt && props.formatTurnTime ? props.formatTurnTime(turn.createdAt) : '';
-                const extractedReply = turn.reply ? extractComicChatThinking(turn.reply) : { text: '' };
-                const thoughtContent = [view.thinking, turn.thinking, extractedReply.thinking].filter(Boolean).join('\n\n').trim();
-                const cleanReply = extractedReply.text;
-                return <section key={turn.id} className={`nmx-comic-chat-turn nmx-task-turn is-${turn.mode}`} data-turn-id={turn.id}>
-                    <div className='nmx-comic-chat-ask'>
-                        {view.references.length > 0 && <span className='nmx-comic-chat-ask-refs'>{view.references.map(reference => reference.url
-                            ? <button key={reference.id} type='button' className='nmx-comic-chat-ask-ref' title={t('openLarge')} aria-label={t('openLarge')} data-nmx-gallery='image'
-                                onClick={() => props.onOpen({ key: `ref:${reference.id}`, kind: 'image', state: 'done', assetId: reference.id, url: reference.url })}>
-                                <img src={reference.url} alt='' draggable={false} />
-                            </button> : <i key={reference.id} className='codicon codicon-file-media' aria-hidden='true'></i>)}</span>}
-                        <ConversationMarkdown markdown={turn.prompt} className='nmx-user-markdown' locale={props.locale} tokenizer={props.markdownTokenizer} onCopyCode={props.onCopy} onRender={props.onRenderMarkdown} />
-                        <small className='nmx-comic-chat-meta'>
-                            <i className={`codicon codicon-${COMIC_CHAT_MODE_ICONS[turn.mode]}`} aria-hidden='true'></i>{t(turn.mode)}
-                            {view.modelLabel && <span data-nmx-literal> · {view.modelLabel}</span>}
-                            {settings.length > 0 && <span data-nmx-literal> · {settings.join(' · ')}</span>}
-                            {turnTimeLabel && <time dateTime={turn.createdAt} data-nmx-literal>{turnTimeLabel}</time>}
-                            <button type='button' className='nmx-comic-chat-copy' aria-label={t('copyPrompt')} title={t('copyPrompt')} onClick={() => props.onCopy(turn.prompt)}>
-                                <i className='codicon codicon-copy' aria-hidden='true'></i></button>
-                        </small>
-                    </div>
-                    {turn.from && <p className='nmx-comic-chat-divert'><i className='codicon codicon-comment-discussion' aria-hidden='true'></i>
-                        <span>{t('asChat', { kind: t(turn.from) })}</span></p>}
-                    {turn.mode === 'agent'
-                        ? <div className='nmx-comic-chat-answer'>
-                            {thoughtContent ? <details className={`nmx-comic-chat-thought ${view.running ? 'is-running' : ''}`} open={Boolean(view.running && !cleanReply)}>
-                                <summary className='nmx-comic-chat-thought-summary'>
-                                    <i className={`codicon ${view.running && !cleanReply ? 'codicon-loading codicon-modifier-spin' : 'codicon-sparkle'}`} aria-hidden='true'></i>
-                                    <span data-nmx-literal={Boolean(view.running && view.progress) || undefined}>{view.running && !cleanReply ? (view.progress || t('thinking')) : t('thoughtProcess')}</span>
-                                    <i className='codicon codicon-chevron-right nmx-comic-chat-thought-chevron' aria-hidden='true'></i>
-                                </summary>
-                                <div className='nmx-comic-chat-thought-body'>
-                                    <ConversationMarkdown markdown={thoughtContent} className='nmx-thought-markdown' locale={props.locale} tokenizer={props.markdownTokenizer} onCopyCode={props.onCopy} onRender={props.onRenderMarkdown} />
-                                </div>
-                            </details> : view.running && !cleanReply ? <p className='nmx-comic-chat-thinking' role='status'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>
-                                <span data-nmx-literal={Boolean(view.progress) || undefined}>{view.progress || t('thinking')}</span></p> : null}
-                            {cleanReply ? <StreamText text={cleanReply} streaming={Boolean(view.running)}
-                                markdownKey={`comic-turn:${turn.id}`}
-                                renderMarkdown={(segment, key) => <ConversationMarkdown key={key} markdown={segment}
-                                    className='nmx-assistant-markdown' locale={props.locale} tokenizer={props.markdownTokenizer}
-                                    onCopyCode={props.onCopy} onRender={props.onRenderMarkdown} />} /> : null}
-                            {view.running && cleanReply && view.progress ? <p className='nmx-comic-chat-thinking' role='status'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>
-                                <span data-nmx-literal>{view.progress}</span></p> : null}
-                            {view.proposals.length > 0 && <div className='nmx-comic-chat-proposals'>
-                                <header><strong>{t('suggestions', { n: view.proposals.length })}</strong>
-                                    {pending.length > 1 && <button type='button' className='nmx-primary-button' onClick={() => props.onGenerate(turn.id, pending.map(item => item.proposal.id))}>
-                                        <i className='codicon codicon-sparkle' aria-hidden='true'></i>{t('generateAll')}</button>}</header>
-                                {view.proposals.map(item => <article key={item.proposal.id} className={`nmx-comic-chat-proposal is-${item.proposal.kind}`}>
-                                    <div className='nmx-comic-chat-proposal-copy'>
-                                        <span><i className={`codicon codicon-${COMIC_CHAT_MODE_ICONS[item.proposal.kind]}`} aria-hidden='true'></i>{t(item.proposal.kind)}
-                                            {item.proposal.aspect && <em data-nmx-literal>{item.proposal.aspect}</em>}
-                                            {item.proposal.seconds && item.proposal.kind === 'video' && <em>{t('seconds', { n: item.proposal.seconds })}</em>}</span>
-                                        {item.proposal.title && <strong data-nmx-literal>{item.proposal.title}</strong>}
-                                        <p data-nmx-literal>{item.proposal.prompt}</p>
-                                    </div>
-                                    {item.proposal.jobIds?.length ? <div className={`nmx-comic-chat-results is-${item.proposal.kind}`}>{item.media.map(tile)}</div>
-                                        : <footer>{item.blocked ? <small className='is-error'>{item.blocked}</small> : item.estimate ? <small data-nmx-literal>{item.estimate}</small> : null}
-                                            <button type='button' disabled={Boolean(item.blocked)} onClick={() => props.onGenerate(turn.id, [item.proposal.id])}>{t('generate')}</button></footer>}
-                                </article>)}
-                            </div>}
-                            {!view.running && cleanReply && <div className='nmx-comic-chat-turn-actions nmx-turn-copy'>
-                                {(['up', 'down'] as const).map(vote => {
-                                    const pressed = props.feedbackByTurnId?.[turn.id] === vote;
-                                    const submitting = props.feedbackSubmitting?.[turn.id];
-                                    const label = props.feedbackLabels?.[vote];
-                                    return <button key={vote} type='button' data-relay-feedback={vote}
-                                        className={`nmx-relay-feedback${pressed ? vote === 'up' ? ' is-active' : ' is-active is-negative' : ''}`}
-                                        aria-label={label} title={label} data-help={label} aria-pressed={pressed} aria-busy={submitting === vote} disabled={submitting !== undefined}
-                                        onClick={() => props.onFeedback?.(turn.id, vote)}>
-                                        <i className={`codicon codicon-${submitting === vote ? 'loading codicon-modifier-spin' : vote === 'up' ? 'thumbsup' : 'thumbsdown'}`} aria-hidden='true'></i>
-                                    </button>;
-                                })}
-                                {props.onReadAloud && <button type='button' data-message-action='read-aloud'
-                                    className={`nmx-turn-read-aloud${props.readingTurnId === turn.id ? props.readAloudPreparing ? ' is-preparing' : ' is-active' : ''}`}
-                                    aria-label={props.readAloudLabel?.(turn.id)} title={props.readAloudLabel?.(turn.id)} data-help={props.readAloudLabel?.(turn.id)} aria-pressed={props.readingTurnId === turn.id}
-                                    onClick={() => props.onReadAloud?.(turn.id, cleanReply)}><i className={`codicon codicon-${props.readingTurnId !== turn.id ? 'unmute' : props.readAloudPreparing ? 'loading codicon-modifier-spin' : 'debug-stop'}`} aria-hidden='true'></i></button>}
-                            </div>}
-                        </div>
-                        : view.media.length > 0 && <div className={`nmx-comic-chat-results is-${turn.mode} is-count-${Math.min(4, view.media.length)}`}>{view.media.map(tile)}</div>}
-                    {turn.error && <p className='nmx-comic-chat-error' role='alert' data-nmx-literal>{turn.error}</p>}
-                </section>;
-            })}
+            {props.turns.map(view => <ComicChatTurnCard key={view.turn.id} view={view} locale={props.locale}
+                markdownTokenizer={props.markdownTokenizer} formatTurnTime={props.formatTurnTime}
+                onCopy={props.onCopy} onRenderMarkdown={props.onRenderMarkdown} onOpen={props.onOpen}
+                onGenerate={props.onGenerate} onMenu={props.onMenu} onRetry={props.onRetry} onCancel={props.onCancel} onSignIn={props.onSignIn}
+                feedback={props.feedbackByTurnId?.[view.turn.id]} feedbackSubmitting={props.feedbackSubmitting?.[view.turn.id]}
+                feedbackLabels={props.feedbackLabels} onFeedback={props.onFeedback}
+                onReadAloud={props.onReadAloud} reading={props.readingTurnId === view.turn.id}
+                readAloudPreparing={props.readingTurnId === view.turn.id && Boolean(props.readAloudPreparing)}
+                readAloudLabel={props.readAloudLabel?.(view.turn.id)} tile={tile} />)}
         </div>
     </div>
     {away && props.turns.length > 0 && <button type='button' className={`nmx-thread-to-bottom nmx-comic-chat-scroll-bottom${unseen ? ' has-unseen' : ''}`}
@@ -489,6 +407,121 @@ export function ComicChatThread(props: {
         <i className='codicon codicon-chevron-down' aria-hidden='true'></i>{unseen ? <span aria-hidden='true'></span> : undefined}</button>}
     </>;
 }
+
+const ComicChatTurnCard = React.memo(function ComicChatTurnCard(props: {
+    readonly view: ComicChatTurnView;
+    readonly locale: NextMuxDesktopLocale;
+    readonly markdownTokenizer?: CodeTokenizer;
+    readonly formatTurnTime?: (createdAt: string) => string;
+    readonly onCopy: (text: string) => void;
+    readonly onRenderMarkdown?: (element: HTMLElement) => void;
+    readonly onOpen: (media: ComicChatMediaView) => void;
+    readonly onGenerate: (turnId: string, proposalIds: readonly string[]) => void;
+    readonly onMenu: (media: ComicChatMediaView, event: React.MouseEvent) => void;
+    readonly onRetry: (jobId: string) => void;
+    readonly onCancel: (jobId: string) => void;
+    readonly onSignIn?: () => void;
+    readonly feedback?: 'up' | 'down' | null;
+    readonly feedbackSubmitting?: 'up' | 'down';
+    readonly feedbackLabels?: { readonly up: string; readonly down: string };
+    readonly onFeedback?: (turnId: string, vote: 'up' | 'down') => void;
+    readonly onReadAloud?: (turnId: string, markdown: string) => void;
+    readonly reading: boolean;
+    readonly readAloudPreparing: boolean;
+    readonly readAloudLabel?: string;
+    readonly tile: (media: ComicChatMediaView) => React.ReactElement;
+}): React.ReactElement {
+    const { view } = props;
+    const t = (key: ComicChatTextKey, values?: Record<string, string | number>): string => comicChatText(props.locale, key, values);
+    const { turn } = view;
+    const settings = [
+        turn.params.aspect, turn.params.count && turn.params.count > 1 ? t('count', { n: turn.params.count }) : '',
+        turn.params.seconds && turn.mode === 'video' ? t('seconds', { n: turn.params.seconds }) : '',
+        turn.mode === 'music' ? t(turn.params.instrumental ? 'instrumental' : 'withVocals') : '', turn.mode === 'speech' ? turn.params.voice : ''
+    ].filter(Boolean);
+    const pending = view.proposals.filter(item => !item.proposal.jobIds?.length && !item.blocked);
+    const turnTimeLabel = turn.createdAt && props.formatTurnTime ? props.formatTurnTime(turn.createdAt) : '';
+    const extractedReply = turn.reply ? extractComicChatThinking(turn.reply) : { text: '' };
+    const thoughtContent = [view.thinking, turn.thinking, extractedReply.thinking].filter(Boolean).join('\n\n').trim();
+    const cleanReply = extractedReply.text;
+    const renderMarkdown = React.useCallback((segment: string, key: string) => <ConversationMarkdown key={key} markdown={segment}
+        className='nmx-assistant-markdown' locale={props.locale} tokenizer={props.markdownTokenizer}
+        onCopyCode={props.onCopy} onRender={props.onRenderMarkdown} />, [props.locale, props.markdownTokenizer, props.onCopy, props.onRenderMarkdown]);
+    return <section className={`nmx-comic-chat-turn nmx-task-turn is-${turn.mode}`} data-turn-id={turn.id}>
+        <div className='nmx-comic-chat-ask'>
+            {view.references.length > 0 && <span className='nmx-comic-chat-ask-refs'>{view.references.map(reference => reference.url
+                ? <button key={reference.id} type='button' className='nmx-comic-chat-ask-ref' title={t('openLarge')} aria-label={t('openLarge')} data-nmx-gallery='image'
+                    onClick={() => props.onOpen({ key: `ref:${reference.id}`, kind: 'image', state: 'done', assetId: reference.id, url: reference.url })}>
+                    <img src={reference.url} alt='' loading='lazy' decoding='async' draggable={false} />
+                </button> : <i key={reference.id} className='codicon codicon-file-media' aria-hidden='true'></i>)}</span>}
+            <ConversationMarkdown markdown={turn.prompt} className='nmx-user-markdown' locale={props.locale} tokenizer={props.markdownTokenizer} onCopyCode={props.onCopy} onRender={props.onRenderMarkdown} />
+            <small className='nmx-comic-chat-meta'>
+                <i className={`codicon codicon-${COMIC_CHAT_MODE_ICONS[turn.mode]}`} aria-hidden='true'></i>{t(turn.mode)}
+                {view.modelLabel && <span data-nmx-literal> · {view.modelLabel}</span>}
+                {settings.length > 0 && <span data-nmx-literal> · {settings.join(' · ')}</span>}
+                {turnTimeLabel && <time dateTime={turn.createdAt} data-nmx-literal>{turnTimeLabel}</time>}
+                <button type='button' className='nmx-comic-chat-copy' aria-label={t('copyPrompt')} title={t('copyPrompt')} onClick={() => props.onCopy(turn.prompt)}>
+                    <i className='codicon codicon-copy' aria-hidden='true'></i></button>
+            </small>
+        </div>
+        {turn.from && <p className='nmx-comic-chat-divert'><i className='codicon codicon-comment-discussion' aria-hidden='true'></i>
+            <span>{t('asChat', { kind: t(turn.from) })}</span></p>}
+        {turn.mode === 'agent'
+            ? <div className='nmx-comic-chat-answer'>
+                {thoughtContent ? <details className={`nmx-comic-chat-thought ${view.running ? 'is-running' : ''}`} open={Boolean(view.running && !cleanReply)}>
+                    <summary className='nmx-comic-chat-thought-summary'>
+                        <i className={`codicon ${view.running && !cleanReply ? 'codicon-loading codicon-modifier-spin' : 'codicon-sparkle'}`} aria-hidden='true'></i>
+                        <span data-nmx-literal={Boolean(view.running && view.progress) || undefined}>{view.running && !cleanReply ? (view.progress || t('thinking')) : t('thoughtProcess')}</span>
+                        <i className='codicon codicon-chevron-right nmx-comic-chat-thought-chevron' aria-hidden='true'></i>
+                    </summary>
+                    <div className='nmx-comic-chat-thought-body'>
+                        <ConversationMarkdown markdown={thoughtContent} className='nmx-thought-markdown' locale={props.locale} tokenizer={props.markdownTokenizer} onCopyCode={props.onCopy} onRender={props.onRenderMarkdown} />
+                    </div>
+                </details> : view.running && !cleanReply ? <p className='nmx-comic-chat-thinking' role='status'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>
+                    <span data-nmx-literal={Boolean(view.progress) || undefined}>{view.progress || t('thinking')}</span></p> : null}
+                {cleanReply ? <StreamText text={cleanReply} streaming={Boolean(view.running)}
+                    markdownKey={`comic-turn:${turn.id}`} renderMarkdown={renderMarkdown} /> : null}
+                {view.running && cleanReply && view.progress ? <p className='nmx-comic-chat-thinking' role='status'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>
+                    <span data-nmx-literal>{view.progress}</span></p> : null}
+                {view.proposals.length > 0 && <div className='nmx-comic-chat-proposals'>
+                    <header><strong>{t('suggestions', { n: view.proposals.length })}</strong>
+                        {pending.length > 1 && <button type='button' className='nmx-primary-button' onClick={() => props.onGenerate(turn.id, pending.map(item => item.proposal.id))}>
+                            <i className='codicon codicon-sparkle' aria-hidden='true'></i>{t('generateAll')}</button>}</header>
+                    {view.proposals.map(item => <article key={item.proposal.id} className={`nmx-comic-chat-proposal is-${item.proposal.kind}`}>
+                        <div className='nmx-comic-chat-proposal-copy'>
+                            <span><i className={`codicon codicon-${COMIC_CHAT_MODE_ICONS[item.proposal.kind]}`} aria-hidden='true'></i>{t(item.proposal.kind)}
+                                {item.proposal.aspect && <em data-nmx-literal>{item.proposal.aspect}</em>}
+                                {item.proposal.seconds && item.proposal.kind === 'video' && <em>{t('seconds', { n: item.proposal.seconds })}</em>}</span>
+                            {item.proposal.title && <strong data-nmx-literal>{item.proposal.title}</strong>}
+                            <p data-nmx-literal>{item.proposal.prompt}</p>
+                        </div>
+                        {item.proposal.jobIds?.length ? <div className={`nmx-comic-chat-results is-${item.proposal.kind}`}>{item.media.map(props.tile)}</div>
+                            : <footer>{item.blocked ? <small className='is-error'>{item.blocked}</small> : item.estimate ? <small data-nmx-literal>{item.estimate}</small> : null}
+                                <button type='button' disabled={Boolean(item.blocked)} onClick={() => props.onGenerate(turn.id, [item.proposal.id])}>{t('generate')}</button></footer>}
+                    </article>)}
+                </div>}
+                {!view.running && cleanReply && <div className='nmx-comic-chat-turn-actions nmx-turn-copy'>
+                    {(['up', 'down'] as const).map(vote => {
+                        const pressed = props.feedback === vote;
+                        const submitting = props.feedbackSubmitting;
+                        const label = props.feedbackLabels?.[vote];
+                        return <button key={vote} type='button' data-relay-feedback={vote}
+                            className={`nmx-relay-feedback${pressed ? vote === 'up' ? ' is-active' : ' is-active is-negative' : ''}`}
+                            aria-label={label} title={label} data-help={label} aria-pressed={pressed} aria-busy={submitting === vote} disabled={submitting !== undefined}
+                            onClick={() => props.onFeedback?.(turn.id, vote)}>
+                            <i className={`codicon codicon-${submitting === vote ? 'loading codicon-modifier-spin' : vote === 'up' ? 'thumbsup' : 'thumbsdown'}`} aria-hidden='true'></i>
+                        </button>;
+                    })}
+                    {props.onReadAloud && <button type='button' data-message-action='read-aloud'
+                        className={`nmx-turn-read-aloud${props.reading ? props.readAloudPreparing ? ' is-preparing' : ' is-active' : ''}`}
+                        aria-label={props.readAloudLabel} title={props.readAloudLabel} data-help={props.readAloudLabel} aria-pressed={props.reading}
+                        onClick={() => props.onReadAloud?.(turn.id, cleanReply)}><i className={`codicon codicon-${!props.reading ? 'unmute' : props.readAloudPreparing ? 'loading codicon-modifier-spin' : 'debug-stop'}`} aria-hidden='true'></i></button>}
+                </div>}
+            </div>
+            : view.media.length > 0 && <div className={`nmx-comic-chat-results is-${turn.mode} is-count-${Math.min(4, view.media.length)}`}>{view.media.map(props.tile)}</div>}
+        {turn.error && <p className='nmx-comic-chat-error' role='alert' data-nmx-literal>{turn.error}</p>}
+    </section>;
+});
 
 export interface ComicChatMenuItem {
     readonly id: string;
@@ -1035,7 +1068,7 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                             </header>
                             {props.cast.length ? <div className='nmx-comic-chat-cast-grid'>{props.cast.map(item => <button key={item.id} type='button' role='menuitem' title={item.name}
                                 disabled={props.referenceLimit < 1} onClick={() => { setPopover(undefined); props.onPickCast(item.id); }}>
-                                {item.url ? <img src={item.url} alt='' loading='lazy' draggable={false} /> : <i className='codicon codicon-person' aria-hidden='true'></i>}
+                                {item.url ? <img src={item.url} alt='' loading='lazy' decoding='async' draggable={false} /> : <i className='codicon codicon-person' aria-hidden='true'></i>}
                                 <span data-nmx-literal>{item.name}</span></button>)}</div>
                                 : <p className='nmx-comic-chat-cast-empty'>{t('castEmpty')} <button type='button' className='nmx-link-button' onClick={() => { setPopover(undefined); props.onOpenCast(); }}>{t('openCast')}</button></p>}
                             {props.referenceLimit < 1 && props.cast.length > 0 && <small>{t('noReferencesHere')}</small>}
@@ -1212,6 +1245,17 @@ export function ComicMaterialsPanel(props: {
         ? [['all', 'all'], ['image', 'images'], ['character', 'character']]
         : [['all', 'all'], ['image', 'images'], ['character', 'character'], ['video', 'videos'], ['audio', 'audio']];
     const scopeLabel: Readonly<Record<ComicMaterialScope, ComicChatTextKey>> = { chat: 'scopeChat', project: 'scopeProject', all: 'scopeAll' };
+    const materialsRef = React.useRef({ pick: props.pick, onPick: props.onPick, onOpen: props.onOpen, onMenu: props.onMenu });
+    materialsRef.current = { pick: props.pick, onPick: props.onPick, onOpen: props.onOpen, onMenu: props.onMenu };
+    const handleSelectMaterial = React.useCallback((item: ComicMaterialView) => {
+        const current = materialsRef.current;
+        if (current.pick) current.onPick?.(item);
+        else current.onOpen(item);
+    }, []);
+    const handleMenuMaterial = React.useCallback((item: ComicMaterialView, event: React.MouseEvent) => {
+        event.preventDefault();
+        materialsRef.current.onMenu(item, event);
+    }, []);
     return <aside ref={panel} tabIndex={-1} className={`nmx-comic-materials ${props.pick ? 'is-picking' : ''}`} aria-label={t('materials')} data-nmx-gallery-root=''
         style={{ '--nmx-library-card-min': COMIC_MATERIAL_SIZES[librarySize] } as React.CSSProperties}
         onKeyDown={event => { if (event.key === 'Escape') { if (document.querySelector('.nmx-comic-chat-viewer, .nmx-attachment-lightbox, .nmx-comic-chat-menu')) return; event.preventDefault(); props.onClose(); } }}>
@@ -1230,23 +1274,39 @@ export function ComicMaterialsPanel(props: {
         </div>
         {props.loading ? <p className='nmx-comic-materials-empty'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i> {t('loadingChats')}</p>
             : shown.length === 0 ? <p className='nmx-comic-materials-empty'>{props.items.length === 0 && props.emptyText || t('noMaterials')}</p>
-            : <div className='nmx-comic-materials-grid' role='list'>{shown.map(item => <button key={`${item.path || ''}${item.assetId}`} type='button' role='listitem' data-asset-id={item.assetId}
-                data-nmx-gallery={!props.pick && item.url && item.kind !== 'audio' ? item.kind : undefined}
-                className={`nmx-comic-material is-${item.kind} ${item.assetId === props.focus ? 'is-focus' : ''}`} title={item.prompt || item.title}
-                onClick={() => props.pick ? props.onPick?.(item) : props.onOpen(item)} onContextMenu={event => { event.preventDefault(); props.onMenu(item, event); }}>
-                <span className='nmx-comic-material-thumb' style={item.kind === 'audio' ? undefined : aspectStyle(item.aspect)}>
-                    {item.kind === 'image' && item.url ? <img src={item.url} alt='' loading='lazy' draggable={false} />
-                        : item.kind === 'video' && item.url ? <ComicMaterialVideoThumb url={item.url} locale={props.locale} />
-                            : <i className={`codicon codicon-${item.kind === 'audio' ? 'music' : 'file-media'}`} aria-hidden='true'></i>}
-                    {item.kind === 'video' && !item.url && <i className='codicon codicon-play nmx-comic-material-play' aria-hidden='true'></i>}
-                </span>
-                <strong data-nmx-literal>{item.title}</strong>
-                <small data-nmx-literal={item.project ? true : undefined}>{item.project || t(item.origin === 'chat' ? 'fromChat' : item.origin === 'flow' ? 'fromFlow' : 'imported')}</small>
-            </button>)}</div>}
+            : <div className='nmx-comic-materials-grid' role='list'>{shown.map(item => <ComicMaterialCard key={`${item.path || ''}${item.assetId}`}
+                item={item} locale={props.locale} pick={Boolean(props.pick)} focused={item.assetId === props.focus}
+                originLabel={item.project || t(item.origin === 'chat' ? 'fromChat' : item.origin === 'flow' ? 'fromFlow' : 'imported')}
+                onSelect={handleSelectMaterial} onMenu={handleMenuMaterial} />)}</div>}
     </aside>;
 }
 
-function ComicMaterialVideoThumb(props: { readonly url: string; readonly locale: NextMuxDesktopLocale }): React.ReactElement {
+const ComicMaterialCard = React.memo(function ComicMaterialCard(props: {
+    readonly item: ComicMaterialView;
+    readonly locale: NextMuxDesktopLocale;
+    readonly pick: boolean;
+    readonly focused: boolean;
+    readonly originLabel: string;
+    readonly onSelect: (item: ComicMaterialView) => void;
+    readonly onMenu: (item: ComicMaterialView, event: React.MouseEvent) => void;
+}): React.ReactElement {
+    const { item } = props;
+    return <button type='button' role='listitem' data-asset-id={item.assetId}
+        data-nmx-gallery={!props.pick && item.url && item.kind !== 'audio' ? item.kind : undefined}
+        className={`nmx-comic-material is-${item.kind} ${props.focused ? 'is-focus' : ''}`} title={item.prompt || item.title}
+        onClick={() => props.onSelect(item)} onContextMenu={event => props.onMenu(item, event)}>
+        <span className='nmx-comic-material-thumb' style={item.kind === 'audio' ? undefined : aspectStyle(item.aspect)}>
+            {item.kind === 'image' && item.url ? <img src={item.url} alt='' loading='lazy' decoding='async' draggable={false} />
+                : item.kind === 'video' && item.url ? <ComicMaterialVideoThumb url={item.url} locale={props.locale} />
+                    : <i className={`codicon codicon-${item.kind === 'audio' ? 'music' : 'file-media'}`} aria-hidden='true'></i>}
+            {item.kind === 'video' && !item.url && <i className='codicon codicon-play nmx-comic-material-play' aria-hidden='true'></i>}
+        </span>
+        <strong data-nmx-literal>{item.title}</strong>
+        <small data-nmx-literal={item.project ? true : undefined}>{props.originLabel}</small>
+    </button>;
+});
+
+const ComicMaterialVideoThumb = React.memo(function ComicMaterialVideoThumb(props: { readonly url: string; readonly locale: NextMuxDesktopLocale }): React.ReactElement {
     const stillRef = React.useRef<HTMLSpanElement>(null);
     React.useEffect(() => {
         if (!stillRef.current) return undefined;
@@ -1255,4 +1315,4 @@ function ComicMaterialVideoThumb(props: { readonly url: string; readonly locale:
     return <span ref={stillRef} className='nmx-video-card-still' data-state='loading'>
         <span className='nmx-video-card-play' aria-hidden='true'><i className='codicon codicon-play' aria-hidden='true'></i></span>
     </span>;
-}
+});

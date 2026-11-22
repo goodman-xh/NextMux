@@ -2714,9 +2714,7 @@ body:is(.windows, :has(#window-controls)) .nmx-shell.is-detached-conversation .n
     border-radius: 10px !important;
     border: 1px solid var(--nmx-border-strong, var(--nmx-border)) !important;
     color: var(--nmx-text) !important;
-    background: color-mix(in srgb, var(--nmx-menu-background, var(--nmx-panel, var(--nmx-bg))) 92%, transparent) !important;
-    -webkit-backdrop-filter: blur(10px) !important;
-    backdrop-filter: blur(10px) !important;
+    background: color-mix(in srgb, var(--nmx-menu-background, var(--nmx-panel, var(--nmx-bg))) 97%, transparent) !important;
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28) !important;
     font-size: 12px !important;
     line-height: 1.4 !important;

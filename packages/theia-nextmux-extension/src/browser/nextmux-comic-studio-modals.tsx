@@ -1076,6 +1076,137 @@ interface StudioContextMenuState {
     readonly mediaKind: 'video' | 'audio' | 'image';
 }
 
+const StudioLibraryItemButton = React.memo(function StudioLibraryItemButton(props: {
+    readonly item: ComicCreationLibraryItem;
+    readonly selected: boolean;
+    readonly closeOnPick: boolean;
+    readonly zoomLabel: string;
+    readonly onPick: (item: ComicCreationLibraryItem, closeOnPick: boolean) => void;
+    readonly onZoom: (item: ComicCreationLibraryItem, aspectRatio: number | undefined) => void;
+}): React.ReactElement {
+    const { item, selected, closeOnPick } = props;
+    const openZoomFromThumb = (container: HTMLElement | null): void => {
+        const thumbVideo = item.kind === 'video' ? container?.querySelector('video') : null;
+        const ar = thumbVideo && thumbVideo.videoWidth > 0 && thumbVideo.videoHeight > 0
+            ? thumbVideo.videoWidth / thumbVideo.videoHeight
+            : undefined;
+        props.onZoom(item, ar);
+    };
+    return (
+        <button
+            type='button'
+            role='listitem'
+            className={`nmx-comic-studio-lib-item${selected ? ' is-selected' : ''}`}
+            title={item.name}
+            onClick={() => props.onPick(item, closeOnPick)}
+        >
+            <span className='nmx-comic-studio-lib-thumb'>
+                {item.kind === 'image' && item.previewUrl ? (
+                    <img src={item.previewUrl} alt='' loading='lazy' decoding='async' draggable={false} />
+                ) : item.kind === 'video' && item.previewUrl ? (
+                    <video src={item.previewUrl} muted preload='metadata' />
+                ) : (
+                    <i
+                        className={`codicon codicon-${item.kind === 'video' ? 'device-camera-video' : 'file-media'}`}
+                        aria-hidden='true'
+                    />
+                )}
+                {selected && (
+                    <em className='nmx-comic-studio-lib-check' aria-hidden='true'>
+                        <i className='codicon codicon-check' />
+                    </em>
+                )}
+                {(item.kind === 'image' || item.kind === 'video') && item.previewUrl && (
+                    <span
+                        role='button'
+                        tabIndex={0}
+                        className='nmx-comic-studio-lib-zoom'
+                        title={props.zoomLabel}
+                        aria-label={props.zoomLabel}
+                        onPointerDown={event => event.stopPropagation()}
+                        onMouseDown={event => event.stopPropagation()}
+                        onClick={event => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            openZoomFromThumb(event.currentTarget.parentElement);
+                        }}
+                        onKeyDown={event => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                openZoomFromThumb(event.currentTarget.parentElement);
+                            }
+                        }}
+                    >
+                        <i className='codicon codicon-screen-full' aria-hidden='true' />
+                    </span>
+                )}
+            </span>
+            <small data-nmx-literal>{item.name}</small>
+        </button>
+    );
+});
+
+const StudioTakeCard = React.memo(function StudioTakeCard(props: {
+    readonly take: ComicStudioGeneratedTake;
+    readonly index: number;
+    readonly selected: boolean;
+    readonly modalKind: ComicStudioModalKind;
+    readonly durationLabel?: string;
+    readonly onSelect: (takeId: string) => void;
+    readonly onContextMenu: (event: React.MouseEvent<HTMLButtonElement>, take: ComicStudioGeneratedTake) => void;
+}): React.ReactElement {
+    const { take, index, selected } = props;
+    const takeIsImage = take.kind === 'image';
+    const takeIsAudio = !takeIsImage && (take.kind === 'audio' || (props.modalKind === 'music' && take.kind !== 'video'));
+    return (
+        <button
+            type='button'
+            role='option'
+            aria-selected={selected}
+            data-take-id={take.id}
+            className={`nmx-comic-studio-take-card${selected ? ' is-active' : ''}`}
+            title={take.title}
+            onClick={() => props.onSelect(take.id)}
+            onContextMenu={event => props.onContextMenu(event, take)}
+        >
+            <span className='nmx-comic-studio-take-thumb'>
+                {takeIsImage ? (
+                    <img
+                        src={take.thumbnailUrl || take.mediaUrl}
+                        alt=''
+                        loading='lazy'
+                        decoding='async'
+                        draggable={false}
+                    />
+                ) : take.thumbnailUrl ? (
+                    <img src={take.thumbnailUrl} alt='' loading='lazy' decoding='async' draggable={false} />
+                ) : !takeIsAudio ? (
+                    <video
+                        src={take.mediaUrl}
+                        preload='metadata'
+                        muted
+                        playsInline
+                    />
+                ) : (
+                    <span className='nmx-comic-studio-take-wave' aria-hidden='true'>
+                        <i className='codicon codicon-music' />
+                    </span>
+                )}
+                <b className='nmx-comic-studio-take-index' data-nmx-literal>
+                    #{index + 1}
+                </b>
+                {props.durationLabel && (
+                    <em className='nmx-comic-studio-take-dur' data-nmx-literal>
+                        {props.durationLabel}
+                    </em>
+                )}
+            </span>
+            <small data-nmx-literal>{take.title}</small>
+        </button>
+    );
+});
+
 export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.ReactElement | null {
     const t = (key: StudioModalTextKey, values?: Readonly<Record<string, string | number>>): string =>
         comicStudioModalText(props.locale, key, values);
@@ -1386,6 +1517,42 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
         };
     }, [props.open, props.generating, props.onClose, contextMenu, sourceZoomItem, closeSourceZoom, lightboxOpen, closeLightbox]);
 
+    // Stable handlers for the memoized library items and takes. Hooks, so they sit above the closed-modal return; the
+    // ref is pointed at the current props and menu opener further down, once openTakeContextMenu exists.
+    const studioCallbacksRef = React.useRef<{
+        readonly onToggleLibraryItem?: (item: ComicCreationLibraryItem) => void;
+        readonly onSelectTake: (takeId: string) => void;
+        readonly openTakeContextMenu: (event: React.MouseEvent<HTMLElement>, take: ComicStudioGeneratedTake) => void;
+    } | undefined>(undefined);
+    const handlePickLibraryItem = React.useCallback((item: ComicCreationLibraryItem, closeAfter: boolean): void => {
+        studioCallbacksRef.current?.onToggleLibraryItem?.(item);
+        if (closeAfter) {
+            setShowLibrary(false);
+        }
+    }, []);
+    const handleZoomLibraryItem = React.useCallback((item: ComicCreationLibraryItem, aspectRatio: number | undefined): void => {
+        sourceZoomMediaStateRef.current = {
+            restoredUrl: '',
+            currentTime: 0,
+            volume: 1,
+            muted: false
+        };
+        setSourceZoomAspectRatio(aspectRatio);
+        setSourceZoomItem({
+            id: item.id,
+            path: item.path,
+            title: item.name,
+            kind: item.kind === 'video' ? 'video' : 'image',
+            url: item.previewUrl || ''
+        });
+    }, []);
+    const handleSelectTake = React.useCallback((takeId: string): void => {
+        studioCallbacksRef.current?.onSelectTake(takeId);
+    }, []);
+    const handleTakeContextMenu = React.useCallback((event: React.MouseEvent<HTMLButtonElement>, take: ComicStudioGeneratedTake): void => {
+        studioCallbacksRef.current?.openTakeContextMenu(event, take);
+    }, []);
+
     if (!props.open) {
         return null;
     }
@@ -1486,6 +1653,12 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
             filePath: take.filePath,
             mediaKind
         });
+    };
+
+    studioCallbacksRef.current = {
+        onToggleLibraryItem: props.onToggleLibraryItem,
+        onSelectTake: props.onSelectTake,
+        openTakeContextMenu
     };
 
     const toggleActivePlayback = (): void => {
@@ -1595,110 +1768,17 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                         <p className='nmx-comic-studio-lib-empty'>{t('libraryEmpty')}</p>
                     ) : (
                         <div className='nmx-comic-studio-lib-grid' role='list'>
-                            {filteredLibraryItems.map(item => {
-                                const selected = isLibraryItemSelected(item);
-                                return (
-                                    <button
-                                        key={item.id}
-                                        type='button'
-                                        role='listitem'
-                                        className={`nmx-comic-studio-lib-item${selected ? ' is-selected' : ''}`}
-                                        title={item.name}
-                                        onClick={() => {
-                                            props.onToggleLibraryItem?.(item);
-                                            if (closeLibraryOnPick) {
-                                                setShowLibrary(false);
-                                            }
-                                        }}
-                                    >
-                                        <span className='nmx-comic-studio-lib-thumb'>
-                                            {item.kind === 'image' && item.previewUrl ? (
-                                                <img src={item.previewUrl} alt='' loading='lazy' draggable={false} />
-                                            ) : item.kind === 'video' && item.previewUrl ? (
-                                                <video src={item.previewUrl} muted preload='metadata' />
-                                            ) : (
-                                                <i
-                                                    className={`codicon codicon-${item.kind === 'video' ? 'device-camera-video' : 'file-media'}`}
-                                                    aria-hidden='true'
-                                                />
-                                            )}
-                                            {selected && (
-                                                <em className='nmx-comic-studio-lib-check' aria-hidden='true'>
-                                                    <i className='codicon codicon-check' />
-                                                </em>
-                                            )}
-                                            {(item.kind === 'image' || item.kind === 'video') && item.previewUrl && (
-                                                <span
-                                                    role='button'
-                                                    tabIndex={0}
-                                                    className='nmx-comic-studio-lib-zoom'
-                                                    title={t('zoomPreview')}
-                                                    aria-label={t('zoomPreview')}
-                                                    onPointerDown={event => event.stopPropagation()}
-                                                    onMouseDown={event => event.stopPropagation()}
-                                                    onClick={event => {
-                                                        event.preventDefault();
-                                                        event.stopPropagation();
-                                                        const thumbVideo =
-                                                            item.kind === 'video'
-                                                                ? event.currentTarget.parentElement?.querySelector('video')
-                                                                : null;
-                                                        const ar =
-                                                            thumbVideo && thumbVideo.videoWidth > 0 && thumbVideo.videoHeight > 0
-                                                                ? thumbVideo.videoWidth / thumbVideo.videoHeight
-                                                                : undefined;
-                                                        sourceZoomMediaStateRef.current = {
-                                                            restoredUrl: '',
-                                                            currentTime: 0,
-                                                            volume: 1,
-                                                            muted: false
-                                                        };
-                                                        setSourceZoomAspectRatio(ar);
-                                                        setSourceZoomItem({
-                                                            id: item.id,
-                                                            path: item.path,
-                                                            title: item.name,
-                                                            kind: item.kind === 'video' ? 'video' : 'image',
-                                                            url: item.previewUrl || ''
-                                                        });
-                                                    }}
-                                                    onKeyDown={event => {
-                                                        if (event.key === 'Enter' || event.key === ' ') {
-                                                            event.preventDefault();
-                                                            event.stopPropagation();
-                                                            const thumbVideo =
-                                                                item.kind === 'video'
-                                                                    ? event.currentTarget.parentElement?.querySelector('video')
-                                                                    : null;
-                                                            const ar =
-                                                                thumbVideo && thumbVideo.videoWidth > 0 && thumbVideo.videoHeight > 0
-                                                                    ? thumbVideo.videoWidth / thumbVideo.videoHeight
-                                                                    : undefined;
-                                                            sourceZoomMediaStateRef.current = {
-                                                                restoredUrl: '',
-                                                                currentTime: 0,
-                                                                volume: 1,
-                                                                muted: false
-                                                            };
-                                                            setSourceZoomAspectRatio(ar);
-                                                            setSourceZoomItem({
-                                                                id: item.id,
-                                                                path: item.path,
-                                                                title: item.name,
-                                                                kind: item.kind === 'video' ? 'video' : 'image',
-                                                                url: item.previewUrl || ''
-                                                            });
-                                                        }
-                                                    }}
-                                                >
-                                                    <i className='codicon codicon-screen-full' aria-hidden='true' />
-                                                </span>
-                                            )}
-                                        </span>
-                                        <small data-nmx-literal>{item.name}</small>
-                                    </button>
-                                );
-                            })}
+                            {filteredLibraryItems.map(item => (
+                                <StudioLibraryItemButton
+                                    key={item.id}
+                                    item={item}
+                                    selected={isLibraryItemSelected(item)}
+                                    closeOnPick={closeLibraryOnPick}
+                                    zoomLabel={t('zoomPreview')}
+                                    onPick={handlePickLibraryItem}
+                                    onZoom={handleZoomLibraryItem}
+                                />
+                            ))}
                         </div>
                     )}
                 </div>
@@ -2854,59 +2934,18 @@ export function ComicMediaStudioModal(props: ComicMediaStudioModalProps): React.
                                     aria-label={t('takesCount', { count: props.takes.length })}
                                     onWheel={handleFilmstripWheel}
                                 >
-                                    {props.takes.map((take, idx) => {
-                                        const selected = take.id === activeTake?.id;
-                                        const takeIsImage = take.kind === 'image';
-                                        const takeIsAudio =
-                                            !takeIsImage &&
-                                            (take.kind === 'audio' || (props.kind === 'music' && take.kind !== 'video'));
-                                        return (
-                                            <button
-                                                key={take.id}
-                                                type='button'
-                                                role='option'
-                                                aria-selected={selected}
-                                                data-take-id={take.id}
-                                                className={`nmx-comic-studio-take-card${selected ? ' is-active' : ''}`}
-                                                title={take.title}
-                                                onClick={() => props.onSelectTake(take.id)}
-                                                onContextMenu={event => openTakeContextMenu(event, take)}
-                                            >
-                                                <span className='nmx-comic-studio-take-thumb'>
-                                                    {takeIsImage ? (
-                                                        <img
-                                                            src={take.thumbnailUrl || take.mediaUrl}
-                                                            alt=''
-                                                            loading='lazy'
-                                                            draggable={false}
-                                                        />
-                                                    ) : take.thumbnailUrl ? (
-                                                        <img src={take.thumbnailUrl} alt='' loading='lazy' draggable={false} />
-                                                    ) : !takeIsAudio ? (
-                                                        <video
-                                                            src={take.mediaUrl}
-                                                            preload='metadata'
-                                                            muted
-                                                            playsInline
-                                                        />
-                                                    ) : (
-                                                        <span className='nmx-comic-studio-take-wave' aria-hidden='true'>
-                                                            <i className='codicon codicon-music' />
-                                                        </span>
-                                                    )}
-                                                    <b className='nmx-comic-studio-take-index' data-nmx-literal>
-                                                        #{idx + 1}
-                                                    </b>
-                                                    {take.durationSeconds !== undefined && take.durationSeconds > 0 && (
-                                                        <em className='nmx-comic-studio-take-dur' data-nmx-literal>
-                                                            {formatMediaClock(take.durationSeconds)}
-                                                        </em>
-                                                    )}
-                                                </span>
-                                                <small data-nmx-literal>{take.title}</small>
-                                            </button>
-                                        );
-                                    })}
+                                    {props.takes.map((take, idx) => (
+                                        <StudioTakeCard
+                                            key={take.id}
+                                            take={take}
+                                            index={idx}
+                                            selected={take.id === activeTake?.id}
+                                            modalKind={props.kind}
+                                            durationLabel={take.durationSeconds !== undefined && take.durationSeconds > 0 ? formatMediaClock(take.durationSeconds) : undefined}
+                                            onSelect={handleSelectTake}
+                                            onContextMenu={handleTakeContextMenu}
+                                        />
+                                    ))}
                                 </div>
 
                                 <button

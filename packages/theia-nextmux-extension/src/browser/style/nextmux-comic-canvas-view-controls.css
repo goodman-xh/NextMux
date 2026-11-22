@@ -16,7 +16,7 @@
 .nmx-board-view-preference > span { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .nmx-board-view-preference output { color:var(--nmx-muted); }
 .nmx-board-zoom-menu p { margin:6px 8px 0; font-size:11px; line-height:1.5; color:var(--nmx-muted); }
-.nmx-canvas-guide-backdrop { position:fixed; inset:0; display:grid; place-items:center; background:#000b; backdrop-filter:blur(6px); }
+.nmx-canvas-guide-backdrop { position:fixed; inset:0; display:grid; place-items:center; background:rgb(6 6 10 / 84%); }
 .nmx-canvas-guide { display:grid; grid-template-columns:160px minmax(0,1fr); grid-template-rows:40px minmax(0,1fr); gap:16px 12px; box-sizing:border-box; width:min(1240px,calc(100vw - 64px)); height:min(760px,calc(100dvh - 64px)); padding:20px; border-radius:24px; background:linear-gradient(var(--nmx-panel-2),var(--nmx-panel)); color:var(--nmx-text); box-shadow:0 24px 80px #0009; }
 .nmx-canvas-guide > header { grid-column:1 / -1; display:flex; align-items:center; justify-content:space-between; }
 .nmx-canvas-guide > header strong { font-size:16px; }

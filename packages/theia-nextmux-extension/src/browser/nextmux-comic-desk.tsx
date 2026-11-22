@@ -671,6 +671,129 @@ export function ConfirmCost({ cost }: { readonly cost: DeskConfirmCost }): React
     </div>;
 }
 
+const DeskCastCard = React.memo(function DeskCastCard(props: {
+    readonly item: DeskCard;
+    readonly index: number;
+    readonly focus: number;
+    readonly showOutdated?: boolean;
+    readonly stateLabel: string;
+    readonly zoomLabel: string;
+    readonly outdatedLabel: string;
+    readonly onFocusCard: (index: number) => void;
+    readonly onZoom: (item: Zoomed) => void;
+}): React.ReactElement {
+    const { item, index, focus } = props;
+    return <article className={`nmx-desk-card is-${item.state} ${item.picture ? 'is-flipped' : ''} ${index === focus ? 'is-focus' : ''}`}
+        style={carouselStyle(index, focus)} onClick={() => { if (index !== focus) props.onFocusCard(index); }}>
+        <div className='nmx-desk-card-inner'>
+            <div className='nmx-desk-card-back'><i className={`codicon ${item.state === 'drawing' ? 'codicon-loading codicon-modifier-spin' : item.state === 'failed' ? 'codicon-warning' : 'codicon-person'}`}></i>
+                <strong data-nmx-literal>{item.name}</strong><small>{props.stateLabel}</small></div>
+            <div className='nmx-desk-card-front'>{item.picture && <img src={item.picture} alt={item.name} loading='lazy' decoding='async' />}<strong data-nmx-literal>{item.name}</strong>
+                {props.showOutdated && item.outdated && <em className='nmx-desk-card-flag'>{props.outdatedLabel}</em>}
+                {item.picture && <ZoomButton label={props.zoomLabel} onClick={() => props.onZoom({ src: item.picture!, caption: item.name })} />}</div>
+        </div>
+    </article>;
+});
+
+const DeskLookCard = React.memo(function DeskLookCard(props: {
+    readonly card: DeskCard;
+    readonly index: number;
+    readonly isFocus: boolean;
+    readonly draft: string | undefined;
+    readonly anyRewriting: boolean;
+    readonly noImageModel: boolean | undefined;
+    readonly library: readonly DesktopComicCharacterLibraryEntry[];
+    readonly t: (key: Key, values?: Record<string, string | number>) => string;
+    readonly onFocusCard: (index: number) => void;
+    readonly onDraftChange: (cardId: string, next: string) => void;
+    readonly onCommit: (card: DeskCard) => void;
+    readonly onStopRewrite?: () => void;
+    readonly onRewriteLook?: (cardId: string) => void;
+    readonly onStopDraw?: () => void;
+    readonly onRedraw: (cardId: string) => void;
+    readonly onBind: (cardId: string, bundleId: string) => void;
+    readonly onUpload: (cardId: string) => void;
+}): React.ReactElement {
+    const { card, index, isFocus, t } = props;
+    const drawing = card.state === 'drawing';
+    const value = props.draft ?? card.look;
+    return <article className={`nmx-desk-look ${isFocus ? 'is-focus' : ''} is-${card.state}`}
+        onFocusCapture={() => { if (!isFocus) props.onFocusCard(index); }} onClick={() => { if (!isFocus) props.onFocusCard(index); }}>
+        <header>
+            <strong data-nmx-literal>{card.name}</strong>
+            {card.variant && <em>{t('sameCharacter', { n: card.variant.index, total: card.variant.total })}</em>}
+            {card.fromLibrary && <em>{t('fromLibrary')}</em>}
+            <small className={`nmx-desk-look-state is-${card.state}`}>{drawing ? t('drawing') : card.state === 'failed' ? t('failed') : card.picture ? t('done') : t('waiting')}</small>
+        </header>
+        {card.role && <p className='nmx-desk-look-role' data-nmx-literal>{card.role}</p>}
+        <ImeTextarea value={value} rows={6} placeholder={t('lookPlaceholder')} readOnly={card.rewriting || drawing} aria-label={`${t('looksTitle')} · ${card.name}`}
+            onChange={event => props.onDraftChange(card.id, event.currentTarget.value)}
+            onBlur={() => props.onCommit(card)} />
+        {card.outdated && !drawing && <small className='nmx-desk-look-note'>{t('lookChanged')}</small>}
+        {card.error && <small className='nmx-desk-clip-error' data-nmx-literal>{card.error}</small>}
+        <footer>
+            {card.rewriting
+                ? <button type='button' onClick={props.onStopRewrite}><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>{t('stopAll')}</button>
+                : <button type='button' disabled={drawing || props.anyRewriting} onClick={() => props.onRewriteLook?.(card.id)}>
+                    <i className='codicon codicon-sparkle' aria-hidden='true'></i>{t('rewriteLook')}</button>}
+            {drawing
+                ? <button type='button' onClick={props.onStopDraw}><i className='codicon codicon-debug-stop' aria-hidden='true'></i>{t('stopAll')}</button>
+                : <button type='button' className={!card.picture || card.outdated ? 'nmx-primary-button' : ''} disabled={props.noImageModel || card.rewriting || !value.trim()}
+                    onClick={() => { props.onCommit(card); props.onRedraw(card.id); }}><i className='codicon codicon-person' aria-hidden='true'></i>{card.picture ? t('redraw') : t('drawOne')}</button>}
+            <select aria-label={t('library')} value='' disabled={drawing || !props.library.length}
+                onChange={event => { const bundleId = event.currentTarget.value; if (bundleId) props.onBind(card.id, bundleId); }}>
+                <option value=''>{props.library.length ? t('library') : t('libraryEmpty')}</option>
+                {props.library.map(entry => <option key={entry.bundleId} value={entry.bundleId}>{entry.name}</option>)}
+            </select>
+            <button type='button' disabled={drawing} aria-label={t('upload')} title={t('upload')} onClick={() => props.onUpload(card.id)}><i className='codicon codicon-cloud-upload' aria-hidden='true'></i></button>
+        </footer>
+    </article>;
+});
+
+const DeskClipCard = React.memo(function DeskClipCard(props: {
+    readonly item: DeskClip;
+    readonly index: number;
+    readonly focus: number;
+    readonly stateText: string;
+    readonly secondsText: string;
+    readonly outdatedText: string;
+    readonly onFocusClip: (index: number) => void;
+}): React.ReactElement {
+    const { item, index, focus } = props;
+    return <article className={`nmx-desk-card is-clip is-${item.state} ${item.video && item.state === 'done' ? 'is-flipped' : ''} ${index === focus ? 'is-focus' : ''}`}
+        style={carouselStyle(index, focus)} onClick={() => { if (index !== focus) props.onFocusClip(index); }}>
+        <div className='nmx-desk-card-inner'>
+            <div className='nmx-desk-card-back'>
+                <i className={`codicon ${item.state === 'video' || item.state === 'picture' ? 'codicon-loading codicon-modifier-spin' : item.state === 'failed' ? 'codicon-warning' : 'codicon-device-camera-video'}`}></i>
+                <strong data-nmx-literal>{String(index + 1).padStart(2, '0')} · {item.title}</strong><small>{props.stateText} · {props.secondsText}</small></div>
+            <div className='nmx-desk-card-front'>
+                {item.video && <ClipPlayer src={item.video} cues={item.cues} active={index === focus} />}
+                {item.outdated && <em className='nmx-desk-card-flag'>{props.outdatedText}</em>}
+            </div>
+        </div>
+    </article>;
+});
+
+const DeskFilmstripItem = React.memo(function DeskFilmstripItem(props: {
+    readonly item: DeskClip;
+    readonly index: number;
+    readonly isFocus: boolean;
+    readonly titleText: string;
+    readonly secondsText: string;
+    readonly onFocusClip: (index: number) => void;
+}): React.ReactElement {
+    const { item, index, isFocus } = props;
+    return <button type='button' role='tab' aria-selected={isFocus}
+        className={`is-${item.state} ${isFocus ? 'is-focus' : ''} ${item.outdated ? 'is-outdated' : ''}`}
+        title={props.titleText} onClick={() => props.onFocusClip(index)}>
+        {item.poster ? <img src={item.poster} alt='' loading='lazy' decoding='async' draggable={false} />
+            : item.video ? <video src={`${item.video}#t=0.5`} muted preload='metadata' playsInline tabIndex={-1} aria-hidden='true' />
+            : <i className={`codicon ${item.state === 'video' || item.state === 'picture' ? 'codicon-loading codicon-modifier-spin' : item.state === 'failed' ? 'codicon-warning' : 'codicon-device-camera-video'}`} aria-hidden='true'></i>}
+        <span data-nmx-literal>{String(index + 1).padStart(2, '0')}</span>
+        <em data-nmx-literal>{props.secondsText}</em>
+    </button>;
+});
+
 /**
  * 选角 (review): the character cards, then one look prompt per character (edited in place, rewritten by the AI one
  * at a time, drawn one by one or all together, each stoppable), then one script per episode (edited, or adapted
@@ -684,13 +807,21 @@ function CastReview(props: Inner): React.ReactElement {
     React.useEffect(() => {
         looks.current?.querySelectorAll<HTMLElement>('.nmx-desk-look')[focus]?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
     }, [focus]);
-    const commit = (card: DeskCard): void => {
-        const draft = drafts[card.id];
+    const draftsRef = React.useRef(drafts);
+    draftsRef.current = drafts;
+    const onLookCommitRef = React.useRef(props.onLookCommit);
+    onLookCommitRef.current = props.onLookCommit;
+    const commit = React.useCallback((card: DeskCard): void => {
+        const draft = draftsRef.current[card.id];
         if (draft === undefined) return;
         setDrafts(current => { const next = { ...current }; delete next[card.id]; return next; });
-        if (draft.trim() !== card.look.trim()) props.onLookCommit?.(card.id, draft.trim());
-    };
+        if (draft.trim() !== card.look.trim()) onLookCommitRef.current?.(card.id, draft.trim());
+    }, []);
+    const onDraftChange = React.useCallback((cardId: string, next: string): void => {
+        setDrafts(current => ({ ...current, [cardId]: next }));
+    }, []);
     const busyEpisode = props.rewritingEpisode !== undefined;
+    const anyRewriting = Boolean(props.cards.some(item => item.rewriting));
     return <div className='nmx-desk-review'>
         <div className='nmx-desk-review-bar'>
             <p className='nmx-desk-lead'>{t('reviewLead')}{props.noImageModel && <strong className='nmx-desk-review-warning'>{t('noImageModel')}</strong>}</p>
@@ -701,56 +832,19 @@ function CastReview(props: Inner): React.ReactElement {
         </div>
         {!props.cards.length ? <div className='nmx-desk-empty is-inline'><span>{t('noCharacters')}</span></div>
                 : <div className='nmx-desk-carousel is-cards is-review'>
-                    {props.cards.map((item, index) => <article key={item.id} className={`nmx-desk-card is-${item.state} ${item.picture ? 'is-flipped' : ''} ${index === focus ? 'is-focus' : ''}`}
-                        style={carouselStyle(index, focus)} onClick={() => { if (index !== focus) props.onFocusCard(index); }}>
-                        <div className='nmx-desk-card-inner'>
-                            <div className='nmx-desk-card-back'><i className={`codicon ${item.state === 'drawing' ? 'codicon-loading codicon-modifier-spin' : item.state === 'failed' ? 'codicon-warning' : 'codicon-person'}`}></i>
-                                <strong data-nmx-literal>{item.name}</strong><small>{t(item.state === 'drawing' ? 'drawing' : item.state === 'failed' ? 'failed' : 'waiting')}</small></div>
-                            <div className='nmx-desk-card-front'>{item.picture && <img src={item.picture} alt={item.name} />}<strong data-nmx-literal>{item.name}</strong>
-                                {item.outdated && <em className='nmx-desk-card-flag'>{t('outdated')}</em>}
-                                {item.picture && <ZoomButton label={props.t('zoom')} onClick={() => props.onZoom({ src: item.picture!, caption: item.name })} />}</div>
-                        </div>
-                    </article>)}
+                    {props.cards.map((item, index) => <DeskCastCard key={item.id} item={item} index={index} focus={focus} showOutdated
+                        stateLabel={t(item.state === 'drawing' ? 'drawing' : item.state === 'failed' ? 'failed' : 'waiting')}
+                        zoomLabel={props.t('zoom')} outdatedLabel={t('outdated')} onFocusCard={props.onFocusCard} onZoom={props.onZoom} />)}
                     <Arrows index={focus} count={props.cards.length} onFocus={props.onFocusCard} previous={t('previous')} next={t('next')} />
                 </div>}
         {props.cards.length > 0 && <section className='nmx-desk-row is-looks' aria-label={t('looksTitle')}>
             <header><strong>{t('looksTitle')}</strong><small>{t('castLead')}</small></header>
             <div className='nmx-desk-strip' ref={looks}>
-                {props.cards.map((card, index) => {
-                    const drawing = card.state === 'drawing';
-                    const value = drafts[card.id] ?? card.look;
-                    return <article key={card.id} className={`nmx-desk-look ${index === focus ? 'is-focus' : ''} is-${card.state}`}
-                        onFocusCapture={() => { if (index !== focus) props.onFocusCard(index); }} onClick={() => { if (index !== focus) props.onFocusCard(index); }}>
-                        <header>
-                            <strong data-nmx-literal>{card.name}</strong>
-                            {card.variant && <em>{t('sameCharacter', { n: card.variant.index, total: card.variant.total })}</em>}
-                            {card.fromLibrary && <em>{t('fromLibrary')}</em>}
-                            <small className={`nmx-desk-look-state is-${card.state}`}>{drawing ? t('drawing') : card.state === 'failed' ? t('failed') : card.picture ? t('done') : t('waiting')}</small>
-                        </header>
-                        {card.role && <p className='nmx-desk-look-role' data-nmx-literal>{card.role}</p>}
-                        <ImeTextarea value={value} rows={6} placeholder={t('lookPlaceholder')} readOnly={card.rewriting || drawing} aria-label={`${t('looksTitle')} · ${card.name}`}
-                            onChange={event => { const next = event.currentTarget.value; setDrafts(current => ({ ...current, [card.id]: next })); }}
-                            onBlur={() => commit(card)} />
-                        {card.outdated && !drawing && <small className='nmx-desk-look-note'>{t('lookChanged')}</small>}
-                        {card.error && <small className='nmx-desk-clip-error' data-nmx-literal>{card.error}</small>}
-                        <footer>
-                            {card.rewriting
-                                ? <button type='button' onClick={props.onStopRewrite}><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>{t('stopAll')}</button>
-                                : <button type='button' disabled={drawing || Boolean(props.cards.some(item => item.rewriting))} onClick={() => props.onRewriteLook?.(card.id)}>
-                                    <i className='codicon codicon-sparkle' aria-hidden='true'></i>{t('rewriteLook')}</button>}
-                            {drawing
-                                ? <button type='button' onClick={props.onStopDraw}><i className='codicon codicon-debug-stop' aria-hidden='true'></i>{t('stopAll')}</button>
-                                : <button type='button' className={!card.picture || card.outdated ? 'nmx-primary-button' : ''} disabled={props.noImageModel || card.rewriting || !value.trim()}
-                                    onClick={() => { commit(card); props.onRedraw(card.id); }}><i className='codicon codicon-person' aria-hidden='true'></i>{card.picture ? t('redraw') : t('drawOne')}</button>}
-                            <select aria-label={t('library')} value='' disabled={drawing || !props.library.length}
-                                onChange={event => { const bundleId = event.currentTarget.value; if (bundleId) props.onBind(card.id, bundleId); }}>
-                                <option value=''>{props.library.length ? t('library') : t('libraryEmpty')}</option>
-                                {props.library.map(entry => <option key={entry.bundleId} value={entry.bundleId}>{entry.name}</option>)}
-                            </select>
-                            <button type='button' disabled={drawing} aria-label={t('upload')} title={t('upload')} onClick={() => props.onUpload(card.id)}><i className='codicon codicon-cloud-upload' aria-hidden='true'></i></button>
-                        </footer>
-                    </article>;
-                })}
+                {props.cards.map((card, index) => <DeskLookCard key={card.id} card={card} index={index} isFocus={index === focus}
+                    draft={drafts[card.id]} anyRewriting={anyRewriting} noImageModel={props.noImageModel} library={props.library}
+                    t={t} onFocusCard={props.onFocusCard} onDraftChange={onDraftChange} onCommit={commit}
+                    onStopRewrite={props.onStopRewrite} onRewriteLook={props.onRewriteLook} onStopDraw={props.onStopDraw}
+                    onRedraw={props.onRedraw} onBind={props.onBind} onUpload={props.onUpload} />)}
             </div>
         </section>}
         {props.episodes.length > 0 && <section className='nmx-desk-row is-episodes' aria-label={t('episodesTitle')}>
@@ -888,15 +982,9 @@ function CastCarousel(props: Inner): React.ReactElement {
     return <div className='nmx-desk-cast'>
         <p className='nmx-desk-lead'>{t('castLead')}</p>
         <div className='nmx-desk-carousel is-cards'>
-            {props.cards.map((item, index) => <article key={item.id} className={`nmx-desk-card is-${item.state} ${item.picture ? 'is-flipped' : ''} ${index === focus ? 'is-focus' : ''}`}
-                style={carouselStyle(index, focus)} onClick={() => { if (index !== focus) props.onFocusCard(index); }}>
-                <div className='nmx-desk-card-inner'>
-                    <div className='nmx-desk-card-back'><i className={`codicon ${item.state === 'drawing' ? 'codicon-loading codicon-modifier-spin' : item.state === 'failed' ? 'codicon-warning' : 'codicon-person'}`}></i>
-                        <strong data-nmx-literal>{item.name}</strong><small>{t(item.state === 'drawing' ? 'drawing' : item.state === 'failed' ? 'failed' : 'waiting')}</small></div>
-                    <div className='nmx-desk-card-front'>{item.picture && <img src={item.picture} alt={item.name} />}<strong data-nmx-literal>{item.name}</strong>
-                        {item.picture && <ZoomButton label={props.t('zoom')} onClick={() => props.onZoom({ src: item.picture!, caption: item.name })} />}</div>
-                </div>
-            </article>)}
+            {props.cards.map((item, index) => <DeskCastCard key={item.id} item={item} index={index} focus={focus}
+                stateLabel={t(item.state === 'drawing' ? 'drawing' : item.state === 'failed' ? 'failed' : 'waiting')}
+                zoomLabel={props.t('zoom')} outdatedLabel={t('outdated')} onFocusCard={props.onFocusCard} onZoom={props.onZoom} />)}
             <Arrows index={focus} count={props.cards.length} onFocus={props.onFocusCard} previous={t('previous')} next={t('next')} />
         </div>
         <div className='nmx-desk-card-detail'>
@@ -955,30 +1043,15 @@ function ShootStage(props: Inner): React.ReactElement {
         </div>
         {!clips.length ? <div className='nmx-desk-empty'><span>{episode.splitting ? t('splitting') : t('noClips')}</span></div>
             : <div className='nmx-desk-carousel is-clips'>
-                {clips.map((item, index) => <article key={item.shotId} className={`nmx-desk-card is-clip is-${item.state} ${item.video && item.state === 'done' ? 'is-flipped' : ''} ${index === focus ? 'is-focus' : ''}`}
-                    style={carouselStyle(index, focus)} onClick={() => { if (index !== focus) props.onFocusClip(index); }}>
-                    <div className='nmx-desk-card-inner'>
-                        <div className='nmx-desk-card-back'>
-                            <i className={`codicon ${item.state === 'video' || item.state === 'picture' ? 'codicon-loading codicon-modifier-spin' : item.state === 'failed' ? 'codicon-warning' : 'codicon-device-camera-video'}`}></i>
-                            <strong data-nmx-literal>{String(index + 1).padStart(2, '0')} · {item.title}</strong><small>{stateLabel(item.state)} · {t('seconds', { n: item.seconds })}</small></div>
-                        <div className='nmx-desk-card-front'>
-                            {item.video && <ClipPlayer src={item.video} cues={item.cues} active={index === focus} />}
-                            {item.outdated && <em className='nmx-desk-card-flag'>{t('outdated')}</em>}
-                        </div>
-                    </div>
-                </article>)}
+                {clips.map((item, index) => <DeskClipCard key={item.shotId} item={item} index={index} focus={focus}
+                    stateText={stateLabel(item.state)} secondsText={t('seconds', { n: item.seconds })} outdatedText={t('outdated')}
+                    onFocusClip={props.onFocusClip} />)}
                 <Arrows index={focus} count={clips.length} onFocus={props.onFocusClip} previous={t('previous')} next={t('next')} />
             </div>}
         {clips.length > 0 && <div className='nmx-desk-filmstrip' role='tablist' aria-label={t('clips', { n: clips.length })}>
-            {clips.map((item, index) => <button key={item.shotId} type='button' role='tab' aria-selected={index === focus}
-                className={`is-${item.state} ${index === focus ? 'is-focus' : ''} ${item.outdated ? 'is-outdated' : ''}`}
-                title={`${String(index + 1).padStart(2, '0')} · ${item.title} · ${stateLabel(item.state)}`} onClick={() => props.onFocusClip(index)}>
-                {item.poster ? <img src={item.poster} alt='' draggable={false} />
-                    : item.video ? <video src={`${item.video}#t=0.5`} muted preload='metadata' playsInline tabIndex={-1} aria-hidden='true' />
-                    : <i className={`codicon ${item.state === 'video' || item.state === 'picture' ? 'codicon-loading codicon-modifier-spin' : item.state === 'failed' ? 'codicon-warning' : 'codicon-device-camera-video'}`} aria-hidden='true'></i>}
-                <span data-nmx-literal>{String(index + 1).padStart(2, '0')}</span>
-                <em data-nmx-literal>{t('seconds', { n: item.seconds })}</em>
-            </button>)}
+            {clips.map((item, index) => <DeskFilmstripItem key={item.shotId} item={item} index={index} isFocus={index === focus}
+                titleText={`${String(index + 1).padStart(2, '0')} · ${item.title} · ${stateLabel(item.state)}`}
+                secondsText={t('seconds', { n: item.seconds })} onFocusClip={props.onFocusClip} />)}
         </div>}
         <div className='nmx-desk-editor'>
             <div className='nmx-desk-tabs' role='tablist'>

@@ -139,6 +139,74 @@ function LibraryLightboxImage(props:{readonly src:string;readonly alt:string;rea
     </>;
 }
 
+const libraryDateFormats=new Map<string,Intl.DateTimeFormat>();
+function getLibraryDateFormatter(locale:string):Intl.DateTimeFormat{
+    let cached=libraryDateFormats.get(locale);
+    if(!cached){cached=new Intl.DateTimeFormat(locale,{dateStyle:'short',timeStyle:'short'});libraryDateFormats.set(locale,cached);}
+    return cached;
+}
+
+const LibraryAssetCard=React.memo(function LibraryAssetCard(props:{
+    readonly entry:ComicAssetLibraryEntry;
+    readonly media:string|undefined;
+    readonly isChar:boolean;
+    readonly badgeLabel:string;
+    readonly fallbackText:string;
+    readonly createdLabel:string;
+    readonly unavailable:boolean;
+    readonly busy:boolean;
+    readonly useActive:boolean;
+    readonly useBlocked:boolean;
+    readonly hasUse:boolean;
+    readonly useLabel:string;
+    readonly canReclassify:boolean;
+    readonly hasPin:boolean;
+    readonly hasDelete:boolean;
+    readonly zoomLabel:string;
+    readonly notAllowedLabel:string;
+    readonly loadingLabel:string;
+    readonly reclassifyLabel:string;
+    readonly pinLabel:string;
+    readonly deleteLabel:string;
+    readonly onContextMenuEntry:(entry:ComicAssetLibraryEntry,event:React.MouseEvent<HTMLElement>)=>void;
+    readonly onOpenZoom:(entry:ComicAssetLibraryEntry,video?:HTMLVideoElement|null)=>void;
+    readonly onUseEntry:(entry:ComicAssetLibraryEntry)=>void;
+    readonly onReclassifyEntry:(entry:ComicAssetLibraryEntry,nextCategory:ComicAssetCategory)=>void;
+    readonly onPinEntry:(entry:ComicAssetLibraryEntry)=>void;
+    readonly onOpenDelete:(entry:ComicAssetLibraryEntry,event:React.MouseEvent<HTMLElement>)=>void;
+}):React.ReactElement{
+    const {entry,media,isChar,badgeLabel}=props;
+    const isZoomableImage=entry.assetType==='image'&&Boolean(media);
+    const isZoomableVideo=entry.assetType==='video'&&Boolean(media);
+    return <article data-library-asset={entry.assetId} className={entry.pinnedAt?'is-pinned':''}
+        onContextMenu={event=>props.onContextMenuEntry(entry,event)}>
+        <div className={`nmx-library-preview${isZoomableImage?' is-zoomable-image':isZoomableVideo?' is-zoomable-video':''}`} onClick={isZoomableImage?()=>props.onOpenZoom(entry):undefined}>
+            {isZoomableImage?<img src={media} alt='' loading='lazy' decoding='async'/>:isZoomableVideo?<video src={media} controls playsInline preload='metadata' controlsList='nofullscreen noremoteplayback' disablePictureInPicture onMouseMove={event=>{
+                // The zoom-in cursor belongs to the frame only; over the control bar the native cursors apply.
+                const rect=event.currentTarget.getBoundingClientRect(),zone=event.clientY<rect.bottom-LIBRARY_VIDEO_CONTROL_STRIP?'frame':'controls';
+                if(event.currentTarget.dataset.pointerZone!==zone)event.currentTarget.dataset.pointerZone=zone;
+            }} onClick={event=>{
+                // A pointer click on the frame opens the zoom; the bottom strip is the native control bar's.
+                const rect=event.currentTarget.getBoundingClientRect();
+                if(!(event.detail>0&&event.clientY<rect.bottom-LIBRARY_VIDEO_CONTROL_STRIP))return;
+                event.preventDefault();event.stopPropagation();props.onOpenZoom(entry,event.currentTarget);
+            }}/>:entry.assetType==='audio'&&media?<audio src={media} controls preload='metadata'/>:<span>{props.fallbackText}</span>}
+            {(isZoomableImage||isZoomableVideo)&&<button type='button' className='nmx-library-zoom-btn' title={props.zoomLabel} aria-label={props.zoomLabel} onClick={event=>{event.stopPropagation();const siblingVideo=isZoomableVideo?event.currentTarget.parentElement?.querySelector('video'):null;props.onOpenZoom(entry,siblingVideo);}}><i className='codicon codicon-screen-full' aria-hidden='true'/></button>}
+            <span className={`nmx-library-type-badge is-${isChar?'character':entry.assetType}`}>{badgeLabel}</span>
+        </div>
+        <div className='nmx-library-card-meta'>
+            <strong data-nmx-literal title={entry.assetName}>{entry.pinnedAt?'★ ':''}{entry.assetName}</strong>
+            <small>{badgeLabel} · {props.createdLabel}{entry.durationMs!==undefined?` · ${(entry.durationMs/1000).toFixed(1)}s`:''}</small>
+        </div>
+        <div className='nmx-library-card-actions'>
+            {props.hasUse&&<button type='button' className='nmx-library-use-btn' title={props.unavailable?props.notAllowedLabel:props.useLabel} aria-label={props.useLabel} disabled={props.useBlocked} onClick={()=>props.onUseEntry(entry)}>{props.useActive?props.loadingLabel:props.useLabel}</button>}
+            {props.canReclassify&&<button type='button' className='nmx-library-reclassify-btn' title={props.reclassifyLabel} aria-label={props.reclassifyLabel} disabled={props.busy} onClick={()=>props.onReclassifyEntry(entry,isChar?'other':'character')}>{props.reclassifyLabel}</button>}
+            {props.hasPin&&<button type='button' className='nmx-library-icon-btn' title={props.pinLabel} aria-label={props.pinLabel} disabled={props.busy} onClick={()=>props.onPinEntry(entry)}>{entry.pinnedAt?'☆':'★'}</button>}
+            {props.hasDelete&&<button type='button' className='nmx-library-icon-btn is-danger' data-library-delete-trigger='true' title={props.deleteLabel} aria-label={props.deleteLabel} disabled={props.busy} onClick={event=>props.onOpenDelete(entry,event)}>×</button>}
+        </div>
+    </article>;
+});
+
 export interface CanvasAssetLibraryDialogProps {
     readonly locale:string;readonly load:()=>Promise<readonly ComicAssetLibraryEntry[]>;
     readonly onUse?:(assetId:string,requestId:string,entry:ComicAssetLibraryEntry)=>Promise<void>;readonly onClose:()=>void;
@@ -477,6 +545,29 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
     const countFor=(tab:LibraryTab):number=>entries.filter(entry=>libraryTabMatches(entry,tab)).length;
     const isCharacterEntry=(entry:ComicAssetLibraryEntry):boolean=>entry.assetCategory==='character'||Boolean(entry.characterBundleId);
     const canReclassify=(entry:ComicAssetLibraryEntry):boolean=>Boolean(props.onCategoryChange&&entry.assetType==='image'&&entry.mediaPath);
+    const cardActionsRef=React.useRef({openZoom,openDeletePopover,use,changeCategory,mutate});
+    cardActionsRef.current={openZoom,openDeletePopover,use,changeCategory,mutate};
+    const onCardContextMenu=React.useCallback((entry:ComicAssetLibraryEntry,event:React.MouseEvent<HTMLElement>)=>{
+        event.preventDefault();event.stopPropagation();
+        setPendingDelete(undefined);
+        setContextMenu({entry,x:event.clientX,y:event.clientY});
+    },[]);
+    const onCardZoom=React.useCallback((entry:ComicAssetLibraryEntry,video?:HTMLVideoElement|null)=>{
+        cardActionsRef.current.openZoom(entry,video);
+    },[]);
+    const onCardUse=React.useCallback((entry:ComicAssetLibraryEntry)=>{
+        void cardActionsRef.current.use(entry);
+    },[]);
+    const onCardReclassify=React.useCallback((entry:ComicAssetLibraryEntry,nextCategory:ComicAssetCategory)=>{
+        void cardActionsRef.current.changeCategory(entry,nextCategory);
+    },[]);
+    const onCardPin=React.useCallback((entry:ComicAssetLibraryEntry)=>{
+        void cardActionsRef.current.mutate(entry,false);
+    },[]);
+    const onCardDelete=React.useCallback((entry:ComicAssetLibraryEntry,event:React.MouseEvent<HTMLElement>)=>{
+        cardActionsRef.current.openDeletePopover(entry,event);
+    },[]);
+    const dateFormatter=React.useMemo(()=>getLibraryDateFormatter(props.locale),[props.locale]);
     return <div className='nmx-board-tool-backdrop nmx-library-backdrop' onMouseDown={event=>{
         event.stopPropagation();
         if(dismissedOverlayOnDownRef.current){dismissedOverlayOnDownRef.current=false;return;}
@@ -525,43 +616,24 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
             {operations.busy&&<p className='nmx-library-progress' role='status'>{t('workingClose')}</p>}
             <div ref={gridRef} className='nmx-board-asset-library-body nmx-library-grid' onScroll={()=>{if(contextMenu)setContextMenu(undefined);if(pendingDelete)setPendingDelete(undefined);}}>
                 {loading?<p role='status' className='nmx-library-empty-state'>{t('loading')}</p>:!visible.length?<p className='nmx-library-empty-state'>{t('empty')}</p>:visible.map(entry=>{
-                    const unavailable=Boolean(props.selectTypes&&!props.selectTypes.includes(entry.assetType)),busy=cardLocks.current.has(entry.assetId)||operations.busy===entry.assetId;
+                    const unavailable=Boolean(props.selectTypes&&!props.selectTypes.includes(entry.assetType));
+                    const locked=cardLocks.current.has(entry.assetId);
+                    const busy=locked||operations.busy===entry.assetId;
+                    const useActive=operations.busy===entry.assetId;
+                    const useBlocked=Boolean(operations.busy)||busy||unavailable;
                     const media=resolveMediaUrl(entry);
                     const isChar=isCharacterEntry(entry);
                     const badgeLabel=isChar?t('character'):t(entry.assetType==='audio'?'audioMedia':entry.assetType);
-                    const isZoomableImage=entry.assetType==='image'&&Boolean(media);
-                    const isZoomableVideo=entry.assetType==='video'&&Boolean(media);
-                    return <article key={entry.assetId} data-library-asset={entry.assetId} className={entry.pinnedAt?'is-pinned':''}
-                        onContextMenu={event=>{
-                            event.preventDefault();event.stopPropagation();
-                            setPendingDelete(undefined);
-                            setContextMenu({entry,x:event.clientX,y:event.clientY});
-                        }}>
-                        <div className={`nmx-library-preview${isZoomableImage?' is-zoomable-image':isZoomableVideo?' is-zoomable-video':''}`} onClick={isZoomableImage?()=>openZoom(entry):undefined}>
-                            {isZoomableImage?<img src={media} alt='' loading='lazy'/>:isZoomableVideo?<video src={media} controls playsInline preload='metadata' controlsList='nofullscreen noremoteplayback' disablePictureInPicture onMouseMove={event=>{
-                                // The zoom-in cursor belongs to the frame only; over the control bar the native cursors apply.
-                                const rect=event.currentTarget.getBoundingClientRect(),zone=event.clientY<rect.bottom-LIBRARY_VIDEO_CONTROL_STRIP?'frame':'controls';
-                                if(event.currentTarget.dataset.pointerZone!==zone)event.currentTarget.dataset.pointerZone=zone;
-                            }} onClick={event=>{
-                                // A pointer click on the frame opens the zoom; the bottom strip is the native control bar's.
-                                const rect=event.currentTarget.getBoundingClientRect();
-                                if(!(event.detail>0&&event.clientY<rect.bottom-LIBRARY_VIDEO_CONTROL_STRIP))return;
-                                event.preventDefault();event.stopPropagation();openZoom(entry,event.currentTarget);
-                            }}/>:entry.assetType==='audio'&&media?<audio src={media} controls preload='metadata'/>:<span>{entry.textContent?.slice(0,160)||t(entry.assetType==='text'?'text':entry.assetType)}</span>}
-                            {(isZoomableImage||isZoomableVideo)&&<button type='button' className='nmx-library-zoom-btn' title={t('zoomPreview')} aria-label={t('zoomPreview')} onClick={event=>{event.stopPropagation();const siblingVideo=isZoomableVideo?event.currentTarget.parentElement?.querySelector('video'):null;openZoom(entry,siblingVideo);}}><i className='codicon codicon-screen-full' aria-hidden='true'/></button>}
-                            <span className={`nmx-library-type-badge is-${isChar?'character':entry.assetType}`}>{badgeLabel}</span>
-                        </div>
-                        <div className='nmx-library-card-meta'>
-                            <strong data-nmx-literal title={entry.assetName}>{entry.pinnedAt?'★ ':''}{entry.assetName}</strong>
-                            <small>{badgeLabel} · {new Intl.DateTimeFormat(props.locale,{dateStyle:'short',timeStyle:'short'}).format(new Date(entry.createdAt))}{entry.durationMs!==undefined?` · ${(entry.durationMs/1000).toFixed(1)}s`:''}</small>
-                        </div>
-                        <div className='nmx-library-card-actions'>
-                            {props.onUse&&<button type='button' className='nmx-library-use-btn' title={unavailable?t('notAllowed'):props.useLabel??t('use')} aria-label={props.useLabel??t('use')} disabled={Boolean(operations.busy)||busy||unavailable} onClick={()=>void use(entry)}>{operations.busy===entry.assetId?t('loading'):props.useLabel??t('use')}</button>}
-                            {canReclassify(entry)&&<button type='button' className='nmx-library-reclassify-btn' title={t(isChar?'moveToImage':'moveToCharacter')} aria-label={t(isChar?'moveToImage':'moveToCharacter')} disabled={busy} onClick={()=>void changeCategory(entry,isChar?'other':'character')}>{t(isChar?'moveToImage':'moveToCharacter')}</button>}
-                            {props.onPin&&<button type='button' className='nmx-library-icon-btn' title={t(entry.pinnedAt?'unpin':'pin')} aria-label={t(entry.pinnedAt?'unpin':'pin')} disabled={busy} onClick={()=>void mutate(entry,false)}>{entry.pinnedAt?'☆':'★'}</button>}
-                            {props.onDelete&&<button type='button' className='nmx-library-icon-btn is-danger' data-library-delete-trigger='true' title={t('delete')} aria-label={t('delete')} disabled={busy} onClick={event=>openDeletePopover(entry,event)}>×</button>}
-                        </div>
-                    </article>;
+                    const fallbackText=entry.textContent?.slice(0,160)||t(entry.assetType==='text'?'text':entry.assetType);
+                    return <LibraryAssetCard key={entry.assetId} entry={entry} media={media} isChar={isChar} badgeLabel={badgeLabel}
+                        fallbackText={fallbackText} createdLabel={dateFormatter.format(new Date(entry.createdAt))}
+                        unavailable={unavailable} busy={busy} useActive={useActive} useBlocked={useBlocked}
+                        hasUse={Boolean(props.onUse)} useLabel={props.useLabel??t('use')} canReclassify={canReclassify(entry)}
+                        hasPin={Boolean(props.onPin)} hasDelete={Boolean(props.onDelete)}
+                        zoomLabel={t('zoomPreview')} notAllowedLabel={t('notAllowed')} loadingLabel={t('loading')}
+                        reclassifyLabel={t(isChar?'moveToImage':'moveToCharacter')} pinLabel={t(entry.pinnedAt?'unpin':'pin')} deleteLabel={t('delete')}
+                        onContextMenuEntry={onCardContextMenu} onOpenZoom={onCardZoom} onUseEntry={onCardUse}
+                        onReclassifyEntry={onCardReclassify} onPinEntry={onCardPin} onOpenDelete={onCardDelete} />;
                 })}
                 {error&&<p role='alert'>{error} <button type='button' title={t('retry')} onClick={()=>{if(failedUpload&&props.onUpload)void upload(true);else setReload(value=>value+1);}}>{t('retry')}</button></p>}
             </div>

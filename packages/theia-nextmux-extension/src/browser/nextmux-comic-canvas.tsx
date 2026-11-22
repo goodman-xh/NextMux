@@ -335,8 +335,9 @@ function MediaPreview(props: { readonly node: CanvasNode; readonly url: (uri: st
             onDoubleClick={() => props.onOpen(version.uri, 'video')} />;
     }
     if (version.kind === 'audio') return <audio className='nmx-board-audio' src={src} controls preload='metadata' />;
-    return <img className='nmx-board-media' src={src} alt='' draggable={false} onDoubleClick={() => props.onOpen(version.uri, 'image')} />;
+    return <img className='nmx-board-media' src={src} alt='' loading='lazy' decoding='async' draggable={false} onDoubleClick={() => props.onOpen(version.uri, 'image')} />;
 }
+const MemoMediaPreview = React.memo(MediaPreview);
 
 function VersionSwitcher(props: { readonly node: CanvasNode; readonly t: T; readonly change: (next: CanvasDocument, record?: boolean) => void; readonly canvas: CanvasDocument }): React.ReactElement | null {
     const { node, t } = props;
@@ -353,6 +354,7 @@ function VersionSwitcher(props: { readonly node: CanvasNode; readonly t: T; read
         <button type='button' title={t('nextVersion')} aria-label={t('nextVersion')} onClick={() => pick(index + 1)}><i className='codicon codicon-chevron-right'></i></button>
     </div>;
 }
+const MemoVersionSwitcher = React.memo(VersionSwitcher);
 
 function CanvasCard(flow: NodeProps): React.ReactElement | null {
     const context = React.useContext(CanvasContext)!;
@@ -395,7 +397,7 @@ function CanvasCard(flow: NodeProps): React.ReactElement | null {
             {node.kind === 'text' && <TextBody node={node} />}
             {node.kind === 'character' && <CharacterBody node={node} />}
             {node.kind !== 'text' && node.kind !== 'character' && <>
-                <MediaPreview node={node} url={props.mediaUrl} onOpen={context.open} />
+                <MemoMediaPreview node={node} url={props.mediaUrl} onOpen={context.open} />
                 {!version && <div className='nmx-board-placeholder'>
                     <i className={`codicon codicon-${canvasKindIcon(node.kind)}`} aria-hidden='true'></i>
                     <span>{node.kind === 'frameExtract' ? t('extract') : hasReference ? comicAssetLibraryText(props.locale, 'referenceAdded') : generation ? t('promptPlaceholder') : t('noResult')}</span>
@@ -411,7 +413,7 @@ function CanvasCard(flow: NodeProps): React.ReactElement | null {
                 {status.key === 'failed' && status.error && <div className='nmx-board-error' title={status.error} data-nmx-literal>{status.error}</div>}
             </>}
             {node.orphaned && <div className='nmx-board-orphaned'>{t('orphaned')}</div>}
-            {flow.selected && <VersionSwitcher node={node} t={t} change={context.change} canvas={canvas} />}
+            {flow.selected && <MemoVersionSwitcher node={node} t={t} change={context.change} canvas={canvas} />}
         </div>
         {takesInput && <Handle type='target' position={Position.Left} className='nmx-board-handle is-in' />}
         {output !== 'group' && <Handle type='source' position={Position.Right} className={`nmx-board-handle is-out is-${output}`} />}
@@ -504,7 +506,7 @@ function CharacterBody(props: { readonly node: Extract<CanvasNode, { kind: 'char
     const version = canvasCurrentVersion(node);
     return <div className='nmx-board-character'>
         {version && canvasVersionReady(version)
-            ? <img src={context.props.mediaUrl(version.uri)} alt='' draggable={false} onDoubleClick={() => context.open(version.uri, 'image')} />
+            ? <img src={context.props.mediaUrl(version.uri)} alt='' loading='lazy' decoding='async' draggable={false} onDoubleClick={() => context.open(version.uri, 'image')} />
             : <div className='nmx-board-placeholder'><i className='codicon codicon-person' aria-hidden='true'></i><span>{context.t('characterNoPortrait')}</span></div>}
         <div className='nmx-board-character-text'>
             {node.payload.description && <strong data-nmx-literal>{node.payload.description}</strong>}
@@ -568,7 +570,7 @@ function NodeActions(props: { readonly node: CanvasNode }): React.ReactElement {
 function ReferenceMedia({ version, label, mediaUrl }: { readonly version: CanvasAssetVersion | undefined; readonly label: string; readonly mediaUrl: (uri: string) => string }): React.ReactElement {
     const [failed, setFailed] = React.useState(false);
     if (version && canvasVersionReady(version) && !failed) {
-        if (version.kind === 'image') return <img src={mediaUrl(version.uri)} alt={label} onError={() => setFailed(true)} />;
+        if (version.kind === 'image') return <img src={mediaUrl(version.uri)} alt={label} loading='lazy' decoding='async' onError={() => setFailed(true)} />;
         if (version.kind === 'video') return <video src={mediaUrl(version.uri)} muted playsInline preload='metadata' aria-label={label} onError={() => setFailed(true)} />;
     }
     return <i className={`codicon codicon-${version?.kind === 'audio' ? 'unmute' : 'device-camera-video'}`} aria-label={label} />;
@@ -982,7 +984,9 @@ function CanvasWire(flow: EdgeProps): React.ReactElement {
     </>;
 }
 
-const NODE_TYPES = { canvasCard: CanvasCard, canvasGroup: CanvasGroup };
+const MemoCanvasCard = React.memo(CanvasCard);
+const MemoCanvasGroup = React.memo(CanvasGroup);
+const NODE_TYPES = { canvasCard: MemoCanvasCard, canvasGroup: MemoCanvasGroup };
 function SequenceWire(flow: EdgeProps): React.ReactElement {
     const context = React.useContext(CanvasContext)!;
     const [path, x, y] = getBezierPath(flow);
@@ -996,7 +1000,9 @@ function SequenceWire(flow: EdgeProps): React.ReactElement {
                 onClick={() => context.change(applyCanvasCommand(context.props.canvas, { type: 'sequence.disconnect', linkId: flow.id }, { now: now() }), true)}><WireCutIcon /></button>
         </div></EdgeLabelRenderer>}</>;
 }
-const EDGE_TYPES = { canvasWire: CanvasWire, sequenceWire: SequenceWire };
+const MemoCanvasWire = React.memo(CanvasWire);
+const MemoSequenceWire = React.memo(SequenceWire);
+const EDGE_TYPES = { canvasWire: MemoCanvasWire, sequenceWire: MemoSequenceWire };
 
 // ——— the board ———
 
@@ -1037,10 +1043,10 @@ function Board(props: ComicCanvasProps): React.ReactElement {
     const [settings, setSettingsState] = React.useState<CanvasSettings>(() => {
         try { return normalizeCanvasSettings(JSON.parse(window.localStorage.getItem(settingsKey) || '{}')); } catch { return { ...DEFAULT_CANVAS_SETTINGS }; }
     });
-    const setSettings = (next: CanvasSettings): void => {
+    const setSettings = React.useCallback((next: CanvasSettings): void => {
         setSettingsState(next);
         try { window.localStorage.setItem(settingsKey, JSON.stringify(next)); } catch { /* kept for this session */ }
-    };
+    }, [settingsKey]);
     const [side, setSide] = React.useState<'locate' | 'settings' | 'edges'>();
     const [nodeDragging, setNodeDragging] = React.useState(false);
     const [pendingRun, setPendingRun] = React.useState<{ readonly ids: readonly string[]; readonly endsAt: number }>();
@@ -1052,14 +1058,26 @@ function Board(props: ComicCanvasProps): React.ReactElement {
         }, 250);
         return () => window.clearInterval(timer);
     }, [pendingRun, props.onRun]);
-    const run = React.useCallback((ids: readonly string[]) => {
-        if (settings.submitDelaySeconds > 0) {
-            setPendingRun(prev => ({
-                ids: [...new Set([...(prev?.ids ?? []), ...ids])],
-                endsAt: Date.now() + settings.submitDelaySeconds * 1000
-            }));
-        } else props.onRun(ids);
-    }, [settings.submitDelaySeconds, props.onRun]);
+    const boardHandlersRef = React.useRef<{
+        canvas: CanvasDocument;
+        nodes: ReadonlyMap<string, CanvasNode>;
+        toFlow: (node: CanvasNode) => FlowNode;
+        props: ComicCanvasProps;
+        run: (ids: readonly string[]) => void;
+        openHistory: (nodeId?: string) => void;
+        download: (ids: readonly string[]) => void;
+        setCompare: (next: CanvasCompareLibrary) => void;
+        toggleCompare: (nodeId: string) => void;
+        extractFrame: (nodeId: string, versionId: string, choice: 'first' | 'last' | 'custom') => void;
+        openTool: (nodeId: string, tool: CanvasToolId) => void;
+        menuFor: (event: React.MouseEvent, nodeId: string) => void;
+        saveAssets: (nodeIds: readonly string[]) => void;
+        aiEdit: (nodeId: string, tool: CanvasImageToolId) => void;
+        pickReference: (nodeId: string, role: CanvasInputRole) => void;
+    }>(null as never);
+    const onChangeRef = React.useRef(props.onChange);
+    onChangeRef.current = props.onChange;
+    const run = React.useCallback((ids: readonly string[]) => boardHandlersRef.current.run(ids), []);
     const connectingFrom = React.useRef<string>();
     const [preview, setPreview] = React.useState<{ readonly uri: string; readonly kind: 'image' | 'video' }>();
     const previewBackdropPress = React.useRef(false);
@@ -1085,27 +1103,12 @@ function Board(props: ComicCanvasProps): React.ReactElement {
     const [history, setHistory] = React.useState<{ readonly canvases: readonly CanvasDocument[]; readonly nodeId?: string }>();
     const historyRequest = React.useRef(0);
     React.useEffect(() => () => { historyRequest.current++; }, []);
-    const openHistory = (nodeId?: string): void => {
-        const request = ++historyRequest.current;
-        setHistory({ canvases: [canvas], ...(nodeId ? { nodeId } : {}) });
-        if (!nodeId && props.loadHistoryCanvases) void props.loadHistoryCanvases().then(canvases => {
-            if (historyRequest.current === request) setHistory({ canvases });
-        }).catch(() => { if (historyRequest.current === request) props.onNotice(canvasHistoryText(props.locale, 'failedAction')); });
-    };
-    const closeHistory = (): void => { historyRequest.current++; setHistory(undefined); };
+    const openHistory = React.useCallback((nodeId?: string): void => { boardHandlersRef.current.openHistory(nodeId); }, []);
+    const closeHistory = React.useCallback((): void => { historyRequest.current++; setHistory(undefined); }, []);
 
-    const download = (ids: readonly string[]): void => { const items = canvasDownloadItems(ids.flatMap(id => { const node = nodes.get(id); return node ? [node] : []; })); if (items.length) setDownloads(items); };
-    const setCompare = (next: CanvasCompareLibrary): void => {
-        setCompareState(next);
-        try { window.localStorage.setItem(compareKey, JSON.stringify(next)); } catch { /* this session only */ }
-    };
-    const toggleCompare = (nodeId: string): void => {
-        const version = canvasCurrentVersion(nodes.get(nodeId));
-        if (version && compare.some(entry => entry.uri === version.uri)) { setCompare(removeCanvasCompareVersion(compare, version.uri)); return; }
-        const result = addCanvasCompareVersion(compare, version);
-        if (result.ok) setCompare(result.library);
-        else props.onNotice(toolText(props.locale, result.code === 'LIBRARY_FULL' ? 'compareFull' : result.code === 'DUPLICATE_URI' ? 'compareDuplicate' : 'compareMissing', { limit: result.limit }));
-    };
+    const download = React.useCallback((ids: readonly string[]): void => { boardHandlersRef.current.download(ids); }, []);
+    const setCompare = React.useCallback((next: CanvasCompareLibrary): void => { boardHandlersRef.current.setCompare(next); }, []);
+    const toggleCompare = React.useCallback((nodeId: string): void => { boardHandlersRef.current.toggleCompare(nodeId); }, []);
     /** A finished tool's first output becomes the selection and comes into view, so it is never left under the source's panels. */
     const revealCreated = React.useCallback((created: readonly CanvasNode[] | false): void => {
         const first = created ? created[0] : undefined;
@@ -1121,22 +1124,15 @@ function Board(props: ComicCanvasProps): React.ReactElement {
             if (mounted.current && activeCanvas.current.id === canvas.id && activeCanvas.current.projectId === canvas.projectId) revealCreated([result.node]);
         } finally { if (mounted.current) setFrameBusy(false); }
     };
-    const extractFrame = (nodeId: string, versionId: string, choice: 'first' | 'last' | 'custom'): void => {
-        const source = nodes.get(nodeId);
-        const version = source && 'versions' in source.payload ? source.payload.versions.find(item => item.id === versionId) : undefined;
-        if (!version || frameBusy) return;
-        if (choice === 'custom') setFrameDialog({ nodeId, version });
-        else void runFrameExtraction(nodeId, versionId, { kind: choice }).catch(error => {
-            if (mounted.current) props.onNotice(t('extractFailed', { error: error instanceof Error ? error.message : String(error) }));
-        });
-    };
+    const extractFrame = React.useCallback((nodeId: string, versionId: string, choice: 'first' | 'last' | 'custom'): void => {
+        boardHandlersRef.current.extractFrame(nodeId, versionId, choice);
+    }, []);
     const openTool = React.useCallback((nodeId: string, tool: CanvasToolId) => {
-        if (toolRunsImmediately(tool)) void props.onTool(nodeId, tool, {}).then(revealCreated);
-        else setToolDialog({ nodeId, tool });
-    }, [props.onTool, revealCreated]);
+        boardHandlersRef.current.openTool(nodeId, tool);
+    }, []);
     const open = React.useCallback((uri: string, kind: 'image' | 'video') => setPreview({ uri, kind }), []);
 
-    const change = React.useCallback((next: CanvasDocument, record = true) => props.onChange(next, { record }), [props.onChange]);
+    const change = React.useCallback((next: CanvasDocument, record = true) => onChangeRef.current(next, { record }), []);
 
     const [dragPreview, setDragPreview] = React.useState<readonly CanvasNode[]>([]);
     const dragCopy = React.useRef<{ readonly anchor: string; readonly origin: CanvasPoint; readonly plan?: CanvasDragCopyPlan; offset: CanvasPoint; active: boolean }>();
@@ -1149,6 +1145,8 @@ function Board(props: ComicCanvasProps): React.ReactElement {
         ...(node.kind === 'group' ? { dragHandle: '.nmx-board-group header', selectable: true } : {})
     }), [selected]);
     const [flowNodes, setFlowNodes] = React.useState<FlowNode[]>(() => canvas.nodes.map(toFlow));
+    const flowNodesRef = React.useRef(flowNodes);
+    flowNodesRef.current = flowNodes;
     // Keep React Flow's measurements across document updates, so wires keep their ports between renders.
     React.useEffect(() => {
         setFlowNodes(previous => {
@@ -1165,6 +1163,7 @@ function Board(props: ComicCanvasProps): React.ReactElement {
     const dragOrigin = React.useRef<Map<string, CanvasPoint>>();
 
     const onNodesChange = React.useCallback((changes: NodeChange[]) => {
+        const { canvas: curCanvas, nodes: curNodes, toFlow: curToFlow, props: curProps } = boardHandlersRef.current;
         const positions = changes.filter((item): item is Extract<NodeChange, { type: 'position' }> => item.type === 'position');
         const selection = changes.filter((item): item is Extract<NodeChange, { type: 'select' }> => item.type === 'select');
         if (selection.length) setSelected(previous => {
@@ -1185,8 +1184,8 @@ function Board(props: ComicCanvasProps): React.ReactElement {
                 if (copying.active && copying.plan) {
                     const result = commitCanvasDragCopy(activeCanvas.current, copying.plan, copying.offset, now());
                     if (result.ok) { change(result.canvas, true); setSelected(new Set(result.ids)); }
-                    else { props.onNotice(`${panelText(props.locale, 'pasteRefused')} ${result.message}`); setFlowNodes(activeCanvas.current.nodes.map(toFlow)); }
-                } else setFlowNodes(activeCanvas.current.nodes.map(toFlow));
+                    else { curProps.onNotice(`${panelText(curProps.locale, 'pasteRefused')} ${result.message}`); setFlowNodes(activeCanvas.current.nodes.map(curToFlow)); }
+                } else setFlowNodes(activeCanvas.current.nodes.map(curToFlow));
             } else {
                 const previews = copying.active && copying.plan ? copying.plan.nodes.map(node => ({ ...node,
                     position: { x: node.position.x + copying.offset.x, y: node.position.y + copying.offset.y } })) : [];
@@ -1194,34 +1193,34 @@ function Board(props: ComicCanvasProps): React.ReactElement {
                 // React Flow continues reporting the source IDs; only the transient copies follow those positions.
                 setFlowNodes(current => {
                     const measuredById = new Map(current.map(node => [node.id, node.measured]));
-                    return [...activeCanvas.current.nodes, ...previews].map(node => ({ ...toFlow(node), measured: measuredById.get(node.id) }));
+                    return [...activeCanvas.current.nodes, ...previews].map(node => ({ ...curToFlow(node), measured: measuredById.get(node.id) }));
                 });
             }
             return;
         }
         setFlowNodes(current => {
             let next = applyNodeChanges([...measured, ...positions], current);
-            const roots = new Set(canvasDragMoveRoots(canvas, positions.map(item => item.id)));
+            const roots = new Set(canvasDragMoveRoots(curCanvas, positions.map(item => item.id)));
             for (const item of positions.filter(item => roots.has(item.id))) {
-                const node = nodes.get(item.id);
+                const node = curNodes.get(item.id);
                 if (node?.kind !== 'group' || !item.position) continue;
                 const start = dragOrigin.current?.get(node.id) ?? node.position;
                 const dx = item.position.x - start.x, dy = item.position.y - start.y;
-                const members = canvasDragGroupMembers(canvas, node.id);
+                const members = canvasDragGroupMembers(curCanvas, node.id);
                 next = next.map(flowNode => members.has(flowNode.id)
-                    ? { ...flowNode, position: { x: (nodes.get(flowNode.id)?.position.x ?? 0) + dx, y: (nodes.get(flowNode.id)?.position.y ?? 0) + dy } } : flowNode);
+                    ? { ...flowNode, position: { x: (curNodes.get(flowNode.id)?.position.x ?? 0) + dx, y: (curNodes.get(flowNode.id)?.position.y ?? 0) + dy } } : flowNode);
             }
             return next;
         });
         const done = positions.filter(item => item.dragging === false);
         if (!done.length) return;
-        let next = canvas;
+        let next = curCanvas;
         const moved = new Set<string>();
-        const roots = new Set(canvasDragMoveRoots(canvas, done.map(item => item.id)));
+        const roots = new Set(canvasDragMoveRoots(curCanvas, done.map(item => item.id)));
         for (const item of done.filter(item => roots.has(item.id))) {
-            const flowNode = flowNodes.find(candidate => candidate.id === item.id);
+            const flowNode = flowNodesRef.current.find(candidate => candidate.id === item.id);
             const position = item.position ?? flowNode?.position;
-            const node = nodes.get(item.id);
+            const node = curNodes.get(item.id);
             if (!position || !node || moved.has(node.id)) continue;
             const rounded = { x: Math.round(position.x), y: Math.round(position.y) };
             if (rounded.x === node.position.x && rounded.y === node.position.y) continue;
@@ -1234,8 +1233,8 @@ function Board(props: ComicCanvasProps): React.ReactElement {
             }
         }
         dragOrigin.current = undefined;
-        if (next !== canvas) change(next, true);
-    }, [canvas, nodes, flowNodes, change, toFlow, props.onNotice, props.locale]);
+        if (next !== curCanvas) change(next, true);
+    }, [change]);
 
     const onEdgesChange = React.useCallback((changes: EdgeChange[]) => {
         const selection = changes.filter((item): item is Extract<EdgeChange, { type: 'select' }> => item.type === 'select');
@@ -1457,23 +1456,22 @@ function Board(props: ComicCanvasProps): React.ReactElement {
         getViewport: () => flow.getViewport(), setViewport: next => flow.setViewport(next), onNavigationEnd: persistViewport });
 
     const menuFor = React.useCallback((event: React.MouseEvent, nodeId: string) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!selected.has(nodeId)) setSelected(new Set([nodeId]));
-        const local = localPoint(event.clientX, event.clientY);
-        setMenu({ x: local.x, y: local.y, at: screenToFlow(event.clientX, event.clientY), kind: 'node', nodeId });
-    }, [selected, screenToFlow]);
+        boardHandlersRef.current.menuFor(event, nodeId);
+    }, []);
 
     const single = selected.size === 1 ? [...selected][0] : undefined;
     const [aiDialog, setAiDialog] = React.useState<{ readonly nodeId: string; readonly tool: CanvasImageToolId }>();
     const libraryScope = `${props.libraryScope ?? canvas.projectId}:${canvas.id}`;
     const [libraryOpen, setLibraryOpen] = React.useState<CanvasPoint & { scope: string; target?: { nodeId: string; role: CanvasInputRole } }>();
     React.useEffect(() => { setLibraryOpen(undefined); }, [libraryScope]);
-    const saveAssets = (nodeIds: readonly string[]): void => {
-        void saveCanvasAssets({ scope: libraryScope, locale: props.locale, items: canvasAssetSaveItems(canvas, nodeIds),
-            onSave: props.onSaveLibraryAsset, onNotice: props.onNotice });
-    };
-    const aiEdit = (nodeId: string, tool: CanvasImageToolId): void => setAiDialog({ nodeId, tool });
+    const saveAssets = React.useCallback((nodeIds: readonly string[]): void => {
+        boardHandlersRef.current.saveAssets(nodeIds);
+    }, []);
+    const aiEdit = React.useCallback((nodeId: string, tool: CanvasImageToolId): void => { setAiDialog({ nodeId, tool }); }, []);
+    const selectNode = React.useCallback((id: string): void => { setSelected(new Set([id])); }, []);
+    const pickReference = React.useCallback((nodeId: string, role: CanvasInputRole): void => {
+        boardHandlersRef.current.pickReference(nodeId, role);
+    }, []);
     /** AI tool drafts: new image nodes wired to the source, on the chosen route; optionally run straight away. */
     const createAiNodes = (created: readonly CanvasNode[], edges: readonly CanvasEdge[], route: CanvasModelChoice, runNow: boolean, source: CanvasNode, base?: SavedMarks): void => {
         // Marked drafts build on the canvas that already holds the marked picture, and sit after that picture.
@@ -1493,7 +1491,74 @@ function Board(props: ComicCanvasProps): React.ReactElement {
         props.onNotice(toolText(props.locale, 'aiNodesCreated', { n: ids.length }));
         if (runNow) run(ids);
     };
-    const context: CanvasContextValue = { props, t, nodes: dragPreview.length ? new Map([...nodes, ...dragPreview.map(node => [node.id, node] as const)]) : nodes, ...(single ? { single } : {}), ...(renaming ? { renaming } : {}), setRenaming, selectNode: id => setSelected(new Set([id])), change, menuFor, open, run, openTool, aiEdit, extractFrame, pickReference: (nodeId, role) => { const node = nodes.get(nodeId); if (node) { setSelected(new Set([nodeId])); setLibraryOpen({ scope: libraryScope, x: node.position.x, y: node.position.y - 300, target: { nodeId, role } }); } }, saveAssets, download, openHistory, openStoryboard, openDirector, compare, toggleCompare };
+    boardHandlersRef.current = {
+        canvas, nodes, toFlow, props,
+        run: ids => {
+            if (settings.submitDelaySeconds > 0) {
+                setPendingRun(prev => ({
+                    ids: [...new Set([...(prev?.ids ?? []), ...ids])],
+                    endsAt: Date.now() + settings.submitDelaySeconds * 1000
+                }));
+            } else props.onRun(ids);
+        },
+        openHistory: nodeId => {
+            const request = ++historyRequest.current;
+            setHistory({ canvases: [canvas], ...(nodeId ? { nodeId } : {}) });
+            if (!nodeId && props.loadHistoryCanvases) void props.loadHistoryCanvases().then(canvases => {
+                if (historyRequest.current === request) setHistory({ canvases });
+            }).catch(() => { if (historyRequest.current === request) props.onNotice(canvasHistoryText(props.locale, 'failedAction')); });
+        },
+        download: ids => { const items = canvasDownloadItems(ids.flatMap(id => { const node = nodes.get(id); return node ? [node] : []; })); if (items.length) setDownloads(items); },
+        setCompare: next => {
+            setCompareState(next);
+            try { window.localStorage.setItem(compareKey, JSON.stringify(next)); } catch { /* this session only */ }
+        },
+        toggleCompare: nodeId => {
+            const version = canvasCurrentVersion(nodes.get(nodeId));
+            if (version && compare.some(entry => entry.uri === version.uri)) { boardHandlersRef.current.setCompare(removeCanvasCompareVersion(compare, version.uri)); return; }
+            const result = addCanvasCompareVersion(compare, version);
+            if (result.ok) boardHandlersRef.current.setCompare(result.library);
+            else props.onNotice(toolText(props.locale, result.code === 'LIBRARY_FULL' ? 'compareFull' : result.code === 'DUPLICATE_URI' ? 'compareDuplicate' : 'compareMissing', { limit: result.limit }));
+        },
+        extractFrame: (nodeId, versionId, choice) => {
+            const source = nodes.get(nodeId);
+            const version = source && 'versions' in source.payload ? source.payload.versions.find(item => item.id === versionId) : undefined;
+            if (!version || frameBusy) return;
+            if (choice === 'custom') setFrameDialog({ nodeId, version });
+            else void runFrameExtraction(nodeId, versionId, { kind: choice }).catch(error => {
+                if (mounted.current) props.onNotice(t('extractFailed', { error: error instanceof Error ? error.message : String(error) }));
+            });
+        },
+        openTool: (nodeId, tool) => {
+            if (toolRunsImmediately(tool)) void props.onTool(nodeId, tool, {}).then(revealCreated);
+            else setToolDialog({ nodeId, tool });
+        },
+        menuFor: (event, nodeId) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!selected.has(nodeId)) setSelected(new Set([nodeId]));
+            const local = localPoint(event.clientX, event.clientY);
+            setMenu({ x: local.x, y: local.y, at: screenToFlow(event.clientX, event.clientY), kind: 'node', nodeId });
+        },
+        saveAssets: nodeIds => {
+            void saveCanvasAssets({ scope: libraryScope, locale: props.locale, items: canvasAssetSaveItems(canvas, nodeIds),
+                onSave: props.onSaveLibraryAsset, onNotice: props.onNotice });
+        },
+        aiEdit: (nodeId, tool) => setAiDialog({ nodeId, tool }),
+        pickReference: (nodeId, role) => {
+            const node = nodes.get(nodeId);
+            if (node) {
+                setSelected(new Set([nodeId]));
+                setLibraryOpen({ scope: libraryScope, x: node.position.x, y: node.position.y - 300, target: { nodeId, role } });
+            }
+        }
+    };
+    const contextNodes = React.useMemo(() => dragPreview.length ? new Map([...nodes, ...dragPreview.map(node => [node.id, node] as const)]) : nodes, [nodes, dragPreview]);
+    const context = React.useMemo<CanvasContextValue>(() => ({
+        props, t, nodes: contextNodes, ...(single ? { single } : {}), ...(renaming ? { renaming } : {}),
+        setRenaming, selectNode, change, menuFor, open, run, openTool, aiEdit, extractFrame,
+        pickReference, saveAssets, download, openHistory, openStoryboard, openDirector, compare, toggleCompare
+    }), [props, t, contextNodes, single, renaming, selectNode, change, menuFor, open, run, openTool, aiEdit, extractFrame, pickReference, saveAssets, download, openHistory, openStoryboard, openDirector, compare, toggleCompare]);
 
     const onDrop = (event: React.DragEvent<HTMLDivElement>): void => {
         const files = Array.from(event.dataTransfer.files || []).filter(file => /^(image|video|audio)\//.test(file.type));
@@ -1530,6 +1595,9 @@ function Board(props: ComicCanvasProps): React.ReactElement {
             }}
             onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={onDrop}>
             <ReactFlow nodes={flowNodes} edges={flowEdges} nodeTypes={NODE_TYPES} edgeTypes={EDGE_TYPES}
+                // Every card stays mounted (no onlyRenderVisibleElements): unmounting a card panned out of view would stop
+                // its playing audio, close its open menus and rename, drop the selected card's toolbar that still shows
+                // above the edge, and take it out of Tab order. Cards are memoized and off-screen images load lazily.
                 onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
                 onConnectStart={(_event, params) => { connectingFrom.current = params.nodeId ?? undefined; }} onConnectEnd={onConnectEnd}
                 onNodeDragStart={(event, node, dragged) => {
@@ -1792,7 +1860,7 @@ function ReturnToNodes(props: { readonly canvas: CanvasDocument; readonly root: 
         <span>{props.t('noViewNodes')}</span><strong>{props.t('backToNodes')}</strong></button>;
 }
 
-function SaveBadge(props: { readonly state: ComicCanvasProps['saveState']; readonly t: T; readonly onRetry: () => void }): React.ReactElement {
+const SaveBadge = React.memo(function SaveBadge(props: { readonly state: ComicCanvasProps['saveState']; readonly t: T; readonly onRetry: () => void }): React.ReactElement {
     const { state, t } = props;
     return <div className={`nmx-board-save is-${state}`} role='status' title={state === 'saved' ? t('saved') : undefined} aria-label={state === 'saved' ? t('saved') : undefined}>
         {state === 'saving' && <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>}
@@ -1801,7 +1869,7 @@ function SaveBadge(props: { readonly state: ComicCanvasProps['saveState']; reado
         {state !== 'saved' && <span>{t(state === 'saving' ? 'saving' : state === 'failed' ? 'saveFailed' : 'unsaved')}</span>}
         {state === 'failed' && <button type='button' className='nmx-link-button' onClick={props.onRetry}>{t('retry')}</button>}
     </div>;
-}
+});
 
 function CanvasMenu(props: {
     readonly menu: MenuState; readonly t: T; readonly canvas: CanvasDocument; readonly selected: ReadonlySet<string>;

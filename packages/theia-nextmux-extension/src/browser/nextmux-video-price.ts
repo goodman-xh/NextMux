@@ -17,26 +17,37 @@ const text = {
     hi: { unknown: 'कीमत की पुष्टि बाकी', second: 'सेकंड', image: 'इनपुट चित्र', units: 'प्रति वीडियो सेकंड + प्रति इनपुट चित्र', estimate: 'अनुमानित {total} (वीडियो {video} + {count} इनपुट चित्र {images})' }
 } as const satisfies Record<NextMuxDesktopLocale, Record<string, string>>;
 
+const requestUnit: Record<NextMuxDesktopLocale, string> = {
+    'zh-CN': '次', 'zh-TW': '次', en: 'request', ja: '回', ko: '회', es: 'solicitud',
+    fr: 'requête', de: 'Anfrage', 'pt-BR': 'solicitação', ru: 'запрос', ar: 'طلب', hi: 'अनुरोध'
+};
 const copy = (locale: string): typeof text[NextMuxDesktopLocale] => text[locale as NextMuxDesktopLocale] ?? text.en;
+const unitForRequest = (locale: string): string => requestUnit[locale as NextMuxDesktopLocale] ?? requestUnit.en;
 const amount = (locale: string, micros: number, currency: string): string => new Intl.NumberFormat(locale, {
-    style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 6
+    style: 'currency', currency: currency || 'USD', minimumFractionDigits: 2, maximumFractionDigits: 6
 }).format(micros / 1_000_000);
+const validRate = (value: number | null | undefined): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 
 export function videoPriceUnitText(locale: string): string { return copy(locale).units; }
 
-/** Keep the per-second and per-input-image prices visible in model pickers and confirmations. */
+/** Keep the per-second (or per-request) and per-input-image prices visible in model pickers and confirmations. */
 export function formatManagedVideoPrice(locale: string, price: PlatformOffering['price']): string {
     const each = managedVideoInputImagePriceMicros(price), t = copy(locale);
     if (estimateManagedVideoPriceMicros(price, 1) === undefined || each === undefined) return t.unknown;
-    const seconds = `${amount(locale, price.videoSecondMicros!, price.currency)} / ${t.second}`;
-    return each > 0 ? `${seconds} + ${amount(locale, each, price.currency)} / ${t.image}` : seconds;
+    const base = validRate(price?.videoSecondMicros)
+        ? `${amount(locale, price!.videoSecondMicros, price!.currency)} / ${t.second}`
+        : `${amount(locale, price!.requestEachMicros!, price!.currency)} / ${unitForRequest(locale)}`;
+    return each > 0 ? `${base} + ${amount(locale, each, price!.currency)} / ${t.image}` : base;
 }
 
 export function formatManagedVideoEstimate(locale: string, price: PlatformOffering['price'], durationSeconds: number | undefined, inputImages = 0): string {
     const total = estimateManagedVideoPriceMicros(price, durationSeconds, inputImages), each = managedVideoInputImagePriceMicros(price);
     if (total === undefined || each === undefined) return copy(locale).unknown;
-    if (!inputImages || !each) return amount(locale, total, price.currency);
-    const values = { total: amount(locale, total, price.currency), video: amount(locale, Math.ceil(price.videoSecondMicros! * durationSeconds!), price.currency),
-        count: new Intl.NumberFormat(locale).format(inputImages), images: amount(locale, each * inputImages, price.currency) };
+    if (!inputImages || !each) return amount(locale, total, price!.currency);
+    const baseMicros = validRate(price?.videoSecondMicros)
+        ? Math.ceil(price!.videoSecondMicros * durationSeconds!)
+        : (price!.requestEachMicros ?? 0);
+    const values = { total: amount(locale, total, price!.currency), video: amount(locale, baseMicros, price!.currency),
+        count: new Intl.NumberFormat(locale).format(inputImages), images: amount(locale, each * inputImages, price!.currency) };
     return Object.entries(values).reduce<string>((out, [key, value]) => out.replaceAll(`{${key}}`, value), copy(locale).estimate);
 }
