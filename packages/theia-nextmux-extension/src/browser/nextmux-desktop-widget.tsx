@@ -4,10 +4,15 @@ import {
     buildComposerSlashCommands,
     expandComposerSlashSubmission,
     filterComposerSlashCommands,
+    isComposerSlashChipKind,
     isSlashDrawerSuppressedByCompetingSurface,
     matchComposerSlashTrigger,
+    matchTypedComposerSlashChip,
     removeComposerSlashToken,
     replaceComposerSlashToken,
+    slashChipFromCommand,
+    slashChipPrompt,
+    type ComposerSlashChip,
     type ComposerSlashCommandItem,
     type ComposerSlashMatch,
     type ComposerSlashSkillInfo
@@ -175,6 +180,7 @@ import { ModelTaxonomyTags } from './nextmux-model-taxonomy-tags';
 import { modelCenterText } from './nextmux-model-center-locale';
 import '../../src/browser/style/nextmux-model-center.css';
 import '../../src/browser/style/nextmux-comic-studio-modals.css';
+import '../../src/browser/style/nextmux-sticky-scroll.css';
 import { modelUsageText } from './nextmux-model-usage-locale';
 import { UsageAnalytics } from './nextmux-usage-analytics';
 import { CitationList, ArchivedChildCitations, answerCitations } from './nextmux-citations';
@@ -318,7 +324,8 @@ import { DownloadsPanel, voicePreviewSentence } from './nextmux-downloads-panel'
 import { DESKTOP_VOICES, type DesktopComponentsState } from '../common/nextmux-components';
 import { readAloudText, speechChunks, speechTextFromMarkdown } from './nextmux-read-aloud';
 import { MODEL_LIST_RETRY_MS, modelListFingerprint, nextModelListWatermark, parseModelListWatermark, staleModelListConnections, type ModelListWatermark } from '../common/nextmux-model-list-refresh';
-import { AccountMenu, FeedbackDialog, accountMenuText, feedbackLength, FEEDBACK_MIN_CHARS, type FeedbackKind } from './nextmux-account-menu';
+import { AccountMenu, FeedbackDialog, accountMenuText, feedbackLength, FEEDBACK_MIN_CHARS, resolveDisplayWallets, type FeedbackKind } from './nextmux-account-menu';
+import { StickyHorizontalScroll, syncStickyHorizontalScrollsIn } from './nextmux-sticky-scroll';
 import { ConversationImportPanel, importText } from './nextmux-conversation-import-panel';
 import type { ConversationImportResult, ConversationImportScan, ConversationImportSource } from '../common/nextmux-conversation-import-protocol';
 import { NextMuxOnboarding, ONBOARDING_KEY, readOnboardingStep, type OnboardingStep } from './nextmux-onboarding';
@@ -520,7 +527,6 @@ import { conversationText } from './nextmux-conversation-locale';
 import { historyReadinessText } from './nextmux-history-readiness-locale';
 import { loadConversationHistoryWithRetry } from './nextmux-history-load';
 import { ConversationArchivePanel } from './nextmux-conversation-archive-panel';
-import { LocalDataDiagnosticAction } from './nextmux-comic-history-archive-actions';
 import { comicExportArchiveText } from './nextmux-comic-export-archive-locale';
 import { comicExportConflictText } from './nextmux-comic-export-conflict-text';
 import { comicMediaFilesArchiveText } from './nextmux-comic-media-files-archive-locale';
@@ -812,7 +818,7 @@ type ComicWorkbenchView = 'script' | 'storyboard' | 'workflow' | 'assets' | 'tim
 type MediaStage = 'idle' | 'queueing' | 'confirming' | 'updating' | 'saving_runtime';
 type ComicExportStage = 'idle' | 'starting' | 'cancelling';
 type PrivacyStage = 'idle' | 'loading' | 'saving';
-type LocalDataStage = 'idle' | 'loading' | 'clearing' | 'exporting' | 'archive' | 'cache';
+type LocalDataStage = 'idle' | 'loading' | 'clearing' | 'archive' | 'cache';
 type BillingTab = 'usage' | 'topups' | 'movements';
 type RelaySortMode = 'quality' | 'authenticity' | 'latency' | 'price';
 /** As long as the platform service keeps a directory page: an older one opening a drawer is refreshed behind its rows. */
@@ -4386,6 +4392,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected desktopThemeApplyRevision = 0;
     protected readonly localizedTextNodes = new WeakMap<Text, { source: string; rendered: string }>();
     protected readonly localizedAttributes = new WeakMap<Element, Map<string, { source: string; rendered: string }>>();
+    protected readonly pendingLocalizationRoots = new Set<Element>();
+    protected initialSurfaceLocalized = false;
+    protected lastLocalizedLocale: NextMuxDesktopLocale | undefined;
+    protected localizationFrameId: number | undefined;
     protected localizationScheduled = false;
     protected localizationMutationSuppressed = false;
     protected localizationMutationSuppressionGeneration = 0;
@@ -4476,6 +4486,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected walletTopupPollTimer = 0;
     protected walletTopupConsecutiveErrors = 0;
     protected walletTopupPendingResume = false;
+    protected walletTopupExternalNotice = '';
+    protected walletTopupAutoOpenedOrderId = '';
+    protected walletTopupAutoOpenedAt = 0;
+    protected workbenchReadyNotified = false;
+    protected pendingAppPluginBuy: { readonly plugin: AppPluginMarketPlugin; readonly key: string; readonly credited?: boolean } | undefined;
     protected notifications: readonly DesktopNotificationRecord[] = [];
     protected composerNotifications: readonly DesktopNotificationRecord[] = [];
     protected readonly composerNotificationTimers = new Map<string, number>();
@@ -5957,13 +5972,38 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.initializeBrowserController();
         this.startBrowserToolBridge();
         if (!this.detachedConversationId) this.scheduleIdleConversationImportScan();
+        const literalExclusionSelector = '[data-nmx-literal], .monaco-editor, .xterm, .nmx-terminal-host, .nmx-context-browser, .nmx-task-view, .nmx-thread-timeline, .nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float';
         const localizationObserver = new MutationObserver(mutations => {
             if (this.localizationMutationSuppressed) return;
-            const needsLocalization = mutations.some(mutation => {
-                const element = mutation.target instanceof Element ? mutation.target : mutation.target.parentElement;
-                return !element?.closest('[data-nmx-literal], .monaco-editor, .xterm, .nmx-terminal-host, .nmx-context-browser, .nmx-task-view, .nmx-thread-timeline, .nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float');
-            });
-            if (needsLocalization) this.scheduleSurfaceLocalization();
+            let queued = false;
+            for (const mutation of mutations) {
+                if (mutation.type === 'childList') {
+                    let hasAddedText = false;
+                    for (const added of Array.from(mutation.addedNodes)) {
+                        if (added.nodeType === 3) {
+                            hasAddedText = true;
+                            continue;
+                        }
+                        if (added instanceof Element && !added.closest?.(literalExclusionSelector)) {
+                            this.pendingLocalizationRoots.add(added);
+                            queued = true;
+                        }
+                    }
+                    if (hasAddedText) {
+                        const targetEl = mutation.target instanceof Element ? mutation.target : mutation.target.parentElement;
+                        if (targetEl && !targetEl.closest?.(literalExclusionSelector)) {
+                            this.pendingLocalizationRoots.add(targetEl);
+                            queued = true;
+                        }
+                    }
+                } else {
+                    const targetEl = mutation.target instanceof Element ? mutation.target : mutation.target.parentElement;
+                    if (!targetEl || targetEl.closest?.(literalExclusionSelector)) continue;
+                    this.pendingLocalizationRoots.add(targetEl);
+                    queued = true;
+                }
+            }
+            if (queued) this.scheduleSurfaceLocalization();
         });
         localizationObserver.observe(this.node, {
             subtree: true,
@@ -6002,6 +6042,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     if (this.contextFilesChangeTimer !== undefined) window.clearTimeout(this.contextFilesChangeTimer);
                     this.contextFilesChangeTimer = window.setTimeout(() => {
                         this.contextFilesChangeTimer = undefined;
+                        if (this.isDisposed) return;
                         const changed = new Set(this.contextFilesChangedUris);
                         this.contextFilesChangedUris.clear();
                         if (this.activeSection === 'coding' && this.contextFilesWorkspace) {
@@ -6013,6 +6054,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
         }));
         this.toDispose.push({ dispose: () => {
+            if (this.contextFilesChangeTimer !== undefined) {
+                if (typeof window !== 'undefined') window.clearTimeout(this.contextFilesChangeTimer);
+                this.contextFilesChangeTimer = undefined;
+            }
             this.comicFileWatcher?.dispose();
             this.platformDefaultMerchantLoads?.clear();
             this.platformDefaultMerchantLoadTokens?.clear();
@@ -7110,19 +7155,27 @@ export class NextMuxDesktopWidget extends ReactWidget {
         window.setTimeout(() => window.location.reload(), 40);
     }
 
-    protected localizeRenderedSurface(): void {
+    protected localizeRenderedSurface(root: Element = this.node): void {
+        if (!root) return;
+        const isRoot = root === this.node;
+        if (!isRoot && isSurfaceLiteral(root)) return;
         const suppressionGeneration = ++this.localizationMutationSuppressionGeneration;
         this.localizationMutationSuppressed = true;
         try {
-            // Written only when they change: every write is a mutation record and a style recalculation of this root.
-            const direction = this.desktopLocale === 'ar' ? 'rtl' : 'ltr';
-            if (this.node.lang !== this.desktopLocale) this.node.lang = this.desktopLocale;
-            if (this.node.dir !== direction) this.node.dir = direction;
+            if (isRoot) {
+                // Written only when they change: every write is a mutation record and a style recalculation of this root.
+                const direction = this.desktopLocale === 'ar' ? 'rtl' : 'ltr';
+                if (this.node.lang !== this.desktopLocale) this.node.lang = this.desktopLocale;
+                if (this.node.dir !== direction) this.node.dir = direction;
+                this.initialSurfaceLocalized = true;
+                this.lastLocalizedLocale = this.desktopLocale;
+                this.pendingLocalizationRoots?.clear();
+            }
             // Rewriting a focused <select> closes its native popup: its options wait until it loses focus.
             const focusedSelect = this.focusedNativeSelect?.();
             let heldForSelect = false;
             // Editor, terminal and literal subtrees hold user content and are never entered.
-            forEachSurfaceTextNode(this.node, textNode => {
+            forEachSurfaceTextNode(root, textNode => {
                 const value = textNode.data;
                 const previous = this.localizedTextNodes.get(textNode);
                 const source = previous && value === previous.rendered ? previous.source : value;
@@ -7133,7 +7186,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }
                 this.localizedTextNodes.set(textNode, { source, rendered });
             });
-            for (const element of Array.from(this.node.querySelectorAll<HTMLElement>('[placeholder],[title],[aria-label]'))) {
+            const attributeTargets: HTMLElement[] = [];
+            if (!isRoot && root.matches?.('[placeholder],[title],[aria-label]')) {
+                attributeTargets.push(root as HTMLElement);
+            }
+            attributeTargets.push(...Array.from(root.querySelectorAll<HTMLElement>('[placeholder],[title],[aria-label]')));
+            for (const element of attributeTargets) {
                 if (isSurfaceLiteral(element)) continue;
                 let attributes = this.localizedAttributes.get(element);
                 if (!attributes) {
@@ -7176,6 +7234,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             dropdown.removeEventListener('change', release);
             dropdown.removeEventListener('focusout', release);
             if (this.dropdownRenderWait === dropdown) this.dropdownRenderWait = undefined;
+            this.pendingLocalizationRoots?.add(dropdown);
+            this.scheduleSurfaceLocalization?.();
             if (!this.isDisposed) this.update();
         };
         dropdown.addEventListener('change', release);
@@ -7183,11 +7243,44 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected scheduleSurfaceLocalization(): void {
-        if (this.localizationScheduled) return;
+        if (this.localizationScheduled || this.isDisposed) return;
         this.localizationScheduled = true;
-        requestAnimationFrame(() => {
+        const schedule = typeof requestAnimationFrame === 'function'
+            ? requestAnimationFrame
+            : (cb: () => void) => window.setTimeout(cb, 0);
+        this.localizationFrameId = schedule(() => {
             this.localizationScheduled = false;
-            this.localizeRenderedSurface();
+            this.localizationFrameId = undefined;
+            if (this.isDisposed) return;
+            if (!this.initialSurfaceLocalized || this.lastLocalizedLocale !== this.desktopLocale) {
+                this.localizeRenderedSurface();
+                return;
+            }
+            const connected = Array.from(this.pendingLocalizationRoots)
+                .filter(element => element.isConnected && this.node.contains(element));
+            this.pendingLocalizationRoots.clear();
+            if (connected.length === 0) return;
+            if (connected.includes(this.node)) {
+                this.localizeRenderedSurface();
+                return;
+            }
+            const rootSet = new Set(connected);
+            const topRoots: Element[] = [];
+            for (const element of connected) {
+                let hasAncestorInSet = false;
+                let parent = element.parentElement;
+                while (parent && parent !== this.node) {
+                    if (rootSet.has(parent)) {
+                        hasAncestorInSet = true;
+                        break;
+                    }
+                    parent = parent.parentElement;
+                }
+                if (!hasAncestorInSet) topRoots.push(element);
+            }
+            for (const subroot of topRoots) {
+                this.localizeRenderedSurface(subroot);
+            }
         });
     }
 
@@ -7619,9 +7712,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     /**
      * Whether a computer or tab request still belongs to a running turn of its conversation. This window's own runs
-     * (interactive, scheduled, delegated) answer at once; any other run (a comic assistant, a child the window does not
-     * track) is asked about by its run id. Only a run known to have ended is refused: its pending calls must not reach
-     * the computer, and so never light the "NextMux is controlling the computer" frame.
+     * (interactive, scheduled, delegated) answer at once; any other run (one this window does not track, or a child the
+     * window does not track) is asked about by its run id. Only a run known to have ended is refused: its pending calls
+     * must not reach the computer, and so never light the "NextMux is controlling the computer" frame.
      */
     protected async computerRequestRunActive(request: DesktopComputerToolRequest): Promise<boolean> {
         const { conversationId, runId } = request;
@@ -7645,8 +7738,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (state.sessionId === conversationId || (runId && (state.runId === runId || state.childRunId === runId))) return true;
         }
         if (!runId) return false;
+        // Only a status answer shows that a run ended: a finished run stays listed for 30 minutes, and a request lives
+        // 10 minutes at most. A failed lookup shows nothing. A delegated child's run id (child-…) is never listed, and
+        // the lookup can fail in transit; refusing then would fail the AI's click in a run that is still going. This
+        // check is not the gate on who may drive the computer. The backend queues only calls still in flight (an
+        // aborted run takes its calls back, and the poll then cancels them), and the main process checks the sender,
+        // the conversation and the user's Esc.
         try { return (await this.platformService.getAgentRunSnapshot(runId, 1_000_000, 0)).status === 'running'; }
-        catch { return false; }
+        catch { return true; }
     }
 
     protected async handleComputerToolRequest(request: DesktopComputerToolRequest): Promise<DesktopComputerToolResult> {
@@ -7916,6 +8015,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     model: route.connection.model
                 }
         };
+        // Switching the lead route must clear per-seat model overrides carried from the old route.
+        for (const staleKey of ['reasoningEffort', 'reasoningEnabled', 'reasoningMode', 'reasoningBudgetTokens', 'contextWindowTokens', 'creativityMode'] as const) {
+            delete (updatedSlot as unknown as Record<string, unknown>)[staleKey];
+        }
         const nextSlots = current.slots.map((slot, idx) => idx === index ? updatedSlot : slot);
         const nextConfig: DesktopAgentCouncilConfig = {
             ...current,
@@ -10073,6 +10176,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // tab; the model should not mistake that for a failure.
         const throttleHint = realtime.selfThrottles === true && realtime.realtimeLaunch !== true
             ? { note: 'This app pauses drawing while its window is hidden; ask the user to reopen it in real-time mode or show it on the desktop if the picture stops changing.' } : {};
+        // Windows: an app running as administrator ignores the clicks and keys of a program without those rights (UIPI). The
+        // model hears it, so it explains instead of retrying input that never lands.
+        const elevatedHint = opened.elevated === true ? { elevated: true, elevatedNote: 'This app runs as administrator. If clicks or keys have no effect, Windows is blocking input from programs without administrator rights: ask the user to restart the app without administrator rights, or to run NextMux as administrator.' } : {};
         const tab = appWindowTab({ pid: opened.pid, windowId: opened.windowId, app: opened.app || app, title: opened.title, appId: opened.appId, familyId: opened.familyId, role: opened.role, windows: opened.windows,
             ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}), ...realtime }, platform);
         if (explicitReopen && (!this.codingSessions.some(session => session.id === conversationId)
@@ -10119,7 +10225,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             return done({ tabId: attached.id, pid: opened.pid, windowId: opened.windowId, app: attached.title, window: attached.target,
                 ...(attached.appId ? { appId: attached.appId } : {}), placement: opened.placement === 'tab' ? 'tab' : 'desktop', sound: false, keyboardMouse: false,
                 tell: 'Tell the user in their language that the app is now open in a tab of this conversation (the tab bar above the conversation).',
-                next: 'Take tabs.screenshot of this tab to see the app, then act with tabs.click / tabs.type / tabs.key (or computer.* on this pid and windowId).', ...throttleHint });
+                next: 'Take tabs.screenshot of this tab to see the app, then act with tabs.click / tabs.type / tabs.key (or computer.* on this pid and windowId).', ...throttleHint, ...elevatedHint });
         }
         const createdTab = attachTabWindow({ ...tab, createdAt: Date.now() }, { pid: opened.pid, windowId: opened.windowId, app: opened.app || app, title: opened.title, appId: opened.appId, familyId: opened.familyId, role: opened.role, windows: opened.windows,
             ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}), ...realtime }, true);
@@ -10127,7 +10233,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return done({ tabId: createdTab.id, pid: opened.pid, windowId: opened.windowId, app: createdTab.title, window: createdTab.target,
             ...(createdTab.appId ? { appId: createdTab.appId } : {}), placement: opened.placement === 'tab' ? 'tab' : 'desktop', sound: false, keyboardMouse: false,
             tell: 'Tell the user in their language that the app is now open in a tab of this conversation (the tab bar above the conversation).',
-            next: 'Take tabs.screenshot of this tab to see the app, then act with tabs.click / tabs.type / tabs.key (or computer.* on this pid and windowId).', ...throttleHint });
+            next: 'Take tabs.screenshot of this tab to see the app, then act with tabs.click / tabs.type / tabs.key (or computer.* on this pid and windowId).', ...throttleHint, ...elevatedHint });
     }
 
 
@@ -12861,7 +12967,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!send) return;
         const session = this.activeCodingSession();
         const route = this.activeModelRoute();
-        const hasPayload = Boolean(this.prompt.trim() || this.attachments.length || this.composerApp());
+        const hasPayload = Boolean(this.prompt.trim() || this.attachments.length || this.composerApp() || this.composerSlashChipSendsAlone?.());
         const importing = this.hasPendingAttachmentImports(session?.id || '')
             || this.hasPendingDraftAttachments(session?.id || '');
         const unresolved = this.hasUnresolvedDraftAttachments(session?.id || '');
@@ -15928,20 +16034,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 const conversationId = window.crypto.randomUUID();
                 const agentRoute = this.comicAgentRoute(textChoice, conversationId);
                 if (!agentRoute) throw new Error(this.ct('noTextModel'));
-                const levels = this.reasoningEffortLevels(textChoice.route);
-                const reasoningEffort = levels.includes('medium') ? 'medium' : levels[0];
-                // The window and relay policy every comic text run sends (comicTextRunOptions); this run keeps its own
-                // thinking settings.
-                const { contextWindowTokens: topicWindowTokens, switchPolicy: topicSwitchPolicy } = this.comicTextRunOptions?.(agentRoute, textChoice.route, { kind: 'topic' }) ?? {};
                 const started = await this.platformService.startAgentRun({
                     route: agentRoute,
                     conversationId,
                     workbench: 'comic',
-                    ...this.reasoningSettingsForRoute(textChoice.route, false),
-                    ...(topicWindowTokens !== undefined ? { contextWindowTokens: topicWindowTokens } : {}),
-                    ...(topicSwitchPolicy ? { switchPolicy: topicSwitchPolicy } : {}),
+                    ...this.comicTextRunOptions?.(agentRoute, textChoice.route, { fallbackEffort: 'medium', kind: 'topic' }),
                     toolScope: 'comic-shots',
-                    ...(reasoningEffort ? { reasoningEffort } : {}),
                     prompt: adaptPrompt,
                     comicMaximumOutputTokens: 16_384,
                     history: [],
@@ -17322,10 +17420,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
             return Array.isArray(raw) ? raw.filter((item): item is string => typeof item === 'string').slice(0, 1_000) : [];
         } catch { return []; }
     })();
+    protected orderedComicProjectsCache: { readonly items: unknown; readonly order: readonly string[]; readonly value: readonly unknown[] } | undefined;
     protected orderedComicProjects<T extends { readonly path: string }>(items: readonly T[]): T[] {
+        const cached = this.orderedComicProjectsCache;
+        if (cached && cached.items === items && cached.order === this.comicProjectOrder) return cached.value as T[];
         const rank = new Map(this.comicProjectOrder.map((path, index) => [path, index]));
         // Never-moved projects keep the library's newest-first order, above the ones the user placed.
-        return [...items].sort((left, right) => (rank.get(left.path) ?? -1) - (rank.get(right.path) ?? -1));
+        const value = [...items].sort((left, right) => (rank.get(left.path) ?? -1) - (rank.get(right.path) ?? -1));
+        this.orderedComicProjectsCache = { items, order: this.comicProjectOrder, value };
+        return value;
     }
     protected comicRowDrag: { path: string; kind: ComicProjectKind | 'all'; startY: number; pointerId: number; active: boolean; timer?: number; overPath?: string; after?: boolean; element: HTMLElement } | undefined;
     protected comicRowDragEndedAt = 0;
@@ -17522,22 +17625,63 @@ export class NextMuxDesktopWidget extends ReactWidget {
      * The platform's global order of a model (frontier models, then new releases, then established rank), also for a
      * model the user reaches through an own API: the catalog ranks the same model wherever it is sold.
      */
-    protected globalModelRankCache: { readonly catalog: unknown; readonly ranks: ReadonlyMap<string, number> } | undefined;
+    protected globalModelRankCache: {
+        readonly catalog: unknown;
+        readonly global: unknown;
+        readonly registry: unknown;
+        readonly ranks: ReadonlyMap<string, number>;
+    } | undefined;
     protected globalModelRank(model: string): number | undefined {
         const catalog = this.platformCatalog;
-        let ranks = this.globalModelRankCache?.catalog === catalog ? this.globalModelRankCache.ranks : undefined;
+        const global = this.globalModels;
+        const registry = this.registryModels;
+        const cached = this.globalModelRankCache;
+        let ranks = cached && cached.catalog === catalog && cached.global === global && cached.registry === registry
+            ? cached.ranks : undefined;
         if (!ranks) {
             const next = new Map<string, number>();
-            for (const offering of catalog?.offerings || []) {
-                const rank = Number(offering.catalogRank);
-                if (!Number.isFinite(rank) || !offering.canonicalModel) continue;
-                for (const id of [offering.canonicalModel, offering.canonicalModel.split('/').pop() || '']) {
+            const now = Date.now();
+            const recentWindowMs = 45 * 86_400_000;
+            const addRank = (rawId: string | undefined, rank: number): void => {
+                if (!rawId || !Number.isFinite(rank)) return;
+                for (const id of [rawId, rawId.split('/').pop() || '']) {
                     const key = this.normalizedModelId(id);
                     if (key && (next.get(key) ?? Infinity) > rank) next.set(key, rank);
                 }
+            };
+            for (const offering of catalog?.offerings || []) {
+                if (Number.isFinite(offering.catalogRank)) {
+                    addRank(offering.canonicalModel, Number(offering.catalogRank));
+                } else if (Number.isFinite(offering.frontierPosition)) {
+                    addRank(offering.canonicalModel, Number(offering.frontierPosition));
+                } else {
+                    const releasedMs = Date.parse(offering.releasedAt || '');
+                    if (Number.isFinite(releasedMs)) {
+                        const ageMs = Math.max(0, now - releasedMs);
+                        addRank(offering.canonicalModel, ageMs <= recentWindowMs
+                            ? 500 + Math.round(ageMs / 3_600_000)
+                            : 100_000 + Math.round(ageMs / 86_400_000));
+                    }
+                }
+            }
+            // Newly released catalog/registry models without priced route offerings yet keep release-date order ahead of undated legacy rows.
+            for (const entry of [...(registry || []), ...(global || [])]) {
+                const releasedMs = Date.parse(entry.releaseDate || '');
+                const releaseRank = Number.isFinite(releasedMs)
+                    ? (() => {
+                        const ageMs = Math.max(0, now - releasedMs);
+                        return ageMs <= recentWindowMs
+                            ? 500 + Math.round(ageMs / 3_600_000)
+                            : 100_000 + Math.round(ageMs / 86_400_000);
+                    })()
+                    : entry.popularity?.rank ? 200_000 + entry.popularity.rank : undefined;
+                if (releaseRank === undefined) continue;
+                for (const id of [entry.canonicalModel, ...(entry.aliases || [])]) {
+                    addRank(id, releaseRank);
+                }
             }
             ranks = next;
-            this.globalModelRankCache = { catalog, ranks };
+            this.globalModelRankCache = { catalog, global, registry, ranks };
         }
         const id = this.normalizedModelId(model);
         return ranks.get(id) ?? ranks.get(id.split('/').pop() || '');
@@ -17672,7 +17816,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (capability === 'music') {
             const settings = project?.music;
             const support = musicReferenceSupport(route.connection?.protocol, route.connection?.providerSettings?.mediaTemplate,
-                route.connection?.discoveredModels.find(model => model.id === route.model));
+                route.connection?.discoveredModels.find(model => typeof sameModelId === 'function' ? sameModelId(model.id, route.model) : model.id.trim().toLowerCase() === route.model.trim().toLowerCase()));
             if (settings?.mode === 'cover') return support.cover;
             return comicRouteTakesText('music', route) && (settings?.vocalSource !== 'my_voice' || support.vocalReference);
         }
@@ -17710,7 +17854,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (kind === 'speech') return 'voice' in input && this.comicMediaVoices(route).includes(input.voice);
         if (kind === 'music' && ('vocalReference' in input && input.vocalReference || 'referenceSong' in input && input.referenceSong || 'mode' in input && input.mode === 'cover')) {
             const support = musicReferenceSupport(route.connection?.protocol, route.connection?.providerSettings?.mediaTemplate,
-                route.connection?.discoveredModels.find(model => model.id === route.model));
+                route.connection?.discoveredModels.find(model => typeof sameModelId === 'function' ? sameModelId(model.id, route.model) : model.id.trim().toLowerCase() === route.model.trim().toLowerCase()));
             return ('mode' in input && input.mode === 'cover' || 'referenceSong' in input && input.referenceSong) ? support.cover : support.vocalReference;
         }
         if (kind !== 'image' && kind !== 'video') return true;
@@ -22202,6 +22346,299 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return entry && !entry.deletedAt ? entry.title : `${entry?.title ? `${entry.title} · ` : ''}${canvasTimelineText(this.desktopLocale, 'deletedSource')}`;
     }
 
+    protected readonly handleCanvasExportComposition: NonNullable<React.ComponentProps<typeof ComicCanvas>['onExportComposition']> = nodeId => {
+        const session = this.comicCanvasSession();
+        if (session) void this.exportComicCanvasComposition(nodeId, session);
+    };
+
+    protected readonly handleCanvasDownload: NonNullable<React.ComponentProps<typeof ComicCanvas>['onDownload']> = (items, zipName, signal) => {
+        const session = this.comicCanvasSession();
+        if (!session) return Promise.reject(new Error('Canvas session unavailable'));
+        return this.downloadComicCanvasItems(session, items, zipName, signal);
+    };
+
+    protected readonly handleCanvasCompositionProgress: NonNullable<React.ComponentProps<typeof ComicCanvas>['compositionProgress']> = nodeId => {
+        const session = this.comicCanvasSession();
+        return session ? this.canvasCompositionProgress(nodeId, session) : undefined;
+    };
+
+    protected readonly handleCanvasRouteOf: NonNullable<React.ComponentProps<typeof ComicCanvas>['routeOf']> = node => {
+        const doc = this.comicCanvasSession()?.doc;
+        return doc ? this.canvasRouteOf(doc, node) : undefined;
+    };
+
+    protected readonly handleCanvasDefaultRoute: NonNullable<React.ComponentProps<typeof ComicCanvas>['defaultRoute']> = kind => {
+        const session = this.comicCanvasSession();
+        return session ? this.canvasDefaultChoice(kind, session) : undefined;
+    };
+
+    protected readonly handleCanvasCapabilityOf: NonNullable<React.ComponentProps<typeof ComicCanvas>['capabilityOf']> = choice => {
+        const session = this.comicCanvasSession();
+        return session ? this.canvasCapabilityOf(session, choice) : { loading: true };
+    };
+
+    protected readonly handleCanvasJobOf: NonNullable<React.ComponentProps<typeof ComicCanvas>['jobOf']> = node => {
+        const session = this.comicCanvasSession();
+        return session ? this.canvasJobOf(node, session) : undefined;
+    };
+
+    protected readonly handleCanvasEstimateOf: NonNullable<React.ComponentProps<typeof ComicCanvas>['estimateOf']> = node => {
+        const session = this.comicCanvasSession();
+        return session ? this.comicCanvasEstimate(session, node) : undefined;
+    };
+
+    protected readonly handleCanvasMediaUrl: NonNullable<React.ComponentProps<typeof ComicCanvas>['mediaUrl']> = uri =>
+        this.comicMediaUrl(uri) || '';
+
+    protected readonly handleCanvasChange: NonNullable<React.ComponentProps<typeof ComicCanvas>['onChange']> = (next, options) => {
+        const session = this.comicCanvasSession();
+        if (session) this.changeComicCanvasSession(session, next, options?.record !== false);
+    };
+
+    protected readonly handleCanvasPlanStory: NonNullable<React.ComponentProps<typeof ComicCanvas>['onPlanStory']> = nodeId => {
+        const session = this.comicCanvasSession();
+        if (session) void this.planComicCanvasStory(session, nodeId);
+    };
+
+    protected readonly handleCanvasCancelStory: NonNullable<React.ComponentProps<typeof ComicCanvas>['onCancelStory']> = () => {
+        const session = this.comicCanvasSession();
+        if (session && this.comicCanvasStoryRun?.session === session && this.comicAdaptation.status === 'running') {
+            this.comicAdaptation = { ...this.comicAdaptation, cancelRequested: true };
+            if (this.comicAdaptation.runId) void this.platformService.cancelAgentRun(this.comicAdaptation.runId);
+        }
+    };
+
+    protected readonly handleCanvasUndo: NonNullable<React.ComponentProps<typeof ComicCanvas>['onUndo']> = () =>
+        this.undoComicCanvas();
+
+    protected readonly handleCanvasRedo: NonNullable<React.ComponentProps<typeof ComicCanvas>['onRedo']> = () =>
+        this.undoComicCanvas(true);
+
+    protected readonly handleCanvasSetRoute: NonNullable<React.ComponentProps<typeof ComicCanvas>['onSetRoute']> = (nodeIds, choice) => {
+        const session = this.comicCanvasSession();
+        const current = session?.doc;
+        if (!session || !current) return;
+        const now = new Date().toISOString();
+        let next = current;
+        for (const nodeId of nodeIds) {
+            this.cancelComicCanvasVideoInput(session, nodeId);
+            const node = next.nodes.find(item => item.id === nodeId);
+            if (!node || (node.kind !== 'imageGen' && node.kind !== 'videoGen')) continue;
+            next = applyCanvasCommand(next, { type: 'node.setParameters', nodeId, parameters: node.payload.parameters, modelId: choice.modelId }, { now });
+            session.reconcile.add(nodeId);
+        }
+        const routes = { ...(next.settings.nodeRoutes as Readonly<Record<string, string>> | undefined), ...Object.fromEntries(nodeIds.map(id => [id, choice.key])) };
+        this.changeComicCanvasSession(session, { ...next, settings: { ...next.settings, nodeRoutes: routes } }, true);
+        for (const nodeId of nodeIds) if (!(next.settings.manualVideoModes as Readonly<Record<string, boolean>> | undefined)?.[nodeId] && resolveCanvasVideoInput(next, nodeId).ok) {
+            session.reconcile.delete(nodeId);
+            void this.prepareComicCanvasVideoInput(session, undefined, nodeId);
+        }
+        const known = session.capabilities.get(`${choice.kind}|${choice.key}|${choice.modelId}`)?.capability;
+        if (known) this.reconcileComicCanvasRoutes(session, choice, known); else this.canvasCapabilityOf(session, choice);
+    };
+
+    protected readonly handleCanvasRun: NonNullable<React.ComponentProps<typeof ComicCanvas>['onRun']> = nodeIds =>
+        void this.runComicCanvasNodes(nodeIds);
+
+    protected readonly handleCanvasExtract: NonNullable<React.ComponentProps<typeof ComicCanvas>['onExtract']> = nodeId =>
+        void this.extractComicCanvasFrame(nodeId);
+
+    protected readonly handleCanvasContinuityFrame: NonNullable<React.ComponentProps<typeof ComicCanvas>['onContinuityFrame']> = (nodeId, versionId) =>
+        this.prepareComicContinuityFrame(nodeId, versionId);
+
+    protected readonly handleCanvasExtractVersion: NonNullable<React.ComponentProps<typeof ComicCanvas>['onExtractVersion']> = (nodeId, versionId, selection) =>
+        this.prepareComicContinuityFrame(nodeId, versionId, selection);
+
+    protected readonly handleCanvasVideoInput: NonNullable<React.ComponentProps<typeof ComicCanvas>['onVideoInput']> = (sourceNodeId, targetNodeId, mode) => {
+        const session = this.comicCanvasSession();
+        if (session) void this.prepareComicCanvasVideoInput(session, sourceNodeId, targetNodeId, mode);
+    };
+
+    protected readonly handleCanvasVideoModeIntent: NonNullable<React.ComponentProps<typeof ComicCanvas>['onVideoModeIntent']> = nodeId => {
+        const session = this.comicCanvasSession();
+        if (session) this.cancelComicCanvasVideoInput(session, nodeId);
+    };
+
+    protected readonly handleCanvasStartFrameSetup: NonNullable<React.ComponentProps<typeof ComicCanvas>['onStartFrameSetup']> = nodeId => {
+        const session = this.comicCanvasSession();
+        if (!session) return;
+        this.comicStartFrameEditor = { session, nodeId };
+        this.update();
+    };
+
+    protected readonly handleCanvasStartFrameBusy: NonNullable<React.ComponentProps<typeof ComicCanvas>['startFrameBusy']> = nodeId => {
+        const session = this.comicCanvasSession();
+        if (!session) return false;
+        const control = this.comicStartFrameFlows.get(session)?.get(nodeId);
+        return Boolean(control && !control.cancelled || this.comicStartFrameJob(session, nodeId));
+    };
+
+    protected readonly handleCanvasStartFrameStatus: NonNullable<React.ComponentProps<typeof ComicCanvas>['startFrameStatus']> = nodeId => {
+        const session = this.comicCanvasSession();
+        return session ? this.comicStartFrameJob(session, nodeId)?.status : undefined;
+    };
+
+    protected readonly handleCanvasCancelStartFrame: NonNullable<React.ComponentProps<typeof ComicCanvas>['onCancelStartFrame']> = nodeId => {
+        const session = this.comicCanvasSession();
+        if (session) void this.stopComicStartFrame(session, nodeId);
+    };
+
+    protected readonly handleCanvasCancelGeneration: NonNullable<React.ComponentProps<typeof ComicCanvas>['onCancelGeneration']> = (nodeId, renderedJobId) => {
+        const session = this.comicCanvasSession();
+        if (!session || this.comicCanvas !== session || !this.comicCanvasIsTracked(session) || this.activeComicWorkspaceRoot !== session.workspaceRoot) return;
+        if (session.waiting.delete(nodeId)) { this.comicStartFrameBatchConsents.get(session)?.delete(nodeId); this.update(); return; }
+        if (this.mediaWorkspaceRoot !== session.workspaceRoot) return;
+        const node = session.doc?.nodes.find(item => item.id === nodeId);
+        if (!node) return;
+        const jobId = canvasLatestJob(node)?.jobId;
+        if (!jobId || jobId !== renderedJobId || !this.canvasJobOf(node, session)?.cancellable) return;
+        const job = this.mediaState.jobs.find(item => item.id === jobId);
+        if (job) void this.updateMediaJob(job, 'cancel');
+    };
+
+    protected readonly handleCanvasResumeGeneration: NonNullable<React.ComponentProps<typeof ComicCanvas>['onResumeGeneration']> = (nodeId, renderedJobId) => {
+        const session = this.comicCanvasSession();
+        if (session) void this.resumeComicCanvasGeneration(session, nodeId, renderedJobId, this.desktopLocale);
+    };
+
+    protected readonly handleCanvasAssetLibraryCategories: NonNullable<React.ComponentProps<typeof ComicCanvas>['assetLibraryCategories']> = () =>
+        this.platformService.comicAssetLibraryCategories();
+
+    protected readonly handleCanvasAssetLibraryEntries: NonNullable<React.ComponentProps<typeof ComicCanvas>['assetLibraryEntries']> = () =>
+        this.platformService.listComicAssetLibrary();
+
+    protected readonly handleCanvasPreparePlaybackFiles: NonNullable<React.ComponentProps<typeof ComicCanvas>['preparePlaybackFiles']> = paths =>
+        this.preparePlaybackFileMap(paths);
+
+    protected readonly handleCanvasLoadHistory: NonNullable<React.ComponentProps<typeof ComicCanvas>['loadHistoryCanvases']> = () => {
+        const session = this.comicCanvasSession();
+        return session ? this.loadComicCanvasHistory(session) : Promise.resolve([]);
+    };
+
+    protected readonly handleCanvasSelectHistoryVersion: NonNullable<React.ComponentProps<typeof ComicCanvas>['onSelectHistoryVersion']> = async (canvasId, nodeId, versionId) => {
+        const session = this.comicCanvasSession();
+        if (!session) throw new Error('Canvas session unavailable');
+        return this.selectComicCanvasHistoryVersion(session, canvasId, nodeId, versionId);
+    };
+
+    protected readonly handleCanvasUploadLibrary: NonNullable<React.ComponentProps<typeof ComicCanvas>['onUploadLibrary']> = (category, retryFailed) =>
+        this.uploadComicLibraryFiles(category, retryFailed);
+
+    protected readonly handleCanvasPinLibrary: NonNullable<React.ComponentProps<typeof ComicCanvas>['onPinLibrary']> = (assetId, pinned) =>
+        this.platformService.setComicAssetLibraryPinned({ assetId, pinned }).then(() => this.refreshComicAssetLibrary());
+
+    protected readonly handleCanvasCategoryChangeLibrary: NonNullable<React.ComponentProps<typeof ComicCanvas>['onCategoryChangeLibrary']> = (assetId, assetCategory) =>
+        this.platformService.setComicAssetLibraryCategory({ assetId, assetCategory }).then(() => this.refreshComicAssetLibrary());
+
+    protected readonly handleCanvasDeleteLibrary: NonNullable<React.ComponentProps<typeof ComicCanvas>['onDeleteLibrary']> = assetId =>
+        this.deleteComicLibraryAssetAndSync(assetId);
+
+    protected readonly handleCanvasRenameLibraryAsset: NonNullable<React.ComponentProps<typeof ComicCanvas>['onRenameLibraryAsset']> = (entryId, name) =>
+        Promise.resolve(this.platformService.renameComicAssetLibraryEntry?.(entryId, name));
+
+    protected readonly handleCanvasSaveLibraryAsset: NonNullable<React.ComponentProps<typeof ComicCanvas>['onSaveLibraryAsset']> = async input => {
+        const session = this.comicCanvasSession();
+        if (!session) throw new Error('Canvas session unavailable');
+        return this.saveCanvasLibraryItem(session, input);
+    };
+
+    protected readonly handleCanvasUseLibraryAsset: NonNullable<React.ComponentProps<typeof ComicCanvas>['onUseLibraryAsset']> = async (assetId, position, requestId, target) => {
+        const session = this.comicCanvasSession();
+        if (!session) throw new Error('Canvas session unavailable');
+        return this.useCanvasLibraryItem(session, assetId, position, requestId, target);
+    };
+
+    protected readonly handleCanvasAttachReference: NonNullable<React.ComponentProps<typeof ComicCanvas>['onAttachReference']> = (sourceId, targetId, role) => {
+        const session = this.comicCanvasSession();
+        if (session) void this.attachComicCanvasReference(session, sourceId, targetId, role).catch(error => this.comicCanvasNotice(session, modelFailureText(this.desktopLocale, error)));
+    };
+
+    protected readonly handleCanvasImport: NonNullable<React.ComponentProps<typeof ComicCanvas>['onImport']> = (position, files, target) => {
+        const session = this.comicCanvasSession();
+        if (session) void this.importComicCanvasFiles(position, files, target, session);
+    };
+
+    protected readonly handleCanvasUsePortrait: NonNullable<React.ComponentProps<typeof ComicCanvas>['onUsePortrait']> = (characterNodeId, portraitNodeId) => {
+        const session = this.comicCanvasSession();
+        if (session) void this.useComicCanvasPortrait(characterNodeId, portraitNodeId, session).catch(() => undefined);
+    };
+
+    protected readonly handleCanvasRetrySave: NonNullable<React.ComponentProps<typeof ComicCanvas>['onRetrySave']> = () => {
+        const session = this.comicCanvasSession();
+        if (session) void this.saveComicCanvas(session);
+    };
+
+    protected readonly handleCanvasNotice: NonNullable<React.ComponentProps<typeof ComicCanvas>['onNotice']> = text => {
+        const session = this.comicCanvasSession();
+        if (session) this.comicCanvasNotice(session, text);
+    };
+
+    protected readonly handleCanvasTool: NonNullable<React.ComponentProps<typeof ComicCanvas>['onTool']> = (nodeId, tool, parameters) =>
+        this.runComicCanvasToolOn(nodeId, tool, parameters);
+
+    protected readonly handleCanvasCancelTool: NonNullable<React.ComponentProps<typeof ComicCanvas>['onCancelTool']> = nodeId => {
+        const session = this.comicCanvasSession();
+        const entry = session?.tools.get(nodeId);
+        if (session && entry) void this.platformService.cancelComicCanvasTool(session.workspaceRoot, entry.requestId, session.canvasId).catch(() => undefined);
+    };
+
+    protected readonly handleCanvasPickLut: NonNullable<React.ComponentProps<typeof ComicCanvas>['onPickLut']> = () =>
+        this.pickComicCanvasLut();
+
+    protected readonly handleCanvasDirectorImport: NonNullable<React.ComponentProps<typeof ComicCanvas>['onDirectorImport']> = async file => {
+        const session = this.comicCanvasSession();
+        if (!session) throw new Error('Canvas session unavailable');
+        const mimeType = directorImportMime(file.name, file.type);
+        return withDirectorBlobUpload(file, { workspaceRoot: session.workspaceRoot, purpose: 'model', name: file.name, mimeType }, this.platformService,
+            uploadId => this.platformService.importComicDirectorModel({ workspaceRoot: session.workspaceRoot, name: file.name, mimeType, uploadId }));
+    };
+
+    protected readonly handleCanvasDirectorCapture: NonNullable<React.ComponentProps<typeof ComicCanvas>['onDirectorCapture']> = async (nodeId, capture) => {
+        const session = this.comicCanvasSession();
+        if (!session) throw new Error('Canvas session unavailable');
+        await this.flushComicCanvas(session);
+        const source = session.doc?.nodes.find(node => node.id === nodeId);
+        if (!source) throw Object.assign(new Error('DIRECTOR_SOURCE_REQUIRED'), { code: 'DIRECTOR_SOURCE_REQUIRED' });
+        const request = { workspaceRoot: session.workspaceRoot, canvasId: session.canvasId, sourceNodeId: nodeId, captureId: capture.captureId,
+            kind: capture.kind, mimeType: capture.blob.type, scene: capture.scene,
+            camera: capture.camera, frame: capture.frame, ...(capture.endFrame !== undefined ? { endFrame: capture.endFrame } : {}),
+            title: `${source.title} · ${canvasText(this.desktopLocale, capture.kind === 'image' ? 'kind.image' : 'kind.video')}`,
+            position: { x: source.position.x + source.size.width + 140, y: source.position.y } };
+        const result = await withDirectorBlobUpload(capture.blob, { workspaceRoot: session.workspaceRoot, purpose: 'capture', mimeType: capture.blob.type }, this.platformService, async uploadId => {
+            try { return await this.platformService.saveComicDirectorCapture({ ...request, uploadId, expectedRevision: session.base?.revision ?? 0 }); }
+            catch (failure) {
+                if ((failure as { code?: string })?.code !== 'CANVAS_REVISION_CONFLICT') throw failure;
+                await this.refreshComicCanvas(session);
+                return this.platformService.saveComicDirectorCapture({ ...request, uploadId, expectedRevision: session.base?.revision ?? 0 });
+            }
+        });
+        this.adoptComicCanvas(session, result.state.canvas);
+    };
+
+    protected readonly handleCanvasSaveMarks: NonNullable<React.ComponentProps<typeof ComicCanvas>['onSaveMarks']> = async marks => {
+        const session = this.comicCanvasSession();
+        if (!session) throw new Error('Canvas session unavailable');
+        await this.flushComicCanvas(session);
+        const request = { workspaceRoot: session.workspaceRoot, canvasId: session.canvasId, sourceNodeId: marks.nodeId, sourceVersionId: marks.versionId,
+            markId: crypto.randomUUID(), title: marks.title, position: marks.position };
+        const result = await withDirectorBlobUpload(marks.picture, { workspaceRoot: session.workspaceRoot, purpose: 'capture', mimeType: 'image/png' }, this.platformService, async uploadId => {
+            try { return await this.platformService.saveComicCanvasMarkedImage({ ...request, uploadId, expectedRevision: session.base?.revision ?? 0 }); }
+            catch (failure) {
+                if ((failure as { code?: string })?.code !== 'CANVAS_REVISION_CONFLICT') throw failure;
+                await this.refreshComicCanvas(session);
+                return this.platformService.saveComicCanvasMarkedImage({ ...request, uploadId, expectedRevision: session.base?.revision ?? 0 });
+            }
+        });
+        this.adoptComicCanvas(session, result.state.canvas);
+        const canvas = session.doc ?? result.state.canvas;
+        if (!canvas) throw new Error(canvasText(this.desktopLocale, 'unknown'));
+        return { canvas, nodeId: result.nodeId, version: result.version };
+    };
+
+    protected readonly handleCanvasToEditor: NonNullable<React.ComponentProps<typeof ComicDesk>['onToEditor']> = () => {
+        void this.commitComicCanvasToEditor();
+    };
+
     /** The desk's canvas step: the board, its footer note and 进入剪辑. */
     protected comicCanvasDeskProps(project: ComicProject): Pick<React.ComponentProps<typeof ComicDesk>, 'canvasView' | 'canvasNote' | 'toEditorLabel' | 'toEditorDisabled' | 'onToEditor'> {
         const session = this.comicCanvasSession();
@@ -22227,120 +22664,52 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 <ComicCanvas key={session.canvasId} locale={locale} canvas={doc} saveState={session.save} canUndo={session.past.length > 0} canRedo={session.future.length > 0}
                     models={{ image: this.canvasUsableChoices(session, 'image'), video: this.canvasUsableChoices(session, 'video') }}
                     families={{ image: this.canvasModelFamilies(session, 'image'), video: this.canvasModelFamilies(session, 'video') }}
-                    onExportComposition={nodeId => void this.exportComicCanvasComposition(nodeId, session)}
-                    onDownload={(items, zipName, signal) => this.downloadComicCanvasItems(session, items, zipName, signal)}
-                    compositionProgress={nodeId => this.canvasCompositionProgress(nodeId, session)}
-                    routeOf={node => this.canvasRouteOf(doc, node)}
-                    defaultRoute={kind => this.canvasDefaultChoice(kind, session)}
-                    capabilityOf={choice => this.canvasCapabilityOf(session, choice)} jobOf={node => this.canvasJobOf(node, session)}
-                    estimateOf={node => this.comicCanvasEstimate(session, node)}
-                    waiting={session.waiting} submitting={new Set([...session.submitting, ...(this.comicCanvasVideoInputs.get(session)?.keys() ?? [])])} mediaUrl={uri => this.comicMediaUrl(uri) || ''}
+                    onExportComposition={this.handleCanvasExportComposition}
+                    onDownload={this.handleCanvasDownload}
+                    compositionProgress={this.handleCanvasCompositionProgress}
+                    routeOf={this.handleCanvasRouteOf}
+                    defaultRoute={this.handleCanvasDefaultRoute}
+                    capabilityOf={this.handleCanvasCapabilityOf} jobOf={this.handleCanvasJobOf}
+                    estimateOf={this.handleCanvasEstimateOf}
+                    waiting={session.waiting} submitting={new Set([...session.submitting, ...(this.comicCanvasVideoInputs.get(session)?.keys() ?? [])])} mediaUrl={this.handleCanvasMediaUrl}
                     defaults={{ aspectRatio: project.canvas.aspectRatio, durationSeconds: 5, frameRate: project.frameRate }}
-                    onChange={(next, options) => this.changeComicCanvasSession(session, next, options?.record !== false)}
-                    onPlanStory={nodeId => void this.planComicCanvasStory(session, nodeId)} storyBusy={this.comicAdaptation.status === 'running'}
+                    onChange={this.handleCanvasChange}
+                    onPlanStory={this.handleCanvasPlanStory} storyBusy={this.comicAdaptation.status === 'running'}
                     storyStatus={this.comicCanvasStoryRun?.session === session ? this.comicCanvasStoryRun.status : undefined}
-                    onCancelStory={() => { if (this.comicCanvasStoryRun?.session === session && this.comicAdaptation.status === 'running') { this.comicAdaptation = { ...this.comicAdaptation, cancelRequested: true }; if (this.comicAdaptation.runId) void this.platformService.cancelAgentRun(this.comicAdaptation.runId); } }}
-                    onUndo={() => this.undoComicCanvas()} onRedo={() => this.undoComicCanvas(true)}
-                    onSetRoute={(nodeIds, choice) => {
-                        const current = session.doc;
-                        if (!current) return;
-                        const now = new Date().toISOString();
-                        let next = current;
-                        for (const nodeId of nodeIds) {
-                            this.cancelComicCanvasVideoInput(session, nodeId);
-                            const node = next.nodes.find(item => item.id === nodeId);
-                            if (!node || (node.kind !== 'imageGen' && node.kind !== 'videoGen')) continue;
-                            next = applyCanvasCommand(next, { type: 'node.setParameters', nodeId, parameters: node.payload.parameters, modelId: choice.modelId }, { now });
-                            session.reconcile.add(nodeId);
-                        }
-                        const routes = { ...(next.settings.nodeRoutes as Readonly<Record<string, string>> | undefined), ...Object.fromEntries(nodeIds.map(id => [id, choice.key])) };
-                        this.changeComicCanvasSession(session, { ...next, settings: { ...next.settings, nodeRoutes: routes } }, true);
-                        for (const nodeId of nodeIds) if (!(next.settings.manualVideoModes as Readonly<Record<string, boolean>> | undefined)?.[nodeId] && resolveCanvasVideoInput(next, nodeId).ok) {
-                            session.reconcile.delete(nodeId);
-                            void this.prepareComicCanvasVideoInput(session, undefined, nodeId);
-                        }
-                        const known = session.capabilities.get(`${choice.kind}|${choice.key}|${choice.modelId}`)?.capability;
-                        if (known) this.reconcileComicCanvasRoutes(session, choice, known); else this.canvasCapabilityOf(session, choice);
-                    }}
-                    onRun={nodeIds => void this.runComicCanvasNodes(nodeIds)} onExtract={nodeId => void this.extractComicCanvasFrame(nodeId)}
-                    onContinuityFrame={(nodeId, versionId) => this.prepareComicContinuityFrame(nodeId, versionId)}
-                    onExtractVersion={(nodeId, versionId, selection) => this.prepareComicContinuityFrame(nodeId, versionId, selection)}
-                    onVideoInput={(sourceNodeId, targetNodeId, mode) => void this.prepareComicCanvasVideoInput(session, sourceNodeId, targetNodeId, mode)}
-                    onVideoModeIntent={nodeId => this.cancelComicCanvasVideoInput(session, nodeId)}
-                    onStartFrameSetup={nodeId => { this.comicStartFrameEditor = { session, nodeId }; this.update(); }}
-                    startFrameBusy={nodeId => { const control = this.comicStartFrameFlows.get(session)?.get(nodeId); return Boolean(control && !control.cancelled || this.comicStartFrameJob(session, nodeId)); }}
-                    startFrameStatus={nodeId => this.comicStartFrameJob(session, nodeId)?.status}
-                    onCancelStartFrame={nodeId => void this.stopComicStartFrame(session, nodeId)}
-                    onCancelGeneration={(nodeId, renderedJobId) => {
-                        if (this.comicCanvas !== session || !this.comicCanvasIsTracked(session) || this.activeComicWorkspaceRoot !== session.workspaceRoot) return;
-                        if (session.waiting.delete(nodeId)) { this.comicStartFrameBatchConsents.get(session)?.delete(nodeId); this.update(); return; }
-                        if (this.mediaWorkspaceRoot !== session.workspaceRoot) return;
-                        const node = session.doc?.nodes.find(item => item.id === nodeId);
-                        if (!node) return;
-                        const jobId = canvasLatestJob(node)?.jobId;
-                        if (!jobId || jobId !== renderedJobId || !this.canvasJobOf(node, session)?.cancellable) return;
-                        const job = this.mediaState.jobs.find(item => item.id === jobId);
-                        if (job) void this.updateMediaJob(job, 'cancel');
-                    }}
-                    onResumeGeneration={(nodeId, renderedJobId) => { void this.resumeComicCanvasGeneration(session, nodeId, renderedJobId, locale); }}
-                    assetLibraryCategories={() => this.platformService.comicAssetLibraryCategories()} assetLibraryEntries={() => this.platformService.listComicAssetLibrary()}
-                    preparePlaybackFiles={paths => this.preparePlaybackFileMap(paths)}
-                    loadHistoryCanvases={() => this.loadComicCanvasHistory(session)} onSelectHistoryVersion={(canvasId, nodeId, versionId) => this.selectComicCanvasHistoryVersion(session, canvasId, nodeId, versionId)}
+                    onCancelStory={this.handleCanvasCancelStory}
+                    onUndo={this.handleCanvasUndo} onRedo={this.handleCanvasRedo}
+                    onSetRoute={this.handleCanvasSetRoute}
+                    onRun={this.handleCanvasRun} onExtract={this.handleCanvasExtract}
+                    onContinuityFrame={this.handleCanvasContinuityFrame}
+                    onExtractVersion={this.handleCanvasExtractVersion}
+                    onVideoInput={this.handleCanvasVideoInput}
+                    onVideoModeIntent={this.handleCanvasVideoModeIntent}
+                    onStartFrameSetup={this.handleCanvasStartFrameSetup}
+                    startFrameBusy={this.handleCanvasStartFrameBusy}
+                    startFrameStatus={this.handleCanvasStartFrameStatus}
+                    onCancelStartFrame={this.handleCanvasCancelStartFrame}
+                    onCancelGeneration={this.handleCanvasCancelGeneration}
+                    onResumeGeneration={this.handleCanvasResumeGeneration}
+                    assetLibraryCategories={this.handleCanvasAssetLibraryCategories} assetLibraryEntries={this.handleCanvasAssetLibraryEntries}
+                    preparePlaybackFiles={this.handleCanvasPreparePlaybackFiles}
+                    loadHistoryCanvases={this.handleCanvasLoadHistory} onSelectHistoryVersion={this.handleCanvasSelectHistoryVersion}
                     libraryScope={`${session.workspaceRoot}:${session.canvasId}`}
-                    onUploadLibrary={(category, retryFailed) => this.uploadComicLibraryFiles(category, retryFailed)} onPinLibrary={(assetId, pinned) => this.platformService.setComicAssetLibraryPinned({ assetId, pinned }).then(() => this.refreshComicAssetLibrary())}
-                    onCategoryChangeLibrary={(assetId, assetCategory) => this.platformService.setComicAssetLibraryCategory({ assetId, assetCategory }).then(() => this.refreshComicAssetLibrary())}
-                    onDeleteLibrary={assetId => this.deleteComicLibraryAssetAndSync(assetId)}
-                    onRenameLibraryAsset={(entryId, name) => Promise.resolve(this.platformService.renameComicAssetLibraryEntry?.(entryId, name))}
-                    onSaveLibraryAsset={input => this.saveCanvasLibraryItem(session, input)} onUseLibraryAsset={(assetId, position, requestId, target) => this.useCanvasLibraryItem(session, assetId, position, requestId, target)}
-                    onAttachReference={(sourceId, targetId, role) => void this.attachComicCanvasReference(session, sourceId, targetId, role).catch(error => this.comicCanvasNotice(session, modelFailureText(locale, error)))}
-                    onImport={(position, files, target) => void this.importComicCanvasFiles(position, files, target, session)}
-                    onUsePortrait={(characterNodeId, portraitNodeId) => void this.useComicCanvasPortrait(characterNodeId, portraitNodeId,session).catch(()=>undefined)}
-                    onRetrySave={() => void this.saveComicCanvas(session)} onNotice={text => this.comicCanvasNotice(session, text)}
+                    onUploadLibrary={this.handleCanvasUploadLibrary} onPinLibrary={this.handleCanvasPinLibrary}
+                    onCategoryChangeLibrary={this.handleCanvasCategoryChangeLibrary}
+                    onDeleteLibrary={this.handleCanvasDeleteLibrary}
+                    onRenameLibraryAsset={this.handleCanvasRenameLibraryAsset}
+                    onSaveLibraryAsset={this.handleCanvasSaveLibraryAsset} onUseLibraryAsset={this.handleCanvasUseLibraryAsset}
+                    onAttachReference={this.handleCanvasAttachReference}
+                    onImport={this.handleCanvasImport}
+                    onUsePortrait={this.handleCanvasUsePortrait}
+                    onRetrySave={this.handleCanvasRetrySave} onNotice={this.handleCanvasNotice}
                     toolProgress={new Map([...session.tools].map(([nodeId, entry]) => [nodeId, entry.fraction]))}
-                    onTool={(nodeId, tool, parameters) => this.runComicCanvasToolOn(nodeId, tool, parameters)}
-                    onCancelTool={nodeId => { const entry = session.tools.get(nodeId); if (entry) void this.platformService.cancelComicCanvasTool(session.workspaceRoot, entry.requestId, session.canvasId).catch(() => undefined); }}
-                    onPickLut={() => this.pickComicCanvasLut()}
-                    onDirectorImport={async file => {
-                        const mimeType = directorImportMime(file.name, file.type);
-                        return withDirectorBlobUpload(file, { workspaceRoot: session.workspaceRoot, purpose: 'model', name: file.name, mimeType }, this.platformService,
-                            uploadId => this.platformService.importComicDirectorModel({ workspaceRoot: session.workspaceRoot, name: file.name, mimeType, uploadId }));
-                    }}
-                    onDirectorCapture={async (nodeId, capture) => {
-                        await this.flushComicCanvas(session);
-                        const source = session.doc?.nodes.find(node => node.id === nodeId);
-                        if (!source) throw Object.assign(new Error('DIRECTOR_SOURCE_REQUIRED'), { code: 'DIRECTOR_SOURCE_REQUIRED' });
-                        const request = { workspaceRoot: session.workspaceRoot, canvasId: session.canvasId, sourceNodeId: nodeId, captureId: capture.captureId,
-                            kind: capture.kind, mimeType: capture.blob.type, scene: capture.scene,
-                            camera: capture.camera, frame: capture.frame, ...(capture.endFrame !== undefined ? { endFrame: capture.endFrame } : {}),
-                            title: `${source.title} · ${canvasText(locale, capture.kind === 'image' ? 'kind.image' : 'kind.video')}`,
-                            position: { x: source.position.x + source.size.width + 140, y: source.position.y } };
-                        const result = await withDirectorBlobUpload(capture.blob, { workspaceRoot: session.workspaceRoot, purpose: 'capture', mimeType: capture.blob.type }, this.platformService, async uploadId => {
-                            try { return await this.platformService.saveComicDirectorCapture({ ...request, uploadId, expectedRevision: session.base?.revision ?? 0 }); }
-                            catch (failure) {
-                                if ((failure as { code?: string })?.code !== 'CANVAS_REVISION_CONFLICT') throw failure;
-                                await this.refreshComicCanvas(session);
-                                return this.platformService.saveComicDirectorCapture({ ...request, uploadId, expectedRevision: session.base?.revision ?? 0 });
-                            }
-                        });
-                        this.adoptComicCanvas(session, result.state.canvas);
-                    }}
-                    onSaveMarks={async marks => {
-                        await this.flushComicCanvas(session);
-                        const request = { workspaceRoot: session.workspaceRoot, canvasId: session.canvasId, sourceNodeId: marks.nodeId, sourceVersionId: marks.versionId,
-                            markId: crypto.randomUUID(), title: marks.title, position: marks.position };
-                        const result = await withDirectorBlobUpload(marks.picture, { workspaceRoot: session.workspaceRoot, purpose: 'capture', mimeType: 'image/png' }, this.platformService, async uploadId => {
-                            try { return await this.platformService.saveComicCanvasMarkedImage({ ...request, uploadId, expectedRevision: session.base?.revision ?? 0 }); }
-                            catch (failure) {
-                                if ((failure as { code?: string })?.code !== 'CANVAS_REVISION_CONFLICT') throw failure;
-                                await this.refreshComicCanvas(session);
-                                return this.platformService.saveComicCanvasMarkedImage({ ...request, uploadId, expectedRevision: session.base?.revision ?? 0 });
-                            }
-                        });
-                        this.adoptComicCanvas(session, result.state.canvas);
-                        const canvas = session.doc ?? result.state.canvas;
-                        if (!canvas) throw new Error(canvasText(locale, 'unknown'));
-                        return { canvas, nodeId: result.nodeId, version: result.version };
-                    }} />
+                    onTool={this.handleCanvasTool}
+                    onCancelTool={this.handleCanvasCancelTool}
+                    onPickLut={this.handleCanvasPickLut}
+                    onDirectorImport={this.handleCanvasDirectorImport}
+                    onDirectorCapture={this.handleCanvasDirectorCapture}
+                    onSaveMarks={this.handleCanvasSaveMarks} />
                 </div>
                 {session.notice && <div className={`nmx-desk-canvas-notice${session.noticeAction ? ' has-action' : ''}`} role='status'>
                     <span data-nmx-literal>{session.notice}</span>
@@ -22353,7 +22722,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             canvasNote: clips.length ? `${panelText(locale, 'clipsReady', { done: filmed, total: clips.length })}${notices ? ` · ${canvasText(locale, 'notices')} ${notices}` : ''}` : '',
             toEditorLabel: session?.committing ? canvasText(locale, 'toEditorBusy') : canvasText(locale, 'toEditor'),
             toEditorDisabled: !doc || Boolean(session?.committing) || filmed === 0,
-            onToEditor: () => void this.commitComicCanvasToEditor()
+            onToEditor: this.handleCanvasToEditor
         };
     }
 
@@ -23048,14 +23417,23 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected computeComicOfficialModelRoutes(): readonly Extract<DesktopModelRoute, { readonly kind: 'official_connection' }>[] {
+        const matchModel = (left: string | undefined, right: string | undefined): boolean =>
+            typeof sameModelId === 'function'
+                ? sameModelId(left, right)
+                : typeof left === 'string' && typeof right === 'string' && left.trim().toLowerCase() === right.trim().toLowerCase();
         return this.officialModels.connections.flatMap(connection => {
-            const models = [...new Set([connection.model, ...connection.discoveredModels.map(model => model.id)])];
+            const models: string[] = [];
+            for (const candidate of [connection.model, ...connection.discoveredModels.map(model => model.id)]) {
+                if (models.some(existing => matchModel(existing, candidate))) continue;
+                models.push(candidate);
+            }
             return models.flatMap(model => {
-                if (connection.discoveredModels.find(candidate => candidate.id === model)?.available === false) return [];
-                const virtual = model === connection.model ? connection : this.connectionForDiscoveredModel(connection, model);
+                if (connection.discoveredModels.find(candidate => matchModel(candidate.id, model))?.available === false) return [];
+                const isPrimary = matchModel(model, connection.model);
+                const virtual = isPrimary ? connection : this.connectionForDiscoveredModel(connection, model);
                 const metadata = this.comicConnectionMetadata(virtual);
                 if (!metadata || !this.registryModelSupportsWorkbench(metadata, 'comic')) return [];
-                return [{ id: model === connection.model ? `official:${connection.id}` : `official:${connection.id}:${encodeURIComponent(model)}`,
+                return [{ id: isPrimary ? `official:${connection.id}` : `official:${connection.id}:${encodeURIComponent(model)}`,
                     kind: 'official_connection' as const, connection: virtual }];
             });
         });
@@ -23083,7 +23461,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
      * only what it left out is matched locally against the public model directory, never a relay's catalogue.
      */
     protected comicConnectionMetadata(connection: OfficialModelConnection): PlatformRegistryModel | undefined {
-        const discovered = connection.discoveredModels.find(candidate => candidate.id === connection.model);
+        const discovered = connection.discoveredModels.find(candidate =>
+            typeof sameModelId === 'function'
+                ? sameModelId(candidate.id, connection.model)
+                : candidate.id.trim().toLowerCase() === connection.model.trim().toLowerCase());
         const protocolCapabilities = officialMediaCapabilities(connection.protocol, connection.model, connection.providerSettings);
         const local = protocolCapabilities.length ? undefined : ownModelMediaFacts({ ...discovered, id: connection.model, label: discovered?.label,
             inputModalities: discovered?.inputModalities, outputModalities: discovered?.outputModalities }, matchCatalogModel(connection.model, discovered?.label, this.globalModels));
@@ -23543,8 +23924,41 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.update();
     }
 
+    protected comicAssetsByIdCache = new WeakMap<ComicProject, ReadonlyMap<string, ComicProject['assets'][number]>>();
+    protected comicAssetsById(project: ComicProject): ReadonlyMap<string, ComicProject['assets'][number]> {
+        let map = this.comicAssetsByIdCache.get(project);
+        if (!map) {
+            const next = new Map<string, ComicProject['assets'][number]>();
+            for (const asset of project.assets) next.set(asset.id, asset);
+            map = next;
+            this.comicAssetsByIdCache.set(project, map);
+        }
+        return map;
+    }
+
+    protected comicShotByAssetIdCache = new WeakMap<ComicProject, ReadonlyMap<string, { readonly scene: ComicScene; readonly shot: ComicShot }>>();
+    protected comicShotByAssetId(project: ComicProject): ReadonlyMap<string, { readonly scene: ComicScene; readonly shot: ComicShot }> {
+        let map = this.comicShotByAssetIdCache.get(project);
+        if (!map) {
+            const next = new Map<string, { readonly scene: ComicScene; readonly shot: ComicShot }>();
+            for (const scene of project.scenes) {
+                for (const shot of scene.shots) {
+                    const pair = { scene, shot };
+                    for (const assetId of [shot.visualAssetId, shot.audioAssetId, shot.subtitleAssetId, shot.videoAssetId, ...(shot.musicAssetIds || []), ...(shot.effectAssetIds || [])]) {
+                        if (assetId && !next.has(assetId)) next.set(assetId, pair);
+                    }
+                }
+            }
+            map = next;
+            this.comicShotByAssetIdCache.set(project, map);
+        }
+        return map;
+    }
+
     protected comicAsset(assetId: string | undefined): ComicProject['assets'][number] | undefined {
-        return assetId ? this.comicProject()?.assets.find(asset => asset.id === assetId) : undefined;
+        if (!assetId) return undefined;
+        const project = this.comicProject();
+        return project ? this.comicAssetsById(project).get(assetId) : undefined;
     }
 
     protected buildComicVisualPrompt(sceneArg?: ComicScene, shotArg?: ComicShot): string {
@@ -25277,10 +25691,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.update();
     }
 
+    protected orderedCodingProjectsCache: { readonly projects: unknown; readonly order: readonly string[]; readonly value: readonly unknown[] } | undefined;
     protected orderedCodingProjects<T extends { readonly path: string }>(projects: readonly T[]): T[] {
+        const cached = this.orderedCodingProjectsCache;
+        if (cached && cached.projects === projects && cached.order === this.codingProjectOrder) return cached.value as T[];
         if (!this.codingProjectOrder.length) return [...projects];
         const order = new Map(this.codingProjectOrder.map((path, index) => [path, index]));
-        return [...projects].sort((left, right) => {
+        const value = [...projects].sort((left, right) => {
             const leftIndex = order.get(left.path);
             const rightIndex = order.get(right.path);
             if (leftIndex !== undefined && rightIndex !== undefined) return leftIndex - rightIndex;
@@ -25288,6 +25705,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (rightIndex !== undefined) return 1;
             return 0;
         });
+        this.orderedCodingProjectsCache = { projects, order: this.codingProjectOrder, value };
+        return value;
     }
 
     protected handleCodingProjectDragOver(event: React.DragEvent<HTMLElement>, targetPath: string, visibleProjects: readonly { readonly path: string }[]): void {
@@ -28683,20 +29102,22 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const workspaceName = workspaceRoot.split(/[\\/]/).pop() || workspaceRoot;
         const hasFiles = this.contextFilesWorkspace === workspaceRoot && this.contextFileChildren.has(workspaceRoot);
         const agentsTitle = threadProjectAgentsTitle(this.desktopLocale);
-        return <><aside className='nmx-thread-files' aria-label='当前项目文件'>
-            <span className='nmx-thread-float-tab' tabIndex={0} role='button' aria-label='当前项目文件'>
+        const threadFilesTitle = localizeDesktopSurface(this.desktopLocale, '当前项目文件');
+        const refreshFilesLabel = localizeDesktopSurface(this.desktopLocale, '刷新文件');
+        return <><aside className='nmx-thread-files' aria-label={threadFilesTitle}>
+            <span className='nmx-thread-float-tab' tabIndex={0} role='button' aria-label={threadFilesTitle}>
                 <i className='codicon codicon-folder-opened' aria-hidden='true'></i>
             </span>
             <div>
                 <header>
                     <i className='codicon codicon-folder-opened'></i>
                     <strong title={workspaceRoot}>{workspaceName}</strong>
-                    <button aria-label='刷新文件' title='刷新文件' disabled={this.contextFilesLoading} onClick={() => void this.loadContextFiles(true)}><i className={`codicon codicon-${this.contextFilesLoading ? 'loading' : 'refresh'}`}></i></button>
+                    <button aria-label={refreshFilesLabel} title={refreshFilesLabel} disabled={this.contextFilesLoading} onClick={() => void this.loadContextFiles(true)}><i className={`codicon codicon-${this.contextFilesLoading ? 'loading' : 'refresh'}`}></i></button>
                 </header>
                 <section>
-                    {this.contextFilesError ? <button className='nmx-thread-file-retry' onClick={() => void this.loadContextFiles(true)}><i className='codicon codicon-warning'></i><span>重新读取</span></button>
+                    {this.contextFilesError ? <button className='nmx-thread-file-retry' onClick={() => void this.loadContextFiles(true)}><i className='codicon codicon-warning'></i><span>{localizeDesktopSurface(this.desktopLocale, '重新读取')}</span></button>
                         : hasFiles ? this.renderThreadFileRows(workspaceRoot)
-                            : <span className='nmx-thread-file-loading'><i className='codicon codicon-loading codicon-modifier-spin'></i><b>读取中</b></span>}
+                            : <span className='nmx-thread-file-loading'><i className='codicon codicon-loading codicon-modifier-spin'></i><b>{localizeDesktopSurface(this.desktopLocale, '读取中')}</b></span>}
                 </section>
             </div>
         </aside>{notes}<aside className='nmx-thread-agents-float' aria-label={agentsTitle}>
@@ -29808,6 +30229,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.composerApps.set(created.id, draftPickedApp);
         }
         if (draftInputOwner) this.composerInputScope?.adopt(draftInputOwner, this.composerInputOwner());
+        // The draft's command chip moves into its new conversation with the text.
+        const draftSlashChip = draftInputOwner ? this.composerSlashChips?.get(draftInputOwner) : undefined;
+        if (draftInputOwner && draftSlashChip) {
+            this.composerSlashChips!.delete(draftInputOwner);
+            this.composerSlashChips!.set(this.composerInputOwner(), { ...draftSlashChip, owner: this.composerInputOwner() });
+        }
         this.codingSessions = [created, ...this.codingSessions];
         this.persistCodingSessions();
         this.persistDesktopRestoreState();
@@ -31767,8 +32194,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
         </div>;
     }
 
-    /** The ring's history estimate, recomputed only when the conversation, route or compaction choice changes. */
-    protected contextRingCache: { readonly key: string; readonly historyTokens: number; readonly windowTokens: number; readonly turns: number } | undefined;
+    /**
+     * The ring's history estimate, recomputed only when the conversation, route, window choice or compaction choice
+     * changes, or the model directory its window comes from is replaced (a catalog that arrives after the first paint).
+     */
+    protected contextRingCache: { readonly key: string; readonly sources: readonly unknown[]; readonly historyTokens: number; readonly windowTokens: number; readonly turns: number } | undefined;
 
     /**
      * The context ring beside the model picker (LobeChat #9): what the next message would carry against the model's
@@ -31787,14 +32217,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const last = codingSession.turns.at(-1);
         // While the ring turns, the estimate keeps the previous figure; the watermark lands when the turn ends.
         const key = JSON.stringify([codingSession.id, codingSession.turns.length, last?.id, last?.stage, last?.completedAt, activeRoute?.id,
-            codingSession.contextWindowTokens, compacted, compactedAtTurnCount]);
+            codingSession.contextWindowTokens, compacted, compactedAtTurnCount, eligibleTurns, this.contextWindowTokens, this.contextWindowByModel]);
+        // The same directory identities rawModelContextWindowTokens caches by: a window read before they loaded is not kept.
+        const sources: readonly unknown[] = [this.globalModels, this.platformCatalog?.offerings, this.registryModels];
         const estimate = estimateTextTokens;
-        if (this.contextRingCache?.key !== key) {
+        if (this.contextRingCache?.key !== key || !this.contextRingCache.sources.every((value, index) => value === sources[index])) {
             const history = this.codingConversationHistory(codingSession, activeRoute);
             const maxWindowTokens = this.modelContextWindowTokens?.(activeRoute);
             const windowTokens = effectiveContextWindowTokens(this.contextWindowForRoute?.(activeRoute, codingSession.contextWindowTokens ?? this.contextWindowTokens), maxWindowTokens)
                 ?? maxWindowTokens ?? 128_000;
-            this.contextRingCache = { key, historyTokens: history.reduce((sum, message) => sum + estimate(message.content), 0), windowTokens,
+            this.contextRingCache = { key, sources, historyTokens: history.reduce((sum, message) => sum + estimate(message.content), 0), windowTokens,
                 turns: eligibleTurns };
         }
         const cache = this.contextRingCache;
@@ -32610,6 +33042,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         });
     }
 
+    protected syncMarkdownStickyScrolls(element: HTMLElement): void {
+        syncStickyHorizontalScrollsIn(element);
+    }
+
     /** Stable identity: the Markdown host is memoized on its props. */
     protected readonly decorateConversationContent = (element: HTMLElement): void => {
         decorateConversationLinks(element);
@@ -32622,6 +33058,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // A picture on a file server loads by itself only inside a root this conversation already uses.
             allowNetworkFile: resolved => this.conversationNetworkFileAllowed?.(resolved.url) === true
         });
+        this.syncMarkdownStickyScrolls?.(element);
     };
 
     /**
@@ -32985,7 +33422,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** Pictures and video clips a reply's markdown shows, in reading order (matching decorateConversationMedia). */
     protected conversationMarkdownMedia(text: string): readonly { readonly kind: 'image' | 'video'; readonly source: string; readonly alt: string }[] {
         if (!/!\[|\[[^\]]*\]\(|<(?:img|video)\b|\.(?:mp4|m4v|webm|mov|ogv|mkv)\b/i.test(text)) return [];
-        const cached = this.conversationMarkdownMediaCache.get(text);
+        // Rendered in the current language (a clip's label is), so a language switch never keeps the old captions.
+        const cacheKey = `${this.desktopLocale}\u0000${text}`;
+        const cached = this.conversationMarkdownMediaCache.get(cacheKey);
         if (cached) return cached;
         const found: { readonly kind: 'image' | 'video'; readonly source: string; readonly alt: string }[] = [];
         try {
@@ -33038,7 +33477,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (page.body) walk(page.body);
         } catch { /* a reply that cannot be rendered offers no media to step to */ }
         if (this.conversationMarkdownMediaCache.size >= 256) this.conversationMarkdownMediaCache.delete(this.conversationMarkdownMediaCache.keys().next().value as string);
-        this.conversationMarkdownMediaCache.set(text, found);
+        this.conversationMarkdownMediaCache.set(cacheKey, found);
         return found;
     }
 
@@ -37410,7 +37849,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.flushComposerDraft();
         this.persistActiveCodingSessionState();
         this.rememberNavigation();
-        this.disconnectInactiveConversationTabs('');
+        this.disconnectInactiveConversationTabs?.('');
         this.activeSection = 'coding';
         this.codingPanel = 'thread';
         this.codingPopover = '';
@@ -37457,6 +37896,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.restoringCheckpointId = '';
         this.globalCodingDraft = true;
         this.draftWorkspaceRoot = this.activeWorkspaceRoot;
+        // A new task starts without a command chip; a chip on another conversation's draft stays with that draft.
+        this.composerSlashChips?.delete(this.composerInputOwner?.());
         this.persistDesktopRestoreState();
         this.update();
         requestAnimationFrame(() => this.node.querySelector<HTMLTextAreaElement>('.nmx-composer textarea')?.focus());
@@ -38694,7 +39135,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected composerRows(): number {
-        const logicalLines = this.prompt.split('\n').reduce((total, line) => total + Math.max(1, Math.ceil(line.length / 74)), 0);
+        // The command chip takes the start of the first line: about its slug and icon in characters.
+        const chip = this.composerSlashChip?.();
+        const chipColumns = chip ? chip.slug.length + 4 : 0;
+        const logicalLines = this.prompt.split('\n').reduce((total, line, index) => total + Math.max(1, Math.ceil((line.length + (index ? 0 : chipColumns)) / 74)), 0);
         return Math.max(2, Math.min(9, logicalLines));
     }
 
@@ -38768,6 +39212,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected slashCommandActiveIndex = 0;
     protected slashCommandDismissedToken = '';
     protected slashCommandMatch: ComposerSlashMatch | undefined;
+    /**
+     * Each composer's workflow or skill command chip (`[icon] slug`) at the start of its input, keyed by the composer it
+     * was picked in (`composerInputOwner()`): every conversation and draft keeps its own, and another conversation's
+     * composer, or the goal input, never shows or sends it.
+     */
+    protected composerSlashChips?: Map<string, ComposerSlashChip & { readonly owner: string }>;
+    protected composerSlashPillHost?: HTMLElement;
+    protected composerSlashPillObserver?: ResizeObserver;
     protected readonly steeringDisplayPrompts = new Map<string, string>();
 
     protected competingSlashSurfaces() {
@@ -38813,7 +39265,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }));
     }
 
-    protected currentSlashCommands(): readonly ComposerSlashCommandItem[] {
+    protected currentSlashCommands(query = this.slashCommandMatch?.query || ''): readonly ComposerSlashCommandItem[] {
         const session = this.activeCodingSession?.();
         const completedTurnCount = (session?.turns || []).filter(
             turn => !(turn as { excludedFromContext?: boolean }).excludedFromContext
@@ -38859,7 +39311,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 : undefined,
             skills: this.availableSlashSkills(session?.id || this.activeCodingSessionId)
         });
-        const query = this.slashCommandMatch?.query || '';
         return filterComposerSlashCommands(allCommands, query);
     }
 
@@ -38868,6 +39319,105 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.slashCommandMatch = undefined;
         this.slashCommandDismissedToken = '';
         this.slashCommandActiveIndex = 0;
+    }
+
+    /**
+     * The command chip of the composer on screen. This reset (also run by every popover and navigation change) leaves
+     * it alone: picking a model or a permission after `/review` keeps the chip, and a conversation's chip is back
+     * with its draft after a visit elsewhere. It goes when sent, removed, or replaced, and on a new task.
+     */
+    protected composerSlashChip(): (ComposerSlashChip & { readonly owner: string }) | undefined {
+        return this.composerSlashChips?.get(this.composerInputOwner());
+    }
+
+    /** A chip is a message on its own (`/review`, `/init`, `/commit`, a skill), except `/plan`, which waits for the task. */
+    protected composerSlashChipSendsAlone(): boolean {
+        const chip = this.composerSlashChip();
+        return Boolean(chip && chip.kind !== 'plan');
+    }
+
+    /** Shows a workflow or skill command as the input's chip, leaves the rest of the text in place and the caret in the input. */
+    protected attachComposerSlashCommand(command: ComposerSlashCommandItem, nextValue: string, nextCaret: number): void {
+        this.slashCommandOpen = false;
+        this.slashCommandMatch = undefined;
+        this.slashCommandDismissedToken = '';
+        // Set first: when the text is not empty, a new draft gets its conversation right below and the chip moves with it.
+        const owner = this.composerInputOwner();
+        (this.composerSlashChips ??= new Map()).set(owner, { ...slashChipFromCommand(command), owner });
+        this.applySlashTextReplacement(nextValue, nextCaret);
+        this.update();
+    }
+
+    /** Takes the chip out (Backspace at the start of the input, or its ×); the text the user typed stays. */
+    protected detachComposerSlashCommand(): void {
+        if (!this.composerSlashChip()) return;
+        this.composerSlashChips?.delete(this.composerInputOwner());
+        this.syncComposerDomControls?.();
+        this.update();
+        const textarea = this.composerTextareaRef?.current;
+        if (textarea?.isConnected && document.activeElement !== textarea) textarea.focus({ preventScroll: true });
+    }
+
+    /** `/review ` (a workflow or skill command and a space) typed at the start of the input becomes its chip. */
+    protected adoptTypedComposerSlashCommand(textarea: HTMLTextAreaElement): boolean {
+        if (this.composerComposing || this.goalComposerActive && this.goalComposerSessionId === this.activeCodingSessionId) return false;
+        // Cheap gate before the command list is built: the text starts with `/`, and the caret sits right after its first space.
+        const value = textarea.value;
+        const space = value.indexOf(' ');
+        if (value[0] !== '/' || space < 2 || textarea.selectionStart !== space + 1 || textarea.selectionEnd !== space + 1) return false;
+        const typed = matchTypedComposerSlashChip(value, textarea.selectionStart, textarea.selectionEnd, this.currentSlashCommands(''));
+        if (!typed) return false;
+        this.attachComposerSlashCommand(typed.command, typed.rest, 0);
+        return true;
+    }
+
+    protected renderComposerSlashPill(): React.ReactNode {
+        const chip = this.composerSlashChip();
+        if (!chip) return undefined;
+        const removeLabel = localizeDesktopSurface(this.desktopLocale, `移除 /${chip.slug}`);
+        return <span key={chip.slug} ref={this.syncSlashPillIndent} className='nmx-composer-slash-pill' data-slash-slug={chip.slug} data-slash-kind={chip.kind}>
+            <span className='nmx-composer-slash-pill-remove' role='button' aria-label={removeLabel} title={removeLabel}
+                onMouseDown={event => event.preventDefault()} onClick={() => this.detachComposerSlashCommand()}>
+                <i className={`codicon codicon-${chip.icon}`} aria-hidden='true' />
+                <i className='codicon codicon-close' aria-hidden='true' />
+            </span>
+            <span className='nmx-composer-slash-pill-label' data-nmx-literal>{chip.slug}</span>
+        </span>;
+    }
+
+    /**
+     * Indents the input's first line (and its Markdown overlay's) by the chip's width plus a 6px gap, measured again
+     * whenever the chip's size changes (fonts, a hidden composer shown again). Later lines wrap to the left edge.
+     */
+    protected readonly syncSlashPillIndent = (pill: HTMLSpanElement | null): void => {
+        this.composerSlashPillObserver?.disconnect();
+        this.composerSlashPillObserver = undefined;
+        const host = pill?.parentElement;
+        if (!pill || !host) {
+            this.composerSlashPillHost?.style.removeProperty('--nmx-slash-pill-indent');
+            this.composerSlashPillHost = undefined;
+            return;
+        }
+        this.composerSlashPillHost = host;
+        const measure = (): void => host.style.setProperty('--nmx-slash-pill-indent', `${pill.offsetWidth + 6}px`);
+        measure();
+        if (typeof ResizeObserver === 'function') {
+            this.composerSlashPillObserver = new ResizeObserver(measure);
+            this.composerSlashPillObserver.observe(pill);
+        }
+        const textarea = host.querySelector<HTMLTextAreaElement>(':scope > textarea');
+        if (textarea) this.positionComposerSlashPill(textarea);
+    };
+
+    /** The chip scrolls with the first line it sits on, and is cut off where the input cuts that line off. */
+    protected positionComposerSlashPill(textarea: HTMLTextAreaElement): void {
+        const pill = textarea.parentElement?.querySelector<HTMLElement>(':scope > .nmx-composer-slash-pill');
+        if (!pill) return;
+        const offset = Math.max(0, textarea.scrollTop);
+        const hidden = Math.min(pill.offsetHeight, Math.max(0, offset - pill.offsetTop));
+        pill.style.transform = offset ? `translateY(${-offset}px)` : '';
+        pill.style.clipPath = hidden ? `inset(${hidden}px 0 0 0)` : '';
+        pill.style.visibility = hidden && hidden >= pill.offsetHeight ? 'hidden' : '';
     }
 
     protected slashCommandDrawerVisible(): boolean {
@@ -38985,6 +39535,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.update();
             return;
         }
+        if (isComposerSlashChipKind(command.kind)) {
+            const cleaned = removeComposerSlashToken(currentText, match);
+            this.attachComposerSlashCommand(command, cleaned.value, cleaned.caret);
+            return;
+        }
         const replaced = replaceComposerSlashToken(currentText, match, command.slug, true);
         this.applySlashTextReplacement(replaced.value, replaced.caret);
         this.update();
@@ -39081,31 +39636,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.slashCommandMatch = undefined;
         this.slashCommandDismissedToken = '';
 
-        // Workflow & skill commands keep or expand `/<slug>` in the composer:
-        if (command.kind === 'review' || command.kind === 'init' || command.kind === 'commit' || command.kind === 'plan' || command.kind === 'skill') {
-            const textBeforeSlash = match ? currentText.slice(0, match.slashIndex).trim() : '';
-            const stripped = match ? removeComposerSlashToken(currentText, match).value.trim() : '';
-            if (command.requiresTaskInput && !stripped) {
-                if (match) {
-                    const replaced = replaceComposerSlashToken(currentText, match, command.slug, true);
-                    this.applySlashTextReplacement(replaced.value, replaced.caret);
-                } else {
-                    const nextVal = `/${command.slug} `;
-                    this.applySlashTextReplacement(nextVal, nextVal.length);
-                }
-                this.update();
-                return;
-            }
-            if (command.requiresTaskInput && textBeforeSlash) {
-                const nextPrompt = `/${command.slug} ${stripped}`;
-                this.applySlashTextReplacement(nextPrompt, nextPrompt.length);
-                this.update();
-                return;
-            }
-            const nextPrompt = stripped ? `/${command.slug} ${stripped}` : `/${command.slug}`;
-            this.applySlashTextReplacement(nextPrompt, nextPrompt.length);
-            this.update();
-            void this.submitPrompt('coding');
+        // Workflow & skill commands become the input's chip: the `/query` token leaves the text, nothing is sent yet, and
+        // the caret stays for the user's own words (Enter sends `/<slug> <text>`).
+        if (isComposerSlashChipKind(command.kind)) {
+            const cleaned = match
+                ? removeComposerSlashToken(currentText, match)
+                : { value: currentText, caret: textarea?.selectionStart ?? currentText.length };
+            this.attachComposerSlashCommand(command, cleaned.value, cleaned.caret);
             return;
         }
 
@@ -39242,7 +39779,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected handleComposerKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>): void {
         if (!this.ownsComposerInput(event.currentTarget)) return;
         if (this.handleSlashCommandKeyDown?.(event)) return;
-        if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.currentTarget.value.trim()) {
+        // Backspace at the very start of the input (no selection) takes the command chip out, like deleting one character.
+        if (event.key === 'Backspace' && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !this.composerComposing
+            && !event.nativeEvent.isComposing && event.currentTarget.selectionStart === 0 && event.currentTarget.selectionEnd === 0 && this.composerSlashChip?.()) {
+            event.preventDefault();
+            this.detachComposerSlashCommand?.();
+            return;
+        }
+        if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.currentTarget.value.trim() && !this.composerSlashChip?.()) {
             const session = this.activeCodingSession();
             const suggestion = this.agentStage === 'running' ? '' : this.composerFollowUpSuggestion(session);
             if (suggestion && session) {
@@ -40104,32 +40648,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
     }
 
-    protected async exportDesktopDiagnostics(): Promise<void> {
-        if (this.localDataStage !== 'idle') return;
-        this.localDataStage = 'exporting';
-        this.localDataMessage = '';
-        this.localDataError = '';
-        this.update();
-        try {
-            const report = await this.platformService.createDesktopDiagnosticReport(this.activeWorkspaceRoot || '');
-            const destination = await this.fileDialogService.showSaveDialog({
-                title: '保存诊断报告',
-                saveLabel: '保存',
-                inputValue: report.fileName,
-                filters: { JSON: ['json'] }
-            });
-            if (destination) {
-                await this.fileService.writeFile(destination, BinaryBuffer.fromString(report.content));
-                this.localDataMessage = '诊断报告已保存';
-            }
-        } catch (error) {
-            this.localDataError = error instanceof Error ? error.message : '诊断报告导出失败';
-        } finally {
-            this.localDataStage = 'idle';
-            this.update();
-        }
-    }
-
     protected conversationArchiveBusy(): boolean {
         return this.agentStage === 'running' || Boolean(this.activeAgentRunId)
             || this.runningScheduledTaskIds.size > 0 || this.localDataStage !== 'idle';
@@ -40728,6 +41246,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.accountOverviewLoading = false;
             this.accountOverviewError = '';
             this.accountOverview = EMPTY_ACCOUNT_OVERVIEW;
+            // A plugin purchase (and the top-up it waits on) belongs to the account that started it: signing out or
+            // switching accounts ends it, so it never reopens as a dialog for nobody, or under the next account.
+            if (previousUserId) {
+                this.pendingAppPluginBuy = undefined;
+                this.appPluginBuy = undefined;
+                if (this.walletTopupSheetOpen || this.walletTopupOrder) this.resetWalletTopupSurface?.();
+            }
             // The plain directory (the merchant and own-API tabs) is public, read without the account
             // (getPublicMerchantDirectory). Signing in, the launch's first session included, keeps the page already shown
             // or on its way instead of dropping it and reading it again; a failed read is read again as before. Leaving or
@@ -41017,6 +41542,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }).catch(() => undefined);
     }
 
+    protected openTopupForAppPluginBuy(): void {
+        const buy = this.appPluginBuy;
+        if (!buy) {
+            this.openWalletTopup();
+            return;
+        }
+        const wallets = resolveDisplayWallets(this.platformSession.linked, this.platformSession.wallets);
+        const availableMicros = wallets.find(wallet => wallet.currency === 'USD')?.availableMicros ?? 0;
+        const availableCents = Math.max(0, Math.floor(availableMicros / 10_000));
+        const shortfallCents = Math.max(0, buy.plugin.priceCents - availableCents);
+        const minMinor = Math.max(100, this.walletTopupOptions?.minimumMinor ?? 1_000);
+        const maxMinor = Math.max(minMinor, this.walletTopupOptions?.maximumMinor ?? 100_000);
+        const desiredMinor = Math.min(maxMinor, Math.max(minMinor, Math.ceil(shortfallCents / 100) * 100));
+        this.walletTopupAmount = String(Math.ceil(desiredMinor / 100));
+        this.pendingAppPluginBuy = { plugin: buy.plugin, key: buy.key, credited: false };
+        this.appPluginBuy = undefined;
+        this.openWalletTopup();
+    }
+
     protected openWalletTopup(): void {
         if (!this.platformSession.linked) {
             void this.startDeviceLink();
@@ -41028,12 +41572,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.walletTopupStage = 'idle';
         this.walletTopupOrder = undefined;
         this.walletTopupError = '';
+        this.walletTopupExternalNotice = '';
+        this.walletTopupAutoOpenedOrderId = '';
+        this.walletTopupAutoOpenedAt = 0;
         this.clearWalletTopupPoll();
         this.refreshWalletTopupPlatformOrigin();
         this.update();
         requestAnimationFrame(() => this.node.querySelector<HTMLInputElement>('.nmx-topup-amount-input')?.focus());
         void this.platformService.getWalletTopupOptions().then(options => {
             this.walletTopupOptions = options;
+            if (this.pendingAppPluginBuy && this.walletTopupStage === 'idle') {
+                const currentMinor = walletTopupAmountMinor(this.walletTopupAmount) ?? 0;
+                if (currentMinor < options.minimumMinor) {
+                    this.walletTopupAmount = String(Math.ceil(options.minimumMinor / 100));
+                }
+            }
             if (this.walletTopupSheetOpen) this.update();
         }).catch(() => undefined);
     }
@@ -41073,6 +41626,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         this.walletTopupStage = 'creating';
         this.walletTopupError = '';
+        this.walletTopupExternalNotice = '';
+        this.walletTopupAutoOpenedOrderId = '';
+        this.walletTopupAutoOpenedAt = 0;
         this.walletTopupConsecutiveErrors = 0;
         this.walletTopupPendingResume = false;
         this.update();
@@ -41083,10 +41639,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.walletTopupStage = order.topup.status === 'credited' ? 'credited' : 'waiting';
             this.walletTopupPollStartedAt = Date.now();
             if (order.topup.status === 'credited') {
+                if (this.pendingAppPluginBuy) this.pendingAppPluginBuy = { ...this.pendingAppPluginBuy, credited: true };
                 await this.loadAccountOverview(true);
             } else {
                 // Embedded /checkout-embed renders inline inside the modal when planId + whopAccountId are present; open browser automatically only when no embed target exists.
-                if (!(order.payment.planId && order.payment.whopAccountId) && order.payment.checkoutUrl) this.openExternalUrl(order.payment.checkoutUrl);
+                if (!(order.payment.planId && order.payment.whopAccountId) && order.payment.checkoutUrl) {
+                    this.walletTopupAutoOpenedOrderId = order.topup.id;
+                    this.walletTopupAutoOpenedAt = Date.now();
+                    this.openExternalUrl(order.payment.checkoutUrl);
+                }
                 this.scheduleWalletTopupPoll();
             }
         } catch (error) {
@@ -41096,6 +41657,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             this.walletTopupStage = 'error';
             this.walletTopupError = walletTopupErrorText(this.desktopLocale, error, 'create', this.walletTopupOptions);
+        }
+        this.update();
+    }
+
+    protected handleWalletTopupOpenExternal(_code?: string): void {
+        const order = this.walletTopupOrder;
+        const checkoutUrl = order?.payment.checkoutUrl;
+        if (!order || !this.walletTopupSheetOpen || !checkoutUrl) return;
+        const now = Date.now();
+        const sameOrderRapidly = this.walletTopupAutoOpenedOrderId === order.topup.id
+            && now - this.walletTopupAutoOpenedAt < 10_000;
+        if (!sameOrderRapidly) {
+            this.walletTopupAutoOpenedOrderId = order.topup.id;
+            this.walletTopupAutoOpenedAt = now;
+            this.openExternalUrl(checkoutUrl);
+        }
+        this.walletTopupExternalNotice = walletTopupText(this.desktopLocale, 'openedInBrowser');
+        if (this.walletTopupStage === 'waiting' && !this.walletTopupPollTimer) {
+            this.scheduleWalletTopupPoll();
         }
         this.update();
     }
@@ -41119,15 +41699,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.walletTopupOrder = order;
             if (order.topup.status === 'credited') {
                 this.walletTopupStage = 'credited';
+                if (this.pendingAppPluginBuy) this.pendingAppPluginBuy = { ...this.pendingAppPluginBuy, credited: true };
+                this.walletTopupExternalNotice = '';
                 this.clearWalletTopupPoll();
                 await this.loadAccountOverview(true);
                 this.addNotification('success', walletTopupText(this.desktopLocale, 'notifyTitle'), walletTopupText(this.desktopLocale, 'notifyBody', { amount: this.formatMoneyMicros(order.payment.creditAmount.currency, order.payment.creditAmount.micros) }), undefined, { persist: true, category: 'billing' });
             } else if (order.topup.status === 'expired' || order.topup.status === 'cancelled' || order.topup.status === 'refunded') {
                 this.walletTopupStage = 'error';
+                this.walletTopupExternalNotice = '';
                 this.walletTopupError = walletTopupText(this.desktopLocale, order.topup.status === 'expired' ? 'expired' : 'closed');
                 this.clearWalletTopupPoll();
             } else if (order.topup.status === 'review') {
                 this.walletTopupStage = 'error';
+                this.walletTopupExternalNotice = '';
                 this.walletTopupError = walletTopupText(this.desktopLocale, 'review');
                 this.clearWalletTopupPoll();
             } else {
@@ -41146,7 +41730,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.update();
     }
 
-    protected resetWalletTopupSurface(): void {
+    protected resetWalletTopupSurface(preservePendingPluginBuy = false): void {
+        const resumeBuy = preservePendingPluginBuy ? undefined : this.pendingAppPluginBuy;
+        const wasCredited = this.walletTopupStage === 'credited' || Boolean(resumeBuy?.credited);
+        if (!preservePendingPluginBuy) this.pendingAppPluginBuy = undefined;
         this.clearWalletTopupPoll();
         this.walletTopupConsecutiveErrors = 0;
         this.walletTopupPendingResume = false;
@@ -41155,6 +41742,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.walletTopupStage = 'idle';
         this.walletTopupOrder = undefined;
         this.walletTopupError = '';
+        this.walletTopupExternalNotice = '';
+        this.walletTopupAutoOpenedOrderId = '';
+        this.walletTopupAutoOpenedAt = 0;
+        if (resumeBuy && !this.appPluginBuy) {
+            this.appPluginBuy = { plugin: resumeBuy.plugin, key: resumeBuy.key, busy: false, error: '' };
+            if (wasCredited && this.platformSession.linked) void this.loadAccountOverview(true);
+        }
     }
 
     protected applyCatalog(catalog: PlatformCatalog): void {
@@ -41623,13 +42217,33 @@ export class NextMuxDesktopWidget extends ReactWidget {
         });
     }
 
+    protected routesForRelayCache: Map<string, { readonly key: readonly unknown[]; readonly value: readonly DesktopModelRoute[] }> | undefined;
     /** `hideFull` drops a merchant's offerings whose API keys are all full, for pickers; automatic routing picks across merchants. */
     protected routesForRelay(relayKey: string, workbench: 'coding' | 'comic', _includeDisabled = false, hideFull = false): readonly DesktopModelRoute[] {
+        const merchantId = relayKey.startsWith('managed:') ? relayKey.slice('managed:'.length) : undefined;
+        const snapshot = merchantId ? this.merchantPickerSnapshots?.get(merchantId) : undefined;
+        const cacheKey = [
+            this.platformCatalog,
+            this.selectedMerchantCatalog,
+            this.officialModels,
+            // Own-API routes are built from the model directory too (officialModelRoutes reads globalModels,
+            // comicOfficialModelRoutes registryModels): a directory that loads later replaces them.
+            this.globalModels,
+            this.registryModels,
+            this.savedFixedOfferingRevision,
+            this.catalogSnapshotRevision,
+            snapshot?.updatedAt,
+            snapshot?.catalog?.offerings?.length,
+            hideFull ? this.relayCapacitySnapshot : undefined
+        ];
+        const cacheSlot = `${workbench}\u0000${hideFull ? '1' : '0'}\u0000${relayKey}`;
+        const cache = this.routesForRelayCache ??= new Map<string, { readonly key: readonly unknown[]; readonly value: readonly DesktopModelRoute[] }>();
+        const cached = cache.get(cacheSlot);
+        if (cached && cached.key.every((value, index) => Object.is(value, cacheKey[index]))) return cached.value;
         let routes: readonly DesktopModelRoute[] = [];
         if (relayKey === 'auto') {
             routes = this.managedModelRoutes(workbench, true);
-        } else if (relayKey.startsWith('managed:')) {
-            const merchantId = relayKey.slice('managed:'.length);
+        } else if (relayKey.startsWith('managed:') && merchantId !== undefined) {
             routes = this.managedModelRoutes(workbench, false, merchantId, hideFull)
                 .filter(route => this.offeringMerchantId(route.offering) === merchantId);
         } else if (relayKey.startsWith('official:')) {
@@ -41639,6 +42253,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 ? route.connection.id === connectionId
                 : route.connection.providerId === connectionId);
         }
+        cache.set(cacheSlot, { key: cacheKey, value: routes });
         return routes;
     }
 
@@ -41852,7 +42467,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return answer;
     }
 
+    protected comicModelOptionsCache: { readonly key: readonly unknown[]; readonly value: readonly CodingModelOption[] } | undefined;
     protected comicModelOptions(): readonly CodingModelOption[] {
+        const cacheKey = [this.registryModels, this.globalModels, this.platformCatalog, this.selectedMerchantCatalog, this.catalogSnapshotRevision, this.officialModels, this.platformSession.linked];
+        const cached = this.comicModelOptionsCache;
+        if (cached && cached.key.every((value, index) => Object.is(value, cacheKey[index]))) return cached.value;
         const models = new Map<string, CodingModelOption>();
         const add = (option: CodingModelOption): void => {
             const current = models.get(option.id);
@@ -41894,20 +42513,32 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (metadata) add({ ...this.registryModelOption(metadata), id: this.modelKeyForConnection(connection),
                 model: connection.model, available: true, providerName: connection.providerName });
         }
-        return [...models.values()].sort((left, right) => Number(right.available) - Number(left.available)
+        const sorted = [...models.values()].map(option => {
+            const rank = option.rank ?? this.globalModelRank?.(option.model);
+            return rank === option.rank ? option : { ...option, rank };
+        }).sort((left, right) => Number(right.available) - Number(left.available)
+            || (left.rank ?? Infinity) - (right.rank ?? Infinity)
             || left.providerName.localeCompare(right.providerName) || left.label.localeCompare(right.label));
+        this.comicModelOptionsCache = { key: cacheKey, value: sorted };
+        return sorted;
     }
 
     protected modelOptions(workbench: 'coding' | 'comic'): readonly CodingModelOption[] {
         return workbench === 'coding' ? this.codingModelOptions() : this.comicModelOptions();
     }
 
+    protected settingsModelOptionsCache: Map<'coding' | 'comic', { readonly global: unknown; readonly value: readonly CodingModelOption[] }> | undefined;
     protected settingsModelOptions(workbench: 'coding' | 'comic'): readonly CodingModelOption[] {
+        const cache = this.settingsModelOptionsCache ??= new Map<'coding' | 'comic', { readonly global: unknown; readonly value: readonly CodingModelOption[] }>();
+        const cached = cache.get(workbench);
+        if (cached && cached.global === this.globalModels) return cached.value;
         // Settings is the public author/model directory. Never derive it from a
         // selected merchant, its cached routes, or a private API discovery list.
-        return this.globalModels.filter(model => modelVisibilityCategories(model).some(category => workbench === 'coding' ? category === 'language' : category !== 'language')
+        const value = this.globalModels.filter(model => modelVisibilityCategories(model).some(category => workbench === 'coding' ? category === 'language' : category !== 'language')
             && !/^unlisted\//i.test(model.canonicalModel) && !isDecisionModel(model.canonicalModel))
             .map(model => ({ ...this.registryModelOption(model), id: model.canonicalModel, popularity: model.popularity }));
+        cache.set(workbench, { global: this.globalModels, value });
+        return value;
     }
 
     protected relayOptions(workbench: 'coding' | 'comic' = this.activeSection === 'comic' ? 'comic' : 'coding'): readonly RelayOption[] {
@@ -46684,7 +47315,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!this.conversationHistoryReady() || run.runningMessageSubmitting || this.composerComposing) return false;
         const session = this.activeCodingSession();
         const value = this.prompt.trim();
-        if (!session || (!value && !this.attachments.length && !this.pastedTextReferences.length)) return false;
+        if (!session || (!value && !this.attachments.length && !this.pastedTextReferences.length && !this.composerSlashChip?.())) return false;
         try {
             const queued = await this.submitRunningMessage('coding');
             if (queued) {
@@ -46800,7 +47431,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
             ? this.composerAppItems(appOwner)
             : composerAppList(this.composerApp(appOwner));
         const pickedApp = pickedApps.length > 1 ? pickedApps : pickedApps[0];
+        // A chip queues as its typed command (`/review <text>`); the queue expands it when the task runs.
+        const slashChip = workbench === 'coding' ? this.composerSlashChip?.() : undefined;
         if (workbench === 'coding' && !this.attachments.length && !references.length) {
+            if (slashChip?.kind === 'plan' && !rawValue) {
+                this.composerTextareaRef?.current?.focus({ preventScroll: true });
+                return false;
+            }
             if (!pickedApps.length) {
                 const bareUiMatch = /^\/(compact|new|undo|goal|council|app|model|relay|permissions|mcp)$/iu.exec(rawValue);
                 if (bareUiMatch) {
@@ -46821,7 +47458,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 return false;
             }
         }
-        if ((!rawValue && !this.attachments.length && !pickedApps.length) || run.runningMessageSubmitting) return false;
+        if ((!rawValue && !this.attachments.length && !pickedApps.length && !slashChip) || run.runningMessageSubmitting) return false;
         const targetSessionId = this.activeCodingSessionId || run.activeAgentSessionId;
         if (!targetSessionId) return false;
         const currentComposerToken = (): string => composerContentToken(
@@ -46853,7 +47490,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (taskAttachments.length > MAX_TOTAL_ATTACHMENTS_PER_TASK) {
                 throw new Error(composerAttachmentText(this.desktopLocale, 'maxAttachments'));
             }
-            const value = withAppControlMarker(pickedApp, materializePastedTextPrompt(rawValue, durableReferences));
+            const body = materializePastedTextPrompt(rawValue, durableReferences);
+            const value = withAppControlMarker(pickedApp, slashChip ? slashChipPrompt(slashChip, body) : body);
             if (!this.enqueueFollowUpTask(targetSessionId, workbench, value || runningTaskText(this.desktopLocale, 'attachmentOnly'), taskAttachments, {
                 pastedTextReferences: durableReferences
             })) {
@@ -46861,6 +47499,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
 
             if (pickedApp) this.clearSubmittedComposerApps?.(appOwner, pickedApp);
+            if (slashChip && this.composerSlashChips?.get(slashChip.owner) === slashChip) this.composerSlashChips.delete(slashChip.owner);
             this.setComposerPrompt('');
             this.attachments = [];
             this.pastedTextReferences = [];
@@ -47606,7 +48245,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     return items.length > 1 ? items : items[0];
                 })()
                 : undefined,
-            anchored: this.anchoredModelPrompt?.(prompt.trim(), attachments, pastedTextReferences)
+            anchored: this.anchoredModelPrompt?.(prompt.trim(), attachments, pastedTextReferences),
+            slashCommand: workbench === 'coding' ? this.composerSlashChip?.() : undefined
         };
     }
 
@@ -47633,6 +48273,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected clearSubmittedComposer(submission: ReturnType<NextMuxDesktopWidget['capturePromptSubmission']>): void {
         if (!this.submissionComposerMatches(submission)) return;
+        if (submission.slashCommand && this.composerSlashChips?.get(submission.slashCommand.owner) === submission.slashCommand) this.composerSlashChips.delete(submission.slashCommand.owner);
         if (this.activeCodingSessionId === submission.sessionId) {
             this.setComposerPrompt('');
             this.attachments = [];
@@ -47721,6 +48362,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.update();
                 return false;
             }
+            // The `/plan` chip with no task yet: nothing to plan, so the caret simply stays in the input for the task.
+            if (!trimmedDraft && this.composerSlashChip?.()?.kind === 'plan') {
+                this.composerTextareaRef?.current?.focus({ preventScroll: true });
+                return false;
+            }
         }
         if (workbench === 'coding' && !this.conversationHistoryReady()) return false;
         const targetSessionId = historicalExecution?.sessionId || queuedExecution?.session.id || resumedExecution?.session.id || this.activeCodingSessionId;
@@ -47733,9 +48379,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!queuedExecution && !resumedExecution && !historicalExecution
             && (this.hasPendingAttachmentImports(this.activeCodingSessionId)
                 || this.hasUnresolvedDraftAttachments(this.activeCodingSessionId))) return false;
+        const draftSlashChip = workbench === 'coding' && !queuedExecution && !resumedExecution && !historicalExecution ? this.composerSlashChip?.() : undefined;
         if (workbench === 'coding' && !queuedExecution && !resumedExecution && !historicalExecution && !this.activeCodingSessionId
-            && (this.prompt.trim() || this.attachments.length || this.composerApp?.())) {
-            this.ensureCodingSession(this.prompt || this.attachments[0]?.attachment.name || this.composerApp()?.name || '');
+            && (this.prompt.trim() || this.attachments.length || this.composerApp?.() || draftSlashChip)) {
+            this.ensureCodingSession(this.prompt || this.attachments[0]?.attachment.name || this.composerApp()?.name || (draftSlashChip ? `/${draftSlashChip.slug}` : ''));
         }
         const ownerId = workbench === 'coding' ? (historicalExecution?.sessionId || queuedExecution?.session.id || resumedExecution?.session.id || this.activeCodingSessionId) : '';
         const run = this.conversationAgentRun?.(ownerId) || this;
@@ -47855,7 +48502,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         let taskAttachments: readonly DesktopAttachmentRecord[] = resumedExecution ? []
             : historicalExecution?.attachments || queuedExecution?.attachments || submission?.attachments || this.attachments;
         if (run.agentStage === 'running' || run.activeAgentRunId) {
-            if (!directComposerSubmission || (!rawValue && !this.attachments.length && !this.composerApp())) return false;
+            if (!directComposerSubmission || (!rawValue && !this.attachments.length && !this.composerApp() && !submission?.slashCommand)) return false;
             return this.submitRunningMessage(workbench);
         }
         if (directComposerSubmission && workbench === 'coding' && typeof shouldEnqueueComposerSubmissionWhileBusy === 'function' && shouldEnqueueComposerSubmissionWhileBusy({
@@ -47863,7 +48510,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             activeAgentRunId: run.activeAgentRunId,
             hasRunningTurn: Boolean(this.codingSessions?.find?.(item => item.id === councilTargetSession)?.turns?.some?.(turn => turn.stage === 'running'))
         })) {
-            if (!rawValue && !this.attachments.length && !this.composerApp()) return false;
+            if (!rawValue && !this.attachments.length && !this.composerApp() && !submission?.slashCommand) return false;
             return this.submitRunningMessage(workbench);
         }
         if (historicalExecution) {
@@ -47955,6 +48602,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.update();
                 return false;
             }
+        }
+        // The command chip goes in front of the text as if typed (`/review <text>`): the expansion below, the turn's
+        // display text and the skill priorities are exactly those of the typed command.
+        const slashChip = directComposerSubmission && workbench === 'coding' && !resumedExecution && !suppressSlashForGoalInput ? submission?.slashCommand : undefined;
+        if (slashChip) {
+            if (slashChip.kind === 'plan' && !value && !taskAttachments.length) {
+                this.composerTextareaRef?.current?.focus({ preventScroll: true });
+                return false;
+            }
+            value = slashChipPrompt(slashChip, value);
+            displayValue = slashChipPrompt(slashChip, displayValue);
         }
         if (!value && !pickedApp && !taskAttachments.length) return false;
         if (taskAttachments.length > MAX_TOTAL_ATTACHMENTS_PER_TASK) {
@@ -50360,7 +51018,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
         const showUpdate = updateAppearsInDock(this.updateState);
         // The USD wallet, like the plugin market and the billing page; another currency only when there is none.
-        const wallet = this.platformSession.wallets.find(item => item.currency === 'USD') ?? this.platformSession.wallets[0];
+        const displayWallets = resolveDisplayWallets(this.platformSession.linked, this.platformSession.wallets);
+        const wallet = displayWallets.find(item => item.currency === 'USD') ?? displayWallets[0];
         const balance = wallet ? formatBalanceMicros(this.desktopLocale, wallet.currency, walletNetBalanceMicros(wallet)) : undefined;
         // The avatar opens the account sheet (balance, feedback, settings, sign out); the gear still opens settings directly.
         // The balance lives in that sheet only, not under the name.
@@ -50587,6 +51246,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return <span className={className ? `nmx-brand-logo ${className}` : 'nmx-brand-logo'} aria-hidden='true'></span>;
     }
 
+    protected visibleCodingSidebarProjectsCache: { readonly key: readonly unknown[]; readonly value: readonly ReturnType<typeof codingSidebarProjects>[number][] } | undefined;
+    protected visibleCodingSidebarProjects(): readonly ReturnType<typeof codingSidebarProjects>[number][] {
+        const hiddenPaths = [...this.hiddenProjectPaths].join('\u0000');
+        const cacheKey = [this.workspaceOptions, this.codingHistoryProjects, this.codingSessions, this.codingProjectOrder, hiddenPaths];
+        const cached = this.visibleCodingSidebarProjectsCache;
+        if (cached && cached.key.every((value, index) => Object.is(value, cacheKey[index]))) return cached.value;
+        const hiddenProjectKeys = new Set([...this.hiddenProjectPaths].map(item => codingProjectPathKey(item)));
+        const value = this.orderedCodingProjects(
+            codingSidebarProjects(this.workspaceOptions, [...this.codingHistoryProjects, ...this.codingSessions])
+                .filter(workspace => !this.hiddenProjectPaths.has(workspace.path) && !hiddenProjectKeys.has(codingProjectPathKey(workspace.path)))
+        );
+        this.visibleCodingSidebarProjectsCache = { key: cacheKey, value };
+        return value;
+    }
+
     protected renderContextPanel(): React.ReactNode {
         if (this.activeSection === 'models') {
             return <aside id='nmx-context-panel' className='nmx-context-panel'>
@@ -50616,11 +51290,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // Global search has its own dialog; the project tree keeps its
             // ordering, expansion and pagination while the query changes.
             const openWorkspacePaths = new Set(this.workspaceOptions.map(workspace => workspace.path));
-            const hiddenProjectKeys = new Set([...this.hiddenProjectPaths].map(item => codingProjectPathKey(item)));
-            const visibleProjects = this.orderedCodingProjects(
-                codingSidebarProjects(this.workspaceOptions, [...this.codingHistoryProjects, ...this.codingSessions])
-                    .filter(workspace => !this.hiddenProjectPaths.has(workspace.path) && !hiddenProjectKeys.has(codingProjectPathKey(workspace.path)))
-            );
+            const visibleProjects = this.visibleCodingSidebarProjects
+                ? this.visibleCodingSidebarProjects()
+                : (() => {
+                    const hiddenProjectKeys = new Set([...this.hiddenProjectPaths].map(item => codingProjectPathKey(item)));
+                    return this.orderedCodingProjects(
+                        codingSidebarProjects(this.workspaceOptions, [...this.codingHistoryProjects, ...this.codingSessions])
+                            .filter(workspace => !this.hiddenProjectPaths.has(workspace.path) && !hiddenProjectKeys.has(codingProjectPathKey(workspace.path)))
+                    );
+                })();
             const pinnedList: CodingSessionRecord[] = [];
             const recentList: CodingSessionRecord[] = [];
             const sessionsByWorkspace = new Map<string, CodingSessionRecord[]>();
@@ -50952,7 +51630,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
             <div className='nmx-community-skills-toolbar'>
                 <label><i className='codicon codicon-search'></i><ImeInput value={this.communitySkillQuery} placeholder={communitySkillListText(this.desktopLocale, 'search')} onChange={event => { this.communitySkillQuery = event.currentTarget.value.slice(0, 200); this.communitySkillVisibleLimit = 120; this.update(); }} />{this.communitySkillQuery && <button aria-label='清除搜索' onClick={() => { this.communitySkillQuery = ''; this.communitySkillVisibleLimit = 120; this.update(); }}><i className='codicon codicon-close'></i></button>}</label>
                 <select aria-label='Skill 来源' value={this.communitySkillSource} onChange={event => { this.communitySkillSource = event.currentTarget.value; this.communitySkillVisibleLimit = 120; this.update(); }}><option value='all'>全部来源</option>{this.communitySkills.sources.map(source => <option value={source.id} key={source.id}>{source.name}</option>)}</select>
-                <button disabled={this.communitySkillsLoading} onClick={() => void this.loadCommunitySkills(true)}><i className={`codicon codicon-${this.communitySkillsLoading ? 'loading codicon-modifier-spin' : 'refresh'}`}></i>{this.communitySkillsLoading ? '刷新中' : '刷新'}</button>
             </div>
             <div className='nmx-skill-install-link'><label><i className='codicon codicon-link-external'></i><ImeInput value={this.communitySkillUrl} maxLength={2048} spellCheck={false} placeholder='粘贴 GitHub Skill 链接（目录或 SKILL.md）' onChange={event => { this.communitySkillUrl = event.currentTarget.value; this.update(); }} /></label><button className='is-primary' disabled={!this.communitySkillUrl.trim() || Boolean(this.communitySkillActionId)} onClick={() => void this.installCommunitySkillFromUrl()}>{this.communitySkillActionId === 'url' ? '安装中…' : '从链接安装'}</button></div>
             {(this.communitySkillsError || this.communitySkills.stale && this.communitySkills.message) && <div className={`nmx-settings-inline-error ${this.communitySkillsError ? '' : 'is-warning'}`}>
@@ -50971,7 +51648,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onRemove={location => void this.removeInstalledSkill(location)} removing={this.installedSkillRemoving}
                 onClose={() => { this.installedSkillsOpen = false; this.update(); }} />}
             <section className='nmx-community-skills-list'>
-                <header><strong>{communitySkillListText(this.desktopLocale, 'title')}</strong><span>{matchingCommunitySkills.length}</span></header>
+                {/* The list's title bar carries its refresh at the right end, as the MCP and 技能插件 title rows do. */}
+                <header><strong>{communitySkillListText(this.desktopLocale, 'title')}</strong><span>{matchingCommunitySkills.length}</span>
+                    <button type='button' className='nmx-community-skills-refresh' disabled={this.communitySkillsLoading} onClick={() => void this.loadCommunitySkills(true)}><i className={`codicon codicon-${this.communitySkillsLoading ? 'loading codicon-modifier-spin' : 'refresh'}`} aria-hidden='true'></i>{this.communitySkillsLoading ? '刷新中' : '刷新'}</button></header>
                 <div>{visibleCommunitySkills.map(skill => {
                     const busy = this.communitySkillActionId === skill.id;
                     return <CommunitySkillCard key={`${skill.id}:${skill.permissionChange?.reviewToken || ''}`} skill={skill} locale={this.desktopLocale}
@@ -51136,6 +51815,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
         }
         const seenLegacyRunLevelExecutions = new Set<string>();
+        const matchModel = (left: string | undefined, right: string | undefined): boolean =>
+            typeof sameModelId === 'function'
+                ? sameModelId(left, right)
+                : typeof left === 'string' && typeof right === 'string' && left.trim().toLowerCase() === right.trim().toLowerCase();
         const estimatePersonalTokenUsd = (
             connection: OfficialModelConnection | undefined,
             modelId: string | undefined,
@@ -51143,7 +51826,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             outputCount: number | undefined
         ): { readonly estimateUsd?: number; readonly estimateSource?: 'api' | 'reference' } => {
             if (!modelId) return {};
-            const discovered = connection?.discoveredModels.find(item => item.id === modelId || item.label === modelId);
+            const discovered = connection?.discoveredModels.find(item => matchModel(item.id, modelId) || matchModel(item.label, modelId));
             const apiPrice = discovered?.inputPricePerMillion !== undefined && discovered.outputPricePerMillion !== undefined
                 ? { input: discovered.inputPricePerMillion, output: discovered.outputPricePerMillion } : undefined;
             const reference = !apiPrice ? matchCatalogModel(modelId, discovered?.label, this.globalModels)?.referencePrice : undefined;
@@ -51199,7 +51882,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             const connection = this.officialModels.connections.find(item => item.id === entry.connectionId);
             const local = connection?.providerId === 'ollama';
-            const discovered = connection?.discoveredModels.find(item => item.id === entry.model || item.label === entry.model);
+            const discovered = connection?.discoveredModels.find(item => matchModel(item.id, entry.model) || matchModel(item.label, entry.model));
             const estimate = local ? {} : estimatePersonalTokenUsd(connection, entry.model, entry.inputTokens, entry.outputTokens);
             const matchedSessionTitle = entry.source.kind === 'coding'
                 ? sessionTitleByRunId.get(baseOwnApiRunId(entry.id))
@@ -51223,7 +51906,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected renderModelCenter(): React.ReactNode {
         const query = this.modelSearchQuery.trim().toLocaleLowerCase();
         // The USD wallet, like the plugin market and the billing page; another currency only when there is none.
-        const wallet = this.platformSession.wallets.find(item => item.currency === 'USD') ?? this.platformSession.wallets[0];
+        const displayWallets = resolveDisplayWallets(this.platformSession.linked, this.platformSession.wallets);
+        const wallet = displayWallets.find(item => item.currency === 'USD') ?? displayWallets[0];
         const showOfficial = this.modelCenterView === 'official';
         const showMarketplace = this.modelCenterView === 'all' || this.modelCenterView === 'capability';
         const showUsage = this.modelCenterView === 'usage';
@@ -51267,7 +51951,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     // 刷新 on 优质中转 also refreshes the count shown on its tab.
                     onRefresh={tabKey => { if (tabKey === 'quality-relays') void this.loadModelCenterMerchantCount(); }}
                     onFavorite={(id, name) => this.toggleFavoriteMerchantById(id, name)}
-                    onCopy={id => this.copyToClipboard(id, relayMarketplaceText(this.desktopLocale, 'copiedNumber'), `model-center:${id}`)} />}
+                    onCopy={id => this.copyToClipboard(id, relayMarketplaceText(this.desktopLocale, 'copiedNumber'), `model-center:${id}`)}
+                    // A merchant's model list arrives without an order of its own: newest first by the platform's global rank.
+                    modelRank={model => this.globalModelRank(model)} />}
                 {showOfficial && <section className='nmx-content-section nmx-my-apis-page'>
                     <div className='nmx-section-heading'><div><p>{myApisText(this.desktopLocale, 'lead', { store: credentialStoreName(this.desktopLocale, undefined, false) })}</p></div></div>
                     {this.officialModelsError && <div className='nmx-catalog-notice'><strong>{this.tx('catalogOffline')}</strong><span>{this.officialModelsError}</span><button onClick={() => void this.loadOfficialModels()}>{this.tx('retry')}</button></div>}
@@ -52155,9 +52841,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         ? this.appPluginMarket.plugins.map(item => item.id === id ? { ...item, priceCents: 0, owned: true } : item)
                         : this.appPluginMarket.plugins.filter(item => item.id !== id) };
                     buy.error = appPluginError(locale, result.error);
-                } else buy.error = result.error === 'insufficient_balance' ? appPluginText(locale, 'buyInsufficient')
-                    : result.error === 'plugin_own' ? appPluginText(locale, 'ownPlugin')
-                        : appPluginText(locale, 'buyFailed', { reason: appPluginError(locale, result.error || 'market_failed') });
+                } else {
+                    buy.error = result.error === 'insufficient_balance' ? appPluginText(locale, 'buyInsufficient')
+                        : result.error === 'plugin_own' ? appPluginText(locale, 'ownPlugin')
+                            : appPluginText(locale, 'buyFailed', { reason: appPluginError(locale, result.error || 'market_failed') });
+                    // The refusal is fresher than the balance on screen (spent in another window, say): read it again so
+                    // the dialog offers Top up instead of a Pay that cannot succeed.
+                    if (result.error === 'insufficient_balance' && this.platformSession.linked) void this.loadAccountOverview(true);
+                }
                 return;
             }
             const owned = { ...buy.plugin, owned: true };
@@ -55236,9 +55927,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onPickFolder={() => { this.appPluginLoadOpen = false; void this.addAppPluginFolder(); }}
                 onOpenDocs={() => this.openExternalUrl(APP_PLUGIN_DOCS_URL)} onClose={() => { this.appPluginLoadOpen = false; this.update(); }} />}
             {this.appPluginBuy && <AppPluginBuyDialog locale={this.desktopLocale} plugin={this.appPluginBuy.plugin} signedIn={Boolean(this.platformSession.linked)}
-                {...(this.platformSession.linked ? { balanceMicros: this.platformSession.wallets.find(wallet => wallet.currency === 'USD')?.availableMicros ?? 0 } : {})}
+                {...(this.platformSession.linked ? { balanceMicros: resolveDisplayWallets(this.platformSession.linked, this.platformSession.wallets).find(wallet => wallet.currency === 'USD')?.availableMicros ?? 0 } : {})}
                 busy={this.appPluginBuy.busy} error={this.appPluginBuy.error}
-                onPay={() => void this.payAppPlugin()} onTopUp={() => { this.appPluginBuy = undefined; this.openWalletTopup(); }}
+                onPay={() => void this.payAppPlugin()} onTopUp={() => this.openTopupForAppPluginBuy()}
                 onSignIn={() => { this.appPluginBuy = undefined; void this.startDeviceLink(); }}
                 onCancel={() => { if (!this.appPluginBuy?.busy) { this.appPluginBuy = undefined; this.update(); } }} />}
             {this.appPluginInstall && <AppPluginInstallDialog locale={this.desktopLocale} inspection={this.appPluginInstall} busy={this.appPluginInstallBusy} error={this.appPluginInstallError}
@@ -56303,7 +56994,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             ? runningPermissionTiming(this.desktopLocale, currentPermissionLabel, nextPermissionLabel) : nextPermissionLabel;
         const permissionButtonLabel = currentPermissionLabel === nextPermissionLabel
             ? nextPermissionLabel : `${currentPermissionLabel} → ${nextPermissionLabel}`;
-        const composerHasPayload = Boolean(this.prompt.trim() || this.attachments.length || this.composerApp());
+        const composerHasPayload = Boolean(this.prompt.trim() || this.attachments.length || this.composerApp() || this.composerSlashChipSendsAlone?.());
         const attachmentImporting = this.hasPendingAttachmentImports(codingSession?.id || '')
             || this.hasPendingDraftAttachments(codingSession?.id || '');
         const attachmentsUnresolved = this.hasUnresolvedDraftAttachments(codingSession?.id || '');
@@ -56789,7 +57480,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                   * Technical attempt codes stay out of this surface. */}
                                 {stage === 'running' && this.renderAgentActivity(activityEvents, true, false, turn.id, undefined, turn.steeringMessages, liveResult?.changes || turn.changes,
                                     this.computerPermissionWait && this.computerPermissionWait.conversationId === this.activeCodingSessionId && !this.computerPermissionWait.appName ? computerPermissionNames(this.desktopLocale, this.computerPermissionWait.missing) : undefined)}
-                                {stage === 'error' && <>{this.renderAgentActivity(errorActivityEvents, false, true, turn.id, 'stopped', turn.steeringMessages, liveResult?.changes || turn.changes)}<StreamNotice locale={this.desktopLocale} tone='error' role={live ? 'alert' : 'status'} action={this.renderOriginalManagedReceiptAction?.(this.activeCodingSessionId, turn.id) || this.renderOllamaPullAction(this.activeCodingSessionId, turn, failure || error) || this.renderModelFailureAction(normalizedTurnFailure, undefined, modelFailureSource(turn.routeId), { surface: 'thread', hasSelectedRelay: this.activeRelayKey === undefined ? undefined : Boolean(this.activeRelayKey), hasSelectedRoute: this.activeModelRouteId === undefined && turn.routeId === undefined ? undefined : Boolean(this.activeModelRouteId || turn.routeId) })} text={this.renderThreadText(displayError || agentOutcomeText(this.desktopLocale, 'fallbackBody'), turn.id, 'error')} />{this.renderOriginalManagedReceiptResult?.(this.activeCodingSessionId, turn.id)}{!workspace && !displayError && <div className='nmx-inline-actions'><button className='nmx-inline-action' onClick={() => this.openWorkspace()}>打开项目目录</button></div>}</>}
+                                {stage === 'error' && <>{this.renderAgentActivity(errorActivityEvents, false, true, turn.id, 'stopped', turn.steeringMessages, liveResult?.changes || turn.changes)}<StreamNotice locale={this.desktopLocale} tone='error' role={live ? 'alert' : 'status'} action={this.renderOriginalManagedReceiptAction?.(this.activeCodingSessionId, turn.id) || this.renderOllamaPullAction(this.activeCodingSessionId, turn, failure || error) || this.renderModelFailureAction(normalizedTurnFailure, undefined, modelFailureSource(turn.routeId), { surface: 'thread', hasSelectedRelay: this.activeRelayKey === undefined ? undefined : Boolean(this.activeRelayKey), hasSelectedRoute: this.activeModelRouteId === undefined && turn.routeId === undefined ? undefined : Boolean(this.activeModelRouteId || turn.routeId) })} text={this.renderThreadText(displayError || agentOutcomeText(this.desktopLocale, 'fallbackBody'), turn.id, 'error')} />{this.renderOriginalManagedReceiptResult?.(this.activeCodingSessionId, turn.id)}{!workspace && !displayError && <div className='nmx-inline-actions'><button className='nmx-inline-action' onClick={() => this.openWorkspace()}>{localizeDesktopSurface(this.desktopLocale, '打开项目目录')}</button></div>}</>}
                                 {stage === 'cancelled' && <>{this.renderAgentActivity(cancelledActivityEvents, false, true, turn.id, 'stopped', turn.steeringMessages, liveResult?.changes || turn.changes)}</>}
                                 {(stage === 'complete' || stage === 'paused') && <>
                                     {this.renderAgentActivity(stage === 'paused' && (liveResult?.stopReason || turn.stopReason) === 'pause_requested'
@@ -57147,8 +57838,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         {(this.composerApp() || this.composerDisplayApps().length > 0) && <ComposerAppChip app={this.composerApp()!} apps={this.composerDisplayApps()} pendingIds={this.composerPendingAppIds()} locale={this.desktopLocale} onRemove={id => this.removeComposerApp(id)} disabled={this.runningMessageSubmitting}
                             onFullAccess={this.permissionMode === 'full_access' ? undefined : () => this.setPermissionMode('full_access')} />}
                         <div className={`nmx-composer-input ${/\[[^\]\n]+\]\(https?:\/\/[^)\s]+\)/i.test(this.prompt)
-                            || typeof findPastedTextMarkerRanges === 'function' && findPastedTextMarkerRanges(this.prompt, this.pastedTextReferences).length > 0 ? 'has-markdown-links' : ''}`}>
+                            || typeof findPastedTextMarkerRanges === 'function' && findPastedTextMarkerRanges(this.prompt, this.pastedTextReferences).length > 0 ? 'has-markdown-links' : ''}${this.composerSlashChip?.() ? ' has-slash-pill' : ''}`}>
                         {this.renderComposerMarkdownOverlay()}
+                        {this.renderComposerSlashPill?.()}
                         {this.composerDropMode === 'text' && this.composerDropCaret && <TextDropIndicator caret={this.composerDropCaret} locale={this.desktopLocale} />}
                         <textarea key={this.composerInputKey()} data-composer-input-scope={this.composerInputKey()} ref={this.composerTextareaRef} defaultValue={this.prompt} maxLength={200_000}
                             spellCheck={false} autoCorrect='off' autoCapitalize='off'
@@ -57160,6 +57852,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 this.shiftComposerAnchors?.(this.prompt, event.currentTarget.value);
                                 this.prompt = event.currentTarget.value;
                                 this.pastedTextReferences = pastedTextReferencesInDocument(this.prompt, this.pastedTextReferences);
+                                this.adoptTypedComposerSlashCommand?.(event.currentTarget);
                                 this.syncComposerSlashMenu?.(event.currentTarget);
                                 this.scheduleComposerDraftPersist();
                                 this.scheduleComposerUiUpdate();
@@ -57174,6 +57867,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 this.prompt = event.currentTarget.value;
                                 this.recordConversationSyncDiagnostic?.('input');
                                 this.pastedTextReferences = pastedTextReferencesInDocument(this.prompt, this.pastedTextReferences);
+                                if (!(event.nativeEvent as InputEvent).isComposing) this.adoptTypedComposerSlashCommand?.(event.currentTarget);
                                 this.syncComposerSlashMenu?.(event.currentTarget);
                                 this.scheduleComposerDraftPersist();
                                 this.scheduleComposerUiUpdate();
@@ -57199,14 +57893,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 this.syncComposerDomControls();
                                 if (typeof this.updateNow === 'function') this.updateNow(); else this.update();
                             }}
-                            onScroll={event => { if (!this.ownsComposerInput(event.currentTarget)) return; const overlay = this.composerMarkdownOverlayRef.current; if (overlay) { overlay.scrollTop = event.currentTarget.scrollTop; overlay.scrollLeft = event.currentTarget.scrollLeft; } }}
+                            onScroll={event => { if (!this.ownsComposerInput(event.currentTarget)) return; const overlay = this.composerMarkdownOverlayRef.current; if (overlay) { overlay.scrollTop = event.currentTarget.scrollTop; overlay.scrollLeft = event.currentTarget.scrollLeft; } this.positionComposerSlashPill?.(event.currentTarget); }}
                             onKeyDown={event => this.handleComposerKeyDown(event)}
                             placeholder={this.goalComposerActive && this.goalComposerSessionId === codingSession?.id
                                 ? '设置要持续完成的目标任务'
                                 : agentRunning ? runningTaskText(this.desktopLocale, 'followUpPlaceholder')
                                     : this.composerAppItems().length > 1 ? appControlText(this.desktopLocale, 'placeholderMany', { count: String(this.composerAppItems().length) })
                                         : this.composerApp() ? appControlText(this.desktopLocale, 'placeholder', { name: this.composerApp()!.name })
-                                            : (followUp => followUp ? followUpPlaceholder(this.desktopLocale, followUp) : '发送消息或描述任务')(this.composerFollowUpSuggestion(codingSession))} rows={this.composerRows()}></textarea>
+                                            : (followUp => followUp ? followUpPlaceholder(this.desktopLocale, followUp) : '发送消息或描述任务')(this.composerSlashChip?.() ? '' : this.composerFollowUpSuggestion(codingSession))} rows={this.composerRows()}></textarea>
                         </div>
                         <div>
                             <button className={`nmx-composer-tool ${this.codingPopover === 'attachments' || this.codingPopover === 'directories' ? 'is-active' : ''}`} onClick={() => this.toggleCodingPopover('attachments')} title='添加内容' aria-label='添加内容'><i className='codicon codicon-add'></i></button>
@@ -60319,6 +61013,83 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return deduplicated;
     }
 
+    protected comicChatFeedbackLabelsCache: { readonly locale: NextMuxDesktopLocale; readonly value: NonNullable<React.ComponentProps<typeof ComicChatThread>['feedbackLabels']> } | undefined;
+
+    protected comicChatFeedbackLabels(): NonNullable<React.ComponentProps<typeof ComicChatThread>['feedbackLabels']> {
+        if (this.comicChatFeedbackLabelsCache?.locale === this.desktopLocale) return this.comicChatFeedbackLabelsCache.value;
+        const value = {
+            up: relayMarketplaceText(this.desktopLocale, 'helpful'),
+            down: relayMarketplaceText(this.desktopLocale, 'notHelpful')
+        };
+        this.comicChatFeedbackLabelsCache = { locale: this.desktopLocale, value };
+        return value;
+    }
+
+    protected readonly handleComicChatContentClick: NonNullable<React.ComponentProps<typeof ComicChatThread>['onContentClick']> = event =>
+        this.handleAssistantContentClick(event);
+
+    protected readonly formatComicChatTurnTime: NonNullable<React.ComponentProps<typeof ComicChatThread>['formatTurnTime']> = iso => {
+        const parsed = Date.parse(iso);
+        return Number.isFinite(parsed) ? this.formatConversationTime(parsed) : '';
+    };
+
+    protected readonly handleComicChatReadAloud: NonNullable<React.ComponentProps<typeof ComicChatThread>['onReadAloud']> = (turnId, text) =>
+        void this.readTurnAloud(turnId, text);
+
+    protected readonly handleComicChatReadAloudLabel: NonNullable<React.ComponentProps<typeof ComicChatThread>['readAloudLabel']> = turnId =>
+        this.readAloudButtonLabel(turnId);
+
+    protected readonly handleComicChatFeedback: NonNullable<React.ComponentProps<typeof ComicChatThread>['onFeedback']> = (turnId, vote) =>
+        void this.submitComicTurnFeedback(turnId, vote);
+
+    protected readonly handleComicChatTurnMenu: NonNullable<React.ComponentProps<typeof ComicChatThread>['onMenu']> = (media, event) => {
+        const ui = this.comicChatUi();
+        ui.menu = { x: event.clientX, y: event.clientY, target: this.comicChatMediaTarget(media), origin: event.currentTarget as HTMLElement };
+        this.update();
+    };
+
+    protected readonly handleComicChatTurnOpen: NonNullable<React.ComponentProps<typeof ComicChatThread>['onOpen']> = media => {
+        if (!media.url) return;
+        const { project } = this.comicChatContext();
+        const chat = this.activeComicChat();
+        const allViews = project ? this.comicMaterialViews(project) : [];
+        const matchedAsset = media.assetId ? allViews.find(item => item.assetId === media.assetId) : undefined;
+        const mediaKind = media.kind === 'video' ? 'video' : media.kind === 'image' ? 'image' : 'audio';
+        const fallbackName = matchedAsset?.title || chat?.title || this.comicChatT(mediaKind === 'video' ? 'video' : mediaKind === 'image' ? 'image' : 'music');
+        this.openComicViewerMedia(media.url, fallbackName, mediaKind, matchedAsset?.path);
+    };
+
+    protected readonly handleComicChatTurnRetry: NonNullable<React.ComponentProps<typeof ComicChatThread>['onRetry']> = jobId => {
+        const { root } = this.comicChatContext();
+        if (!root) return;
+        const ui = this.comicChatUi();
+        void this.platformService.retryMediaJob(root, jobId).then(() => this.loadMediaState(true), error => {
+            ui.error = modelFailureText(this.desktopLocale, error);
+            this.update();
+        });
+    };
+
+    protected readonly handleComicChatTurnCancel: NonNullable<React.ComponentProps<typeof ComicChatThread>['onCancel']> = jobId => {
+        const { root } = this.comicChatContext();
+        if (!root) return;
+        const ui = this.comicChatUi();
+        void this.platformService.cancelMediaJob(root, jobId).then(() => this.loadMediaState(true), error => {
+            ui.error = modelFailureText(this.desktopLocale, error);
+            this.update();
+        });
+    };
+
+    protected readonly handleComicChatTurnGenerate: NonNullable<React.ComponentProps<typeof ComicChatThread>['onGenerate']> = (turnId, ids) => {
+        const chat = this.activeComicChat();
+        if (chat) void this.generateComicChatProposals(chat.id, turnId, ids);
+    };
+
+    protected readonly handleComicChatTurnCopy: NonNullable<React.ComponentProps<typeof ComicChatThread>['onCopy']> = text =>
+        void this.copyToClipboard(text, this.comicChatT('copied'));
+
+    protected readonly handleComicChatSignIn: NonNullable<React.ComponentProps<typeof ComicChatThread>['onSignIn']> = () =>
+        void this.startDeviceLink();
+
     protected renderComicChatSurface(): React.ReactNode {
         const ui = this.comicChatUi();
         this.reopenRestoredComicChat?.();
@@ -60401,29 +61172,23 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     : <ComicChatThread locale={this.desktopLocale} turns={turns}
                         onRenderMarkdown={this.decorateConversationContent}
                         markdownTokenizer={conversationCodeTokenizer}
-                        onContentClick={event => this.handleAssistantContentClick(event)}
-                        formatTurnTime={iso => { const parsed = Date.parse(iso); return Number.isFinite(parsed) ? this.formatConversationTime(parsed) : ''; }}
-                        onReadAloud={(turnId, text) => void this.readTurnAloud(turnId, text)}
+                        onContentClick={this.handleComicChatContentClick}
+                        formatTurnTime={this.formatComicChatTurnTime}
+                        onReadAloud={this.handleComicChatReadAloud}
                         readingTurnId={this.readingTurnId}
                         readAloudPreparing={this.readAloudPreparing}
-                        readAloudLabel={turnId => this.readAloudButtonLabel(turnId)}
-                        feedbackLabels={{ up: relayMarketplaceText(this.desktopLocale, 'helpful'), down: relayMarketplaceText(this.desktopLocale, 'notHelpful') }}
-                        onFeedback={(turnId, vote) => void this.submitComicTurnFeedback(turnId, vote)}
+                        readAloudLabel={this.handleComicChatReadAloudLabel}
+                        feedbackLabels={this.comicChatFeedbackLabels()}
+                        onFeedback={this.handleComicChatFeedback}
                         feedbackSubmitting={Object.fromEntries(this.comicRelayFeedbackSubmitting)}
                         feedbackByTurnId={{ ...Object.fromEntries(turns.filter(view => view.turn.feedback).map(view => [view.turn.id, view.turn.feedback])), ...this.comicFeedbackByTurnId } as Record<string, 'up' | 'down' | null | undefined>}
-                        onMenu={(media, event) => { ui.menu = { x: event.clientX, y: event.clientY, target: this.comicChatMediaTarget(media), origin: event.currentTarget as HTMLElement }; this.update(); }}
-                        onOpen={media => {
-                            if (!media.url) return;
-                            const matchedAsset = media.assetId ? allViews.find(item => item.assetId === media.assetId) : undefined;
-                            const mediaKind = media.kind === 'video' ? 'video' : media.kind === 'image' ? 'image' : 'audio';
-                            const fallbackName = matchedAsset?.title || chat?.title || t(mediaKind === 'video' ? 'video' : mediaKind === 'image' ? 'image' : 'music');
-                            this.openComicViewerMedia(media.url, fallbackName, mediaKind, matchedAsset?.path);
-                        }}
-                        onRetry={jobId => void this.platformService.retryMediaJob(root, jobId).then(() => this.loadMediaState(true), error => { ui.error = modelFailureText(this.desktopLocale, error); this.update(); })}
-                        onCancel={jobId => void this.platformService.cancelMediaJob(root, jobId).then(() => this.loadMediaState(true), error => { ui.error = modelFailureText(this.desktopLocale, error); this.update(); })}
-                        onGenerate={(turnId, ids) => { if (chat) void this.generateComicChatProposals(chat.id, turnId, ids); }}
-                        onCopy={text => void this.copyToClipboard(text, t('copied'))}
-                        onSignIn={() => void this.startDeviceLink()}>
+                        onMenu={this.handleComicChatTurnMenu}
+                        onOpen={this.handleComicChatTurnOpen}
+                        onRetry={this.handleComicChatTurnRetry}
+                        onCancel={this.handleComicChatTurnCancel}
+                        onGenerate={this.handleComicChatTurnGenerate}
+                        onCopy={this.handleComicChatTurnCopy}
+                        onSignIn={this.handleComicChatSignIn}>
                         {turns.length === 0 && <div className='nmx-comic-chat-welcome'>
                             <span className='nmx-comic-chat-welcome-mark' aria-hidden='true'><i className='codicon codicon-sparkle'></i></span>
                             <h2>{t('welcomeTitle')}</h2>
@@ -60666,7 +61431,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected comicShotHasVideo(project: ComicProject, shot: ComicShot): boolean {
-        return Boolean(shot.videoAssetId && project.assets.some(asset => asset.id === shot.videoAssetId && asset.kind === 'video' && asset.status === 'ready'));
+        const asset = shot.videoAssetId ? this.comicAssetsById(project).get(shot.videoAssetId) : undefined;
+        return Boolean(asset && asset.kind === 'video' && asset.status === 'ready');
     }
 
     /**
@@ -60681,7 +61447,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (!seen || job.updatedAt > seen.updatedAt) latest.set(job.shotId, job);
         }
         const shots = new Map(this.comicAllShots(project).map(shot => [shot.id, shot]));
-        const filmed = (shot: ComicShot): boolean => Boolean(shot.videoAssetId && project.assets.some(asset => asset.id === shot.videoAssetId && asset.status === 'ready'));
+        const assets = this.comicAssetsById(project);
+        const filmed = (shot: ComicShot): boolean => {
+            const asset = shot.videoAssetId ? assets.get(shot.videoAssetId) : undefined;
+            return Boolean(asset && asset.status === 'ready');
+        };
         return [...latest.values()].filter(job => (job.status === 'failed' || job.status === 'interrupted')
             && shots.has(job.shotId) && !filmed(shots.get(job.shotId)!)).length;
     }
@@ -60754,9 +61524,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 return <button key={candidate.id} className={`nmx-shot-card ${active ? 'is-active' : ''}`} onClick={() => this.selectComicShot(candidate.id)}>
                     <span>{String(index + 1).padStart(2, '0')}</span>
                     <div className={`nmx-shot-thumb is-${thumbStatus}`}>{imageUrl
-                        ? <img src={imageUrl} alt='' loading='lazy' draggable={false} />
+                        ? <img src={imageUrl} alt='' loading='lazy' decoding='async' draggable={false} />
                         : videoUrl
-                            ? <video src={videoUrl} muted playsInline preload='metadata' onLoadedData={event => { if (event.currentTarget.currentTime === 0) { try { event.currentTarget.currentTime = 0.05; } catch { /* some codecs refuse a seek before metadata */ } } }} />
+                            ? <video src={videoUrl} muted playsInline preload={active ? 'metadata' : 'none'} onMouseEnter={event => { if (event.currentTarget.preload === 'none') event.currentTarget.preload = 'metadata'; }} onLoadedData={event => { if (event.currentTarget.currentTime === 0) { try { event.currentTarget.currentTime = 0.05; } catch { /* some codecs refuse a seek before metadata */ } } }} />
                             : <span>{COMIC_SHOT_SIZE_LABELS[candidate.shotSize]}</span>}</div>
                     <p><strong data-nmx-literal>{candidate.title}</strong><small>{(candidate.durationFrames / project.frameRate).toFixed(2).replace(/0+$/, '').replace(/\.$/, '')} 秒 · {COMIC_CAMERA_MOTION_LABELS[candidate.cameraMotion]}</small><em className={`is-${candidate.status}`}>{status}<i>{candidate.visualAssetId ? '画' : ''}{candidate.audioAssetId ? '声' : ''}{candidate.musicAssetIds?.length ? '乐' : ''}{candidate.effectAssetIds?.length ? '效' : ''}{candidate.videoAssetId ? '片' : ''}</i></em></p>
                 </button>;
@@ -61252,7 +62022,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!route) { this.comicMessage = this.ct('noStepModel'); this.update(); return; }
         const lyrics = settings.lyrics.trim();
         try {
-            const support = musicReferenceSupport(route.connection?.protocol, route.connection?.providerSettings?.mediaTemplate, route.connection?.discoveredModels.find(model => model.id === route.model));
+            const support = musicReferenceSupport(route.connection?.protocol, route.connection?.providerSettings?.mediaTemplate,
+                route.connection?.discoveredModels.find(model => typeof sameModelId === 'function' ? sameModelId(model.id, route.model) : model.id.trim().toLowerCase() === route.model.trim().toLowerCase()));
             const problem = musicReferenceProblem(settings, support, latest.assets);
             if (problem) throw new Error(musicReferenceText(this.desktopLocale, problem));
             const vocal = settings.mode !== 'cover' && settings.vocalSource === 'my_voice'
@@ -61469,7 +62240,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const live = jobs.filter(job => ['awaiting_confirmation', 'queued', 'running'].includes(job.status));
             const latest = [...jobs].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
             const needsLyrics = settings.mode !== 'cover' && !settings.instrumental && !this.musicLyricsText(project).trim();
-            const support = musicReferenceSupport(route?.connection?.protocol, route?.connection?.providerSettings?.mediaTemplate, route?.connection?.discoveredModels.find(model => model.id === route.model));
+            const support = musicReferenceSupport(route?.connection?.protocol, route?.connection?.providerSettings?.mediaTemplate, route?.connection?.discoveredModels.find(model => typeof sameModelId === 'function' ? sameModelId(model.id, route?.model) : Boolean(route?.model && model.id.trim().toLowerCase() === route.model.trim().toLowerCase())));
             const referenceProblem = musicReferenceProblem(settings, support, project.assets);
             const chosen = settings.selectedAssetId;
             const price = route?.kind === 'managed' ? this.formatManagedMediaPrice(route, 'music') : '';
@@ -61508,12 +62279,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected renderComicCanvasView(project: ComicProject, scene: ComicScene | undefined, shot: ComicShot | undefined, shotIndex: number, sceneFrames: number, projectFrames: number): React.ReactNode {
-        const visualAsset = shot?.visualAssetId ? project.assets.find(asset => asset.id === shot.visualAssetId && asset.kind === 'image' && asset.status === 'ready') : undefined;
-        const canCompareVisual = Boolean(visualAsset?.sourceAssetId && this.comicVisualPreviewUrl && this.comicPreviousVisualPreviewUrl);
+        const assetsById = this.comicAssetsById(project);
+        const visualAsset = shot?.visualAssetId ? assetsById.get(shot.visualAssetId) : undefined;
+        const canCompareVisual = Boolean(visualAsset?.kind === 'image' && visualAsset.status === 'ready' && visualAsset.sourceAssetId && this.comicVisualPreviewUrl && this.comicPreviousVisualPreviewUrl);
         const pendingVideo = Boolean(shot?.pendingVideoAssetId);
         return <section className='nmx-canvas-panel'>
             <header className='nmx-canvas-toolbar'><div><strong>{shot?.title || '未选择镜头'}</strong><span>{shot ? `镜头 ${String(shotIndex + 1).padStart(2, '0')} · ${COMIC_SHOT_SIZE_LABELS[shot.shotSize]}` : '从左侧选择镜头'}</span></div><div><button disabled={!shot || this.comicHasDirtyDraft()} onClick={() => shot && this.openComicMediaForShot(shot.id, 'image')}>生成画面</button><button disabled={!shot || this.comicHasDirtyDraft()} onClick={() => shot && this.openComicMediaForShot(shot.id, 'video')}>生成视频</button><button disabled={!shot || this.comicHasDirtyDraft() || this.comicStage !== 'idle'} title={this.ct('animateHint')} onClick={() => this.pickComicImageForShot()}><i className='codicon codicon-file-media'></i>{this.ct('animateImage')}</button><button disabled={!shot || shot.dialogueCues.length === 0 || this.comicHasDirtyDraft()} onClick={() => shot && this.openComicMediaForShot(shot.id, 'speech')}>生成配音</button>{canCompareVisual && <button className={this.comicCompareVisualOpen ? 'is-active' : ''} onClick={() => { this.comicCompareVisualOpen = !this.comicCompareVisualOpen; this.update(); }}>{this.comicCompareVisualOpen ? '关闭对比' : '对比上一版'}</button>}</div></header>
-            <div className='nmx-canvas-viewport'><div className={`nmx-canvas ${this.comicVisualPreviewUrl || this.comicVideoPreviewUri ? 'has-preview' : ''}`} style={{ aspectRatio: `${project.canvas.width} / ${project.canvas.height}` }}>{this.comicCompareVisualOpen && canCompareVisual ? <div className='nmx-comic-visual-compare'><figure><img src={this.comicPreviousVisualPreviewUrl} alt={mediaAuditText(this.desktopLocale, 'previousImage')} /><figcaption>上一版</figcaption></figure><figure><img src={this.comicVisualPreviewUrl} alt={mediaAuditText(this.desktopLocale, 'currentImage')} /><figcaption>当前版</figcaption></figure></div> : this.comicVideoPreviewUri ? <video data-nmx-literal ref={element => { this.comicVideoElement = element || undefined; }} onLoadedMetadata={event => { const seconds = this.comicPendingSeekSeconds; const targetEpisodeId = this.comicPendingSeekEpisodeId; if (seconds !== undefined && (!targetEpisodeId || targetEpisodeId === this.activeComicEpisodeId)) { event.currentTarget.currentTime = Math.max(0, Math.min(event.currentTarget.duration || Number.MAX_SAFE_INTEGER, seconds)); this.comicPendingSeekSeconds = undefined; this.comicPendingSeekEpisodeId = undefined; } this.syncComicPlayback(event.currentTarget); }} onTimeUpdate={event => this.syncComicPlayback(event.currentTarget)} onPlay={event => this.syncComicPlayback(event.currentTarget)} onPause={event => this.syncComicPlayback(event.currentTarget)} onEnded={event => this.syncComicPlayback(event.currentTarget)} controls preload='metadata' src={this.comicVideoPreviewUri} aria-label={shot ? mediaAuditText(this.desktopLocale, 'shotVideoPreview', { title: shot.title }) : mediaAuditText(this.desktopLocale, 'videoPreview')} /> : this.comicVisualPreviewUrl ? <img data-nmx-literal src={this.comicVisualPreviewUrl} alt={shot ? mediaAuditText(this.desktopLocale, 'shotImage', { title: shot.title }) : mediaAuditText(this.desktopLocale, 'generatedImage')} /> : undefined}{/* Over a picture or a playing video the caption would sit on the player's own controls: show it only on the empty canvas. */}{pendingVideo && this.comicVideoPreviewIsPending && (this.comicVisualPreviewUrl || this.comicVideoPreviewUri) && <span className='nmx-comic-preview-badge'>{localizeDesktopSurface(this.desktopLocale, '待确认的新视频版本（不会自动替换当前成片）')}</span>}{!this.comicVisualPreviewUrl && !this.comicVideoPreviewUri && <div className='nmx-canvas-copy'><span>{shot ? `镜头 ${String(shotIndex + 1).padStart(2, '0')}` : '未选择镜头'}</span><strong data-nmx-literal={shot ? true : undefined}>{shot?.title || '新增镜头后在这里编辑'}</strong>{pendingVideo && this.comicVideoPreviewIsPending && <p className='nmx-comic-preview-note'>{localizeDesktopSurface(this.desktopLocale, '待确认的新视频版本（不会自动替换当前成片）')}</p>}{!this.comicVisualPreviewUrl && !this.comicVideoPreviewUri && (shot?.visualPrompt ? <p data-nmx-literal>{shot.visualPrompt}</p> : <p>保存画面提示后，可从“素材与任务”创建真实任务。</p>)}<small>{project.canvas.aspectRatio} · {project.canvas.width} × {project.canvas.height} · {project.frameRate} fps</small></div>}</div></div>
+            <div className='nmx-canvas-viewport'><div className={`nmx-canvas ${this.comicVisualPreviewUrl || this.comicVideoPreviewUri ? 'has-preview' : ''}`} style={{ aspectRatio: `${project.canvas.width} / ${project.canvas.height}` }}>{this.comicCompareVisualOpen && canCompareVisual ? <div className='nmx-comic-visual-compare'><figure><img decoding='async' src={this.comicPreviousVisualPreviewUrl} alt={mediaAuditText(this.desktopLocale, 'previousImage')} /><figcaption>上一版</figcaption></figure><figure><img decoding='async' src={this.comicVisualPreviewUrl} alt={mediaAuditText(this.desktopLocale, 'currentImage')} /><figcaption>当前版</figcaption></figure></div> : this.comicVideoPreviewUri ? <video data-nmx-literal ref={element => { this.comicVideoElement = element || undefined; }} onLoadedMetadata={event => { const seconds = this.comicPendingSeekSeconds; const targetEpisodeId = this.comicPendingSeekEpisodeId; if (seconds !== undefined && (!targetEpisodeId || targetEpisodeId === this.activeComicEpisodeId)) { event.currentTarget.currentTime = Math.max(0, Math.min(event.currentTarget.duration || Number.MAX_SAFE_INTEGER, seconds)); this.comicPendingSeekSeconds = undefined; this.comicPendingSeekEpisodeId = undefined; } this.syncComicPlayback(event.currentTarget); }} onTimeUpdate={event => this.syncComicPlayback(event.currentTarget)} onPlay={event => this.syncComicPlayback(event.currentTarget)} onPause={event => this.syncComicPlayback(event.currentTarget)} onEnded={event => this.syncComicPlayback(event.currentTarget)} controls preload='metadata' src={this.comicVideoPreviewUri} aria-label={shot ? mediaAuditText(this.desktopLocale, 'shotVideoPreview', { title: shot.title }) : mediaAuditText(this.desktopLocale, 'videoPreview')} /> : this.comicVisualPreviewUrl ? <img decoding='async' data-nmx-literal src={this.comicVisualPreviewUrl} alt={shot ? mediaAuditText(this.desktopLocale, 'shotImage', { title: shot.title }) : mediaAuditText(this.desktopLocale, 'generatedImage')} /> : undefined}{/* Over a picture or a playing video the caption would sit on the player's own controls: show it only on the empty canvas. */}{pendingVideo && this.comicVideoPreviewIsPending && (this.comicVisualPreviewUrl || this.comicVideoPreviewUri) && <span className='nmx-comic-preview-badge'>{localizeDesktopSurface(this.desktopLocale, '待确认的新视频版本（不会自动替换当前成片）')}</span>}{!this.comicVisualPreviewUrl && !this.comicVideoPreviewUri && <div className='nmx-canvas-copy'><span>{shot ? `镜头 ${String(shotIndex + 1).padStart(2, '0')}` : '未选择镜头'}</span><strong data-nmx-literal={shot ? true : undefined}>{shot?.title || '新增镜头后在这里编辑'}</strong>{pendingVideo && this.comicVideoPreviewIsPending && <p className='nmx-comic-preview-note'>{localizeDesktopSurface(this.desktopLocale, '待确认的新视频版本（不会自动替换当前成片）')}</p>}{!this.comicVisualPreviewUrl && !this.comicVideoPreviewUri && (shot?.visualPrompt ? <p data-nmx-literal>{shot.visualPrompt}</p> : <p>保存画面提示后，可从“素材与任务”创建真实任务。</p>)}<small>{project.canvas.aspectRatio} · {project.canvas.width} × {project.canvas.height} · {project.frameRate} fps</small></div>}</div></div>
             <div className='nmx-timeline'><header><strong>场景时间线</strong><span>{this.formatComicTimecode(sceneFrames, project.frameRate)} / 全片 {this.formatComicTimecode(projectFrames, project.frameRate)}</span></header><div><label>画面</label>{scene?.shots.map((candidate, index) => <button key={candidate.id} className={candidate.id === shot?.id ? 'is-active' : ''} style={{ flexGrow: candidate.durationFrames, flexBasis: 0 }} onClick={() => this.selectComicShot(candidate.id)}>镜头 {String(index + 1).padStart(2, '0')}</button>)}</div><div><label>对白</label>{scene?.shots.map(candidate => <button data-nmx-literal key={candidate.id} className='audio' style={{ flexGrow: candidate.durationFrames, flexBasis: 0 }} onClick={() => this.selectComicShot(candidate.id)}>{candidate.dialogueCues.map(cue => cue.text).join(' / ') || '—'}</button>)}</div><div><label>音乐</label>{scene?.shots.map(candidate => <button key={candidate.id} className='music' style={{ flexGrow: candidate.durationFrames, flexBasis: 0 }} onClick={() => candidate.musicAssetIds?.length ? this.selectComicShot(candidate.id) : this.openComicMediaForShot(candidate.id, 'music')}>{candidate.musicAssetIds?.length ? dynamicLabel(this.desktopLocale, 'items', { count: candidate.musicAssetIds.length }) : '添加'}</button>)}</div><div><label>音效</label>{scene?.shots.map(candidate => <button key={candidate.id} className='effect' style={{ flexGrow: candidate.durationFrames, flexBasis: 0 }} onClick={() => candidate.effectAssetIds?.length ? this.selectComicShot(candidate.id) : this.openComicMediaForShot(candidate.id, 'sound_effect')}>{candidate.effectAssetIds?.length ? dynamicLabel(this.desktopLocale, 'items', { count: candidate.effectAssetIds.length }) : '添加'}</button>)}</div><div><label>状态</label>{scene?.shots.map(candidate => <button key={candidate.id} className='music' style={{ flexGrow: candidate.durationFrames, flexBasis: 0 }} onClick={() => this.selectComicShot(candidate.id)}>{candidate.status === 'generated' ? '已生成' : candidate.status === 'generating' ? '生成中' : candidate.status === 'failed' ? '失败' : '草稿'}</button>)}</div></div>
         </section>;
     }
@@ -61556,18 +62328,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected renderComicAssetLibrary(project: ComicProject): React.ReactNode {
         const assets = [...project.assets].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
         const kindLabel = (kind: ComicProject['assets'][number]['kind']): string => kind === 'image' ? '画面' : kind === 'audio' ? '配音' : kind === 'music' ? '音乐' : kind === 'effect' ? '音效' : kind === 'subtitle' ? '字幕' : '视频';
-        const shotForAsset = (assetId: string): { readonly scene: ComicScene; readonly shot: ComicShot } | undefined => {
-            for (const scene of project.scenes) {
-                const shot = scene.shots.find(candidate => candidate.visualAssetId === assetId || candidate.audioAssetId === assetId || candidate.musicAssetIds?.includes(assetId) || candidate.effectAssetIds?.includes(assetId) || candidate.subtitleAssetId === assetId || candidate.videoAssetId === assetId);
-                if (shot) return { scene, shot };
-            }
-            return undefined;
-        };
+        const shotByAsset = this.comicShotByAssetId(project);
+        const counts = new Map<ComicProject['assets'][number]['kind'], number>();
+        for (const asset of assets) counts.set(asset.kind, (counts.get(asset.kind) ?? 0) + 1);
         return <section className='nmx-asset-library'>
             <header><div><strong>项目素材库</strong><span>所有生成文件均保存在当前工作区，可追溯到模型与任务</span></div><button disabled={!this.activeComicShot()} onClick={() => this.openMediaSheet()}>新增素材</button></header>
-            <div className='nmx-asset-summary'>{(['image', 'audio', 'music', 'effect', 'subtitle', 'video'] as const).map(kind => <span key={kind}><strong>{assets.filter(asset => asset.kind === kind).length}</strong>{kindLabel(kind)}</span>)}</div>
+            <div className='nmx-asset-summary'>{(['image', 'audio', 'music', 'effect', 'subtitle', 'video'] as const).map(kind => <span key={kind}><strong>{counts.get(kind) ?? 0}</strong>{kindLabel(kind)}</span>)}</div>
             <div className='nmx-asset-grid'>{assets.map(asset => {
-                const target = shotForAsset(asset.id);
+                const target = shotByAsset.get(asset.id);
                 return <article key={asset.id} className={`is-${asset.status}`}><div className={`nmx-asset-mark is-${asset.kind}`}>{kindLabel(asset.kind).slice(0, 1)}</div><div><span>{kindLabel(asset.kind)} · {asset.source === 'generated' ? '已生成' : '已导入'}</span><strong data-nmx-literal>{target ? `${target.scene.title} / ${target.shot.title}` : asset.uri.split('/').pop() || asset.uri}</strong><small data-nmx-literal>{asset.provider === '本机导入' ? dynamicLabel(this.desktopLocale, 'importedProvider') : asset.provider || dynamicLabel(this.desktopLocale, 'localProvider')} · {asset.model || dynamicLabel(this.desktopLocale, 'localModel')}{asset.byteLength ? ` · ${this.formatMediaSize(asset.byteLength)}` : ''}</small><small data-nmx-literal>{asset.uri}</small></div><button disabled={asset.status !== 'ready'} onClick={() => this.openMediaRelativeUri(asset.uri)}>打开</button></article>;
             })}{assets.length === 0 && <div className='nmx-asset-empty'><strong>素材库还是空的</strong><span>在分镜台选择镜头后生成画面、配音、字幕或预览。</span><button onClick={() => this.setComicView('storyboard')}>返回分镜台</button></div>}</div>
         </section>;
@@ -61893,8 +62661,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     /** What a new paid request may reserve from the cached wallet; undefined when signed out (the platform decides alone). */
     protected managedWalletSpendableMicros(currency = 'USD'): number | undefined {
-        const wallets = this.accountOverview?.wallets?.length ? this.accountOverview.wallets : this.platformSession?.wallets;
-        if (!Array.isArray(wallets) || wallets.length === 0) return this.platformSession?.linked ? 0 : undefined;
+        const rawWallets = this.accountOverview?.wallets?.length ? this.accountOverview.wallets : this.platformSession?.wallets;
+        const wallets = resolveDisplayWallets(Boolean(this.platformSession?.linked), rawWallets);
+        if (wallets.length === 0) return undefined;
         const wanted = currency.trim().toUpperCase() || 'USD';
         return computeWalletSpendableMicros(wallets.find(item => item.currency.toUpperCase() === wanted) ?? wallets[0]);
     }
@@ -63592,6 +64361,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** Picture-to-video projects: every picture with its motion prompt and its video. */
     protected renderComicImagesView(project: ComicProject): React.ReactNode {
         const clips = this.comicCutClips(project);
+        const clipsByShotId = new Map(clips.map(item => [item.shotId, item]));
         const shots = this.comicScenesForActiveEpisode().flatMap(scene => scene.shots.map(shot => ({ scene, shot })));
         const busy = this.comicCutBusy || this.comicCutImporting || this.comicStage !== 'idle' || this.comicExternalChange;
         const addFiles = (files: readonly File[]): void => void this.importComicCutFiles(files, { index: clips.length, lane: 'video' });
@@ -63618,11 +64388,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             </header>
             <div className='nmx-comic-images-grid'>
                 {shots.map(({ scene, shot }, index) => {
-                    const clip = clips.find(item => item.shotId === shot.id);
+                    const clip = clipsByShotId.get(shot.id);
                     const state = this.comicMediaNodeState(shot, 'video');
-                    return <article key={shot.id} className={`nmx-comic-image-card is-${state.tone} ${shot.id === this.activeComicShotId ? 'is-active' : ''}`}>
+                    const active = shot.id === this.activeComicShotId;
+                    return <article key={shot.id} className={`nmx-comic-image-card is-${state.tone} ${active ? 'is-active' : ''}`}>
                         <div className='nmx-comic-image-card-media' style={{ aspectRatio: (project.canvas.aspectRatio || '16:9').replace(':', ' / ') }}>
-                            {clip?.videoUrl ? <video src={clip.videoUrl} controls preload='metadata' playsInline /> : clip?.imageUrl ? <img src={clip.imageUrl} alt='' draggable={false} /> : <i className='codicon codicon-file-media' aria-hidden='true'></i>}
+                            {clip?.videoUrl ? <video src={clip.videoUrl} poster={clip.imageUrl || undefined} controls preload={active ? 'metadata' : 'none'} playsInline onMouseEnter={event => { if (event.currentTarget.preload === 'none') event.currentTarget.preload = 'metadata'; }} /> : clip?.imageUrl ? <img src={clip.imageUrl} alt='' loading='lazy' decoding='async' draggable={false} /> : <i className='codicon codicon-file-media' aria-hidden='true'></i>}
                             <span className='nmx-comic-image-card-index' data-nmx-literal>{String(index + 1).padStart(2, '0')}</span>
                             <span className={`nmx-comic-image-card-state is-${state.tone}`}>{clip?.videoUrl ? this.ct('videoReady') : state.label}</span>
                         </div>
@@ -63724,10 +64495,41 @@ export class NextMuxDesktopWidget extends ReactWidget {
      * Comic home: a hero, then the four kinds as tabs — each with its projects by status and its own 新建. Covers are generated from each title (hue) and
      * aspect ratio, so every work is recognisable at a glance.
      */
+    protected comicHomeProjectsCache: {
+        readonly projects: unknown;
+        readonly folders: unknown;
+        readonly order: readonly string[];
+        readonly locale: NextMuxDesktopLocale;
+        readonly mapped: readonly ComicHomeProject[];
+        readonly folderOptions: readonly { readonly id: string; readonly name: string }[];
+    } | undefined;
+    protected comicHomeCatalogProps(): {
+        readonly projects: readonly ComicHomeProject[];
+        readonly folders: readonly { readonly id: string; readonly name: string }[];
+    } {
+        const cached = this.comicHomeProjectsCache;
+        const projects = this.comicLibrary.projects;
+        const folders = this.comicLibrary.folders ?? [];
+        if (cached && cached.projects === projects && cached.folders === folders
+            && cached.order === this.comicProjectOrder && cached.locale === this.desktopLocale) {
+            return { projects: cached.mapped, folders: cached.folderOptions };
+        }
+        const mapped = this.orderedComicProjects(projects).map(item => this.comicHomeProject(item));
+        const folderOptions = folders.map(folder => ({ id: folder.id, name: folder.name }));
+        this.comicHomeProjectsCache = { projects, folders, order: this.comicProjectOrder, locale: this.desktopLocale, mapped, folderOptions };
+        return { projects: mapped, folders: folderOptions };
+    }
+
     protected renderComicWelcome(home = false): React.ReactNode {
         // home: a 小说转漫剧 comic is open with its desk closed — the hero reopens its desk instead of offering a new one here.
         const workspace = home ? undefined : this.activeComicWorkspace();
         const loading = this.comicStage === 'loading';
+        const homeCatalog = this.comicHomeCatalogProps
+            ? this.comicHomeCatalogProps()
+            : {
+                projects: this.orderedComicProjects(this.comicLibrary.projects).map(item => this.comicHomeProject(item)),
+                folders: (this.comicLibrary.folders ?? []).map(folder => ({ id: folder.id, name: folder.name }))
+            };
         return <section className='nmx-comic-empty-v4 nmx-comic-home is-v6'>
             <div className='nmx-comic-hero'>
                 <div className='nmx-comic-hero-glow' aria-hidden='true'></div>
@@ -63750,7 +64552,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             </div>
             {/* The four kinds, each with its projects by status (全部 / 草稿 / 进行中 / 已完成 / 已导出 / 失败待处理). */}
             <ComicHomeCategories locale={this.desktopLocale} kind={this.comicHomeKind} status={this.comicHomeStatus}
-                projects={this.orderedComicProjects(this.comicLibrary.projects).map(item => this.comicHomeProject(item))}
+                projects={homeCatalog.projects}
                 deletedProjectPaths={this.comicDeletedProjectPaths}
                 {...(this.comicLibraryLoaded ? {} : { loading: `${this.tx('reading')}…` })} disabled={loading || this.comicStage !== 'idle'}
                 onDelete={project => this.askComicProjectDelete(project.path, project.title)}
@@ -63758,7 +64560,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onStatus={status => { this.comicHomeStatus = status; this.update(); }}
                 onOpen={project => { void this.handleComicHomeProjectOpen(project); }}
                 onCreate={kind => this.openComicKindSheet(kind)}
-                folders={(this.comicLibrary.folders ?? []).map(folder => ({ id: folder.id, name: folder.name }))} folder={this.comicHomeFolder} query={this.comicHomeQuery} sort={this.comicHomeSort}
+                folders={homeCatalog.folders} folder={this.comicHomeFolder} query={this.comicHomeQuery} sort={this.comicHomeSort}
                 onFolder={folder => { this.comicHomeFolder = folder; this.update(); }}
                 onQuery={query => { this.comicHomeQuery = query; this.update(); }}
                 onSort={sort => { this.comicHomeSort = sort; try { window.localStorage.setItem('nextmux.desktop.comicHomeSort', sort); } catch { /* session only */ } this.update(); }}
@@ -64604,17 +65406,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return <WalletTopupSheet locale={this.desktopLocale} stage={this.walletTopupStage} amount={this.walletTopupAmount}
             paymentMethod={this.walletTopupRail} theme={this.resolvedDesktopTheme?.()}
             platformOrigin={this.walletTopupPlatformOrigin || 'https://nextmux.app'}
-            options={this.walletTopupOptions} order={this.walletTopupOrder} error={this.walletTopupError} now={Date.now()}
+            options={this.walletTopupOptions} order={this.walletTopupOrder} error={this.walletTopupError}
+            externalOpenedNotice={this.walletTopupExternalNotice} now={Date.now()}
             formatMicros={(currency, micros) => this.formatMoneyMicros(currency, micros)}
             onAmountChange={value => { this.walletTopupAmount = value; this.walletTopupError = ''; this.update(); }}
             onPaymentMethodChange={method => { this.walletTopupRail = method; this.walletTopupError = ''; this.update(); }}
             onConfirmToken={(orderId, confirmationToken, returnUrl) => this.platformService.confirmWalletTopup(orderId, confirmationToken, returnUrl)}
             onSubmit={() => void this.createWalletTopup()}
             onClose={() => this.closeNavigationSurface()}
-            onOpenCheckout={() => this.openExternalUrl(this.walletTopupOrder?.payment.checkoutUrl)}
+            onOpenExternal={code => this.handleWalletTopupOpenExternal(code)}
+            onOpenCheckout={() => {
+                const checkoutUrl = this.walletTopupOrder?.payment.checkoutUrl;
+                if (!checkoutUrl) return;
+                this.openExternalUrl(checkoutUrl);
+                this.walletTopupExternalNotice = walletTopupText(this.desktopLocale, 'openedInBrowser');
+                if (this.walletTopupStage === 'waiting' && !this.walletTopupPollTimer) this.scheduleWalletTopupPoll();
+                this.update();
+            }}
             onCheck={() => void this.refreshWalletTopupStatus()}
-            onRestart={() => { const method = this.walletTopupRail; this.resetWalletTopupSurface(); this.walletTopupRail = method; this.walletTopupSheetOpen = true; this.update(); }}
-            onDone={() => { this.billingTab = 'topups'; this.completeNavigationSurface(); }} />;
+            onRestart={() => { const method = this.walletTopupRail; this.resetWalletTopupSurface(true); this.walletTopupRail = method; this.walletTopupSheetOpen = true; this.update(); }}
+            onDone={() => { if (!this.pendingAppPluginBuy) this.billingTab = 'topups'; this.completeNavigationSurface(); }} />;
     }
 
     protected renderSettings(): React.ReactNode {
@@ -64731,23 +65542,23 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onProjectChange={path => { this.instructionsProjectPath = path; this.update(); }}
                 onOpenFile={path => void open(this.openerService, URI.fromFilePath(path))} />;
         } else if (this.settingsPanel === 'billing') {
-            const wallets = this.accountOverview.wallets.length ? this.accountOverview.wallets : this.platformSession.wallets;
+            const wallets = resolveDisplayWallets(this.platformSession.linked, this.accountOverview.wallets.length ? this.accountOverview.wallets : this.platformSession.wallets);
             content = <section className='nmx-settings-panel nmx-billing-panel'>
                 {this.modelSwitchError && <div className='nmx-settings-inline-error' role='status'>{this.modelSwitchError}</div>}
                 <div className='nmx-wallet-grid'>{wallets.map(item => <article key={item.currency}>
                     <span data-nmx-literal>{item.currency} {walletBalanceText(this.desktopLocale, 'balance')}</span>
                     <strong>{this.formatMoneyMicros(item.currency, walletNetBalanceMicros(item))}</strong>
                     <dl><div><dt data-nmx-literal>{walletBalanceText(this.desktopLocale, 'available')}</dt><dd>{this.formatMoneyMicros(item.currency, item.availableMicros)}</dd></div><div><dt data-nmx-literal>{walletBalanceText(this.desktopLocale, 'reserved')}</dt><dd>{this.formatMoneyMicros(item.currency, item.reservedMicros)}</dd></div>{Boolean(item.usageDebtMicros) && <div><dt data-nmx-literal>{walletBalanceText(this.desktopLocale, 'debt')}</dt><dd>{this.formatMoneyMicros(item.currency, item.usageDebtMicros!)}</dd></div>}<div><dt>累计消费</dt><dd>{this.formatMoneyMicros(item.currency, item.lifetimeSpentMicros)}</dd></div><div><dt>累计充值</dt><dd>{this.formatMoneyMicros(item.currency, item.lifetimeCreditedMicros)}</dd></div></dl>
-                </article>)}{!this.platformSession.linked && <div className='nmx-settings-empty'><i className='codicon codicon-wallet'></i><strong>未登录</strong><span>连接账户后查看余额、充值与使用记录。</span></div>}{this.platformSession.linked && wallets.length === 0 && <div className='nmx-settings-empty'><strong>暂无余额账户</strong><span>充值后即可使用平台托管线路。</span></div>}</div>
+                </article>)}{!this.platformSession.linked && <div className='nmx-settings-empty'><i className='codicon codicon-wallet'></i><strong>未登录</strong><span>连接账户后查看余额、充值与使用记录。</span></div>}</div>
                 {this.platformSession.linked && <>
                     <div className='nmx-billing-toolbar'><nav>{(['usage', 'topups', 'movements'] as const).map(tab => <button key={tab} className={this.billingTab === tab ? 'is-active' : ''} title={localizeDesktopSurface(this.desktopLocale, tab === 'usage' ? '消费记录' : tab === 'topups' ? '充值记录' : '余额明细')} onClick={() => this.selectBillingTab(tab)}>{tab === 'usage' ? '消费记录' : tab === 'topups' ? '充值记录' : '余额明细'}</button>)}</nav></div>
                     {this.accountOverviewError && <div className='nmx-settings-inline-error'>{this.accountOverviewError}<button onClick={() => void this.loadAccountOverview()}>重试</button></div>}
                     {this.billingTab === 'usage' && <>
                         <UsageAnalytics variant='summary' service={this.platformService} locale={this.desktopLocale} rangeDays={30} revision={this.accountOverview.refreshedAt} title={modelUsageText(this.desktopLocale, 'range30')} />
-                        <div className='nmx-billing-table'><header><span>模型与线路</span><span>{usageAnalyticsText(this.desktopLocale, 'tokens')}</span><span title={localizeDesktopSurface(this.desktopLocale, '费用')}>费用</span><span>时间</span></header>{this.accountOverview.usage.map(item => <article key={item.id}><span><strong title={item.modelName || item.canonicalModel}>{item.modelName || item.canonicalModel}</strong><small title={item.providerName || '平台线路'}>{item.providerName || '平台线路'} · {item.routeMode === 'automatic' ? '自动最优' : '固定线路'}{item.failoverCount > 0 ? ` · 切换 ${item.failoverCount} 次` : ''}</small><small title={item.referenceModel && item.referenceModel !== item.canonicalModel ? dynamicLabel(this.desktopLocale, 'referencePrice', { model: item.referenceModel }) : item.pricingMode === 'direct' ? '商家直接报价' : '官方参考价格'}>{item.referenceModel && item.referenceModel !== item.canonicalModel ? dynamicLabel(this.desktopLocale, 'referencePrice', { model: item.referenceModel }) : item.pricingMode === 'direct' ? '商家直接报价' : '官方参考价格'}</small></span><span><strong title={String(usageRecordTotalTokens(item) ?? '—')}>{usageRecordTotalTokens(item) ?? '—'}</strong><small title={`${item.inputTokens} 输入 · ${item.cachedInputTokens} 缓存读取`}>{item.inputTokens} 输入 · {item.cachedInputTokens} 缓存读取</small><small title={`${item.cacheWriteTokens} 缓存写入 · ${item.outputTokens} 输出`}>{item.cacheWriteTokens} 缓存写入 · {item.outputTokens} 输出</small></span><span title={this.formatMoneyMicros(item.currency, item.chargedMicros)}><strong title={this.formatMoneyMicros(item.currency, item.chargedMicros)}>{this.formatMoneyMicros(item.currency, item.chargedMicros)}</strong><small title={`结算倍率 ${(item.settlementMultiplierBps / 10_000).toFixed(2)}× · 服务费 ${(item.platformFeeBps / 100).toFixed(2)}%`}>结算倍率 {(item.settlementMultiplierBps / 10_000).toFixed(2)}× · 服务费 {(item.platformFeeBps / 100).toFixed(2)}%</small><small title={item.status === 'completed' ? '已结算' : item.status === 'failed' ? (item.chargedMicros > 0 ? '失败 · 已扣费' : '未扣费') : item.status}>{item.status === 'completed' ? '已结算' : item.status === 'failed' ? (item.chargedMicros > 0 ? '失败 · 已扣费' : '未扣费') : item.status}</small></span><span><strong>{dateTime(item.completedAt || item.startedAt)}</strong><small>{item.durationMs > 0 ? `${Math.max(1, Math.round(item.durationMs / 1000))} 秒` : '—'}</small><small>{item.meteringSource === 'provider_reported' ? '上游用量' : '平台估算'}</small></span>{item.metrics.length > 0 && <details className='nmx-usage-breakdown'><summary>计费明细</summary><div>{item.metrics.map(line => <span key={line.metric}><b>{usageMetricName(line.metric)}</b><em>{line.quantity.toLocaleString(this.desktopLocale)}</em><strong>{this.formatMoneyMicros(item.currency, line.customerAmountMicros)}</strong></span>)}</div></details>}</article>)}{!this.accountOverviewLoading && this.accountOverview.usage.length === 0 && <div className='nmx-billing-empty'>暂无使用记录</div>}</div>
+                        <StickyHorizontalScroll targetSelector='.nmx-billing-table'><div className='nmx-billing-table'><header><span>模型与线路</span><span>{usageAnalyticsText(this.desktopLocale, 'tokens')}</span><span title={localizeDesktopSurface(this.desktopLocale, '费用')}>费用</span><span>时间</span></header>{this.accountOverview.usage.map(item => <article key={item.id}><span><strong title={item.modelName || item.canonicalModel}>{item.modelName || item.canonicalModel}</strong><small title={item.providerName || '平台线路'}>{item.providerName || '平台线路'} · {item.routeMode === 'automatic' ? '自动最优' : '固定线路'}{item.failoverCount > 0 ? ` · 切换 ${item.failoverCount} 次` : ''}</small><small title={item.referenceModel && item.referenceModel !== item.canonicalModel ? dynamicLabel(this.desktopLocale, 'referencePrice', { model: item.referenceModel }) : item.pricingMode === 'direct' ? '商家直接报价' : '官方参考价格'}>{item.referenceModel && item.referenceModel !== item.canonicalModel ? dynamicLabel(this.desktopLocale, 'referencePrice', { model: item.referenceModel }) : item.pricingMode === 'direct' ? '商家直接报价' : '官方参考价格'}</small></span><span><strong title={String(usageRecordTotalTokens(item) ?? '—')}>{usageRecordTotalTokens(item) ?? '—'}</strong><small title={`${item.inputTokens} 输入 · ${item.cachedInputTokens} 缓存读取`}>{item.inputTokens} 输入 · {item.cachedInputTokens} 缓存读取</small><small title={`${item.cacheWriteTokens} 缓存写入 · ${item.outputTokens} 输出`}>{item.cacheWriteTokens} 缓存写入 · {item.outputTokens} 输出</small></span><span title={this.formatMoneyMicros(item.currency, item.chargedMicros)}><strong title={this.formatMoneyMicros(item.currency, item.chargedMicros)}>{this.formatMoneyMicros(item.currency, item.chargedMicros)}</strong><small title={`结算倍率 ${(item.settlementMultiplierBps / 10_000).toFixed(2)}× · 服务费 ${(item.platformFeeBps / 100).toFixed(2)}%`}>结算倍率 {(item.settlementMultiplierBps / 10_000).toFixed(2)}× · 服务费 {(item.platformFeeBps / 100).toFixed(2)}%</small><small title={item.status === 'completed' ? '已结算' : item.status === 'failed' ? (item.chargedMicros > 0 ? '失败 · 已扣费' : '未扣费') : item.status}>{item.status === 'completed' ? '已结算' : item.status === 'failed' ? (item.chargedMicros > 0 ? '失败 · 已扣费' : '未扣费') : item.status}</small></span><span><strong>{dateTime(item.completedAt || item.startedAt)}</strong><small>{item.durationMs > 0 ? `${Math.max(1, Math.round(item.durationMs / 1000))} 秒` : '—'}</small><small>{item.meteringSource === 'provider_reported' ? '上游用量' : '平台估算'}</small></span>{item.metrics.length > 0 && <details className='nmx-usage-breakdown'><summary>计费明细</summary><div>{item.metrics.map(line => <span key={line.metric}><b>{usageMetricName(line.metric)}</b><em>{line.quantity.toLocaleString(this.desktopLocale)}</em><strong>{this.formatMoneyMicros(item.currency, line.customerAmountMicros)}</strong></span>)}</div></details>}</article>)}{!this.accountOverviewLoading && this.accountOverview.usage.length === 0 && <div className='nmx-billing-empty'>暂无使用记录</div>}</div></StickyHorizontalScroll>
                     </>}
-                    {this.billingTab === 'topups' && <div className='nmx-billing-table'><header><span>实付金额</span><span>到账余额</span><span>状态</span><span>时间</span></header>{this.accountOverview.topups.map(item => <article key={item.id}><span><strong>{new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency: item.currency }).format(item.payableAmountMinor / 100)}</strong><small>{item.amountOffsetMinor ? dynamicLabel(this.desktopLocale, 'topupOffset', { amount: new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency: item.currency }).format(item.baseAmountMinor / 100), offset: (item.amountOffsetMinor / 100).toFixed(2) }) : item.currency}</small></span><span><strong>{this.formatMoneyMicros(item.creditCurrency, item.creditAmountMicros)}</strong>{item.status === 'payment_pending' || item.status === 'expired' ? <small>订单未支付</small> : undefined}</span><span><strong>{item.status === 'credited' ? '已到账' : item.status === 'payment_pending' ? '等待支付' : item.status === 'expired' ? '已过期' : item.status === 'refunded' ? '已退款' : item.status}</strong><small>{item.creditedAt ? '余额已更新' : '—'}</small></span><span><strong>{dateTime(item.createdAt)}</strong><small>{item.paidAt ? dynamicLabel(this.desktopLocale, 'paidAt', { time: dateTime(item.paidAt) }) : ''}</small></span></article>)}{!this.accountOverviewLoading && this.accountOverview.topups.length === 0 && <div className='nmx-billing-empty'>暂无充值记录</div>}</div>}
-                    {this.billingTab === 'movements' && <div className='nmx-billing-table'><header><span>类型</span><span>可用余额</span><span>冻结金额</span><span>时间</span></header>{this.accountOverview.movements.map(item => <article key={item.id}><span><strong>{item.kind === 'topup' ? '充值到账' : item.kind === 'reserve' ? '用量预授权' : item.kind === 'capture' ? '实际消费' : item.kind === 'release' ? '释放冻结' : item.kind === 'refund' ? '退款' : '余额调整'}</strong><small title={item.referenceType}>{billingMovementReferenceLabel(this.desktopLocale, item.referenceType)}</small></span><span><strong>{item.availableDeltaMicros > 0 ? '+' : ''}{this.formatMoneyMicros(item.currency, item.availableDeltaMicros)}</strong><small>{item.currency}</small></span><span><strong>{item.reservedDeltaMicros > 0 ? '+' : ''}{this.formatMoneyMicros(item.currency, item.reservedDeltaMicros)}</strong><small>{item.spentDeltaMicros > 0 ? dynamicLabel(this.desktopLocale, 'spent', { amount: this.formatMoneyMicros(item.currency, item.spentDeltaMicros) }) : '—'}</small></span><span><strong>{dateTime(item.createdAt)}</strong><small>{item.referenceId.slice(0, 12)}</small></span></article>)}{!this.accountOverviewLoading && this.accountOverview.movements.length === 0 && <div className='nmx-billing-empty'>暂无余额变动</div>}</div>}
+                    {this.billingTab === 'topups' && <StickyHorizontalScroll targetSelector='.nmx-billing-table'><div className='nmx-billing-table'><header><span>实付金额</span><span>到账余额</span><span>状态</span><span>时间</span></header>{this.accountOverview.topups.map(item => <article key={item.id}><span><strong>{new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency: item.currency }).format(item.payableAmountMinor / 100)}</strong><small>{item.amountOffsetMinor ? dynamicLabel(this.desktopLocale, 'topupOffset', { amount: new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency: item.currency }).format(item.baseAmountMinor / 100), offset: (item.amountOffsetMinor / 100).toFixed(2) }) : item.currency}</small></span><span><strong>{this.formatMoneyMicros(item.creditCurrency, item.creditAmountMicros)}</strong>{item.status === 'payment_pending' || item.status === 'expired' ? <small>订单未支付</small> : undefined}</span><span><strong>{item.status === 'credited' ? '已到账' : item.status === 'payment_pending' ? '等待支付' : item.status === 'expired' ? '已过期' : item.status === 'refunded' ? '已退款' : item.status}</strong><small>{item.creditedAt ? '余额已更新' : '—'}</small></span><span><strong>{dateTime(item.createdAt)}</strong><small>{item.paidAt ? dynamicLabel(this.desktopLocale, 'paidAt', { time: dateTime(item.paidAt) }) : ''}</small></span></article>)}{!this.accountOverviewLoading && this.accountOverview.topups.length === 0 && <div className='nmx-billing-empty'>暂无充值记录</div>}</div></StickyHorizontalScroll>}
+                    {this.billingTab === 'movements' && <StickyHorizontalScroll targetSelector='.nmx-billing-table'><div className='nmx-billing-table'><header><span>类型</span><span>可用余额</span><span>冻结金额</span><span>时间</span></header>{this.accountOverview.movements.map(item => <article key={item.id}><span><strong>{item.kind === 'topup' ? '充值到账' : item.kind === 'reserve' ? '用量预授权' : item.kind === 'capture' ? '实际消费' : item.kind === 'release' ? '释放冻结' : item.kind === 'refund' ? '退款' : '余额调整'}</strong><small title={item.referenceType}>{billingMovementReferenceLabel(this.desktopLocale, item.referenceType)}</small></span><span><strong>{item.availableDeltaMicros > 0 ? '+' : ''}{this.formatMoneyMicros(item.currency, item.availableDeltaMicros)}</strong><small>{item.currency}</small></span><span><strong>{item.reservedDeltaMicros > 0 ? '+' : ''}{this.formatMoneyMicros(item.currency, item.reservedDeltaMicros)}</strong><small>{item.spentDeltaMicros > 0 ? dynamicLabel(this.desktopLocale, 'spent', { amount: this.formatMoneyMicros(item.currency, item.spentDeltaMicros) }) : '—'}</small></span><span><strong>{dateTime(item.createdAt)}</strong><small>{item.referenceId.slice(0, 12)}</small></span></article>)}{!this.accountOverviewLoading && this.accountOverview.movements.length === 0 && <div className='nmx-billing-empty'>暂无余额变动</div>}</div></StickyHorizontalScroll>}
                 </>}
             </section>;
         } else if (this.settingsPanel === 'models') {
@@ -64860,11 +65671,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 </div>}
                 {Boolean(this.localDataState.attachmentCoverage?.pendingStagingRoots || this.localDataState.attachmentCoverage?.unavailableRoots) && <div className='nmx-settings-note' role='status'><i className='codicon codicon-warning'></i><span>{Boolean(this.localDataState.attachmentCoverage?.pendingStagingRoots) && `有 ${this.localDataState.attachmentCoverage!.pendingStagingRoots} 个暂存缓存目录，可校验的文件已计入用量，可重试清理。`}{Boolean(this.localDataState.attachmentCoverage?.unavailableRoots) && `另有 ${this.localDataState.attachmentCoverage!.unavailableRoots} 个缓存目录无法安全读取，当前用量不完整，附件清理已暂停。`}</span></div>}
                 {(this.localDataError || this.localDataMessage) && <div role={this.localDataConfirmAction ? 'alert' : 'status'} className={`nmx-network-message ${this.localDataError ? 'is-error' : ''}`}>{this.localDataError || this.localDataMessage}</div>}
-                <section className='nmx-local-data-diagnostics'>
-                    <i className='codicon codicon-pulse' aria-hidden='true'></i>
-                    <span><strong>{localizeDesktopSurface(this.desktopLocale, '诊断报告')}</strong><small>{localizeDesktopSurface(this.desktopLocale, '出现问题时，把这个文件发给我们帮助排查。只包含版本、系统和统计数字，不含对话内容、文件或密钥。')}</small></span>
-                    <LocalDataDiagnosticAction busy={busy} exporting={this.localDataStage === 'exporting'} onExport={() => void this.exportDesktopDiagnostics()} />
-                </section>
             </section>;
         } else if (this.settingsPanel === 'downloads') {
             content = <DownloadsPanel locale={this.desktopLocale} state={this.downloadsState} {...(this.downloadsError ? { error: this.downloadsError } : {})}
@@ -65359,6 +66165,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     override dispose(): void {
         this.cancelScheduledRenderUpdate();
+        if (this.contextFilesChangeTimer !== undefined) {
+            if (typeof window !== 'undefined') window.clearTimeout(this.contextFilesChangeTimer);
+            this.contextFilesChangeTimer = undefined;
+        }
+        if (this.localizationFrameId !== undefined) {
+            if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this.localizationFrameId);
+            else if (typeof window !== 'undefined') window.clearTimeout(this.localizationFrameId);
+            this.localizationFrameId = undefined;
+        }
+        this.localizationScheduled = false;
+        this.pendingLocalizationRoots?.clear();
         super.dispose();
     }
 
@@ -65423,13 +66240,20 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.conversationWindowHidden) void this.releaseHiddenConversationWindow();
         this.scheduleAgentChildScrollSync();
         this.scheduleContextFileListScrollRestore();
-        this.localizeRenderedSurface();
+        if (!this.initialSurfaceLocalized || this.lastLocalizedLocale !== this.desktopLocale) this.localizeRenderedSurface();
     }
 
     protected override onAfterAttach(message: Message): void {
         super.onAfterAttach(message);
         // Apply the saved close policy before the window view is first opened lazily.
         void window.nextmuxDesktop?.setComputerTabCloseBehavior?.(this.tabAppCloseBehavior()).catch(() => undefined);
+        // The update card (updater.cjs) waits for the main workbench to be on screen. The bridge reports that itself once
+        // Theia's launch layer and the launch animation are gone (nextmux-electron-preload.cjs); this only makes sure it
+        // is watching. A detached conversation window or the hidden standby window never reports.
+        if (!this.workbenchReadyNotified && !this.detachedConversationId && typeof window !== 'undefined') {
+            this.workbenchReadyNotified = true;
+            (window.nextmuxDesktop as { notifyWorkbenchReady?: () => void } | undefined)?.notifyWorkbenchReady?.();
+        }
     }
 
     protected override onActivateRequest(message: Message): void {

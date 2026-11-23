@@ -218,8 +218,7 @@
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-hero::after { content: ''; position: absolute; inset: -40%; z-index: -1; opacity: .12;
     background: repeating-conic-gradient(from 0deg at 72% 45%, rgba(255, 255, 255, .9) 0deg 1.2deg, transparent 1.2deg 9deg); }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-hero-glow { position: absolute; z-index: -1; top: -170px; inset-inline-end: -130px; width: 440px; height: 440px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(255, 214, 120, .55), transparent 62%); filter: blur(8px); animation: nmx-home-glow 9s ease-in-out infinite alternate; }
-@keyframes nmx-home-glow { from { transform: translate(0, 0) scale(1); } to { transform: translate(-40px, 30px) scale(1.12); } }
+    background: radial-gradient(circle, rgba(255, 214, 120, .38) 0%, rgba(255, 214, 120, .14) 38%, transparent 66%); pointer-events: none; }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-hero-copy { position: relative; min-width: 0; }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-overline { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border: 1px solid rgba(255, 255, 255, .28); border-radius: 999px;
     color: #fff; background: rgba(20, 14, 46, .46); font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
@@ -237,16 +236,19 @@
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-ghost-cta:hover { background: rgba(255, 255, 255, .18); }
 /* Hero art: three comic panels, a speech bubble and sparkles. */
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-hero-art { position: relative; height: 150px; min-width: 0; }
-.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel { position: absolute; overflow: hidden; border: 3px solid #fff; border-radius: 11px; box-shadow: 0 20px 40px rgba(0, 0, 0, .35); }
-.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel.is-back { top: 0; inset-inline-end: 2%; width: 44%; height: 60%; transform: rotate(8deg); background: linear-gradient(160deg, #3a7bff, #7b3fe4); animation: nmx-home-float 7s ease-in-out infinite; }
+.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel { position: absolute; overflow: hidden; border: 3px solid #fff; border-radius: 11px; box-shadow: 0 20px 40px rgba(0, 0, 0, .35); transition: transform 220ms cubic-bezier(.2, .8, .2, 1); }
+.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel.is-back { top: 0; inset-inline-end: 2%; width: 44%; height: 60%; transform: rotate(8deg); background: linear-gradient(160deg, #3a7bff, #7b3fe4); }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel.is-back > i { display: block; height: 6px; margin: 13px 12px 0; border-radius: 3px; background: rgba(255, 255, 255, .55); }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel.is-back > i:nth-child(2) { width: 60%; }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel.is-back > i:nth-child(3) { width: 40%; }
-.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel.is-mid { top: 12%; inset-inline-start: 4%; width: 50%; height: 56%; transform: rotate(-7deg); background: linear-gradient(180deg, #ffb35c 0%, #ff5f8a 62%, #8e4ec6 100%); animation: nmx-home-float 8s ease-in-out -2s infinite; }
+.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel.is-mid { top: 12%; inset-inline-start: 4%; width: 50%; height: 56%; transform: rotate(-7deg); background: linear-gradient(180deg, #ffb35c 0%, #ff5f8a 62%, #8e4ec6 100%); }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel-sun { position: absolute; top: 18%; left: 50%; width: 36%; aspect-ratio: 1; border-radius: 50%; transform: translateX(-50%); background: radial-gradient(circle, #fff7cf 0 40%, #ffd36b 62%, transparent 64%); }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel-hill { position: absolute; left: -12%; right: -12%; bottom: -32%; height: 62%; border-radius: 50%; background: #34176b; box-shadow: 30px -8px 0 -6px #4a2091; }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel.is-front { bottom: 0; inset-inline-end: 14%; width: 56%; height: 64%; transform: rotate(2deg);
-    background: radial-gradient(circle, rgba(255, 255, 255, .35) 1.4px, transparent 1.8px) 0 0 / 10px 10px, linear-gradient(135deg, #ff7aa0, #ffb56b); animation: nmx-home-float 6s ease-in-out -4s infinite; }
+    background: radial-gradient(circle, rgba(255, 255, 255, .35) 1.4px, transparent 1.8px) 0 0 / 10px 10px, linear-gradient(135deg, #ff7aa0, #ffb56b); }
+.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-hero:hover .nmx-comic-panel.is-back { transform: rotate(8deg) translateY(-3px); }
+.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-hero:hover .nmx-comic-panel.is-mid { transform: rotate(-7deg) translateY(-4px); }
+.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-hero:hover .nmx-comic-panel.is-front { transform: rotate(2deg) translateY(-5px); }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel-figure { position: absolute; bottom: 0; inset-inline-start: 16%; width: 30%; height: 70%; border-radius: 44% 44% 10px 10px; background: #2b0f3f; }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel-figure::before { content: ''; position: absolute; top: -38%; left: 18%; width: 64%; aspect-ratio: 1; border-radius: 50%; background: #2b0f3f; }
 /* The hero panels show real frames made with NextMux (灯塔来信, an original two-episode test story); the drawn shapes stay hidden. */
@@ -257,12 +259,10 @@
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-bubble { position: absolute; top: 12%; inset-inline-end: 9%; padding: 6px 11px; border-radius: 14px; color: #2b0f3f; background: #fff; font-size: 15px; font-weight: 900; box-shadow: 0 6px 14px rgba(0, 0, 0, .2); }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-bubble::after { content: ''; position: absolute; bottom: -7px; inset-inline-start: 12px; width: 12px; height: 12px; background: #fff; clip-path: polygon(0 0, 100% 0, 0 100%); }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-film { position: absolute; left: 0; right: 0; bottom: 5px; height: 7px; background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .8) 0 6px, transparent 6px 12px); opacity: .55; }
-.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-spark { position: absolute; width: 14px; height: 14px; background: #fff7cf; clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%); animation: nmx-home-twinkle 2.6s ease-in-out infinite; }
+.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-spark { position: absolute; width: 10px; height: 10px; border-radius: 3px; transform: rotate(45deg); background: radial-gradient(circle, #fffdf0 28%, rgba(255, 240, 175, .75) 100%); opacity: .88; pointer-events: none; }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-spark.is-a { top: 4%; inset-inline-start: 2%; }
-.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-spark.is-b { bottom: 18%; inset-inline-start: 0; width: 10px; height: 10px; animation-delay: -1s; }
-.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-spark.is-c { top: 42%; inset-inline-end: 0; width: 18px; height: 18px; animation-delay: -1.8s; }
-@keyframes nmx-home-float { 50% { translate: 0 -6px; } }
-@keyframes nmx-home-twinkle { 50% { opacity: .35; transform: scale(.7) rotate(20deg); } }
+.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-spark.is-b { bottom: 18%; inset-inline-start: 0; width: 8px; height: 8px; opacity: .7; }
+.nmx-shell .nmx-comic-home.is-v6 .nmx-comic-spark.is-c { top: 42%; inset-inline-end: 0; width: 12px; height: 12px; }
 /* The four steps, each with its own colour. */
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-pipeline { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
 .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-pipeline > li { --step-a: #7b5cff; --step-b: #b36bff; position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 18px 16px 16px;
@@ -327,7 +327,7 @@
     .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-home-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) {
-    .nmx-shell .nmx-comic-home.is-v6 :is(.nmx-comic-hero-glow, .nmx-comic-panel, .nmx-comic-spark) { animation: none; }
+    .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel { transition: none; }
 }
 
 /* Comic sidebar: a monochrome “new comic” button, covers and progress for each comic. */
@@ -456,7 +456,7 @@
 .nmx-shell .nmx-comic-images-batch:disabled { opacity: .5; cursor: default; box-shadow: none; }
 .nmx-shell .nmx-comic-images-batch > b { padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--nmx-bg) 20%, transparent); font-size: 11px; }
 .nmx-shell .nmx-comic-images-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); align-content: start; gap: 14px; }
-.nmx-shell .nmx-comic-image-card { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--nmx-border); border-radius: 14px; background: var(--nmx-panel); transition: box-shadow 160ms ease, border-color 160ms ease; }
+.nmx-shell .nmx-comic-image-card { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--nmx-border); border-radius: 14px; background: var(--nmx-panel); transition: box-shadow 160ms ease, border-color 160ms ease; content-visibility: auto; contain: layout style; contain-intrinsic-size: auto 310px; }
 .nmx-shell .nmx-comic-image-card:hover { box-shadow: 0 12px 28px rgba(0, 0, 0, .12); }
 .nmx-shell .nmx-comic-image-card.is-active { border-color: #1fa2ff; }
 .nmx-shell .nmx-comic-image-card-media { position: relative; display: grid; place-items: center; max-height: 320px; overflow: hidden; background: #0d0d10; color: #666; }
@@ -1641,9 +1641,10 @@
     .nmx-shell :is(.nmx-music-mv-subtitle, .nmx-music-mv-confirm) { animation: none; }
 }
 
-/* The home's decoration moves for a moment, then rests: endless motion (and an animated blur) kept the GPU busy for
-   as long as the page was open. */
-.nmx-shell .nmx-comic-home.is-v6 :is(.nmx-comic-panel, .nmx-comic-spark), .nmx-shell .nmx-comic-home.is-v6 [class*='glow'] { animation-iteration-count: 2 !important; }
+/* Off-screen comic home hero stays static without compositor animations; disable hover transition under reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+    .nmx-shell .nmx-comic-home.is-v6 .nmx-comic-panel { transition: none; }
+}
 
 /* Creation sheets: the one 保存位置 field and the asset-library picker. */
 .nmx-shell .nmx-comic-location-field { display: flex; flex-direction: column; gap: 6px; }

@@ -146,6 +146,14 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
         this.state = { selected: [], frame: 0, zoom: 48, snap: true, pending: false, property: 'x', trackHeight: 240, filter: 'all', search: '', keys: false, scrollLeft: 0, scrollTop: 0, viewportWidth: 1400 };
     }
     protected scrollerObserver?: ResizeObserver;
+    protected scrollFrame?: number;
+    protected pendingScroll?: { scrollLeft: number; scrollTop: number; viewportWidth: number };
+    protected flushScroll = (): void => {
+        this.scrollFrame = undefined;
+        const pending = this.pendingScroll;
+        this.pendingScroll = undefined;
+        if (this.mounted && pending) this.setState(pending);
+    };
     protected syncViewportWidth = (): void => {
         if (!this.mounted || !this.scroller) return;
         const width = this.scroller.clientWidth;
@@ -239,6 +247,11 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
         window.removeEventListener('resize', this.syncViewportWidth);
         this.scrollerObserver?.disconnect();
         this.scrollerObserver = undefined;
+        if (this.scrollFrame !== undefined) {
+            cancelAnimationFrame(this.scrollFrame);
+            this.scrollFrame = undefined;
+        }
+        this.pendingScroll = undefined;
         window.removeEventListener('blur', this.finishScrub);
         window.removeEventListener('keydown', this.handleWindowKeyDown);
         document.removeEventListener('pointerdown', this.handleDocumentPointerDown, true);
@@ -666,7 +679,7 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
         const pixels=this.pixels(), defaultClipLabel=this.cut('clip');
         const assetTitles=new Map<string,string>();
         for(const asset of this.props.mediaAssets)assetTitles.set(asset.id,asset.title);
-        return <div className='nmx-mt-timeline' style={{height:this.state.trackHeight}} ref={this.bindScroller} onScroll={event=>{this.setState({scrollLeft:event.currentTarget.scrollLeft,scrollTop:event.currentTarget.scrollTop,viewportWidth:event.currentTarget.clientWidth});if(this.scrub)this.scrubTo(this.scrub.clientX);}}>
+        return <div className='nmx-mt-timeline' style={{height:this.state.trackHeight}} ref={this.bindScroller} onScroll={event=>{this.pendingScroll={scrollLeft:event.currentTarget.scrollLeft,scrollTop:event.currentTarget.scrollTop,viewportWidth:event.currentTarget.clientWidth};if(this.scrollFrame===undefined)this.scrollFrame=requestAnimationFrame(this.flushScroll);if(this.scrub)this.scrubTo(this.scrub.clientX);}}>
             <div className='nmx-mt-ruler-row'><div className='nmx-mt-track-label'><select aria-label={this.t('addTrack')} value='' disabled={this.blocked()} onChange={event=>{if(event.currentTarget.value)void this.addTrack(event.currentTarget.value as ComicCompositionTrack['kind']);}}><option value=''>{this.t('addTrack')}</option>{(['video','audio','text'] as const).map(kind=><option key={kind} value={kind}>{this.t(kind)}</option>)}</select><button type='button' disabled={this.blocked()} title={this.t('addText')} onClick={()=>void this.addText()}>T+</button></div>
                 <div className='nmx-mt-ruler' ref={element=>{this.ruler=element;}} style={{width}} onPointerDown={event=>this.beginScrub(event)}>{Array.from({length:Math.min(200,lastTick-firstTick+1)},(_,i)=><span key={i+firstTick} style={{left:(i+firstTick)*step*this.state.zoom}}>{formatEditorTime((i+firstTick)*step)}</span>)}<div className='nmx-mt-playhead nmx-mt-playhead-handle' style={{left:this.state.frame*pixels}}
                     role='slider' tabIndex={0} aria-label={this.cut('playhead')} aria-orientation='horizontal' aria-valuemin={0} aria-valuemax={this.duration()} aria-valuenow={this.state.frame} aria-valuetext={formatEditorTime(this.state.frame/this.props.fps)} onPointerDown={event=>this.beginScrub(event,true)} /></div></div>

@@ -30,6 +30,7 @@ export function CanvasAutoDock(props: {
     }, [hidden]);
     React.useEffect(() => { setEnabled(read(props.storageKey)); setHidden(false); delay.current = 1200; }, [props.storageKey]);
     React.useEffect(() => {
+        if (!enabled) { setPanelOpen(false); return; }
         const board = props.root.current;
         if (!board) return;
         const check = (): void => setPanelOpen(Boolean(board.querySelector('[role="dialog"], .nmx-board-side, .nmx-board-menu, .nmx-board-tools')));
@@ -37,7 +38,7 @@ export function CanvasAutoDock(props: {
         const observer = new MutationObserver(check);
         observer.observe(board, { childList: true, subtree: true, attributes: true, attributeFilter: ['role'] });
         return () => observer.disconnect();
-    }, [props.root]);
+    }, [props.root, enabled]);
     React.useEffect(() => {
         if (!enabled || props.keepOpen || panelOpen || hovered || focused) { setHidden(false); return; }
         const timer = window.setTimeout(() => setHidden(true), delay.current);

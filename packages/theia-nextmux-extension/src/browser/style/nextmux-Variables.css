@@ -1317,9 +1317,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
     padding: 8px 8px 8px 12px;
     border: 1px solid var(--nmxv-line-2);
     border-radius: 10px;
-    background: color-mix(in srgb, var(--nmxv-surface) 94%, transparent);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
+    background: color-mix(in srgb, var(--nmxv-surface) 97%, transparent);
     box-shadow: var(--nmxv-shadow-pop);
     color: var(--nmxv-fg);
     font-size: var(--nmxv-text-xs);
@@ -3368,11 +3366,9 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
     padding: 0 8px;
     border: 1px solid var(--nmxv-line-2) !important;
     border-radius: 8px;
-    background: color-mix(in srgb, var(--nmxv-surface) 88%, transparent) !important;
+    background: color-mix(in srgb, var(--nmxv-surface) 96%, transparent) !important;
     color: var(--nmxv-fg) !important;
     font-size: var(--nmxv-text-xs);
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
     cursor: pointer;
 }
 
@@ -3670,9 +3666,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
     padding: 6px !important;
     border: 1px solid var(--nmxv-line-2) !important;
     border-radius: 12px !important;
-    background: color-mix(in srgb, var(--nmxv-surface) 97%, transparent) !important;
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
+    background: color-mix(in srgb, var(--nmxv-surface) 98%, transparent) !important;
     box-shadow: var(--nmxv-shadow-pop) !important;
 }
 
@@ -3723,9 +3717,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
     padding: 10px 12px !important;
     border: 1px solid var(--nmxv-line-2) !important;
     border-radius: 12px !important;
-    background: color-mix(in srgb, var(--nmxv-surface) 97%, transparent) !important;
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
+    background: color-mix(in srgb, var(--nmxv-surface) 98%, transparent) !important;
     box-shadow: var(--nmxv-shadow-pop) !important;
 }
 
@@ -4058,9 +4050,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
     padding: 4px;
     border: 1px solid rgba(255, 255, 255, .12);
     border-radius: 11px;
-    background: rgba(28, 28, 30, .78);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
+    background: rgba(28, 28, 30, .92);
     color: #f2f2f2;
 }
 

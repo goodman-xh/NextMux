@@ -35,6 +35,7 @@ export class ComicMultitrackPlayer extends React.Component<ComicMultitrackPlayer
     protected live = { seconds: 0, playing: false, speed: 1 };
     protected readonly media = new Map<string, MediaEntry>();
     protected readonly mediaRefs = new Map<string, { url: string; ref: (element: HTMLMediaElement | null) => void }>();
+    protected readonly imageRefs = new Map<string, (element: HTMLImageElement | null) => void>();
     protected readonly gains = new WeakMap<HTMLMediaElement, GainNode>();
     protected audioContext?: AudioContext;
     protected stage: HTMLDivElement | null = null;
@@ -101,7 +102,7 @@ export class ComicMultitrackPlayer extends React.Component<ComicMultitrackPlayer
     override componentWillUnmount(): void {
         this.disposed = true; this.stopClock(); this.observer?.disconnect();
         for (const entry of this.media.values()) this.release(entry);
-        this.visualRenderer?.destroy();this.images.clear();this.media.clear(); void this.audioContext?.close().catch(() => undefined); this.props.onController?.(undefined);
+        this.visualRenderer?.destroy();this.images.clear();this.imageRefs.clear();this.media.clear();this.mediaRefs.clear(); void this.audioContext?.close().catch(() => undefined); this.props.onController?.(undefined);
     }
     protected publish(): void { if (!this.disposed) this.props.onStateChange?.(this.snapshot()); }
     protected measure(): void {
@@ -255,6 +256,19 @@ export class ComicMultitrackPlayer extends React.Component<ComicMultitrackPlayer
         if (!cached || cached.url !== url) { cached = { url, ref: element => this.attach(id, url, element) }; this.mediaRefs.set(id, cached); }
         return cached.ref;
     }
+    protected imageRef(id: string): (element: HTMLImageElement | null) => void {
+        let cached = this.imageRefs.get(id);
+        if (!cached) {
+            cached = image => {
+                if (image) {
+                    this.images.set(id, image);
+                    if (image.complete && image.naturalWidth) this.paintVisual();
+                } else this.images.delete(id);
+            };
+            this.imageRefs.set(id, cached);
+        }
+        return cached;
+    }
     protected visualCanvasRef = (element: HTMLCanvasElement | null): void => {
         this.visualCanvas = element;
         if (element) this.paintVisual();
@@ -286,7 +300,7 @@ export class ComicMultitrackPlayer extends React.Component<ComicMultitrackPlayer
                             if (clip.kind === 'audio') return url ? <audio key={clip.id} data-clip-id={clip.id} src={url} ref={this.mediaRef(clip.id, url)} preload='auto' onLoadedMetadata={loaded} onLoadedData={loaded} onSeeked={() => this.sync()} onError={error} /> : null;
                             return <div key={clip.id} className={`nmx-mt-layer is-${clip.kind}`} data-clip-id={clip.id} style={style}>
                                 {clip.kind === 'video' && url ? <video src={url} ref={this.mediaRef(clip.id, url)} playsInline preload='auto' style={{ objectFit: clip.fit || 'contain' }} onLoadedMetadata={loaded} onLoadedData={loaded} onSeeked={() => this.sync()} onError={error} />
-                                    : clip.kind === 'image' && url ? <img src={url} alt={clip.title || ''} onLoad={()=>this.paintVisual()} ref={image=>{if(image){this.images.set(clip.id,image);if(image.complete&&image.naturalWidth)this.paintVisual();}else this.images.delete(clip.id);}} style={{ objectFit: clip.fit || 'contain' }} />
+                                    : clip.kind === 'image' && url ? <img src={url} alt={clip.title || ''} onLoad={()=>this.paintVisual()} ref={this.imageRef(clip.id)} style={{ objectFit: clip.fit || 'contain' }} />
                                         : clip.kind === 'text' ? <span className='nmx-mt-text' style={{ fontFamily, fontSize: clip.textStyle?.fontSize || 56, fontWeight: clip.textStyle?.bold ? 700 : 400, color: clip.textStyle?.color || '#ffffff', backgroundColor: clip.textStyle?.backgroundColor || 'transparent', textAlign: clip.textStyle?.align || 'center' }}>{comicCompositionTextLines(clip.text ?? (this.props.subtitleCues?.[clip.assetId || ''] || []).filter(cue => item.sourceFrame >= cue.startFrame && item.sourceFrame < cue.startFrame + cue.durationFrames).map(cue => cue.text).join('\n'),clip.textStyle?.fontSize||56,width)}</span>
                                             : <span className='nmx-mt-missing'>{comicMultitrackText(this.props.locale, 'missing')}</span>}
                             </div>;

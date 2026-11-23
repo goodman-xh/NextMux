@@ -1613,9 +1613,18 @@ body:is(.windows, :has(#window-controls)) .nmx-shell .nmx-titlebar-context {
 .nmx-mcp-access h3, .nmx-mcp-access p { margin: 0; }
 .nmx-mcp-heading, .nmx-mcp-server-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
 .nmx-mcp-heading .nmx-settings-note { margin-top: 5px; line-height: 1.5; color: var(--theia-descriptionForeground); }
-.nmx-mcp-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; width: 100%; min-width: 0; }
-.nmx-mcp-access .nmx-mcp-toolbar > input.nmx-mcp-search { flex: 1 1 180px; width: auto !important; min-width: 0; height: 34px !important; min-height: 34px !important; padding: 0 10px !important; margin: 0 !important; box-sizing: border-box; background: var(--theia-input-background); color: var(--theia-input-foreground); border: 1px solid var(--theia-input-border, var(--theia-widget-border)); border-radius: 6px; font: inherit; }
-.nmx-mcp-access .nmx-mcp-toolbar > button { flex: 0 0 auto; height: 34px !important; min-height: 34px !important; padding: 0 12px !important; display: inline-flex; align-items: center; justify-content: center; margin: 0 !important; box-sizing: border-box; white-space: nowrap; }
+/* Refresh and Add at the right end of the MCP title row; the search is its own full-width row under it. */
+.nmx-mcp-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 0 auto; flex-wrap: nowrap; min-width: 0; }
+/* The panel can be narrow inside a wide window (the coding Extensions column): the title keeps its room and the
+   actions drop below it, still at the end, instead of squeezing the title or running past the edge. */
+.nmx-mcp-heading { flex-wrap: wrap; row-gap: 8px; }
+.nmx-mcp-heading > :first-child { flex: 1 1 220px; min-width: 0; }
+.nmx-mcp-heading > .nmx-mcp-toolbar { margin-inline-start: auto; }
+.nmx-mcp-search-row { display: flex; width: 100%; min-width: 0; }
+.nmx-mcp-access .nmx-mcp-search-row > input.nmx-mcp-search { flex: 1 1 180px; width: auto !important; min-width: 0; height: 34px !important; min-height: 34px !important; padding: 0 10px !important; margin: 0 !important; box-sizing: border-box; background: var(--theia-input-background); color: var(--theia-input-foreground); border: 1px solid var(--theia-input-border, var(--theia-widget-border)); border-radius: 6px; font: inherit; }
+.nmx-mcp-access .nmx-mcp-toolbar > button { flex: 0 0 auto; height: 32px !important; min-height: 32px !important; padding: 0 12px !important; display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin: 0 !important; box-sizing: border-box; white-space: nowrap; }
+.nmx-mcp-access .nmx-mcp-toolbar > button > .codicon { font-size: 14px; }
+.nmx-mcp-access .nmx-mcp-toolbar > button:disabled { opacity: .6; cursor: default; }
 .nmx-mcp-access button { appearance: none; font: inherit; min-height: 30px; min-width: 0; max-width: 100%; padding: 5px 10px; border: 1px solid var(--theia-widget-border); border-radius: 6px; color: var(--theia-foreground); background: var(--theia-editorWidget-background); cursor: pointer; overflow-wrap: anywhere; }
 .nmx-mcp-access button:hover:not(:disabled) { background: var(--theia-list-hoverBackground); }
 .nmx-mcp-access button[type='submit'] { color: var(--theia-button-foreground); background: var(--theia-button-background); }

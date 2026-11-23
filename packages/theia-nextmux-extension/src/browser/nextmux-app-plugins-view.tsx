@@ -405,7 +405,8 @@ export function AppPluginBuyDialog(props: {
         <p className='nmx-plugin-description'>{props.signedIn ? t(locale, 'buyLead', { price }) : t(locale, 'loginToBuy')}</p>
         {props.signedIn && props.balanceMicros !== undefined && <p className={`nmx-plugin-buy-balance ${short ? 'is-short' : ''}`} data-nmx-literal>
             {t(locale, 'buyBalance', { balance: usd(locale, Math.floor(props.balanceMicros / 10_000)) })}{short ? ` · ${t(locale, 'buyInsufficient')}` : ''}</p>}
-        {props.error && <p className='nmx-project-delete-error' role='alert' data-nmx-literal>{props.error}</p>}
+        {/* A short balance already says "top up first" on its own line */}
+        {props.error && !(short && props.error === t(locale, 'buyInsufficient')) && <p className='nmx-project-delete-error' role='alert' data-nmx-literal>{props.error}</p>}
     </Dialog>;
 }
 
@@ -422,28 +423,32 @@ export function AppPluginsSettings(props: AppPluginsSettingsProps): React.ReactE
             .filter(Boolean).join('\n').toLocaleLowerCase();
         return words.every(word => text.includes(word));
     });
+    // Each tab's actions sit at the right end of the tab bar; the lead below is plain copy.
+    const actions = props.tab === 'market' ? <>
+        <button type='button' className='is-link' onClick={props.onMineUpload}><i className='codicon codicon-cloud-upload' aria-hidden='true'></i>{t(locale, 'publish')}</button>
+        <button type='button' className='is-link' onClick={props.onOpenDocs}><i className='codicon codicon-book' aria-hidden='true'></i>{t(locale, 'docs')}</button>
+    </> : props.tab === 'mine' ? <>
+        <button type='button' className='is-link' onClick={props.onOpenDocs}><i className='codicon codicon-book' aria-hidden='true'></i>{t(locale, 'docs')}</button>
+        <button type='button' onClick={props.onMineEarnings}><i className='codicon codicon-credit-card' aria-hidden='true'></i>{t(locale, 'mineEarnings')}</button>
+        <button type='button' disabled={props.mine.loading} onClick={props.onMineRefresh}><i className={`codicon codicon-${props.mine.loading ? 'loading codicon-modifier-spin' : 'refresh'}`} aria-hidden='true'></i>{t(locale, 'mineRefresh')}</button>
+        <button type='button' className='is-primary' onClick={props.onMineUpload}><i className='codicon codicon-cloud-upload' aria-hidden='true'></i>{t(locale, 'mineUpload')}</button>
+    </> : <>
+        <button type='button' className='is-link' onClick={props.onOpenDocs}><i className='codicon codicon-book' aria-hidden='true'></i>{t(locale, 'docs')}</button>
+        <button type='button' className='is-primary' disabled={props.busy === 'upload' || props.busy === 'folder'} onClick={props.onLoadLocal}>
+            <i className={`codicon codicon-${props.busy === 'upload' || props.busy === 'folder' ? 'loading codicon-modifier-spin' : 'folder-opened'}`} aria-hidden='true'></i>{t(locale, 'loadLocal')}</button>
+    </>;
     return <section className='nmx-settings-panel nmx-plugins-settings'>
-        <div className='nmx-plugins-tabs' role='tablist'>
-            {(['installed', 'market', 'mine'] as const).map(tab => <button key={tab} type='button' role='tab' aria-selected={props.tab === tab} className={props.tab === tab ? 'is-selected' : ''}
-                onClick={() => props.onTab(tab)}>{t(locale, tab === 'installed' ? 'tabInstalled' : tab === 'market' ? 'tabMarket' : 'tabMine')}{tab === 'installed' && props.plugins.length > 0 && <small>{props.plugins.length}</small>}</button>)}
-        </div>
-        {props.tab === 'market' ? <><div className='nmx-plugins-lead'><p>{t(locale, 'lead')}</p><div className='nmx-plugins-toolbar'>
-            <button type='button' className='is-link' onClick={props.onMineUpload}><i className='codicon codicon-cloud-upload' aria-hidden='true'></i>{t(locale, 'publish')}</button>
-            <button type='button' className='is-link' onClick={props.onOpenDocs}><i className='codicon codicon-book' aria-hidden='true'></i>{t(locale, 'docs')}</button></div></div>
-            <AppPluginMarket {...props} /></> : props.tab === 'mine' ? <><div className='nmx-plugins-lead'><p>{t(locale, 'mineLead')}</p><div className='nmx-plugins-toolbar'>
-            <button type='button' className='is-primary' onClick={props.onMineUpload}><i className='codicon codicon-cloud-upload' aria-hidden='true'></i>{t(locale, 'mineUpload')}</button>
-            <button type='button' disabled={props.mine.loading} onClick={props.onMineRefresh}><i className={`codicon codicon-${props.mine.loading ? 'loading codicon-modifier-spin' : 'refresh'}`} aria-hidden='true'></i>{t(locale, 'mineRefresh')}</button>
-            <button type='button' onClick={props.onMineEarnings}><i className='codicon codicon-credit-card' aria-hidden='true'></i>{t(locale, 'mineEarnings')}</button>
-            <button type='button' className='is-link' onClick={props.onOpenDocs}><i className='codicon codicon-book' aria-hidden='true'></i>{t(locale, 'docs')}</button></div></div>
-            <AppPluginMinePanel {...props} /></> : <>
-        <div className='nmx-plugins-lead'>
-            <p>{t(locale, 'lead')}</p>
-            <div className='nmx-plugins-toolbar'>
-                <button type='button' className='is-primary' disabled={props.busy === 'upload' || props.busy === 'folder'} onClick={props.onLoadLocal}>
-                    <i className={`codicon codicon-${props.busy === 'upload' || props.busy === 'folder' ? 'loading codicon-modifier-spin' : 'folder-opened'}`} aria-hidden='true'></i>{t(locale, 'loadLocal')}</button>
-                <button type='button' className='is-link' onClick={props.onOpenDocs}><i className='codicon codicon-book' aria-hidden='true'></i>{t(locale, 'docs')}</button>
+        <div className='nmx-plugins-tabbar'>
+            <div className='nmx-plugins-tabs' role='tablist'>
+                {(['installed', 'market', 'mine'] as const).map(tab => <button key={tab} type='button' role='tab' aria-selected={props.tab === tab} className={props.tab === tab ? 'is-selected' : ''}
+                    onClick={() => props.onTab(tab)}>{t(locale, tab === 'installed' ? 'tabInstalled' : tab === 'market' ? 'tabMarket' : 'tabMine')}{tab === 'installed' && props.plugins.length > 0 && <small>{props.plugins.length}</small>}</button>)}
             </div>
+            <div className='nmx-plugins-toolbar'>{actions}</div>
         </div>
+        {props.tab === 'market' ? <><p className='nmx-plugins-lead'>{t(locale, 'lead')}</p>
+            <AppPluginMarket {...props} /></> : props.tab === 'mine' ? <><p className='nmx-plugins-lead'>{t(locale, 'mineLead')}</p>
+            <AppPluginMinePanel {...props} /></> : <>
+        <p className='nmx-plugins-lead'>{t(locale, 'lead')}</p>
         {props.plugins.length > 0 && <div className='nmx-plugin-market-search is-local' role='search'>
             <i className='codicon codicon-search' aria-hidden='true'></i>
             <ImeInput type='search' value={filter} maxLength={200} placeholder={t(locale, 'installedSearch')} aria-label={t(locale, 'installedSearch')}
@@ -2874,7 +2879,7 @@ export function pluginsForApp(plugins: readonly AppPluginInfo[], identity: strin
     const executable = (text: string): string => text.replace(/\\/g, '/').split('/').pop()!.replace(/\.(?:exe|app)$/i, '');
     const names = (typeof identity === 'string' ? [identity] : identity || []).map(normalize).filter(Boolean);
     const titles = [title, windowTitle].map(normalize).filter(Boolean);
-    return plugins.filter(plugin => plugin.ok && plugin.enabled !== false && plugin.summary?.apps.some(app => {
+    return plugins.filter(plugin => plugin.ok && plugin.summary?.apps.some(app => {
         if (app.platform !== current) return false;
         const targets = [app.bundleId, app.program].map(normalize).filter(Boolean);
         if (names.some(name => targets.some(target => name === target || executable(name) === executable(target)))) return true;

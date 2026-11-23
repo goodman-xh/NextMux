@@ -42,6 +42,8 @@ interface AppPluginParamScope {
 interface NextMuxDesktopBridge {
     readonly ownedBrowser?: import('./common/nextmux-owned-browser').OwnedBrowserBridge;
     setAppLocale?(locale: string): Promise<boolean>;
+    /** Main workbench only: the preload then reports, once, when its workbench is on screen (the update card waits for it). */
+    notifyWorkbenchReady?: () => void;
     getConversationWindowState(): Promise<import('./common/nextmux-conversation-window').ConversationWindowState | false>;
     reportConversationSyncDiagnostic(payload: import('./common/nextmux-conversation-window').ConversationSyncDiagnostic): Promise<boolean>;
     publishConversationWindows(deltas: import('./common/nextmux-conversation-window').ConversationWindowDelta[], removed?: string[]): Promise<boolean>;
@@ -102,7 +104,7 @@ interface NextMuxDesktopBridge {
         /** Who opens it: only 'agent' lights the "controlling the computer" frame (and is refused after Esc). */
         readonly source?: 'agent' | 'plugin' | 'user' | 'passive';
         /** 2: every failure carries `launched` (always), `wasRunningInOs`, `phase`, and `reopened` / `missing` where they apply. */
-        readonly resultVersion?: 2 }): Promise<{ readonly ok: boolean; readonly running?: boolean; readonly requiresRestart?: boolean; readonly root?: number; readonly familyId?: string; readonly role?: 'launcher' | 'client' | 'game' | 'app'; readonly windows?: readonly import('./browser/nextmux-conversation-tabs').ConversationTabWindowItem[]; readonly pid?: number; readonly windowId?: number; readonly app?: string; readonly appId?: string; readonly programs?: readonly string[]; readonly launched?: boolean; readonly wasRunningInOs?: boolean; readonly canView?: boolean; readonly canPark?: boolean; readonly parkReason?: string; readonly title?: string; readonly placement?: 'tab' | 'desktop'; readonly error?: string;
+        readonly resultVersion?: 2 }): Promise<{ readonly ok: boolean; readonly running?: boolean; readonly requiresRestart?: boolean; readonly root?: number; readonly familyId?: string; readonly role?: 'launcher' | 'client' | 'game' | 'app'; readonly windows?: readonly import('./browser/nextmux-conversation-tabs').ConversationTabWindowItem[]; readonly pid?: number; readonly windowId?: number; readonly app?: string; readonly appId?: string; readonly programs?: readonly string[]; readonly launched?: boolean; readonly wasRunningInOs?: boolean; readonly canView?: boolean; readonly canPark?: boolean; readonly parkReason?: string; readonly title?: string; readonly placement?: 'tab' | 'desktop'; readonly error?: string; /** Windows: the app runs as administrator (UIPI may block NextMux's input). */ readonly elevated?: boolean;
         /** The stage that failed (failures only). */
         readonly phase?: 'permission' | 'launch' | 'window' | 'claim';
         /** This call asked the user's running, windowless macOS app for a window. */

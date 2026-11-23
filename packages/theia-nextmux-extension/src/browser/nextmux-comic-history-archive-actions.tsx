@@ -13,13 +13,3 @@ export function ComicHistoryArchiveActions(props: ComicHistoryArchiveActionsProp
         <button disabled={props.busy} onClick={props.onImport}>恢复修订历史</button>
     </>;
 }
-
-export function LocalDataDiagnosticAction(props: {
-    readonly busy: boolean;
-    readonly exporting: boolean;
-    readonly onExport: () => void;
-}): React.ReactElement {
-    return <button type='button' disabled={props.busy} onClick={props.onExport}>
-        {props.exporting ? '正在生成…' : '导出诊断报告'}
-    </button>;
-}

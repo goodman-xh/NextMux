@@ -262,6 +262,11 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
     const zoomOpenerRef=React.useRef<HTMLElement|null>(null);
     const zoomRestoredSrcRef=React.useRef('');
     const probedPathsRef=React.useRef(new Set<string>());
+    const inFlightPathsRef=React.useRef(new Set<string>());
+    const preparePlaybackRef=React.useRef(props.preparePlaybackFiles);
+    preparePlaybackRef.current=props.preparePlaybackFiles;
+    const [playbackProbeSeq,setPlaybackProbeSeq]=React.useState(0);
+    const hasPreparePlayback=Boolean(props.preparePlaybackFiles);
     const dismissedOverlayOnDownRef=React.useRef(false);
     const closeZoom=():void=>{
         lightboxBackdropDownRef.current=false;
@@ -280,17 +285,22 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
     React.useEffect(()=>{if(props.entries!==undefined)setEntries(props.entries);},[props.entries,props.revision]);
     React.useEffect(()=>{if(props.entries!==undefined&&reload===0){setLoading(false);return;}let active=true;setLoading(true);if(preserveError.current)preserveError.current=false;else{setError('');setFailedUpload(false);}void Promise.resolve().then(props.load).then(value=>{if(active)setEntries(value);},()=>{if(active){setFailedUpload(false);setError(t('loadFailed'));}}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[reload,props.entries===undefined?props.revision:undefined]);
     React.useEffect(()=>{
-        const prepare=props.preparePlaybackFiles;
+        const prepare=preparePlaybackRef.current;
         if(!prepare)return;
         const missing=entries
-            .filter(item=>item.assetType==='video'&&Boolean(item.mediaPath)&&/\.(?:mp4|m4v|mov)$/i.test(item.mediaPath!)&&!probedPathsRef.current.has(item.mediaPath!))
+            .filter(item=>item.assetType==='video'&&Boolean(item.mediaPath)&&/\.(?:mp4|m4v|mov)$/i.test(item.mediaPath!)&&!probedPathsRef.current.has(item.mediaPath!)&&!inFlightPathsRef.current.has(item.mediaPath!))
             .map(item=>item.mediaPath!);
         if(!missing.length)return;
         const unique=[...new Set(missing)].slice(0,64);
+        for(const p of unique)inFlightPathsRef.current.add(p);
         let active=true;
         void Promise.resolve(prepare(unique)).then(mapped=>{
+            for(const p of unique)inFlightPathsRef.current.delete(p);
+            if(!active||!mapped){
+                if(!active&&mounted.current&&preparePlaybackRef.current)setPlaybackProbeSeq(v=>v+1);
+                return;
+            }
             for(const p of unique)probedPathsRef.current.add(p);
-            if(!active||!mapped)return;
             const nextPatch:Record<string,string>={};
             let hasNew=false;
             for(const [srcPath,outPath] of Object.entries(mapped)){
@@ -299,9 +309,12 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
                 hasNew=true;
             }
             if(hasNew)setPlaybackUrls(prev=>({...prev,...nextPatch}));
-        },()=>{/* play original mediaUrl on probe failure */});
+        },()=>{
+            for(const p of unique)inFlightPathsRef.current.delete(p);
+            if(!active&&mounted.current&&preparePlaybackRef.current)setPlaybackProbeSeq(v=>v+1);
+        });
         return()=>{active=false;};
-    },[entries,props.preparePlaybackFiles]);
+    },[entries,hasPreparePlayback,playbackProbeSeq]);
     React.useEffect(()=>{
         const onKeyDown=(event:KeyboardEvent):void=>{
             if(event.isComposing||operations.busy)return;

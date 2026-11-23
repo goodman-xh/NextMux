@@ -1,4 +1,5 @@
 import type { OfficialModelConnection, PlatformOffering } from '../common/nextmux-platform-protocol';
+import { sameModelId } from '../common/nextmux-model-name';
 import { mediaModelTakesText } from '../common/nextmux-media-text-input';
 import { plannedClipSeconds, videoModelGuide, videoModelUsesReferences } from '../common/nextmux-video-model-guide';
 import { documentedVideoProfile, videoAspectRatioOf } from '../common/nextmux-video-profiles';
@@ -12,7 +13,7 @@ export interface ComicRouteEvidence {
 }
 
 export function comicRouteTakesText(kind: 'image' | 'video' | 'music', route: ComicRouteEvidence): boolean {
-    const discovered = route.connection?.discoveredModels.find(model => model.id === route.model);
+    const discovered = route.connection?.discoveredModels.find(model => sameModelId(model.id, route.model));
     return mediaModelTakesText(kind, { id: route.model, displayName: discovered?.label,
         input: route.offering?.input || discovered?.inputModalities, capabilities: route.offering?.capabilities });
 }
@@ -31,7 +32,7 @@ export function comicRouteImageInput(route: ComicRouteEvidence, mode: 'image' | 
     }
     const connection = route.connection;
     if (!connection) return false;
-    const discovered = connection.discoveredModels.find(model => model.id === route.model);
+    const discovered = connection.discoveredModels.find(model => sameModelId(model.id, route.model));
     if (discovered?.inputModalities?.length && !discovered.inputModalities.includes('image')) return false;
     const template = connection.protocol === 'async_media_template' ? connection.providerSettings?.mediaTemplate : undefined;
     if (template) {
@@ -91,7 +92,7 @@ const GEMINI_VOICES = ['Kore', 'Zephyr', 'Puck', 'Charon', 'Fenrir', 'Leda', 'Or
 /** Listed voices win. Documented defaults apply only to their exact model families. */
 export function comicRouteVoices(route: ComicRouteEvidence | undefined): readonly string[] {
     if (!route) return [];
-    const discovered = route.connection?.discoveredModels.find(model => model.id === route.model) as { voices?: readonly string[] } | undefined;
+    const discovered = route.connection?.discoveredModels.find(model => sameModelId(model.id, route.model)) as { voices?: readonly string[] } | undefined;
     const listed = route.offering?.voices || discovered?.voices;
     if (listed !== undefined) return [...new Set(listed.filter(voice => /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/.test(voice)))];
     if (/(?:^|\/)gemini-[^/]*-tts(?:$|[-:@])/i.test(route.model)) return GEMINI_VOICES;

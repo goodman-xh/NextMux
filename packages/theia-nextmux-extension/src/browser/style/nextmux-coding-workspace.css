@@ -831,11 +831,6 @@
 .nmx-shell .nmx-local-data-heading > span > b { color: var(--nmx-text); font-weight: 600; }
 .nmx-shell .nmx-local-data-heading > button { height: 28px; padding: 0 11px; border: 1px solid var(--nmx-border-strong); border-radius: 7px; background: var(--nmx-panel-2); color: var(--nmx-text); font-size: 12.5px; cursor: pointer; }
 .nmx-shell .nmx-local-data-lead { margin: 0 0 10px; color: var(--nmx-subtle); font-size: 12.5px; }
-.nmx-shell .nmx-local-data-diagnostics { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-top: 18px; padding: 12px 14px; border: 1px solid var(--nmx-border); border-radius: 10px; background: var(--nmx-panel); }
-.nmx-shell .nmx-local-data-diagnostics > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.nmx-shell .nmx-local-data-diagnostics strong { color: var(--nmx-text); font-size: 13.5px; }
-.nmx-shell .nmx-local-data-diagnostics small { color: var(--nmx-muted); font-size: 12px; line-height: 1.5; }
-.nmx-shell .nmx-local-data-diagnostics > button { height: 30px; padding: 0 13px; border: 1px solid var(--nmx-border-strong); border-radius: 7px; background: var(--nmx-panel-2); color: var(--nmx-text); cursor: pointer; white-space: nowrap; }
 
 /* Settings cards use a neutral surface; the dark theme's rose-tinted panel read as a warning there. */
 .nmx-shell:not(.nmx-theme-light) .nmx-settings-page { --nmx-panel: #232122; }
@@ -1207,10 +1202,14 @@
  * Skill plugins (技能插件): Settings page, dialogs, a tab's plugin bar, menu and readings.
  * ------------------------------------------------------------------------ */
 .nmx-plugins-settings { display: flex; flex-direction: column; gap: 16px; }
-.nmx-plugins-lead { display: flex; flex-direction: column; gap: 12px; }
-.nmx-plugins-lead > p { margin: 0; color: var(--nmx-muted); font-size: 13px; line-height: 1.6; }
-.nmx-plugins-toolbar { display: flex; flex-wrap: wrap; gap: 8px; }
-.nmx-plugins-toolbar > button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: transparent; font-size: 13px; cursor: pointer; }
+/* Tab bar: 已安装 / 应用市场 / 我的插件 on the left, the open tab's actions at the right end of the same row (they wrap
+   under the tabs only when the row is too narrow). The lead below is plain copy. */
+.nmx-plugins-tabbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 12px; min-width: 0; }
+.nmx-plugins-tabbar > .nmx-plugins-tabs { align-self: center; }
+.nmx-plugins-lead { margin: -4px 0 0; color: var(--nmx-muted); font-size: 13px; line-height: 1.6; }
+.nmx-plugins-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; margin-inline-start: auto; }
+.nmx-plugins-toolbar > button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-text); background: transparent; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.nmx-plugins-toolbar > button > .codicon { font-size: 14px; }
 .nmx-plugins-toolbar > button:hover:not(:disabled) { background: var(--nmx-hover); }
 .nmx-plugins-toolbar > button.is-primary { border-color: transparent; color: #fff; background: #3b6ef5; }
 .nmx-plugins-toolbar > button.is-primary:hover:not(:disabled) { background: #3160dd; }
@@ -1916,8 +1915,11 @@
 .nmx-plugin-hub-text > small { overflow: hidden; color: var(--nmx-muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
 .nmx-plugin-hub-text > em { display: -webkit-box; overflow: hidden; color: var(--nmx-text); font-size: 12px; font-style: normal; line-height: 1.5; opacity: .85; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .nmx-plugin-hub-text > em.is-risk { display: flex; align-items: center; gap: 5px; color: #d08a16; opacity: 1; }
-/* Settings → 本地数据 → 数据位置: the path, notes and several actions (same card as the diagnostics row). */
-.nmx-shell .nmx-data-location { margin-top: 0; margin-bottom: 18px; align-items: start; }
+/* Settings → 本地数据 → 数据位置: the path, notes and several actions. */
+.nmx-shell .nmx-data-location { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: start; gap: 10px; margin-top: 0; margin-bottom: 18px; padding: 12px 14px; border: 1px solid var(--nmx-border); border-radius: 10px; background: var(--nmx-panel); }
+.nmx-shell .nmx-data-location > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.nmx-shell .nmx-data-location strong { color: var(--nmx-text); font-size: 13.5px; }
+.nmx-shell .nmx-data-location small { color: var(--nmx-muted); font-size: 12px; line-height: 1.5; }
 .nmx-shell .nmx-data-location > .codicon { margin-top: 2px; }
 .nmx-shell .nmx-data-location code { font-family: var(--monaco-monospace-font, ui-monospace, monospace); font-size: 11.5px; color: var(--nmx-text); overflow-wrap: anywhere; }
 .nmx-shell .nmx-data-location small.is-error { color: var(--nmx-danger, #d9534f); }
@@ -2121,10 +2123,11 @@
 
 /* ==========================================================================
    Main Composer `/` Slash Command Drawer Portal (z-index: 2650)
-   Scoped with `.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell`
-   so every surface, active/hover highlight, badge, and typography token wins over
-   global `.nmx-shell :is(...) button` (`nextmux.css`), `.nmx-theme-light` (`nextmux-composer-attachments.css`),
-   and `.nmx-model-picker-portal *` (`nextmux-motion.css`) regardless of stylesheet load order.
+   One flat list of single-line rows (icon · /slug · title · description), like a command palette: no group
+   headings, dividers or footer. Scoped with `.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell`
+   so every surface, active/hover highlight and typography token wins over global `.nmx-shell :is(...) button`
+   (`nextmux.css`), `.nmx-theme-light` (`nextmux-composer-attachments.css`) and `.nmx-model-picker-portal *`
+   (`nextmux-motion.css`) regardless of stylesheet load order.
    ========================================================================== */
 .nmx-slash-command-portal {
     position: fixed;
@@ -2145,14 +2148,14 @@
     pointer-events: auto;
     display: flex;
     flex-direction: column;
-    padding: 6px !important;
-    border-radius: 12px !important;
+    padding: 4px !important;
+    border-radius: 10px !important;
     border: 1px solid var(--nmx-border-strong, #413d40) !important;
     border-color: var(--nmx-border-strong, #413d40) !important;
     background: var(--nmx-panel-2, #232123) !important;
     background-color: var(--nmx-panel-2, #232123) !important;
     color: var(--nmx-text, #eeecee) !important;
-    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.46), 0 2px 10px rgba(0, 0, 0, 0.24) !important;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.22) !important;
     overflow: hidden;
 }
 
@@ -2163,59 +2166,43 @@
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #18181b !important;
-    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14), 0 2px 8px rgba(15, 23, 42, 0.08) !important;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12), 0 2px 6px rgba(15, 23, 42, 0.07) !important;
 }
 
 .nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-list {
     flex: 1 1 auto;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
     overflow-y: auto;
     overflow-x: hidden;
     overscroll-behavior: contain;
-    padding: 2px;
+    padding: 0;
     scrollbar-width: thin;
 }
 
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-group + .nmx-slash-command-group {
-    margin-top: 6px;
-    padding-top: 6px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-group + .nmx-slash-command-group {
-    border-top-color: #eceaef !important;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-group-title {
-    padding: 3px 8px 4px;
-    font-size: 11px !important;
-    line-height: 15px !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.02em;
-    color: #a39ea4 !important;
-    user-select: none;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-group-title {
-    color: #52525b !important;
-}
-
+/* One crisp line per command, 28px high. */
 .nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover button.nmx-slash-command-item {
+    flex: 0 0 auto;
     width: 100%;
+    height: 28px;
+    min-height: 28px !important;
     display: grid;
-    grid-template-columns: 26px minmax(0, 1fr) auto;
+    grid-template-columns: 16px auto minmax(0, 1fr);
     align-items: center;
-    gap: 9px;
-    padding: 6px 8px;
+    gap: 8px;
+    padding: 5px 10px !important;
     border: 0 !important;
     border-color: transparent !important;
-    border-radius: 8px;
+    border-radius: 6px !important;
     background: transparent !important;
     background-color: transparent !important;
     color: inherit !important;
-    text-align: left;
+    text-align: start;
+    white-space: nowrap;
     cursor: pointer;
-    transition: background-color 100ms ease;
+    transition: background-color 90ms ease;
 }
 
 .nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover button.nmx-slash-command-item:is(:hover, .is-active):not(.is-disabled) {
@@ -2231,172 +2218,173 @@
 }
 
 .nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover button.nmx-slash-command-item.is-disabled {
-    opacity: 0.54;
+    opacity: 0.5;
     cursor: not-allowed;
 }
 
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-icon {
-    width: 26px;
-    height: 26px;
+/* The command's own codicon, bare: no tile, fill or border behind it. */
+.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-icon.codicon {
+    width: 16px;
+    height: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 7px;
-    background: rgba(255, 255, 255, 0.06) !important;
-    color: #d6d2d7 !important;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-icon {
-    background: #f1eff4 !important;
-    color: #3f3f46 !important;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-icon > .codicon {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    color: #a9a4ab !important;
     font-size: 14px !important;
-    line-height: 14px !important;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-body {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-head {
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: nowrap;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-token {
-    flex: 0 0 auto;
-    padding: 1px 6px;
-    border-radius: 5px;
-    font-family: var(--nmx-mono-font, ui-monospace, SFMono-Regular, Menlo, monospace) !important;
-    font-size: 12px !important;
     line-height: 16px !important;
-    font-weight: 600 !important;
-    color: #f5d0de !important;
-    background: rgba(201, 61, 104, 0.2) !important;
-    border: 1px solid rgba(201, 61, 104, 0.34) !important;
 }
 
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-token {
-    color: #9f1239 !important;
-    background: rgba(225, 29, 72, 0.09) !important;
-    border-color: rgba(225, 29, 72, 0.26) !important;
+.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-icon.codicon {
+    color: #6b6670 !important;
 }
 
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-arg {
-    flex: 0 1 auto;
-    font-size: 11.5px !important;
-    line-height: 16px !important;
-    color: #9e99a0 !important;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover button.nmx-slash-command-item:is(:hover, .is-active):not(.is-disabled) .nmx-slash-command-icon.codicon {
+    color: #f1eff2 !important;
 }
 
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-arg {
-    color: #52525b !important;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover strong.nmx-slash-command-title {
-    flex: 0 1 auto;
-    min-width: 0;
-    font-size: 12.5px !important;
-    line-height: 17px !important;
-    font-weight: 600 !important;
-    color: #f3f1f3 !important;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover strong.nmx-slash-command-title {
+.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover button.nmx-slash-command-item:is(:hover, .is-active):not(.is-disabled) .nmx-slash-command-icon.codicon {
     color: #18181b !important;
 }
 
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-badge {
-    flex: 0 0 auto;
-    padding: 0 5px;
-    border-radius: 999px;
-    font-size: 10px !important;
-    line-height: 15px !important;
-    font-weight: 650 !important;
-    letter-spacing: 0.03em;
-    color: #93c5fd !important;
-    background: rgba(59, 130, 246, 0.16) !important;
-    border: 1px solid rgba(59, 130, 246, 0.32) !important;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-badge {
-    color: #1e40af !important;
-    background: rgba(37, 99, 235, 0.1) !important;
-    border-color: rgba(37, 99, 235, 0.26) !important;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-desc {
-    font-size: 11.5px !important;
-    line-height: 16px !important;
-    color: #aca7ad !important;
+/* The slug as clean medium-weight text: no pill, border or tint. */
+.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-token {
+    min-width: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    font-family: var(--nmx-ui-font, -apple-system, system-ui, sans-serif) !important;
+    font-size: 12.5px !important;
+    line-height: 18px !important;
+    font-weight: 500 !important;
+    letter-spacing: 0;
+    color: #f1eff2 !important;
     white-space: nowrap;
+}
+
+.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-token {
+    color: #18181b !important;
+}
+
+.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-sigil {
+    margin-inline-end: 1px;
+    font-size: 12.5px !important;
+    font-weight: 400 !important;
+    color: #8d888f !important;
+}
+
+.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-sigil {
+    color: #a1a1aa !important;
+}
+
+/* Title and description share one muted line and truncate instead of wrapping. */
+.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-desc {
+    min-width: 0;
     overflow: hidden;
+    font-size: 12px !important;
+    line-height: 18px !important;
+    font-weight: 400 !important;
+    color: #9f9aa1 !important;
+    white-space: nowrap;
     text-overflow: ellipsis;
 }
 
 .nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-desc {
-    color: #52525b !important;
+    color: #66616b !important;
 }
 
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-enter {
-    padding: 1px 5px;
-    border-radius: 4px;
-    font-size: 11px !important;
-    line-height: 15px !important;
-    color: #9c979e !important;
-    background: rgba(255, 255, 255, 0.05) !important;
-    opacity: 0;
-    transition: opacity 100ms ease;
+/* --------------------------------------------------------------------------
+ * Composer command chip: the picked workflow or skill command as `[icon] slug` at the start of the first line.
+ * The textarea and its Markdown overlay indent that line by the chip's measured width
+ * (`--nmx-slash-pill-indent`), so typing starts right after it and wrapped lines return to the left edge.
+ * ------------------------------------------------------------------------ */
+.nmx-shell .nmx-composer > .nmx-composer-input.has-slash-pill > textarea,
+.nmx-shell .nmx-composer > .nmx-composer-input.has-slash-pill > .nmx-composer-markdown-overlay {
+    text-indent: var(--nmx-slash-pill-indent, 0px);
 }
 
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-enter {
-    color: #52525b !important;
-    background: #eceaef !important;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover button.nmx-slash-command-item:is(:hover, .is-active):not(.is-disabled) .nmx-slash-command-enter {
-    opacity: 1;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-footer,
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-footer > span {
-    font-size: 11px !important;
-    line-height: 15px !important;
-    color: #9e99a0 !important;
-}
-
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-footer {
-    flex: 0 0 auto;
-    display: flex;
+.nmx-shell .nmx-composer > .nmx-composer-input > .nmx-composer-slash-pill {
+    position: absolute;
+    top: 3px;
+    inset-inline-start: 4px;
+    z-index: 2;
+    box-sizing: border-box;
+    height: 19px;
+    max-width: calc(100% - 64px);
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-    margin-top: 4px;
-    padding: 5px 8px 2px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    gap: 4px;
+    padding: 0 7px 0 4px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #ece9ed;
+    pointer-events: none;
     user-select: none;
 }
 
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-footer {
-    border-top-color: #eceaef !important;
-    color: #52525b !important;
+.nmx-shell.nmx-theme-light .nmx-composer > .nmx-composer-input > .nmx-composer-slash-pill {
+    border-color: #dedae2;
+    background: #f3f1f6;
+    color: #232227;
 }
 
-.nmx-slash-command-portal.nmx-model-picker-portal.nmx-desktop-widget > .nmx-model-picker-surface.nmx-shell.nmx-theme-light > section.nmx-composer-popover.nmx-slash-command-popover .nmx-slash-command-footer > span {
-    color: #52525b !important;
+/* The icon is also the remove control: it turns into × under the pointer. */
+.nmx-shell .nmx-composer > .nmx-composer-input > .nmx-composer-slash-pill > .nmx-composer-slash-pill-remove {
+    flex: 0 0 auto;
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    color: #c3bec6;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.nmx-shell.nmx-theme-light .nmx-composer > .nmx-composer-input > .nmx-composer-slash-pill > .nmx-composer-slash-pill-remove {
+    color: #5d5862;
+}
+
+.nmx-shell .nmx-composer > .nmx-composer-input > .nmx-composer-slash-pill > .nmx-composer-slash-pill-remove > .codicon {
+    font-size: 13px !important;
+    line-height: 14px !important;
+    background: transparent !important;
+}
+
+.nmx-shell .nmx-composer > .nmx-composer-input > .nmx-composer-slash-pill > .nmx-composer-slash-pill-remove > .codicon-close,
+.nmx-shell .nmx-composer > .nmx-composer-input > .nmx-composer-slash-pill > .nmx-composer-slash-pill-remove:hover > .codicon:not(.codicon-close) {
+    display: none;
+}
+
+.nmx-shell .nmx-composer > .nmx-composer-input > .nmx-composer-slash-pill > .nmx-composer-slash-pill-remove:hover > .codicon-close {
+    display: inline-block;
+}
+
+.nmx-shell .nmx-composer > .nmx-composer-input > .nmx-composer-slash-pill > .nmx-composer-slash-pill-remove:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.nmx-shell.nmx-theme-light .nmx-composer > .nmx-composer-input > .nmx-composer-slash-pill > .nmx-composer-slash-pill-remove:hover {
+    color: #18181b;
+    background: rgba(24, 24, 27, 0.08);
+}
+
+.nmx-shell .nmx-composer > .nmx-composer-input > .nmx-composer-slash-pill > .nmx-composer-slash-pill-label {
+    min-width: 0;
+    overflow: hidden;
+    font-family: var(--nmx-ui-font, -apple-system, system-ui, sans-serif);
+    font-size: 12.5px;
+    line-height: 17px;
+    font-weight: 500;
+    white-space: nowrap;
+    text-overflow: ellipsis;
 }
 
 /* ---------------------------------------------------------------------------

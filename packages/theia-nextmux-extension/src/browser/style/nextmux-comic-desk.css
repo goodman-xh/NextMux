@@ -107,10 +107,13 @@
 .nmx-desk-card.is-clip .nmx-desk-card-front video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
 .nmx-desk-card.is-clip:not(.is-focus) .nmx-desk-card-front video { pointer-events: none; }
 .nmx-desk-card.is-clip .nmx-desk-card-back strong { max-width: 86%; font-size: 14px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nmx-desk-card.is-clip.is-video .nmx-desk-card-back::after, .nmx-desk-card.is-clip.is-picture .nmx-desk-card-back::after {
+.nmx-desk-card.is-clip:is(.is-video, .is-picture):not(.is-done):not(.is-failed) .nmx-desk-card-back {
+    overflow: hidden;
+}
+.nmx-desk-card.is-clip:is(.is-video, .is-picture):not(.is-done):not(.is-failed) .nmx-desk-card-back::after {
     content: ''; position: absolute; inset: 0; border-radius: inherit;
-    background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 22%) 50%, transparent 70%);
-    background-size: 220% 100%; animation: nmx-desk-shimmer 1.4s linear infinite;
+    background: linear-gradient(110deg, transparent 25%, rgb(255 255 255 / 22%) 50%, transparent 75%);
+    animation: nmx-desk-shimmer 1.4s linear infinite; will-change: transform; pointer-events: none;
 }
 .nmx-desk-card-flag { position: absolute; top: 8px; inset-inline-start: 8px; z-index: 2; padding: 2px 8px; border-radius: 999px; font-style: normal; font-size: 11px; color: #1b1300; background: #f3c969; }
 .nmx-desk-editor { display: flex; flex-direction: column; gap: 8px; margin: 0 16px 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--nmx-border); background: var(--nmx-panel-2); }
@@ -147,12 +150,13 @@
 .nmx-desk-card-back .codicon { font-size: 28px; opacity: 0.9; }
 .nmx-desk-card-back strong { font-size: 16px; }
 .nmx-desk-card-back small { font-size: 12px; opacity: 0.85; }
+.nmx-desk-card.is-drawing .nmx-desk-card-back { overflow: hidden; }
 .nmx-desk-card.is-drawing .nmx-desk-card-back::after {
     content: ''; position: absolute; inset: 0;
-    background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 28%) 50%, transparent 70%);
-    background-size: 220% 100%; animation: nmx-desk-shimmer 1.4s linear infinite;
+    background: linear-gradient(110deg, transparent 25%, rgb(255 255 255 / 28%) 50%, transparent 75%);
+    animation: nmx-desk-shimmer 1.4s linear infinite; will-change: transform; pointer-events: none;
 }
-@keyframes nmx-desk-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+@keyframes nmx-desk-shimmer { from { transform: translate3d(-100%, 0, 0); } to { transform: translate3d(100%, 0, 0); } }
 .nmx-desk-card.is-failed .nmx-desk-card-back { background: linear-gradient(160deg, #6b2330, #2d0f15); }
 .nmx-desk-card-front { transform: rotateY(180deg); background: #fff; justify-content: flex-end; }
 .nmx-desk-card-front img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
@@ -595,7 +599,7 @@
 .nmx-desk-filmstrip { display: flex; gap: 8px; margin: 0 18px 12px; padding: 4px 2px 6px; overflow-x: auto; scrollbar-width: none; }
 .nmx-desk-filmstrip:hover { scrollbar-width: thin; }
 .nmx-desk-filmstrip > button {
-    position: relative; flex: 0 0 auto; display: grid; place-items: center; width: 92px; aspect-ratio: 16 / 9; padding: 0; overflow: hidden;
+    position: relative; flex: 0 0 auto; display: grid; place-items: center; width: 92px; aspect-ratio: 16 / 9; padding: 0; overflow: hidden; contain: layout style;
     border: 1.5px solid var(--nmx-border); border-radius: 8px; color: var(--nmx-muted); background: var(--nmx-panel-2); cursor: pointer;
     transition: border-color .14s ease, transform .14s ease, box-shadow .14s ease;
 }
@@ -610,7 +614,7 @@
 .nmx-desk-filmstrip > button > em { right: 4px; font-weight: 500; }
 .nmx-desk-filmstrip > button.is-done::after { content: ''; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: #3fb27f; box-shadow: 0 0 0 2px rgb(0 0 0 / 35%); }
 .nmx-desk-filmstrip > button.is-failed { border-color: color-mix(in srgb, #e5484d 60%, var(--nmx-border)); color: var(--nmx-danger, #e5484d); }
-.nmx-desk-filmstrip > button:is(.is-video, .is-picture)::before { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 16%) 50%, transparent 70%); background-size: 220% 100%; animation: nmx-desk-shimmer 1.4s linear infinite; }
+.nmx-desk-filmstrip > button:is(.is-video, .is-picture):not(.is-done):not(.is-failed):not(.is-outdated)::before { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 25%, rgb(255 255 255 / 18%) 50%, transparent 75%); animation: nmx-desk-shimmer 1.4s linear infinite; will-change: transform; pointer-events: none; }
 .nmx-desk-filmstrip > button.is-outdated::after { content: ''; position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: #f3c969; }
 .nmx-shell .nmx-desk-editor { gap: 10px; margin: 0 18px 14px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--nmx-text) 3%, var(--nmx-panel)); }
 .nmx-shell .nmx-desk-editor textarea { padding: 10px 12px; border-radius: 10px; font-size: 13.5px; line-height: 1.7; }

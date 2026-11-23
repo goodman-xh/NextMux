@@ -1,0 +1,93 @@
+/* Always-visible sticky horizontal scrollbar for wide tables & markdown grids.
+   Styled with existing --nmx-* tokens for high contrast in dark & light themes without layout shift or backdrop blur. */
+.nmx-sticky-hscroll-host {
+    display: block;
+    min-width: 0;
+    width: 100%;
+}
+
+/* The layer sits inside the NextMux shell (stickyLayerParent): above the conversation, under every dialog the shell
+   opens, and gone while a modal or backdrop is up, so the bar never shows or takes a drag over a dialog. */
+.nmx-sticky-hscroll-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.nmx-shell:has(:is([aria-modal='true'], [class*='-backdrop'])) > .nmx-sticky-hscroll-layer {
+    display: none;
+}
+
+.nmx-sticky-hscroll-bar {
+    position: fixed;
+    z-index: 1;
+    height: 12px;
+    border-radius: 999px;
+    border: 1px solid var(--nmx-border, rgba(255, 255, 255, 0.12));
+    background: color-mix(in srgb, var(--nmx-panel, #222021) 92%, var(--nmx-bg, #181818));
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+    pointer-events: auto;
+    user-select: none;
+    touch-action: none;
+    box-sizing: border-box;
+    cursor: pointer;
+    opacity: 0.96;
+    transition: opacity 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+
+.nmx-sticky-hscroll-bar:hover,
+.nmx-sticky-hscroll-bar.is-dragging {
+    opacity: 1;
+    border-color: var(--nmx-border-strong, rgba(255, 255, 255, 0.24));
+}
+
+.nmx-sticky-hscroll-thumb {
+    position: absolute;
+    top: 2px;
+    left: 0;
+    height: 6px;
+    min-width: 28px;
+    border-radius: 999px;
+    background: var(--nmx-muted, rgba(255, 255, 255, 0.42));
+    cursor: grab;
+    will-change: transform, width;
+    transition: background-color 120ms ease, height 120ms ease, top 120ms ease;
+}
+
+.nmx-sticky-hscroll-bar:hover .nmx-sticky-hscroll-thumb,
+.nmx-sticky-hscroll-bar.is-dragging .nmx-sticky-hscroll-thumb {
+    top: 1px;
+    height: 8px;
+    background: var(--nmx-text, #e8e6e7);
+}
+
+.nmx-sticky-hscroll-bar.is-dragging .nmx-sticky-hscroll-thumb {
+    cursor: grabbing;
+}
+
+.nmx-shell.nmx-theme-light .nmx-sticky-hscroll-bar,
+.nmx-sticky-hscroll-layer.nmx-theme-light .nmx-sticky-hscroll-bar {
+    border-color: rgba(0, 0, 0, 0.12);
+    background: color-mix(in srgb, var(--nmx-panel, #ffffff) 96%, #f2efec);
+    box-shadow: 0 2px 8px rgba(42, 34, 38, 0.12);
+}
+
+.nmx-shell.nmx-theme-light .nmx-sticky-hscroll-bar:hover,
+.nmx-shell.nmx-theme-light .nmx-sticky-hscroll-bar.is-dragging,
+.nmx-sticky-hscroll-layer.nmx-theme-light .nmx-sticky-hscroll-bar:hover,
+.nmx-sticky-hscroll-layer.nmx-theme-light .nmx-sticky-hscroll-bar.is-dragging {
+    border-color: rgba(0, 0, 0, 0.24);
+}
+
+.nmx-shell.nmx-theme-light .nmx-sticky-hscroll-thumb,
+.nmx-sticky-hscroll-layer.nmx-theme-light .nmx-sticky-hscroll-thumb {
+    background: rgba(66, 58, 62, 0.42);
+}
+
+.nmx-shell.nmx-theme-light .nmx-sticky-hscroll-bar:hover .nmx-sticky-hscroll-thumb,
+.nmx-shell.nmx-theme-light .nmx-sticky-hscroll-bar.is-dragging .nmx-sticky-hscroll-thumb,
+.nmx-sticky-hscroll-layer.nmx-theme-light .nmx-sticky-hscroll-bar:hover .nmx-sticky-hscroll-thumb,
+.nmx-sticky-hscroll-layer.nmx-theme-light .nmx-sticky-hscroll-bar.is-dragging .nmx-sticky-hscroll-thumb {
+    background: rgba(45, 39, 42, 0.72);
+}

@@ -59,15 +59,17 @@
     transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 120ms cubic-bezier(.16, 1, .3, 1), opacity 140ms ease;
 }
 
+/* The danger/confirm exclusions sit in :where() so they add no weight: an :is() list takes the specificity of its
+   strongest entry, and a heavier list here beat the primary hover below, turning primary buttons grey on hover. */
 .nmx-shell .nmx-settings-page :is(
-    .nmx-settings-actions button:not(.is-danger),
-    .nmx-profile-card > button:not(.is-danger),
-    .nmx-local-data-list > article > button:not(.is-confirm):not(.is-danger),
-    .nmx-community-skill-card button:not(.is-danger),
+    .nmx-settings-actions button:where(:not(.is-danger)),
+    .nmx-profile-card > button:where(:not(.is-danger)),
+    .nmx-local-data-list > article > button:where(:not(.is-confirm, .is-danger)),
+    .nmx-community-skill-card button:where(:not(.is-danger)),
     .nmx-community-skills-toolbar > button,
     .nmx-skill-install-link > button,
-    .nmx-conversation-archive button:not(.is-danger),
-    .nmx-mcp-access button:not(.nmx-mcp-server-toggle):not(.is-danger),
+    .nmx-conversation-archive button:where(:not(.is-danger)),
+    .nmx-mcp-access button:not(.nmx-mcp-server-toggle):where(:not(.is-danger)),
     .nmx-settings-inline-error > button,
     .nmx-terminal-profile-controls > button,
     .nmx-terminal-runtime-note > button,
@@ -199,6 +201,48 @@
 }
 .nmx-shell .nmx-settings-page .nmx-installed-skills > div:empty {
     display: none;
+}
+
+/* ---- Title-row actions: MCP's Add is the settings primary (like its own Save); the community Skills list
+   carries its Refresh at the right end of its title bar, as a small secondary button. ---- */
+.nmx-shell .nmx-settings-page .nmx-mcp-access .nmx-mcp-toolbar > button.is-primary,
+.nmx-shell .nmx-settings-page .nmx-mcp-access .nmx-mcp-toolbar > button.is-primary:hover:not(:disabled) {
+    border-color: var(--nmx-text);
+    color: var(--nmx-bg);
+    background: var(--nmx-text);
+}
+.nmx-shell .nmx-settings-page .nmx-mcp-access .nmx-mcp-toolbar > button.is-primary:hover:not(:disabled) {
+    box-shadow: 0 1px 6px rgba(0, 0, 0, .18);
+}
+.nmx-shell .nmx-settings-page .nmx-community-skills-list > header {
+    justify-content: flex-start;
+    gap: 8px;
+}
+.nmx-shell .nmx-settings-page .nmx-community-skills-list > header > span {
+    margin-inline-end: auto;
+}
+.nmx-shell .nmx-settings-page .nmx-community-skills-list > header > button.nmx-community-skills-refresh {
+    flex: 0 0 auto;
+    height: 28px;
+    min-height: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    border: 1px solid var(--nmx-border-strong);
+    border-radius: 8px;
+    color: var(--nmx-text);
+    background: var(--nmx-control-background, var(--nmx-panel));
+    font-size: 12.5px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.nmx-shell .nmx-settings-page .nmx-community-skills-list > header > button.nmx-community-skills-refresh:hover:not(:disabled) {
+    border-color: var(--nmx-focus-ring, var(--nmx-border-strong));
+    background: var(--nmx-control-hover, var(--nmx-hover));
+}
+.nmx-shell .nmx-settings-page .nmx-community-skills-list > header > button.nmx-community-skills-refresh > .codicon {
+    font-size: 13px;
 }
 
 /* ---- MCP: the intro is quiet copy, not an input-like box ---- */

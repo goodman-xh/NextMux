@@ -178,6 +178,7 @@ export type CheckoutEmbedEvent =
     | { readonly event: 'resize'; readonly height: number }
     | { readonly event: 'complete'; readonly result?: string; readonly paymentId?: string }
     | { readonly event: 'error'; readonly message: string; readonly code?: string }
+    | { readonly event: 'open_external'; readonly code: string; readonly paymentId?: string }
     | {
         readonly event: 'confirm_token';
         readonly requestId: string;
@@ -234,6 +235,15 @@ export function parseCheckoutEmbedEvent(
             ...(code ? { code } : {})
         };
     }
+    if (kind === 'open_external') {
+        const code = typeof data.code === 'string' && data.code.trim() ? data.code.trim() : 'external_checkout_required';
+        const paymentId = typeof data.paymentId === 'string' && data.paymentId.trim() ? data.paymentId.trim() : undefined;
+        return {
+            event: 'open_external',
+            code,
+            ...(paymentId ? { paymentId } : {})
+        };
+    }
     if (kind === 'confirm_token') {
         const requestId = typeof data.requestId === 'string' ? data.requestId.trim() : '';
         const orderId = typeof data.orderId === 'string' ? data.orderId.trim() : '';
@@ -261,6 +271,7 @@ export interface CheckoutEmbedBridgeOptions {
     readonly onResize?: (height: number) => void;
     readonly onComplete?: () => void;
     readonly onError?: (error: { readonly message: string; readonly code?: string }) => void;
+    readonly onOpenExternal?: (code: string) => void;
     readonly onConfirmToken?: (orderId: string, confirmationToken: string, returnUrl?: string) => Promise<PlatformWalletTopupConfirmResult>;
 }
 
@@ -321,6 +332,10 @@ export function createCheckoutEmbedMessageHandler(
             options.onError?.({ message: parsed.message, ...(parsed.code ? { code: parsed.code } : {}) });
             return;
         }
+        if (parsed.event === 'open_external') {
+            options.onOpenExternal?.(parsed.code);
+            return;
+        }
 
         const postReply = (payload: Record<string, unknown>): void => {
             if (options.isCancelled?.()) return;
@@ -375,7 +390,6 @@ const en = {
     methodsLabel: 'Payment method', methodCard: 'Card / Apple Pay', methodWechat: 'WeChat Pay', methodAlipayHk: 'AlipayHK',
     wechatHint: 'Whop settles WeChat Pay in RMB at checkout; your wallet still credits the exact USD amount above.',
     limits: 'Between {min} and {max}', credit: 'Balance added', fee: 'Processing fee', feeFree: 'None', total: 'Total due',
-    payCny: 'Total in RMB (reference)',
     note: 'Pay securely with Whop: cards, Apple Pay, Google Pay, WeChat Pay, AlipayHK and more.',
     noteFee: 'Your balance receives the exact USD amount chosen; Whop’s processing fee ({fee}) is paid by the buyer and shown above.',
     cancel: 'Cancel', submit: 'Top up', creating: 'Preparing checkout…',
@@ -384,7 +398,10 @@ const en = {
     embedLoading: 'Loading secure checkout…',
     embedFallbackError: 'The embedded checkout could not load. You can open the payment page in your browser.',
     waiting: 'Waiting for payment', credited: 'Balance added', creditedBody: 'Your balance is up to date.',
-    reopen: 'Open checkout again', openExternal: 'Open in browser (Apple Pay)', check: 'I’ve paid, check now', restart: 'Change amount', done: 'Done',
+    reopen: 'Open checkout again', openExternal: 'Open in browser (Apple Pay / AlipayHK)',
+    openedInBrowser: 'Payment opened in your browser. Your balance updates automatically once it’s completed.',
+    check: 'I’ve paid, check now', restart: 'Change amount', done: 'Done',
+    restartShort: 'Change amount', openBrowserShort: 'Open in browser', checkShort: 'Check payment',
     unavailable: 'Top-up is unavailable right now. Please try again later.',
     invalid: 'Enter an amount between {min} and {max}.', daily: 'You’ve reached today’s top-up limit. Try a smaller amount or come back tomorrow.',
     createFailed: 'The checkout couldn’t be opened. Please try again.', checkFailed: 'Couldn’t confirm the payment yet. Still checking…',
@@ -402,7 +419,6 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         methodsLabel: '支持付款方式', methodCard: '银行卡 / Apple Pay', methodWechat: '微信支付', methodAlipayHk: 'AlipayHK',
         wechatHint: '微信支付由 Whop 以人民币扣款，钱包仍按上方所选美元金额足额到账。',
         limits: '金额范围 {min} – {max}', credit: '到账余额', fee: '手续费', feeFree: '无需手续费', total: '应付总额',
-        payCny: '人民币实付（参考）',
         note: '通过 Whop 安全支付，支持银行卡、微信支付、AlipayHK、Apple Pay、Google Pay 等方式。',
         noteFee: '余额按所选美元金额足额到账；Whop 支付通道手续费（{fee}）由付款方承担并在上方明示。',
         cancel: '取消', submit: '残忍充值', creating: '正在加载收银台…',
@@ -411,7 +427,10 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         embedLoading: '正在加载安全收银台…',
         embedFallbackError: '内嵌收银台暂时无法加载，可点击下方在浏览器中打开支付页。',
         waiting: '正在等待付款', credited: '充值已到账', creditedBody: '余额已自动更新。',
-        reopen: '重新打开支付页', openExternal: '在浏览器中打开（支持 Apple Pay）', check: '我已支付，检查到账', restart: '修改金额', done: '完成',
+        reopen: '重新打开支付页', openExternal: '在浏览器中打开（支持 Apple Pay / AlipayHK）',
+        openedInBrowser: '已在浏览器中打开支付页面，完成付款后余额将自动到账。',
+        check: '我已支付，检查到账', restart: '修改金额', done: '完成',
+        restartShort: '改金额', openBrowserShort: '浏览器打开', checkShort: '检查到账',
         unavailable: '暂时无法充值，请稍后再试。', invalid: '请输入 {min} 至 {max} 之间的金额。',
         daily: '已达到今日充值上限，请减少金额或明天再试。', createFailed: '支付页暂时无法打开，请重试。',
         checkFailed: '暂时无法确认到账，正在继续检查…', expired: '该支付已关闭。如果你已付款，余额会自动到账。',
@@ -423,7 +442,6 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         methodsLabel: '支援付款方式', methodCard: '信用卡 / Apple Pay', methodWechat: '微信支付', methodAlipayHk: 'AlipayHK',
         wechatHint: '微信支付由 Whop 以人民幣扣款，錢包仍依上方所選美元金額足額入帳。',
         limits: '金額範圍 {min} – {max}', credit: '入帳餘額', fee: '手續費', feeFree: '免手續費', total: '應付總額',
-        payCny: '人民幣實付（參考）',
         note: '透過 Whop 安全付款，支援信用卡、微信支付、AlipayHK、Apple Pay、Google Pay 等方式。',
         noteFee: '餘額依所選美元金額足額入帳；Whop 支付通道手續費（{fee}）由付款方承擔並於上方清楚顯示。',
         cancel: '取消', submit: '儲值', creating: '正在載入收銀台…',
@@ -432,7 +450,10 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         embedLoading: '正在載入安全收銀台…',
         embedFallbackError: '內嵌收銀台暫時無法載入，可在瀏覽器中開啟付款頁。',
         waiting: '正在等待付款', credited: '儲值已入帳', creditedBody: '餘額已自動更新。',
-        reopen: '重新開啟付款頁', openExternal: '在瀏覽器中開啟（支援 Apple Pay）', check: '我已付款，檢查入帳', restart: '修改金額', done: '完成',
+        reopen: '重新開啟付款頁', openExternal: '在瀏覽器中開啟（支援 Apple Pay / AlipayHK）',
+        openedInBrowser: '已在瀏覽器中開啟付款頁面，完成付款後餘額將自動入帳。',
+        check: '我已付款，檢查入帳', restart: '修改金額', done: '完成',
+        restartShort: '改金額', openBrowserShort: '瀏覽器開啟', checkShort: '檢查入帳',
         unavailable: '暫時無法儲值，請稍後再試。', invalid: '請輸入 {min} 至 {max} 之間的金額。',
         daily: '已達到今日儲值上限，請減少金額或明天再試。', createFailed: '付款頁暫時無法開啟，請重試。',
         checkFailed: '暫時無法確認入帳，正在繼續檢查…', expired: '該付款已關閉。如果你已付款，餘額會自動入帳。',
@@ -444,7 +465,6 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         methodsLabel: 'お支払い方法', methodCard: 'カード / Apple Pay', methodWechat: 'WeChat Pay', methodAlipayHk: 'AlipayHK',
         wechatHint: 'WeChat Pay は Whop 側で人民元建て決済となりますが、残高には上記の米ドル額がそのまま反映されます。',
         limits: '{min}〜{max}', credit: '入金される残高', fee: '決済手数料', feeFree: '手数料なし', total: 'お支払い合計',
-        payCny: '人民元お支払い額（目安）',
         note: 'Whop で安全にお支払いいただけます（カード、WeChat Pay、AlipayHK、Apple Pay、Google Pay など）。',
         noteFee: '選んだ USD 金額がそのまま残高に入金されます。Whop の決済手数料（{fee}）は購入者負担となります。',
         cancel: 'キャンセル', submit: 'チャージ', creating: '決済画面を準備中…',
@@ -453,7 +473,10 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         embedLoading: '安全な決済画面を読み込み中…',
         embedFallbackError: '決済フォームを読み込めませんでした。ブラウザーで決済ページを開けます。',
         waiting: 'お支払いを待っています', credited: 'チャージが完了しました', creditedBody: '残高は最新です。',
-        reopen: '決済ページをもう一度開く', openExternal: 'ブラウザーで開く（Apple Pay 対応）', check: '支払い済み、今すぐ確認', restart: '金額を変更', done: '完了',
+        reopen: '決済ページをもう一度開く', openExternal: 'ブラウザーで開く（Apple Pay / AlipayHK 対応）',
+        openedInBrowser: 'ブラウザーでお支払いページを開きました。完了後に残高へ自動反映されます。',
+        check: '支払い済み、今すぐ確認', restart: '金額を変更', done: '完了',
+        restartShort: '金額を変更', openBrowserShort: 'ブラウザーで開く', checkShort: '入金を確認',
         unavailable: '現在チャージできません。しばらくしてからお試しください。', invalid: '{min}〜{max} の金額を入力してください。',
         daily: '本日のチャージ上限に達しました。金額を減らすか、明日お試しください。', createFailed: '決済ページを開けませんでした。もう一度お試しください。',
         checkFailed: 'まだ入金を確認できません。確認を続けています…', expired: 'この決済は終了しました。お支払い済みの場合は自動で残高に反映されます。',
@@ -465,7 +488,6 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         methodsLabel: '결제 수단', methodCard: '카드 / Apple Pay', methodWechat: 'WeChat Pay', methodAlipayHk: 'AlipayHK',
         wechatHint: 'WeChat Pay는 Whop에서 위안화(RMB)로 결제되지만, 지갑에는 위에서 선택한 USD 금액이 전액 충전됩니다.',
         limits: '{min} ~ {max}', credit: '충전될 잔액', fee: '처리 수수료', feeFree: '수수료 없음', total: '총 결제 금액',
-        payCny: '위안화 결제 금액(참고)',
         note: 'Whop으로 안전하게 결제하세요. 카드, WeChat Pay, AlipayHK, Apple Pay, Google Pay 등을 지원합니다.',
         noteFee: '선택한 USD 금액이 그대로 잔액에 전액 충전됩니다. Whop 결제 채널 수수료({fee})는 구매자 부담입니다.',
         cancel: '취소', submit: '충전', creating: '결제 창 준비 중…',
@@ -474,7 +496,10 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         embedLoading: '보안 결제 창 불러오는 중…',
         embedFallbackError: '결제 창을 불러오지 못했습니다. 브라우저에서 결제 페이지를 여세요.',
         waiting: '결제 대기 중', credited: '충전 완료', creditedBody: '잔액이 최신 상태입니다.',
-        reopen: '결제 페이지 다시 열기', openExternal: '브라우저에서 열기 (Apple Pay 지원)', check: '결제했어요, 지금 확인', restart: '금액 변경', done: '완료',
+        reopen: '결제 페이지 다시 열기', openExternal: '브라우저에서 열기 (Apple Pay / AlipayHK)',
+        openedInBrowser: '브라우저에서 결제 페이지를 열었습니다. 결제가 완료되면 잔액이 자동으로 충전됩니다.',
+        check: '결제했어요, 지금 확인', restart: '금액 변경', done: '완료',
+        restartShort: '금액 변경', openBrowserShort: '브라우저에서 열기', checkShort: '입금 확인',
         unavailable: '지금은 충전할 수 없습니다. 잠시 후 다시 시도하세요.', invalid: '{min}~{max} 사이의 금액을 입력하세요.',
         daily: '오늘의 충전 한도에 도달했습니다. 금액을 줄이거나 내일 다시 시도하세요.', createFailed: '결제 페이지를 열 수 없습니다. 다시 시도하세요.',
         checkFailed: '아직 결제를 확인하지 못했습니다. 계속 확인 중…', expired: '이 결제는 종료되었습니다. 이미 결제했다면 잔액에 자동으로 반영됩니다.',
@@ -486,7 +511,6 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         methodsLabel: 'Método de pago', methodCard: 'Tarjeta / Apple Pay', methodWechat: 'WeChat Pay', methodAlipayHk: 'AlipayHK',
         wechatHint: 'Whop procesa WeChat Pay en RMB al pagar; tu saldo se acredita igualmente por el importe exacto en USD.',
         limits: 'Entre {min} y {max}', credit: 'Saldo añadido', fee: 'Comisión de procesamiento', feeFree: 'Sin comisión', total: 'Total a pagar',
-        payCny: 'Total en RMB (referencia)',
         note: 'Paga de forma segura con Whop: tarjetas, WeChat Pay, AlipayHK, Apple Pay, Google Pay y más.',
         noteFee: 'Tu saldo recibe el importe exacto en USD; la comisión de procesamiento de Whop ({fee}) corre a cargo del comprador.',
         cancel: 'Cancelar', submit: 'Recargar', creating: 'Preparando el pago…',
@@ -495,7 +519,10 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         embedLoading: 'Cargando pago seguro…',
         embedFallbackError: 'No se pudo cargar el pago integrado. Puedes abrir la página de pago en el navegador.',
         waiting: 'Esperando el pago', credited: 'Saldo añadido', creditedBody: 'Tu saldo está al día.',
-        reopen: 'Abrir el pago de nuevo', openExternal: 'Abrir en navegador (Apple Pay)', check: 'Ya pagué, comprobar', restart: 'Cambiar importe', done: 'Listo',
+        reopen: 'Abrir el pago de nuevo', openExternal: 'Abrir en navegador (Apple Pay / AlipayHK)',
+        openedInBrowser: 'La página de pago se abrió en el navegador. El saldo se acreditará automáticamente al completarse.',
+        check: 'Ya pagué, comprobar', restart: 'Cambiar importe', done: 'Listo',
+        restartShort: 'Cambiar importe', openBrowserShort: 'Abrir en navegador', checkShort: 'Comprobar pago',
         unavailable: 'La recarga no está disponible por ahora. Inténtalo más tarde.', invalid: 'Introduce un importe entre {min} y {max}.',
         daily: 'Has alcanzado el límite diario. Prueba un importe menor o vuelve mañana.', createFailed: 'No se pudo abrir el pago. Inténtalo de nuevo.',
         checkFailed: 'Aún no se confirma el pago. Seguimos comprobando…', expired: 'Este pago se cerró. Si ya pagaste, el saldo se añadirá automáticamente.',
@@ -507,7 +534,6 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         methodsLabel: 'Moyen de paiement', methodCard: 'Carte / Apple Pay', methodWechat: 'WeChat Pay', methodAlipayHk: 'AlipayHK',
         wechatHint: 'Whop traite WeChat Pay en RMB au paiement ; votre solde reste crédité du montant exact en USD.',
         limits: 'Entre {min} et {max}', credit: 'Solde crédité', fee: 'Frais de traitement', feeFree: 'Aucuns frais', total: 'Total à payer',
-        payCny: 'Total en RMB (référence)',
         note: 'Payez en toute sécurité avec Whop : cartes, WeChat Pay, AlipayHK, Apple Pay, Google Pay et plus.',
         noteFee: 'Votre solde reçoit exactement le montant en USD choisi ; les frais de traitement Whop ({fee}) sont à la charge de l’acheteur.',
         cancel: 'Annuler', submit: 'Recharger', creating: 'Préparation du paiement…',
@@ -516,7 +542,10 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         embedLoading: 'Chargement du paiement sécurisé…',
         embedFallbackError: 'Impossible de charger le paiement intégré. Ouvrez la page de paiement dans votre navigateur.',
         waiting: 'En attente du paiement', credited: 'Solde ajouté', creditedBody: 'Votre solde est à jour.',
-        reopen: 'Rouvrir le paiement', openExternal: 'Ouvrir dans le navigateur (Apple Pay)', check: 'J’ai payé, vérifier', restart: 'Modifier le montant', done: 'Terminé',
+        reopen: 'Rouvrir le paiement', openExternal: 'Ouvrir dans le navigateur (Apple Pay / AlipayHK)',
+        openedInBrowser: 'La page de paiement s’est ouverte dans votre navigateur. Votre solde sera crédité automatiquement une fois terminé.',
+        check: 'J’ai payé, vérifier', restart: 'Modifier le montant', done: 'Terminé',
+        restartShort: 'Modifier', openBrowserShort: 'Dans le navigateur', checkShort: 'Vérifier le paiement',
         unavailable: 'La recharge est momentanément indisponible. Réessayez plus tard.', invalid: 'Saisissez un montant entre {min} et {max}.',
         daily: 'Limite du jour atteinte. Essayez un montant plus petit ou revenez demain.', createFailed: 'Impossible d’ouvrir le paiement. Réessayez.',
         checkFailed: 'Paiement pas encore confirmé. Vérification en cours…', expired: 'Ce paiement est clôturé. Si vous avez déjà payé, le solde sera ajouté automatiquement.',
@@ -528,7 +557,6 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         methodsLabel: 'Zahlungsart', methodCard: 'Karte / Apple Pay', methodWechat: 'WeChat Pay', methodAlipayHk: 'AlipayHK',
         wechatHint: 'Whop rechnet WeChat Pay in RMB ab; Ihrem Guthaben wird dennoch der volle gewählte USD-Betrag gutgeschrieben.',
         limits: 'Zwischen {min} und {max}', credit: 'Gutgeschriebenes Guthaben', fee: 'Bearbeitungsgebühr', feeFree: 'Keine Gebühr', total: 'Gesamtbetrag',
-        payCny: 'Betrag in RMB (Referenz)',
         note: 'Sicher bezahlen mit Whop: Karten, WeChat Pay, AlipayHK, Apple Pay, Google Pay und mehr.',
         noteFee: 'Ihr Guthaben erhält genau den gewählten USD-Betrag; die Whop-Bearbeitungsgebühr ({fee}) trägt der Käufer.',
         cancel: 'Abbrechen', submit: 'Aufladen', creating: 'Kasse wird vorbereitet…',
@@ -537,7 +565,10 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         embedLoading: 'Sichere Kasse wird geladen…',
         embedFallbackError: 'Das eingebettete Formular konnte nicht geladen werden. Öffnen Sie die Zahlungsseite im Browser.',
         waiting: 'Warten auf Zahlung', credited: 'Guthaben aufgeladen', creditedBody: 'Ihr Guthaben ist aktuell.',
-        reopen: 'Kasse erneut öffnen', openExternal: 'Im Browser öffnen (Apple Pay)', check: 'Bezahlt – jetzt prüfen', restart: 'Betrag ändern', done: 'Fertig',
+        reopen: 'Kasse erneut öffnen', openExternal: 'Im Browser öffnen (Apple Pay / AlipayHK)',
+        openedInBrowser: 'Die Zahlungsseite wurde im Browser geöffnet. Nach Abschluss wird das Guthaben automatisch gutgeschrieben.',
+        check: 'Bezahlt – jetzt prüfen', restart: 'Betrag ändern', done: 'Fertig',
+        restartShort: 'Betrag ändern', openBrowserShort: 'Im Browser öffnen', checkShort: 'Zahlung prüfen',
         unavailable: 'Aufladen ist gerade nicht verfügbar. Bitte später erneut versuchen.', invalid: 'Geben Sie einen Betrag zwischen {min} und {max} ein.',
         daily: 'Tageslimit erreicht. Wählen Sie einen kleineren Betrag oder versuchen Sie es morgen.', createFailed: 'Die Kasse konnte nicht geöffnet werden. Bitte erneut versuchen.',
         checkFailed: 'Zahlung noch nicht bestätigt. Wir prüfen weiter…', expired: 'Diese Kasse ist geschlossen. Falls Sie schon bezahlt haben, wird das Guthaben automatisch gutgeschrieben.',
@@ -549,7 +580,6 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         methodsLabel: 'Forma de pagamento', methodCard: 'Cartão / Apple Pay', methodWechat: 'WeChat Pay', methodAlipayHk: 'AlipayHK',
         wechatHint: 'O Whop processa o WeChat Pay em RMB no pagamento; sua carteira recebe o valor exato em USD.',
         limits: 'Entre {min} e {max}', credit: 'Saldo adicionado', fee: 'Taxa de processamento', feeFree: 'Sem taxa', total: 'Total a pagar',
-        payCny: 'Total em RMB (referência)',
         note: 'Pague com segurança pela Whop: cartões, WeChat Pay, AlipayHK, Apple Pay, Google Pay e mais.',
         noteFee: 'Seu saldo recebe o valor exato em USD; a taxa de processamento da Whop ({fee}) é paga pelo comprador.',
         cancel: 'Cancelar', submit: 'Recarregar', creating: 'Preparando o pagamento…',
@@ -558,7 +588,10 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         embedLoading: 'Carregando pagamento seguro…',
         embedFallbackError: 'Não foi possível carregar o checkout integrado. Abra a página de pagamento no navegador.',
         waiting: 'Aguardando pagamento', credited: 'Saldo adicionado', creditedBody: 'Seu saldo está atualizado.',
-        reopen: 'Abrir pagamento de novo', openExternal: 'Abrir no navegador (Apple Pay)', check: 'Já paguei, verificar', restart: 'Alterar valor', done: 'Concluído',
+        reopen: 'Abrir pagamento de novo', openExternal: 'Abrir no navegador (Apple Pay / AlipayHK)',
+        openedInBrowser: 'A página de pagamento foi aberta no navegador. O saldo será creditado automaticamente após a conclusão.',
+        check: 'Já paguei, verificar', restart: 'Alterar valor', done: 'Concluído',
+        restartShort: 'Alterar valor', openBrowserShort: 'Abrir no navegador', checkShort: 'Verificar pagamento',
         unavailable: 'A recarga está indisponível no momento. Tente mais tarde.', invalid: 'Informe um valor entre {min} e {max}.',
         daily: 'Você atingiu o limite de hoje. Tente um valor menor ou volte amanhã.', createFailed: 'Não foi possível abrir o pagamento. Tente novamente.',
         checkFailed: 'Pagamento ainda não confirmado. Continuamos verificando…', expired: 'Este pagamento foi encerrado. Se você já pagou, o saldo será adicionado automaticamente.',
@@ -570,7 +603,6 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         methodsLabel: 'Способ оплаты', methodCard: 'Карта / Apple Pay', methodWechat: 'WeChat Pay', methodAlipayHk: 'AlipayHK',
         wechatHint: 'Whop проводит оплату WeChat Pay в юанях (RMB), но на баланс зачисляется ровно выбранная сумма в USD.',
         limits: 'От {min} до {max}', credit: 'Зачислится', fee: 'Комиссия за обработку', feeFree: 'Без комиссии', total: 'Итого к оплате',
-        payCny: 'К оплате в юанях (ориентир)',
         note: 'Безопасная оплата через Whop: карты, WeChat Pay, AlipayHK, Apple Pay, Google Pay и другое.',
         noteFee: 'На баланс зачисляется точная выбранная сумма в USD; комиссия платёжного канала Whop ({fee}) оплачивается покупателем.',
         cancel: 'Отмена', submit: 'Пополнить', creating: 'Готовим форму оплаты…',
@@ -579,7 +611,10 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         embedLoading: 'Загрузка защищённой кассы…',
         embedFallbackError: 'Не удалось загрузить встроенную форму оплаты. Откройте страницу оплаты в браузере.',
         waiting: 'Ожидаем оплату', credited: 'Баланс пополнен', creditedBody: 'Баланс обновлён.',
-        reopen: 'Открыть оплату снова', openExternal: 'Открыть в браузере (Apple Pay)', check: 'Я оплатил, проверить', restart: 'Изменить сумму', done: 'Готово',
+        reopen: 'Открыть оплату снова', openExternal: 'Открыть в браузере (Apple Pay / AlipayHK)',
+        openedInBrowser: 'Страница оплаты открыта в браузере. Баланс пополнится автоматически после завершения.',
+        check: 'Я оплатил, проверить', restart: 'Изменить сумму', done: 'Готово',
+        restartShort: 'Изменить сумму', openBrowserShort: 'Открыть в браузере', checkShort: 'Проверить оплату',
         unavailable: 'Пополнение временно недоступно. Попробуйте позже.', invalid: 'Введите сумму от {min} до {max}.',
         daily: 'Дневной лимит исчерпан. Уменьшите сумму или вернитесь завтра.', createFailed: 'Не удалось открыть оплату. Попробуйте снова.',
         checkFailed: 'Оплата ещё не подтверждена. Продолжаем проверять…', expired: 'Эта оплата закрыта. Если вы уже оплатили, баланс пополнится автоматически.',
@@ -591,7 +626,6 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         methodsLabel: 'طريقة الدفع', methodCard: 'بطاقة / Apple Pay', methodWechat: 'WeChat Pay', methodAlipayHk: 'AlipayHK',
         wechatHint: 'تعالج Whop الدفع عبر WeChat Pay باليوان الصيني، بينما يُضاف إلى محفظتك المبلغ الكامل بالدولار الأمريكي.',
         limits: 'بين {min} و{max}', credit: 'الرصيد المضاف', fee: 'رسوم المعالجة', feeFree: 'بدون رسوم', total: 'الإجمالي المستحق',
-        payCny: 'الإجمالي باليوان (مرجعي)',
         note: 'ادفع بأمان عبر Whop: البطاقات وWeChat Pay وAlipayHK وApple Pay وGoogle Pay وغيرها.',
         noteFee: 'يُضاف إلى رصيدك المبلغ الذي تختاره بالدولار كاملًا؛ يتحمل المشتري رسوم معالجة Whop ({fee}) الموضحة أعلاه.',
         cancel: 'إلغاء', submit: 'اشحن', creating: 'جارٍ تجهيز الدفع…',
@@ -600,7 +634,10 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         embedLoading: 'جارٍ تحميل بوابة الدفع الآمنة…',
         embedFallbackError: 'تعذّر تحميل نموذج الدفع المدمج. يمكنك فتح صفحة الدفع في المتصفح.',
         waiting: 'بانتظار الدفع', credited: 'أُضيف الرصيد', creditedBody: 'رصيدك محدَّث.',
-        reopen: 'فتح صفحة الدفع مجددًا', openExternal: 'فتح في المتصفح (Apple Pay)', check: 'دفعت، تحقّق الآن', restart: 'تغيير المبلغ', done: 'تم',
+        reopen: 'فتح صفحة الدفع مجددًا', openExternal: 'فتح في المتصفح (Apple Pay / AlipayHK)',
+        openedInBrowser: 'تم فتح صفحة الدفع في المتصفح. سيُضاف الرصيد تلقائيًا بعد إتمام الدفع.',
+        check: 'دفعت، تحقّق الآن', restart: 'تغيير المبلغ', done: 'تم',
+        restartShort: 'تغيير المبلغ', openBrowserShort: 'فتح في المتصفح', checkShort: 'التحقق من الدفع',
         unavailable: 'الشحن غير متاح حاليًا. حاول لاحقًا.', invalid: 'أدخل مبلغًا بين {min} و{max}.',
         daily: 'بلغت حد الشحن اليومي. جرّب مبلغًا أقل أو عُد غدًا.', createFailed: 'تعذّر فتح صفحة الدفع. حاول مرة أخرى.',
         checkFailed: 'لم يُؤكَّد الدفع بعد. نواصل التحقق…', expired: 'أُغلقت صفحة الدفع هذه. إذا دفعت بالفعل فسيُضاف الرصيد تلقائيًا.',
@@ -612,7 +649,6 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         methodsLabel: 'भुगतान का तरीका', methodCard: 'कार्ड / Apple Pay', methodWechat: 'WeChat Pay', methodAlipayHk: 'AlipayHK',
         wechatHint: 'Whop चेकआउट पर WeChat Pay को RMB में प्रोसेस करता है; आपके वॉलेट में ऊपर चुनी गई पूरी USD राशि ही जुड़ती है।',
         limits: '{min} से {max} के बीच', credit: 'जुड़ने वाला बैलेंस', fee: 'प्रोसेसिंग शुल्क', feeFree: 'कोई शुल्क नहीं', total: 'कुल देय',
-        payCny: 'RMB में कुल राशि (संदर्भ)',
         note: 'Whop से सुरक्षित भुगतान करें: कार्ड, WeChat Pay, AlipayHK, Apple Pay, Google Pay आदि।',
         noteFee: 'आपके बैलेंस में चुनी गई सटीक USD राशि जुड़ती है; Whop प्रोसेसिंग शुल्क ({fee}) भुगतानकर्ता द्वारा वहन किया जाता है।',
         cancel: 'रद्द करें', submit: 'टॉप अप करें', creating: 'चेकआउट तैयार हो रहा है…',
@@ -621,7 +657,10 @@ const translations: Record<NextMuxDesktopLocale, Partial<Record<TopupTextKey, st
         embedLoading: 'सुरक्षित चेकआउट लोड हो रहा है…',
         embedFallbackError: 'एम्बेडेड चेकआउट लोड नहीं हो सका। आप ब्राउज़र में भुगतान पृष्ठ खोल सकते हैं।',
         waiting: 'भुगतान की प्रतीक्षा', credited: 'बैलेंस जुड़ गया', creditedBody: 'आपका बैलेंस अपडेट है।',
-        reopen: 'चेकआउट फिर खोलें', openExternal: 'ब्राउज़र में खोलें (Apple Pay)', check: 'भुगतान कर दिया, अभी जाँचें', restart: 'राशि बदलें', done: 'हो गया',
+        reopen: 'चेकआउट फिर खोलें', openExternal: 'ब्राउज़र में खोलें (Apple Pay / AlipayHK)',
+        openedInBrowser: 'ब्राउज़र में भुगतान पृष्ठ खुल गया है। भुगतान पूरा होने पर शेष राशि स्वतः जुड़ जाएगी।',
+        check: 'भुगतान कर दिया, अभी जाँचें', restart: 'राशि बदलें', done: 'हो गया',
+        restartShort: 'राशि बदलें', openBrowserShort: 'ब्राउज़र में खोलें', checkShort: 'भुगतान जाँचें',
         unavailable: 'टॉप-अप अभी उपलब्ध नहीं है। बाद में कोशिश करें।', invalid: '{min} से {max} के बीच राशि डालें।',
         daily: 'आज की टॉप-अप सीमा पूरी हो गई। कम राशि आज़माएँ या कल आएँ।', createFailed: 'चेकआउट नहीं खुल सका। फिर से कोशिश करें।',
         checkFailed: 'भुगतान की पुष्टि अभी नहीं हुई। जाँच जारी है…', expired: 'यह चेकआउट बंद हो गया है। अगर आपने भुगतान कर दिया है, तो बैलेंस अपने आप जुड़ जाएगा।',
@@ -685,10 +724,6 @@ function formatCheckoutAmountLabel(locale: NextMuxDesktopLocale, minor: number):
     return `$${(minor / 100).toFixed(2)}`;
 }
 
-function formatRmbReference(minor: number): string {
-    return `${(minor / 100).toFixed(2)} RMB`;
-}
-
 export function walletTopupRangeText(locale: NextMuxDesktopLocale, options?: PlatformWalletTopupOptions): string {
     return walletTopupText(locale, 'invalid', { min: formatUsd(locale, options?.minimumMinor ?? 1_000, 0), max: formatUsd(locale, options?.maximumMinor ?? 100_000, 0) });
 }
@@ -740,6 +775,7 @@ export interface WalletTopupSheetProps {
     readonly options?: PlatformWalletTopupOptions;
     readonly order?: PlatformWalletTopupOrder;
     readonly error: string;
+    readonly externalOpenedNotice?: string;
     readonly now: number;
     readonly formatMicros: (currency: string, micros: number) => string;
     readonly onAmountChange: (value: string) => void;
@@ -750,6 +786,7 @@ export interface WalletTopupSheetProps {
     readonly onSubmit: () => void;
     readonly onClose: () => void;
     readonly onOpenCheckout: () => void;
+    readonly onOpenExternal?: (code: string) => void;
     readonly onCheck: () => void;
     readonly onRestart: () => void;
     readonly onDone: () => void;
@@ -765,6 +802,7 @@ interface NextMuxCheckoutEmbedProps {
     readonly errorFallbackText: string;
     readonly iframeTitle: string;
     readonly onComplete: () => void;
+    readonly onOpenExternal?: (code: string) => void;
     readonly onConfirmToken?: (orderId: string, confirmationToken: string, returnUrl?: string) => Promise<PlatformWalletTopupConfirmResult>;
 }
 
@@ -772,6 +810,8 @@ function NextMuxCheckoutEmbed(props: NextMuxCheckoutEmbedProps): React.ReactElem
     const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
     const onCompleteRef = React.useRef(props.onComplete);
     onCompleteRef.current = props.onComplete;
+    const onOpenExternalRef = React.useRef(props.onOpenExternal);
+    onOpenExternalRef.current = props.onOpenExternal;
     const onConfirmTokenRef = React.useRef(props.onConfirmToken);
     onConfirmTokenRef.current = props.onConfirmToken;
 
@@ -808,6 +848,11 @@ function NextMuxCheckoutEmbed(props: NextMuxCheckoutEmbedProps): React.ReactElem
             onComplete: () => {
                 if (cancelled) return;
                 onCompleteRef.current();
+            },
+            onOpenExternal: (code) => {
+                if (cancelled) return;
+                setLoaded(true);
+                onOpenExternalRef.current?.(code);
             },
             onError: (err) => {
                 if (cancelled) return;
@@ -874,11 +919,9 @@ export function WalletTopupSheet(props: WalletTopupSheetProps): React.ReactEleme
     const inRange = amountMinor !== undefined && (!options || (amountMinor >= options.minimumMinor && amountMinor <= options.maximumMinor));
     const effectiveFee = options?.fee ?? DEFAULT_WHOP_TOPUP_FEE;
     const feeSchedule = formatWalletTopupFeeSchedule(effectiveFee);
+    // Every amount here is the USD the buyer is charged. Whop shows the exact yuan for WeChat Pay in its own checkout;
+    // a local conversion would only be a guess.
     const quote = amountMinor !== undefined && inRange ? walletTopupCharge(amountMinor, effectiveFee) : undefined;
-    const cnyPerUsdMinor = options?.checkout?.cnyPerUsdMinor ?? options?.checkout?.perUsdMinor;
-    const cnyReferenceMinor = paymentMethod === 'wechat_pay' && quote && typeof cnyPerUsdMinor === 'number' && Number.isSafeInteger(cnyPerUsdMinor) && cnyPerUsdMinor > 0
-        ? Math.ceil((quote.chargeMinor * cnyPerUsdMinor) / 100)
-        : undefined;
     const presets = options?.presetsMinor.length ? options.presetsMinor : [1_000, 2_000, 5_000, 10_000, 20_000, 50_000];
     const unavailable = options !== undefined && !options.available;
     const remainingSeconds = order ? Math.max(0, Math.ceil((order.topup.expiresAt - props.now) / 1000)) : 0;
@@ -906,18 +949,14 @@ export function WalletTopupSheet(props: WalletTopupSheetProps): React.ReactEleme
         : undefined;
     const hasEmbeddedTarget = Boolean(embedUrl);
     const defaultReturnUrl = order ? buildCheckoutReturnUrl(embedOrigin, order.topup.id) : undefined;
-    const orderIsCny = Boolean(
-        order && order.payment.checkoutCharge?.currency === 'CNY' && (orderPaymentMethod === 'wechat_pay' || order.payment.checkoutCurrency === 'CNY')
-    );
 
-    const summary = (credit: string, fee: string, total: string, feeRate?: string, cnyRef?: string) => <dl className='nmx-topup-summary'>
+    const summary = (credit: string, fee: string, total: string, feeRate?: string) => <dl className='nmx-topup-summary'>
         <div><dt>{text('credit')}</dt><dd>{credit}</dd></div>
         <div>
             <dt>{text('fee')}{feeRate ? <span className='nmx-topup-fee-rate'> ({feeRate})</span> : undefined}</dt>
             <dd>{fee}</dd>
         </div>
         <div className='is-total'><dt>{text('total')}</dt><dd>{total}</dd></div>
-        {cnyRef && <div className='is-reference'><dt>{text('payCny')}</dt><dd>{cnyRef}</dd></div>}
     </dl>;
 
     return <div className='nmx-sheet-backdrop nmx-dialog-backdrop nmx-topup-backdrop' onMouseDown={() => { if (!busy) props.onClose(); }}>
@@ -957,8 +996,7 @@ export function WalletTopupSheet(props: WalletTopupSheetProps): React.ReactEleme
                     quote ? formatUsd(locale, quote.creditMinor) : '—',
                     quote ? (quote.feeMinor === 0 ? text('feeFree') : formatUsd(locale, quote.feeMinor)) : '—',
                     quote ? formatUsd(locale, quote.chargeMinor) : '—',
-                    feeSchedule || undefined,
-                    cnyReferenceMinor !== undefined ? formatRmbReference(cnyReferenceMinor) : undefined
+                    feeSchedule || undefined
                 )}
                 <p className='nmx-topup-note'><i className='codicon codicon-lock'></i><span>{feeSchedule ? text('noteFee', { fee: feeSchedule }) : text('note')}</span></p>
                 {(props.error || unavailable) && <div className='nmx-topup-error' role='alert'><i className='codicon codicon-warning'></i><span>{props.error || text('unavailable')}</span></div>}
@@ -968,13 +1006,14 @@ export function WalletTopupSheet(props: WalletTopupSheetProps): React.ReactEleme
                 {!hasEmbeddedTarget && <div className='nmx-topup-checkout-mark' aria-hidden='true'><i className={`codicon ${stage === 'credited' ? 'codicon-pass-filled' : 'codicon-credit-card'}`}></i></div>}
                 <div className='nmx-topup-payment-copy'>
                     <span>{stage === 'credited' ? text('creditedBody') : hasEmbeddedTarget ? text('checkoutBodyEmbedded') : text('checkoutBody')}</span>
-                    <strong>{stage === 'credited' ? `+${props.formatMicros(order.payment.creditAmount.currency, order.payment.creditAmount.micros)}` : formatUsd(locale, order.payment.payableAmount.minor)}</strong>
-                    {stage !== 'credited' && summary(
+                    {/* The embedded checkout states the amount on its own pay button: no second total above it, so the
+                        frame (and a WeChat Pay QR code) is in view as soon as the sheet opens. */}
+                    {!hasEmbeddedTarget && <strong>{stage === 'credited' ? `+${props.formatMicros(order.payment.creditAmount.currency, order.payment.creditAmount.micros)}` : formatUsd(locale, order.payment.payableAmount.minor)}</strong>}
+                    {stage !== 'credited' && !hasEmbeddedTarget && summary(
                         props.formatMicros(order.payment.creditAmount.currency, order.payment.creditAmount.micros),
                         (order.payment.feeAmount?.minor ?? 0) === 0 ? text('feeFree') : formatUsd(locale, order.payment.feeAmount?.minor ?? 0),
                         formatUsd(locale, order.payment.payableAmount.minor),
-                        (order.payment.feeAmount?.minor ?? 0) > 0 && feeSchedule ? feeSchedule : undefined,
-                        orderIsCny && order.payment.checkoutCharge ? formatRmbReference(order.payment.checkoutCharge.minor) : undefined
+                        (order.payment.feeAmount?.minor ?? 0) > 0 && feeSchedule ? feeSchedule : undefined
                     )}
                     {embedUrl && <NextMuxCheckoutEmbed
                         embedUrl={embedUrl}
@@ -986,17 +1025,21 @@ export function WalletTopupSheet(props: WalletTopupSheetProps): React.ReactEleme
                         errorFallbackText={text('embedFallbackError')}
                         iframeTitle={text('checkoutTitle')}
                         onComplete={props.onCheck}
+                        onOpenExternal={props.onOpenExternal}
                         onConfirmToken={props.onConfirmToken}
                     />}
                     {stage === 'credited' ? <div className='nmx-topup-success'><i className='codicon codicon-pass-filled'></i><span>{text('credited')}</span></div>
                         : stage === 'waiting' ? <div className='nmx-topup-waiting'><i></i><span>{text('waiting')}</span><time aria-label={text('timeLeft')}>{minutes}:{String(seconds).padStart(2, '0')}</time></div> : undefined}
                 </div>
+                {props.externalOpenedNotice && stage === 'waiting' && <div className='nmx-topup-external-hint' role='status'><i className='codicon codicon-link-external' aria-hidden='true'></i><span>{props.externalOpenedNotice}</span></div>}
                 {props.error && <div className='nmx-topup-error' role='alert'><i className='codicon codicon-warning'></i><span>{props.error}</span></div>}
-                <footer>
+                {/* One row of short labels; the full sentence stays in each button's tooltip and accessible name. */}
+                <footer className='nmx-topup-actions'>
                     {stage === 'credited' ? <button className='is-primary' onClick={props.onDone}>{text('done')}</button>
-                        : <><button onClick={props.onRestart}>{text('restart')}</button>
-                            {order.payment.checkoutUrl && stage === 'waiting' && <button onClick={props.onOpenCheckout}>{text(hasEmbeddedTarget ? 'openExternal' : 'reopen')}</button>}
-                            <button className='is-primary' onClick={props.onCheck}>{text('check')}</button></>}
+                        : <><button title={text('restart')} aria-label={text('restart')} onClick={props.onRestart}><span>{text('restartShort')}</span></button>
+                            {order.payment.checkoutUrl && stage === 'waiting' && <button title={text(hasEmbeddedTarget ? 'openExternal' : 'reopen')} aria-label={text(hasEmbeddedTarget ? 'openExternal' : 'reopen')}
+                                onClick={props.onOpenCheckout}><i className='codicon codicon-link-external' aria-hidden='true'></i><span>{text('openBrowserShort')}</span></button>}
+                            <button className='is-primary' title={text('check')} aria-label={text('check')} onClick={props.onCheck}><span>{text('checkShort')}</span></button></>}
                 </footer>
             </div>}
         </section>

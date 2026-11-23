@@ -4055,6 +4055,9 @@
     text-align: left;
     color: var(--nmx-text);
     background: transparent;
+    content-visibility: auto;
+    contain: layout style;
+    contain-intrinsic-size: auto 62px;
 }
 
 .nmx-shot-card + .nmx-shot-card {
@@ -4484,6 +4487,9 @@
     padding: 8px;
     border: 1px solid transparent;
     border-radius: 6px;
+    content-visibility: auto;
+    contain: layout style;
+    contain-intrinsic-size: auto 82px;
 }
 
 .nmx-workflow-row + .nmx-workflow-row {
@@ -4655,6 +4661,9 @@
     border: 1px solid #2c2f35;
     border-radius: 6px;
     background: #17191c;
+    content-visibility: auto;
+    contain: layout style;
+    contain-intrinsic-size: auto 78px;
 }
 
 .nmx-asset-grid > article.is-failed,
@@ -9815,6 +9824,9 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     border-radius: 10px;
     box-sizing: border-box;
     background: var(--nmx-panel-2);
+    content-visibility: auto;
+    contain: layout style;
+    contain-intrinsic-size: auto 74px;
 }
 
 .nmx-shell.nmx-theme-light .nmx-billing-table > article,
@@ -14961,6 +14973,20 @@ body.theia-dark .nmx-file-editor-tabs:hover::-webkit-scrollbar-thumb,
     border-color: var(--nmx-text);
     color: var(--nmx-panel);
     background: var(--nmx-text);
+}
+
+/* The generic footer hover above (0,3,2) outranks .is-primary (0,2,2) and turned the filled button into a secondary
+   one under the pointer. The primary stays filled and only eases a step toward the panel, in both themes. */
+.nmx-topup-sheet footer button.is-primary:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--nmx-text) 86%, var(--nmx-panel));
+    color: var(--nmx-panel);
+    background: color-mix(in srgb, var(--nmx-text) 86%, var(--nmx-panel));
+}
+
+.nmx-theme-light .nmx-topup-sheet footer button.is-primary:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--nmx-text) 84%, #ffffff);
+    color: #ffffff;
+    background: color-mix(in srgb, var(--nmx-text) 84%, #ffffff);
 }
 
 .nmx-topup-sheet button:disabled {

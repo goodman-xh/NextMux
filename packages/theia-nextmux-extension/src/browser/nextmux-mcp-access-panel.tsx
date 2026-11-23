@@ -506,13 +506,16 @@ export function McpAccessPanel(props: {
     const visibleServers = servers.filter(server => server.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
     const sCopy = smartFormCopy[props.locale] || smartFormCopy.en;
     return <section className='nmx-mcp-access' aria-busy={busy} dir={props.locale === 'ar' ? 'rtl' : undefined} data-nmx-literal>
+        {/* Refresh and Add sit at the right end of the title row; the search gets its own full-width row below. */}
         <header className='nmx-mcp-heading'>
             <div><h3>{t[0]}</h3><p className='nmx-settings-note'>{connectionCopy[props.locale][0]}</p></div>
+            <div className='nmx-mcp-toolbar'>
+                <button type='button' disabled={busy} onClick={() => { setError(false); refresh.current?.refresh(); }}><i className='codicon codicon-refresh' aria-hidden='true'></i>{diagnosticCopy[props.locale][12]}</button>
+                <button type='button' className='is-primary' disabled={blocked} onClick={() => openEditor()}><i className='codicon codicon-add' aria-hidden='true'></i>{t[11]}</button>
+            </div>
         </header>
-        <div className='nmx-mcp-toolbar'>
+        <div className='nmx-mcp-search-row'>
             <input type='search' className='nmx-mcp-search' aria-label={serviceCopy[props.locale][0]} placeholder={serviceCopy[props.locale][0]} value={query} onChange={event => setQuery(event.currentTarget.value)} />
-            <button type='button' disabled={busy} onClick={() => { setError(false); refresh.current?.refresh(); }}>{diagnosticCopy[props.locale][12]}</button>
-            <button type='button' disabled={blocked} onClick={() => openEditor()}>{t[11]}</button>
         </div>
         {error && !credentialNotice && <p role='alert'>{typeof error === 'string' ? mcpFormText(props.locale, error) : t[10]}</p>}
         {credentialNotice && <p role={credentialNotice === 'failed' ? 'alert' : 'status'}>{mcpCredentialText(props.locale, credentialNotice)}</p>}

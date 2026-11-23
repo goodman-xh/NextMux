@@ -474,8 +474,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     border: 1.5px dashed var(--nmx-drop-accent);
     border-radius: 13px;
     color: var(--nmx-att-text);
-    background: color-mix(in srgb, var(--nmx-drop-accent) 7%, var(--nmx-drop-surface));
-    backdrop-filter: blur(6px);
+    background: color-mix(in srgb, var(--nmx-drop-accent) 9%, var(--nmx-drop-surface));
     pointer-events: none;
     animation: nmx-drop-overlay-in 200ms cubic-bezier(.2, .8, .2, 1) both;
 }
@@ -489,7 +488,6 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     border: 1.5px dashed var(--nmx-drop-accent);
     border-radius: 18px;
     background: var(--nmx-drop-soft);
-    backdrop-filter: blur(2px);
     pointer-events: none;
     animation: nmx-drop-overlay-in 220ms cubic-bezier(.2, .8, .2, 1) both, nmx-drop-border-breathe 1.6s ease-in-out 220ms infinite alternate;
 }
@@ -695,8 +693,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
  * (nextmux-modal-chrome.ts).
  * ------------------------------------------------------------------------ */
 body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay {
-    background: rgba(0, 0, 0, .52);
-    backdrop-filter: blur(3px);
+    background: rgba(0, 0, 0, .58);
     -webkit-app-region: no-drag;
     font-family: var(--nmx-ui-font);
     animation: nmx-drop-overlay-in 160ms ease-out both;
@@ -1449,8 +1446,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 .nmx-shell .nmx-visual-tab-terminate-modal-backdrop {
     position: absolute; inset: 0; z-index: 60;
     display: grid; place-items: center; padding: 20px;
-    background: rgba(10, 10, 14, .48);
-    -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+    background: rgba(10, 10, 14, .56);
     animation: nmx-visual-tab-in 150ms ease-out both;
 }
 .nmx-shell .nmx-visual-tab-terminate-modal {
@@ -1540,9 +1536,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
     border-radius: 10px;
     border: 1px solid var(--nmx-border-strong, var(--nmx-border));
     color: var(--nmx-text);
-    background: color-mix(in srgb, var(--nmx-menu-background, var(--nmx-panel, var(--nmx-bg))) 92%, transparent);
-    -webkit-backdrop-filter: blur(10px);
-    backdrop-filter: blur(10px);
+    background: color-mix(in srgb, var(--nmx-menu-background, var(--nmx-panel, var(--nmx-bg))) 97%, transparent);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
     font-size: 12px;
     line-height: 1.4;
@@ -1952,7 +1946,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
     /* At the top: the composer floats over the bottom of the tab. */
     position: absolute; inset-block-start: 10px; inset-inline-start: 50%; transform: translateX(-50%); margin: 0;
     display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; white-space: nowrap;
-    color: #f5f5f7; background: rgba(24, 24, 28, .72); font-size: 12px; pointer-events: none; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    color: #f5f5f7; background: rgba(24, 24, 28, .90); font-size: 12px; pointer-events: none;
 }
 [dir='rtl'] .nmx-shell .nmx-visual-tab-note, .nmx-shell[dir='rtl'] .nmx-visual-tab-note { transform: translateX(50%); }
 /* "Reopen in real-time mode" (Windows, LiveTabView's RealtimeLaunchPrompt): an infobar between the tab's header and
@@ -2187,7 +2181,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 .nmx-system-notify-toggle small { color: var(--nmx-muted); font-size: 12px; line-height: 1.5; }
 
 /* ── First-run setup ─────────────────────────────────────────────────────── */
-.nmx-shell .nmx-onboarding-backdrop { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--nmx-bg, #181818) 82%, transparent); backdrop-filter: blur(14px); animation: nmx-onboarding-in 260ms ease-out both; }
+.nmx-shell .nmx-onboarding-backdrop { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--nmx-bg, #181818) 94%, transparent); animation: nmx-onboarding-in 260ms ease-out both; }
 .nmx-shell .nmx-onboarding { position: relative; box-sizing: border-box; width: min(600px, 100%); max-height: calc(100vh - 48px); overflow: auto; padding: 32px 34px 26px; border: 1px solid var(--nmx-border-strong, var(--nmx-border)); border-radius: 18px; color: var(--nmx-text); background: var(--nmx-panel); box-shadow: 0 30px 90px rgba(0, 0, 0, .35); outline: none; }
 .nmx-shell .nmx-onboarding-step { color: var(--nmx-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .nmx-shell .nmx-onboarding h1 { margin: 8px 0 6px; font-size: 24px; font-weight: 650; letter-spacing: -.02em; }
@@ -2240,7 +2234,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 .nmx-shell .nmx-coding-stage > .nmx-thread-agents-float > .nmx-thread-float-tab { --nmx-float-slot: 44px; }
 .nmx-shell .nmx-coding-stage.is-drop-target > :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float) { visibility: hidden; }
 
-.nmx-shell .nmx-thread-float-tab { position: absolute; top: 50%; right: 0; translate: 0 calc(-50% + var(--nmx-float-slot, 0px)); box-sizing: border-box; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid rgba(255, 255, 255, .07); border-radius: 10px; color: #8d888a; background: rgba(30, 29, 29, .74); box-shadow: 0 4px 14px rgba(0, 0, 0, .14); backdrop-filter: blur(14px); pointer-events: auto; cursor: default; outline: none; transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease, opacity 120ms ease; }
+.nmx-shell .nmx-thread-float-tab { position: absolute; top: 50%; right: 0; translate: 0 calc(-50% + var(--nmx-float-slot, 0px)); box-sizing: border-box; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid rgba(255, 255, 255, .07); border-radius: 10px; color: #8d888a; background: rgba(30, 29, 29, .90); box-shadow: 0 4px 14px rgba(0, 0, 0, .14); pointer-events: auto; cursor: default; outline: none; transition: color 120ms ease, border-color 120ms ease, background-color 120ms ease, opacity 120ms ease; }
 /* Open, a panel replaces the icons: its own icon and the other floats' icons hide until it closes. */
 .nmx-shell .nmx-coding-stage > :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float):is(:hover, :focus-within) > .nmx-thread-float-tab,
 .nmx-shell .nmx-coding-stage:has(> :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float):is(:hover, :focus-within)) > :is(.nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float) > .nmx-thread-float-tab { opacity: 0; pointer-events: none; }
@@ -2255,7 +2249,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 
 /* File panel: the list card, shown only while the float is hovered or focused, vertically centred. */
 .nmx-shell .nmx-coding-stage > .nmx-thread-files:not(:hover):not(:focus-within) > div { display: none; }
-.nmx-shell .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) > div { top: 50%; translate: 0 -50%; right: 0; width: 224px; max-height: 100%; padding: 4px; border: 1px solid color-mix(in srgb, var(--nmx-border-strong, var(--nmx-border)) 88%, rgba(255, 255, 255, .08)); border-radius: 11px; background: color-mix(in srgb, var(--nmx-panel) 96%, #181718); backdrop-filter: blur(16px); box-shadow: 0 10px 26px rgba(0, 0, 0, .38), 0 1px 3px rgba(0, 0, 0, .24); animation: nmx-float-panel-in 140ms ease-out both; }
+.nmx-shell .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) > div { top: 50%; translate: 0 -50%; right: 0; width: 224px; max-height: 100%; padding: 4px; border: 1px solid color-mix(in srgb, var(--nmx-border-strong, var(--nmx-border)) 88%, rgba(255, 255, 255, .08)); border-radius: 11px; background: color-mix(in srgb, var(--nmx-panel) 98%, #181718); box-shadow: 0 10px 26px rgba(0, 0, 0, .38), 0 1px 3px rgba(0, 0, 0, .24); animation: nmx-float-panel-in 140ms ease-out both; }
 .nmx-shell.nmx-theme-light .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) > div { border-color: #dcd6d2 !important; background: rgba(252, 251, 249, .98) !important; box-shadow: 0 8px 22px rgba(60, 50, 54, .12), 0 1px 2px rgba(60, 50, 54, .06); }
 .nmx-shell .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) header { grid-template-columns: 24px minmax(0, 1fr) 26px; gap: 4px; padding: 0 4px 2px; }
 .nmx-shell .nmx-coding-stage > .nmx-thread-files:is(:hover, :focus-within) header strong { width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
@@ -2335,7 +2329,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
 .nmx-shell .nmx-thread-note-readable input[type='checkbox']:focus-visible { outline: 2px solid color-mix(in srgb, var(--nmx-accent) 60%, transparent); outline-offset: 2px; }
 .nmx-shell .nmx-thread-note-readable.is-disabled { color: color-mix(in srgb, var(--nmx-muted) 65%, transparent); cursor: help; }
 .nmx-shell .nmx-thread-note-readable.is-disabled input[type='checkbox'] { opacity: .45; cursor: help; pointer-events: none; }
-.nmx-shell .nmx-thread-note-lightbox { position: fixed; inset: 0; z-index: 2147483500; display: grid; place-items: center; padding: 24px; background: rgba(0, 0, 0, .72); backdrop-filter: blur(4px); cursor: zoom-out; outline: none; }
+.nmx-shell .nmx-thread-note-lightbox { position: fixed; inset: 0; z-index: 2147483500; display: grid; place-items: center; padding: 24px; background: rgba(0, 0, 0, .80); cursor: zoom-out; outline: none; }
 .nmx-shell .nmx-thread-note-lightbox img { max-width: min(92vw, 1200px); max-height: 88vh; border-radius: 10px; box-shadow: 0 18px 48px rgba(0, 0, 0, .48); object-fit: contain; cursor: default; }
 @media (forced-colors: active) {
     .nmx-shell .nmx-thread-float-tab, .nmx-shell .nmx-thread-note, .nmx-shell .nmx-thread-agents-badge, .nmx-shell .nmx-thread-note-thumb { border: 1px solid CanvasText; }
@@ -2468,7 +2462,7 @@ body.nmx-window-inactive:not(.nmx-window-fullscreen):not(.nmx-modal-open):has(#n
 /* Council: a compact assignment sheet, with one shared surface and aligned controls. */
 .nmx-shell .nmx-council-glyph { display: block; flex: none; }
 .nmx-shell .nmx-council-modal-backdrop,
-.nmx-shell .nmx-council-close-backdrop { backdrop-filter: blur(3px); }
+.nmx-shell .nmx-council-close-backdrop { background: rgba(0, 0, 0, .58); }
 .nmx-shell .nmx-council-modal {
     position: relative;
     box-sizing: border-box;

@@ -105,9 +105,8 @@
     border: 1px solid color-mix(in srgb, var(--nmx-accent) 40%, transparent);
     border-radius: 999px;
     color: var(--nmx-text);
-    background: color-mix(in srgb, var(--nmx-panel) 88%, transparent);
+    background: color-mix(in srgb, var(--nmx-panel) 95%, transparent);
     box-shadow: 0 6px 18px rgba(0, 0, 0, .22);
-    backdrop-filter: blur(8px);
     font-size: 12px;
     line-height: 1.3;
     pointer-events: none;

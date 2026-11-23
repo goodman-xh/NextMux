@@ -1,9 +1,15 @@
 /* Unified USD top-up sheet (/checkout-embed Elements flow).
  * Pure solid/tinted surfaces without glass blur; inherits Dark & Light --nmx-* tokens. */
 
+.nmx-shell .nmx-topup-sheet {
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+}
+
 .nmx-shell .nmx-topup-sheet > header {
     min-height: 56px;
     padding: 12px 18px;
+    flex-shrink: 0;
 }
 
 .nmx-shell .nmx-topup-sheet > form,
@@ -161,12 +167,6 @@
     font-weight: 650;
 }
 
-.nmx-topup-summary > .is-reference dt,
-.nmx-topup-summary > .is-reference dd {
-    font-size: 12.5px;
-    color: var(--nmx-subtle);
-}
-
 .nmx-topup-sheet .nmx-topup-note {
     display: flex;
     align-items: flex-start;
@@ -227,8 +227,50 @@
     background: color-mix(in srgb, var(--nmx-success) 12%, var(--nmx-panel));
 }
 
-.nmx-topup-checkout footer {
-    flex-wrap: wrap;
+/* Waiting for payment: Change amount · Open in browser · Check payment on one row with short labels (the full
+   sentences are the tooltips). Only a very narrow window lets the row wrap. */
+.nmx-topup-sheet footer.nmx-topup-actions {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+/* One row in every language: a label too long for the sheet ends in "…" (the full sentence is the tooltip and the
+   accessible name) instead of spilling over its neighbour, and the primary action never shrinks. */
+.nmx-topup-sheet footer.nmx-topup-actions > button {
+    flex: 0 1 auto;
+    min-width: 0;
+    height: 32px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.nmx-topup-sheet footer.nmx-topup-actions > button.is-primary {
+    flex-shrink: 0;
+    font-weight: 600;
+}
+.nmx-topup-sheet footer.nmx-topup-actions > button > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nmx-topup-sheet footer.nmx-topup-actions > button > .codicon {
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+@media (max-width: 420px) {
+    .nmx-topup-sheet footer.nmx-topup-actions {
+        flex-wrap: wrap;
+    }
 }
 
 .nmx-topup-sheet.is-embedded {
@@ -245,16 +287,24 @@
 }
 
 .nmx-topup-payment.is-embedded .nmx-topup-payment-copy {
+    gap: 0;
     text-align: start;
 }
 
-.nmx-topup-payment.is-embedded .nmx-topup-payment-copy > strong {
-    font-size: 20px;
+/* With no summary above it, one quiet line leads straight into the checkout frame. */
+.nmx-topup-payment.is-embedded .nmx-topup-payment-copy > span {
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.nmx-topup-payment.is-embedded .nmx-topup-waiting {
+    align-self: flex-start;
+    margin-top: 10px;
 }
 
 .nmx-topup-embed-shell {
     position: relative;
-    margin-top: 12px;
+    margin-top: 10px;
     border: 1px solid var(--nmx-border-strong);
     border-radius: 10px;
     background: var(--nmx-control-background);
@@ -291,6 +341,28 @@
     max-height: 560px;
     border: 0;
     background: transparent;
+}
+
+.nmx-topup-external-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 9px 12px;
+    border: 1px solid var(--nmx-border-strong);
+    border-radius: 9px;
+    color: var(--nmx-text);
+    background: color-mix(in srgb, var(--nmx-text) 4%, var(--nmx-panel));
+    font-size: 12.5px;
+    line-height: 1.45;
+    text-align: start;
+}
+
+.nmx-topup-external-hint .codicon {
+    margin-top: 2px;
+    font-size: 13px;
+    color: var(--nmx-subtle);
+    flex-shrink: 0;
 }
 
 @keyframes nmx-topup-mark-in {

@@ -77,6 +77,8 @@ type Props = {
     refreshing?: boolean;
     onRefresh?: (tabKey?: string) => Promise<void> | void;
     onFavorite: (id: string, name: string) => void; onCopy: (id: string) => Promise<void>;
+    /** The platform's global order of a model (lower first), for a merchant's models that arrive without one. */
+    modelRank?: (model: string) => number | undefined;
 };
 
 export const MODEL_CENTER_REFRESH_COOLDOWN_MS = 30_000;
@@ -482,7 +484,7 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
     // say) does not prove it left (audit A03-09).
     const missing = view === 'favorites' && page && !loading && !error && !query.trim() ? props.favorites.filter(([id]) =>
         !page.merchants.some(item => item.id === id)) : [];
-    const drawer = detail && <MerchantModelDrawer service={service} merchant={detail} locale={locale} closing={detailClosing} onClose={closeDetail} />;
+    const drawer = detail && <MerchantModelDrawer service={service} merchant={detail} locale={locale} closing={detailClosing} onClose={closeDetail} modelRank={props.modelRank} />;
     return <section ref={directoryRef} className='nmx-mc-directory' dir={locale === 'ar' ? 'rtl' : 'ltr'} lang={locale} data-nmx-literal>
         <header className='nmx-mc-directory-toolbar'>
             <span className='nmx-mc-directory-count'>
@@ -663,6 +665,7 @@ export function ModelCenterPricePreview({ model, side, locale }: {
 
 type MerchantModelDrawerProps = {
     service: Service; merchant: PublicMerchantIdentity; locale: NextMuxDesktopLocale; onClose: () => void; closing?: boolean;
+    modelRank?: (model: string) => number | undefined;
 };
 type SupportCategory = 'all' | 'language' | 'image' | 'video' | 'audio' | 'others';
 
@@ -671,7 +674,44 @@ export function MerchantModelDrawer(props: MerchantModelDrawerProps): React.Reac
     return <MerchantModelDrawerBody key={props.merchant.id} {...props} />;
 }
 
-function MerchantModelDrawerBody({ service, merchant, locale, onClose, closing = false }: MerchantModelDrawerProps): React.ReactElement {
+/**
+ * Newest first: frontier models, then recent releases and the catalog's own ranking, then older releases. A merchant's
+ * catalog page arrives in offering-id order without these fields, so such a row takes the platform's global rank of
+ * the same model (`modelRank`, the order the rest of Model Center uses); rows with no order at all keep theirs, last.
+ */
+export function sortMerchantDrawerOfferings(offerings: readonly PlatformOffering[], modelRank?: (model: string) => number | undefined): PlatformOffering[] {
+    if (offerings.length < 2) return [...offerings];
+    const now = Date.now();
+    const recentUnpricedCutoffMs = 45 * 86_400_000;
+    const priorityOf = (offering: PlatformOffering): readonly [number, number] => {
+        if (Number.isFinite(offering.frontierPosition)) {
+            return [0, Number(offering.frontierPosition)];
+        }
+        const releasedMs = Date.parse(offering.releasedAt || '');
+        const hasReleased = Number.isFinite(releasedMs);
+        if (Number.isFinite(offering.catalogRank)) {
+            return [1, Number(offering.catalogRank)];
+        }
+        if (hasReleased) {
+            const ageMs = Math.max(0, now - releasedMs);
+            // Newly released models without priced route rankings yet stay alongside live recent releases rather than dropping to the end.
+            if (ageMs <= recentUnpricedCutoffMs) return [1, Math.round(ageMs / 3_600_000)];
+            return [2, -releasedMs];
+        }
+        const globalRank = modelRank?.(offering.canonicalModel || offering.registryModelId);
+        if (typeof globalRank === 'number' && Number.isFinite(globalRank)) return [1, globalRank];
+        return [3, 0];
+    };
+    const ranked = offerings.map((offering, index) => ({ offering, index, priority: priorityOf(offering) }));
+    if (ranked.every(entry => entry.priority[0] === 3)) return [...offerings];
+    return ranked
+        .sort((left, right) => left.priority[0] - right.priority[0]
+            || left.priority[1] - right.priority[1]
+            || left.index - right.index)
+        .map(entry => entry.offering);
+}
+
+function MerchantModelDrawerBody({ service, merchant, locale, onClose, closing = false, modelRank }: MerchantModelDrawerProps): React.ReactElement {
     const [search, setSearch] = React.useState('');
     const [composing, setComposing] = React.useState(false);
     const composition = React.useRef(false);
@@ -784,7 +824,7 @@ function MerchantModelDrawerBody({ service, merchant, locale, onClose, closing =
         const key = `${offering.registryModelId}\n${offeringPriceSignature(offering)}`;
         if (!executable.has(key)) executable.set(key, offering);
     }
-    const rows = [...executable.values()];
+    const rows = sortMerchantDrawerOfferings([...executable.values()], modelRank);
     const categories: readonly SupportCategory[] = ['all', 'language', 'image', 'video', 'audio', 'others'];
     const formattedAmount = (value: number | null | undefined, currency: string): string => value == null ? text('pricePending')
         : new Intl.NumberFormat(locale, { style: 'currency', currency, maximumFractionDigits: 6 }).format(value / 1_000_000);

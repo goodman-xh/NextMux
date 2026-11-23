@@ -245,7 +245,110 @@ interface CanvasContextValue {
     readonly toggleCompare: (nodeId: string) => void;
 }
 
+interface CanvasBoardContextValue {
+    readonly t: T;
+    readonly locale: string;
+    readonly mediaUrl: (uri: string) => string;
+    readonly change: (next: CanvasDocument, record?: boolean) => void;
+    readonly selectNode: (id: string) => void;
+    readonly setRenaming: (id?: string) => void;
+    readonly renameNode: (nodeId: string, title: string) => void;
+    readonly menuFor: (event: React.MouseEvent, nodeId: string) => void;
+    readonly open: (uri: string, kind: 'image' | 'video') => void;
+    readonly openTool: (nodeId: string, tool: CanvasToolId) => void;
+    readonly aiEdit: (nodeId: string, tool: CanvasImageToolId) => void;
+    readonly extractFrame: (nodeId: string, versionId: string, choice: 'first' | 'last' | 'custom') => void;
+    readonly pickReference: (nodeId: string, role: CanvasInputRole) => void;
+    readonly saveAssets: (nodeIds: readonly string[]) => void;
+    readonly download: (nodeIds: readonly string[]) => void;
+    readonly openHistory: (nodeId?: string) => void;
+    readonly openDirector: (nodeId: string) => void;
+    readonly toggleCompare: (nodeId: string) => void;
+    readonly importAt: (position: CanvasPoint, files?: readonly File[], target?: { readonly nodeId: string; readonly role: CanvasInputRole }) => void;
+    readonly usePortrait: (characterId: string, nodeId: string) => void;
+    readonly setNodePins: (nodeId: string, colors: readonly PinColor[]) => void;
+    readonly planStory: (nodeId: string) => void;
+    readonly removeEdge: (edgeId: string) => void;
+    readonly rerouteEdge: (edgeId: string, role: CanvasInputRole) => void;
+    readonly disconnectSequence: (linkId: string) => void;
+    readonly selectVersion: (nodeId: string, versionId: string) => void;
+    readonly textContext: CanvasContextValue;
+}
+
+interface CanvasNodeStatus {
+    readonly key: string;
+    readonly busy: boolean;
+    readonly error?: string;
+    readonly progress?: number;
+}
+
+interface CanvasCardData extends Record<string, unknown> {
+    readonly node: CanvasNode;
+    readonly status: CanvasNodeStatus;
+    readonly hasToolProgress: boolean;
+    readonly toolProgress?: number;
+    readonly hasReference: boolean;
+    readonly isSingle: boolean;
+    readonly isRenaming: boolean;
+    readonly versionId?: string;
+    readonly title: string;
+    readonly submitting: boolean;
+    readonly canExtractVersion: boolean;
+    readonly canDownload: boolean;
+    readonly canPlanStory: boolean;
+    readonly storyBusy: boolean;
+    readonly portraitOfId?: string;
+    readonly compared: boolean;
+}
+
+interface CanvasGroupData extends Record<string, unknown> {
+    readonly node: CanvasNode;
+    readonly title: string;
+}
+
+interface CanvasWireData extends Record<string, unknown> {
+    readonly edge: CanvasEdge;
+    readonly roles: readonly CanvasInputRole[];
+}
+
+const EMPTY_ROLES: readonly CanvasInputRole[] = [];
+
+function sameCanvasValue(left: unknown, right: unknown): boolean {
+    if (Object.is(left, right)) return true;
+    if (typeof left !== typeof right || left === null || right === null || typeof left !== 'object') return false;
+    if (Array.isArray(left) || Array.isArray(right)) {
+        if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+        for (let index = 0; index < left.length; index++) {
+            if (!sameCanvasValue(left[index], right[index])) return false;
+        }
+        return true;
+    }
+    const leftObj = left as Record<string, unknown>;
+    const rightObj = right as Record<string, unknown>;
+    const leftKeys = Object.keys(leftObj).filter(key => leftObj[key] !== undefined);
+    const rightKeys = Object.keys(rightObj).filter(key => rightObj[key] !== undefined);
+    if (leftKeys.length !== rightKeys.length) return false;
+    for (const key of leftKeys) {
+        if (rightObj[key] === undefined || !sameCanvasValue(leftObj[key], rightObj[key])) return false;
+    }
+    return true;
+}
+
+function sameCanvasStatus(left: CanvasNodeStatus, right: CanvasNodeStatus): boolean {
+    return left.key === right.key && left.busy === right.busy && left.error === right.error && left.progress === right.progress;
+}
+
+function sameStringArray(left: readonly string[], right: readonly string[]): boolean {
+    if (left === right) return true;
+    if (left.length !== right.length) return false;
+    for (let index = 0; index < left.length; index++) {
+        if (left[index] !== right[index]) return false;
+    }
+    return true;
+}
+
 const CanvasContext = React.createContext<CanvasContextValue | undefined>(undefined);
+const CanvasBoardContext = React.createContext<CanvasBoardContextValue | undefined>(undefined);
 const now = (): string => new Date().toISOString();
 
 /** Keep the exact compiled prefix beside the text, including its single body separator. */
@@ -339,14 +442,14 @@ function MediaPreview(props: { readonly node: CanvasNode; readonly url: (uri: st
 }
 const MemoMediaPreview = React.memo(MediaPreview);
 
-function VersionSwitcher(props: { readonly node: CanvasNode; readonly t: T; readonly change: (next: CanvasDocument, record?: boolean) => void; readonly canvas: CanvasDocument }): React.ReactElement | null {
+function VersionSwitcher(props: { readonly node: CanvasNode; readonly t: T; readonly selectVersion: (nodeId: string, versionId: string) => void }): React.ReactElement | null {
     const { node, t } = props;
     if (!('versions' in node.payload) || node.payload.versions.length < 2) return null;
     const versions = node.payload.versions;
     const index = Math.max(0, versions.findIndex(version => version.id === (node.payload as { currentVersionId?: string }).currentVersionId));
     const pick = (to: number): void => {
         const version = versions[(to + versions.length) % versions.length];
-        props.change(applyCanvasCommand(props.canvas, { type: 'node.selectVersion', nodeId: node.id, versionId: version.id }, { now: now() }), true);
+        props.selectVersion(node.id, version.id);
     };
     return <div className='nmx-board-versions nodrag' onMouseDown={event => event.stopPropagation()}>
         <button type='button' title={t('previousVersion')} aria-label={t('previousVersion')} onClick={() => pick(index - 1)}><i className='codicon codicon-chevron-left'></i></button>
@@ -357,54 +460,50 @@ function VersionSwitcher(props: { readonly node: CanvasNode; readonly t: T; read
 const MemoVersionSwitcher = React.memo(VersionSwitcher);
 
 function CanvasCard(flow: NodeProps): React.ReactElement | null {
-    const context = React.useContext(CanvasContext)!;
-    const { props, t } = context;
-    const node = context.nodes.get(flow.id);
-    if (!node) return null;
-    const canvas = props.canvas;
-    const status = statusOf(props, node);
+    const board = React.useContext(CanvasBoardContext)!;
+    const { t, locale } = board;
+    const data = flow.data as CanvasCardData | undefined;
+    const node = data?.node;
+    if (!node || !data) return null;
+    const { status, hasToolProgress, toolProgress, hasReference, isSingle, isRenaming, title } = data;
     const generation = node.kind === 'imageGen' || node.kind === 'videoGen';
     const version = canvasCurrentVersion(node);
     const takesInput = generation || node.kind === 'frameExtract' || node.kind === 'composition' || node.kind === 'sceneComposer' || node.kind === 'world';
     const output = canvasOutputKind(node);
     const origin = originLabel(t, node);
-    const single = context.single === node.id;
-    const title = displayTitle(node);
     const statusText = status.key === 'waiting' ? t('status.waiting') : t(`status.${status.key}` as CanvasTextKey);
-    const hasReference = generation && (canvas.edges.some(edge => edge.targetNodeId === node.id && ['firstFrame', 'lastFrame', 'referenceImage', 'referenceVideo', 'referenceAudio'].includes(edge.role))
-        || 'inputs' in node.payload && Boolean(node.payload.inputs?.length));
     return <div className={`nmx-board-node is-${node.kind}${flow.selected ? ' is-selected' : ''}${status.busy ? ' is-busy' : ''}${status.key === 'failed' ? ' is-failed' : ''}${node.orphaned ? ' is-orphaned' : ''}`}
-        onContextMenu={event => context.menuFor(event, node.id)}>
+        onContextMenu={event => board.menuFor(event, node.id)}>
         <header className='nmx-board-node-title'>
             <i className={`codicon codicon-${canvasKindIcon(node.kind)}`} aria-hidden='true'></i>
-            {context.renaming === node.id
+            {isRenaming
                 ? <ImeInput className='nmx-board-rename nodrag' autoFocus defaultValue={title} onKeyDown={event => {
                     if (event.key === 'Enter') { event.currentTarget.blur(); }
-                    if (event.key === 'Escape') { context.setRenaming(undefined); }
+                    if (event.key === 'Escape') { board.setRenaming(undefined); }
                     event.stopPropagation();
                 }} onBlur={event => {
                     const value = event.currentTarget.value.trim();
-                    context.setRenaming(undefined);
-                    if (value && value !== title) context.change({ ...canvas, nodes: canvas.nodes.map(item => item.id === node.id ? { ...item, title: value } : item) }, true);
+                    board.setRenaming(undefined);
+                    if (value && value !== title) board.renameNode(node.id, value);
                 }} />
-                : <span className='nmx-board-node-name' data-nmx-literal title={origin ? `${title} · ${origin}` : title} onDoubleClick={() => context.setRenaming(node.id)}>{title}</span>}
+                : <span className='nmx-board-node-name' data-nmx-literal title={origin ? `${title} · ${origin}` : title} onDoubleClick={() => board.setRenaming(node.id)}>{title}</span>}
             {node.pinnedColors?.length ? <span className='nmx-board-node-pins'>{node.pinnedColors.map(color => <i key={color} style={{ background: PIN_SWATCH[color as PinColor] }} />)}</span> : undefined}
             {generation && (status.busy || status.key === 'failed') && <small className={`nmx-board-node-state is-${status.key}`}>{statusText}</small>}
         </header>
         <div className='nmx-board-node-body'>
-            {(node.kind === 'sceneComposer' || node.kind === 'world') && <button type='button' className='nmx-director-open nodrag' onClick={() => context.openDirector(node.id)}>
-                {directorText(props.locale, node.kind === 'world' ? 'world' : 'stage')}</button>}
+            {(node.kind === 'sceneComposer' || node.kind === 'world') && <button type='button' className='nmx-director-open nodrag' onClick={() => board.openDirector(node.id)}>
+                {directorText(locale, node.kind === 'world' ? 'world' : 'stage')}</button>}
             {node.kind === 'text' && <TextBody node={node} />}
             {node.kind === 'character' && <CharacterBody node={node} />}
             {node.kind !== 'text' && node.kind !== 'character' && <>
-                <MemoMediaPreview node={node} url={props.mediaUrl} onOpen={context.open} />
+                <MemoMediaPreview node={node} url={board.mediaUrl} onOpen={board.open} />
                 {!version && <div className='nmx-board-placeholder'>
                     <i className={`codicon codicon-${canvasKindIcon(node.kind)}`} aria-hidden='true'></i>
-                    <span>{node.kind === 'frameExtract' ? t('extract') : hasReference ? comicAssetLibraryText(props.locale, 'referenceAdded') : generation ? t('promptPlaceholder') : t('noResult')}</span>
+                    <span>{node.kind === 'frameExtract' ? t('extract') : hasReference ? comicAssetLibraryText(locale, 'referenceAdded') : generation ? t('promptPlaceholder') : t('noResult')}</span>
                 </div>}
-                {props.toolProgress.has(node.id) && <div className='nmx-board-progress' role='status'>
+                {hasToolProgress && <div className='nmx-board-progress' role='status'>
                     <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>
-                    <span>{toolText(props.locale, 'running')}{props.toolProgress.get(node.id) !== undefined ? ` ${Math.round((props.toolProgress.get(node.id) ?? 0) * 100)}%` : ''}</span>
+                    <span>{toolText(locale, 'running')}{toolProgress !== undefined ? ` ${Math.round((toolProgress ?? 0) * 100)}%` : ''}</span>
                 </div>}
                 {status.busy && <div className='nmx-board-progress' role='status'>
                     <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>
@@ -413,15 +512,19 @@ function CanvasCard(flow: NodeProps): React.ReactElement | null {
                 {status.key === 'failed' && status.error && <div className='nmx-board-error' title={status.error} data-nmx-literal>{status.error}</div>}
             </>}
             {node.orphaned && <div className='nmx-board-orphaned'>{t('orphaned')}</div>}
-            {flow.selected && <MemoVersionSwitcher node={node} t={t} change={context.change} canvas={canvas} />}
+            {flow.selected && <MemoVersionSwitcher node={node} t={t} selectVersion={board.selectVersion} />}
         </div>
         {takesInput && <Handle type='target' position={Position.Left} className='nmx-board-handle is-in' />}
         {output !== 'group' && <Handle type='source' position={Position.Right} className={`nmx-board-handle is-out is-${output}`} />}
         {output === 'video' && <>
-            <Handle id='sequence-in' type='target' position={Position.Left} className='nmx-board-handle is-sequence' style={{ top: '84%' }} data-help={props.locale.startsWith('zh') ? '播放顺序：连接上一个视频' : 'Playback order: connect the previous video'} />
-            <Handle id='sequence-out' type='source' position={Position.Right} className='nmx-board-handle is-sequence' style={{ top: '84%' }} data-help={props.locale.startsWith('zh') ? '播放顺序：拖到下一个视频的顺序入口' : 'Playback order: drag to the next video sequence input'} />
+            <Handle id='sequence-in' type='target' position={Position.Left} className='nmx-board-handle is-sequence' style={{ top: '84%' }} data-help={locale.startsWith('zh') ? '播放顺序：连接上一个视频' : 'Playback order: connect the previous video'} />
+            <Handle id='sequence-out' type='source' position={Position.Right} className='nmx-board-handle is-sequence' style={{ top: '84%' }} data-help={locale.startsWith('zh') ? '播放顺序：拖到下一个视频的顺序入口' : 'Playback order: drag to the next video sequence input'} />
         </>}
-        {single && <NodeToolbar position={Position.Top} offset={34} className='nmx-board-toolbar nodrag'><NodeActions node={node} /></NodeToolbar>}
+        {isSingle && <NodeToolbar position={Position.Top} offset={34} className='nmx-board-toolbar nodrag'>
+            <NodeActions node={node} submitting={data.submitting} canExtractVersion={data.canExtractVersion}
+                canDownload={data.canDownload} canPlanStory={data.canPlanStory} storyBusy={data.storyBusy}
+                portraitOfId={data.portraitOfId} compared={data.compared} />
+        </NodeToolbar>}
     </div>;
 }
 
@@ -445,7 +548,8 @@ function NodePanelOverlay(props: { readonly nodeId: string; readonly hidden: boo
 }
 
 function TextBody(props: { readonly node: Extract<CanvasNode, { kind: 'text' }> }): React.ReactElement {
-    return <InlineCanvasText node={props.node} />;
+    const board = React.useContext(CanvasBoardContext)!;
+    return <CanvasContext.Provider value={board.textContext}><InlineCanvasText node={props.node} /></CanvasContext.Provider>;
 }
 
 /** Edit the actual card. Each focus session is one undo step; every committed IME change is saved. */
@@ -501,32 +605,36 @@ function InlineCanvasText({ node }: { readonly node: Extract<CanvasNode, { kind:
 }
 
 function CharacterBody(props: { readonly node: Extract<CanvasNode, { kind: 'character' }> }): React.ReactElement {
-    const context = React.useContext(CanvasContext)!;
+    const board = React.useContext(CanvasBoardContext)!;
     const { node } = props;
     const version = canvasCurrentVersion(node);
     return <div className='nmx-board-character'>
         {version && canvasVersionReady(version)
-            ? <img src={context.props.mediaUrl(version.uri)} alt='' loading='lazy' decoding='async' draggable={false} onDoubleClick={() => context.open(version.uri, 'image')} />
-            : <div className='nmx-board-placeholder'><i className='codicon codicon-person' aria-hidden='true'></i><span>{context.t('characterNoPortrait')}</span></div>}
+            ? <img src={board.mediaUrl(version.uri)} alt='' loading='lazy' decoding='async' draggable={false} onDoubleClick={() => board.open(version.uri, 'image')} />
+            : <div className='nmx-board-placeholder'><i className='codicon codicon-person' aria-hidden='true'></i><span>{board.t('characterNoPortrait')}</span></div>}
         <div className='nmx-board-character-text'>
             {node.payload.description && <strong data-nmx-literal>{node.payload.description}</strong>}
             {node.payload.appearance && <p data-nmx-literal>{node.payload.appearance}</p>}
-            <button type='button' className='nodrag' title={context.props.locale.startsWith('zh') ? '从素材库选择人物定妆照' : 'Choose a portrait from the asset library'} onClick={() => context.pickReference(node.id, 'referenceImage')}><i className='codicon codicon-library' />{context.props.locale.startsWith('zh') ? '选择定妆照' : 'Choose portrait'}</button>
-            <button type='button' className='nodrag' title={context.t('uploadHint')} onClick={() => context.props.onImport({ x: node.position.x, y: node.position.y - 300 }, undefined, { nodeId: node.id, role: 'referenceImage' })}>{context.t('upload')}</button>
+            <button type='button' className='nodrag' title={board.locale.startsWith('zh') ? '从素材库选择人物定妆照' : 'Choose a portrait from the asset library'} onClick={() => board.pickReference(node.id, 'referenceImage')}><i className='codicon codicon-library' />{board.locale.startsWith('zh') ? '选择定妆照' : 'Choose portrait'}</button>
+            <button type='button' className='nodrag' title={board.t('uploadHint')} onClick={() => board.importAt({ x: node.position.x, y: node.position.y - 300 }, undefined, { nodeId: node.id, role: 'referenceImage' })}>{board.t('upload')}</button>
         </div>
     </div>;
 }
 
-function NodeActions(props: { readonly node: CanvasNode }): React.ReactElement {
-    const context = React.useContext(CanvasContext)!;
-    const { t } = context;
+function NodeActions(props: {
+    readonly node: CanvasNode;
+    readonly submitting: boolean;
+    readonly canExtractVersion: boolean;
+    readonly canDownload: boolean;
+    readonly canPlanStory: boolean;
+    readonly storyBusy: boolean;
+    readonly portraitOfId?: string;
+    readonly compared: boolean;
+}): React.ReactElement {
+    const board = React.useContext(CanvasBoardContext)!;
+    const { t, locale } = board;
     const { node } = props;
-    const canvas = context.props.canvas;
     const version = canvasCurrentVersion(node);
-    // A portrait node's picture can become its character's portrait (the project's reference for every later clip).
-    const portraitOf = node.kind === 'imageGen' && version ? canvas.edges
-        .filter(edge => edge.targetNodeId === node.id).map(edge => canvas.nodes.find(item => item.id === edge.sourceNodeId))
-        .find(source => source?.kind === 'character') : undefined;
     const [pinning, setPinning] = React.useState(false);
     const [toolsOpen, setToolsOpen] = React.useState(false);
     const [frameMenuOpen, setFrameMenuOpen] = React.useState(false);
@@ -548,21 +656,21 @@ function NodeActions(props: { readonly node: CanvasNode }): React.ReactElement {
     const action = (icon: string, label: string, run: () => void, disabled = false): React.ReactElement =>
         <button type='button' key={label} title={label} aria-label={label} disabled={disabled} onClick={run}><i className={`codicon codicon-${icon}`} aria-hidden='true'></i><span>{label}</span></button>;
     return <>
-        {('versions' in node.payload) && action('history', canvasHistoryText(context.props.locale, 'title'), () => context.openHistory(node.id))}
-        {version && canvasVersionReady(version) && version.kind !== 'audio' && action('screen-full', t('open'), () => context.open(version.uri, version.kind === 'video' ? 'video' : 'image'))}
-        {version?.kind === 'video' && context.props.onExtractVersion && action('device-camera', t('extract'), () => { setToolsOpen(false); setPinning(false); setFrameMenuOpen(!frameMenuOpen); }, context.props.submitting.has(node.id))}
-        {frameMenuOpen && version?.kind === 'video' && <CanvasFrameExtractMenu locale={context.props.locale} busy={context.props.submitting.has(node.id)}
-            onClose={() => setFrameMenuOpen(false)} onPick={choice => { setFrameMenuOpen(false); context.extractFrame(node.id, version.id, choice); }} />}
-        {portraitOf && action('person', t('usePortrait'), () => context.props.onUsePortrait(portraitOf.id, node.id))}
-        {(mediaKind || node.kind === 'text' && node.payload.text.trim()) && action('save', comicAssetLibraryText(context.props.locale, 'save'), () => context.saveAssets([node.id]))}
-        {(mediaKind === 'image' || mediaKind === 'video') && version && action('diff', toolText(context.props.locale, context.compare.some(entry => entry.uri === version.uri) ? 'compareRemove' : 'compareAdd'), () => context.toggleCompare(node.id))}
-        {mediaKind && context.props.onDownload && action('desktop-download', downloadText(context.props.locale, 'download'), () => context.download([node.id]), canvasDownloadItems([node]).length === 0)}
-        {mediaKind && action('tools', toolText(context.props.locale, 'tools'), () => { setFrameMenuOpen(false); setPinning(false); setToolsOpen(!toolsOpen); })}
-        {toolsOpen && mediaKind && <ToolMenu locale={context.props.locale} kind={mediaKind} onPick={tool => { setToolsOpen(false); context.openTool(node.id, tool); }}
-            onPickAi={edit => { setToolsOpen(false); context.aiEdit(node.id, edit); }} />}
-        {action('pin', panelText(context.props.locale, 'pin'), () => { setToolsOpen(false); setFrameMenuOpen(false); setPinning(!pinning); })}
-        {pinning && <PinPicker locale={context.props.locale} node={node} onChange={colors => context.change(setCanvasNodePins(canvas, node.id, colors, now()), true)} />}
-        {node.kind === 'text' && context.props.onPlanStory && action('list-ordered', context.props.locale.startsWith('zh') ? 'AI 拆成镜头并按播放顺序连接' : 'Create connected shots from this story', () => context.props.onPlanStory!(node.id), context.props.storyBusy || !node.payload.text.trim())}
+        {('versions' in node.payload) && action('history', canvasHistoryText(locale, 'title'), () => board.openHistory(node.id))}
+        {version && canvasVersionReady(version) && version.kind !== 'audio' && action('screen-full', t('open'), () => board.open(version.uri, version.kind === 'video' ? 'video' : 'image'))}
+        {version?.kind === 'video' && props.canExtractVersion && action('device-camera', t('extract'), () => { setToolsOpen(false); setPinning(false); setFrameMenuOpen(!frameMenuOpen); }, props.submitting)}
+        {frameMenuOpen && version?.kind === 'video' && <CanvasFrameExtractMenu locale={locale} busy={props.submitting}
+            onClose={() => setFrameMenuOpen(false)} onPick={choice => { setFrameMenuOpen(false); board.extractFrame(node.id, version.id, choice); }} />}
+        {props.portraitOfId && action('person', t('usePortrait'), () => board.usePortrait(props.portraitOfId!, node.id))}
+        {(mediaKind || node.kind === 'text' && node.payload.text.trim()) && action('save', comicAssetLibraryText(locale, 'save'), () => board.saveAssets([node.id]))}
+        {(mediaKind === 'image' || mediaKind === 'video') && version && action('diff', toolText(locale, props.compared ? 'compareRemove' : 'compareAdd'), () => board.toggleCompare(node.id))}
+        {mediaKind && props.canDownload && action('desktop-download', downloadText(locale, 'download'), () => board.download([node.id]), canvasDownloadItems([node]).length === 0)}
+        {mediaKind && action('tools', toolText(locale, 'tools'), () => { setFrameMenuOpen(false); setPinning(false); setToolsOpen(!toolsOpen); })}
+        {toolsOpen && mediaKind && <ToolMenu locale={locale} kind={mediaKind} onPick={tool => { setToolsOpen(false); board.openTool(node.id, tool); }}
+            onPickAi={edit => { setToolsOpen(false); board.aiEdit(node.id, edit); }} />}
+        {action('pin', panelText(locale, 'pin'), () => { setToolsOpen(false); setFrameMenuOpen(false); setPinning(!pinning); })}
+        {pinning && <PinPicker locale={locale} node={node} onChange={colors => board.setNodePins(node.id, colors)} />}
+        {node.kind === 'text' && props.canPlanStory && action('list-ordered', locale.startsWith('zh') ? 'AI 拆成镜头并按播放顺序连接' : 'Create connected shots from this story', () => board.planStory(node.id), props.storyBusy || !node.payload.text.trim())}
     </>;
 }
 
@@ -918,11 +1026,12 @@ function FramePanel(props: { readonly node: Extract<CanvasNode, { kind: 'frameEx
 }
 
 function CanvasGroup(flow: NodeProps): React.ReactElement | null {
-    const context = React.useContext(CanvasContext)!;
-    const node = context.nodes.get(flow.id);
-    if (!node) return null;
-    return <div className={`nmx-board-group${flow.selected ? ' is-selected' : ''}`} onContextMenu={event => context.menuFor(event, node.id)}>
-        <header data-nmx-literal>{displayTitle(node)}</header>
+    const board = React.useContext(CanvasBoardContext)!;
+    const data = flow.data as CanvasGroupData | undefined;
+    const node = data?.node;
+    if (!node || !data) return null;
+    return <div className={`nmx-board-group${flow.selected ? ' is-selected' : ''}`} onContextMenu={event => board.menuFor(event, node.id)}>
+        <header data-nmx-literal>{data.title}</header>
     </div>;
 }
 
@@ -943,10 +1052,12 @@ function useWireAnchor(selected: boolean | undefined): { readonly point?: Canvas
 }
 
 function CanvasWire(flow: EdgeProps): React.ReactElement {
-    const context = React.useContext(CanvasContext)!;
-    const { t } = context;
+    const board = React.useContext(CanvasBoardContext)!;
+    const { t } = board;
     const [path, labelX, labelY] = getBezierPath(flow);
-    const edge = context.props.canvas.edges.find(item => item.id === flow.id);
+    const data = flow.data as CanvasWireData | undefined;
+    const edge = data?.edge;
+    const roles = data?.roles ?? EMPTY_ROLES;
     const [open, setOpen] = React.useState(false);
     const anchor = useWireAnchor(flow.selected);
     React.useEffect(() => { if (!flow.selected) setOpen(false); }, [flow.selected]);
@@ -960,7 +1071,6 @@ function CanvasWire(flow: EdgeProps): React.ReactElement {
         document.addEventListener('pointerdown', handlePointerDown, true);
         return () => document.removeEventListener('pointerdown', handlePointerDown, true);
     }, [open, flow.id]);
-    const roles = edge ? canvasAlternativeRoles(context.props.canvas, edge) : [];
     return <>
         <g onClick={anchor.onClick} onContextMenu={event => { event.preventDefault(); event.stopPropagation(); }}>
             <BaseEdge id={flow.id} path={path} markerEnd={flow.markerEnd} className={`nmx-board-wire is-${edge?.role ?? 'prompt'}${flow.selected ? ' is-selected' : ''}`} interactionWidth={16} />
@@ -969,14 +1079,12 @@ function CanvasWire(flow: EdgeProps): React.ReactElement {
             <div className='nmx-board-wire-label nodrag nopan is-selected' data-canvas-edge-id={flow.id} style={{ transform: `translate(-50%, -50%) translate(${anchor.point?.x ?? labelX}px, ${anchor.point?.y ?? labelY}px)` }}>
                 <button type='button' className='nmx-board-wire-role' onClick={() => setOpen(!open)} disabled={roles.length < 2}>{t(`role.${edge.role}` as CanvasTextKey)}</button>
                 <button type='button' className='nmx-board-wire-cut' title={t('removeEdge')} aria-label={t('removeEdge')}
-                    onClick={() => context.change(deleteFromCanvas(context.props.canvas, [], [edge.id], now()), true)}><WireCutIcon /></button>
+                    onClick={() => board.removeEdge(edge.id)}><WireCutIcon /></button>
                 {open && roles.length > 1 && <div className='nmx-board-menu is-wire' role='menu' aria-label={t('edgeAs')}>
                     <header>{t('edgeAs')}</header>
                     {roles.map(role => <button type='button' role='menuitemradio' aria-checked={role === edge.role} key={role} onClick={() => {
                         setOpen(false);
-                        const result = rerouteCanvasEdge(context.props.canvas, edge.id, role, now());
-                        if (result.error) context.props.onNotice(t('connectFailed', { reason: t(`issue.${result.error}` as CanvasTextKey) }));
-                        else context.change(result.canvas, true);
+                        board.rerouteEdge(edge.id, role);
                     }}>{t(`role.${role}` as CanvasTextKey)}{role === edge.role && <i className='codicon codicon-check' aria-hidden='true'></i>}</button>)}
                 </div>}
             </div>
@@ -988,16 +1096,16 @@ const MemoCanvasCard = React.memo(CanvasCard);
 const MemoCanvasGroup = React.memo(CanvasGroup);
 const NODE_TYPES = { canvasCard: MemoCanvasCard, canvasGroup: MemoCanvasGroup };
 function SequenceWire(flow: EdgeProps): React.ReactElement {
-    const context = React.useContext(CanvasContext)!;
+    const board = React.useContext(CanvasBoardContext)!;
     const [path, x, y] = getBezierPath(flow);
     const anchor = useWireAnchor(flow.selected);
-    const label = context.props.locale.startsWith('zh') ? '播放顺序' : 'Playback order';
+    const label = board.locale.startsWith('zh') ? '播放顺序' : 'Playback order';
     return <><g onClick={anchor.onClick} onContextMenu={event => { event.preventDefault(); event.stopPropagation(); }}>
             <BaseEdge id={flow.id} path={path} markerEnd={flow.markerEnd} className='nmx-board-sequence-wire' interactionWidth={20} />
         </g>
         {flow.selected && <EdgeLabelRenderer><div className='nmx-board-wire-label nodrag nopan is-selected' data-canvas-edge-id={flow.id} style={{ transform: `translate(-50%,-50%) translate(${anchor.point?.x ?? x}px,${anchor.point?.y ?? y}px)` }}>
-            <span>{label} →</span><button type='button' className='nmx-board-wire-cut' title={context.t('removeEdge')} aria-label={context.t('removeEdge')}
-                onClick={() => context.change(applyCanvasCommand(context.props.canvas, { type: 'sequence.disconnect', linkId: flow.id }, { now: now() }), true)}><WireCutIcon /></button>
+            <span>{label} →</span><button type='button' className='nmx-board-wire-cut' title={board.t('removeEdge')} aria-label={board.t('removeEdge')}
+                onClick={() => board.disconnectSequence(flow.id)}><WireCutIcon /></button>
         </div></EdgeLabelRenderer>}</>;
 }
 const MemoCanvasWire = React.memo(CanvasWire);
@@ -1035,6 +1143,7 @@ function Board(props: ComicCanvasProps): React.ReactElement {
         setSelectedEdges(previous => [...previous].every(id => edgeIds.has(id)) ? previous : new Set([...previous].filter(id => edgeIds.has(id))));
     }, [canvas.nodes, canvas.edges, canvas.sequenceLinks]);
     const [renaming, setRenaming] = React.useState<string>();
+    const single = selected.size === 1 ? [...selected][0] : undefined;
     const [menu, setMenu] = React.useState<MenuState>();
     const [director, setDirector] = React.useState<string>();
     const openDirector = React.useCallback((nodeId: string) => { setMenu(undefined); setDirector(nodeId); }, []);
@@ -1060,9 +1169,10 @@ function Board(props: ComicCanvasProps): React.ReactElement {
     }, [pendingRun, props.onRun]);
     const boardHandlersRef = React.useRef<{
         canvas: CanvasDocument;
+        canvasEpoch: number;
         nodes: ReadonlyMap<string, CanvasNode>;
-        toFlow: (node: CanvasNode) => FlowNode;
         props: ComicCanvasProps;
+        t: T;
         run: (ids: readonly string[]) => void;
         openHistory: (nodeId?: string) => void;
         download: (ids: readonly string[]) => void;
@@ -1138,32 +1248,221 @@ function Board(props: ComicCanvasProps): React.ReactElement {
     const dragCopy = React.useRef<{ readonly anchor: string; readonly origin: CanvasPoint; readonly plan?: CanvasDragCopyPlan; offset: CanvasPoint; active: boolean }>();
     React.useEffect(() => { dragCopy.current = undefined; setDragPreview([]); }, [canvas.id, canvas.projectId]);
 
+    const referenceTargets = React.useMemo(() => {
+        const targets = new Set<string>();
+        for (const edge of canvas.edges) {
+            if (['firstFrame', 'lastFrame', 'referenceImage', 'referenceVideo', 'referenceAudio'].includes(edge.role)) targets.add(edge.targetNodeId);
+        }
+        return targets;
+    }, [canvas.edges]);
+    const characterBySourceEdge = React.useMemo(() => {
+        if (!single) return new Map<string, string>();
+        const map = new Map<string, string>();
+        for (const edge of canvas.edges) {
+            if (edge.targetNodeId !== single) continue;
+            const source = nodes.get(edge.sourceNodeId);
+            if (source?.kind === 'character' && !map.has(edge.targetNodeId)) map.set(edge.targetNodeId, source.id);
+        }
+        return map;
+    }, [single, canvas.edges, nodes]);
+    const canExtractVersion = Boolean(props.onExtractVersion);
+    const canDownload = Boolean(props.onDownload);
+    const canPlanStory = Boolean(props.onPlanStory);
+    const prevCanvasIdentityRef = React.useRef(canvas);
+    const canvasEpochRef = React.useRef(0);
+    if (prevCanvasIdentityRef.current !== canvas) {
+        prevCanvasIdentityRef.current = canvas;
+        canvasEpochRef.current += 1;
+    }
+    const canvasEpoch = canvasEpochRef.current;
+    const [runtimeNodes, setRuntimeNodes] = React.useState<{
+        readonly epoch: number;
+        readonly byId: ReadonlyMap<string, FlowNode>;
+        readonly seq: number;
+    }>(() => ({ epoch: 0, byId: new Map(), seq: 0 }));
+    const prevFlowNodesByIdRef = React.useRef<ReadonlyMap<string, FlowNode>>(new Map());
+    const prevFlowNodesListRef = React.useRef<FlowNode[]>([]);
     // The flow's own node list follows the document; while dragging it moves ahead and the document catches up on drop.
-    const toFlow = React.useCallback((node: CanvasNode): FlowNode => ({
-        id: node.id, type: flowType(node), position: node.position, data: {}, selected: selected.has(node.id),
-        style: { width: node.size.width, height: node.size.height }, zIndex: node.kind === 'group' ? -1 : 1,
-        ...(node.kind === 'group' ? { dragHandle: '.nmx-board-group header', selectable: true } : {})
-    }), [selected]);
-    const [flowNodes, setFlowNodes] = React.useState<FlowNode[]>(() => canvas.nodes.map(toFlow));
+    const toFlow = React.useCallback((
+        node: CanvasNode,
+        previous?: FlowNode,
+        runtime?: { readonly position?: CanvasPoint; readonly dragging?: boolean; readonly measured?: FlowNode['measured'] }
+    ): FlowNode => {
+        const prevData = previous?.data as (CanvasCardData | CanvasGroupData | undefined);
+        const prevNode = prevData?.node;
+        const stableNode = prevNode && sameCanvasValue(prevNode, node) ? prevNode : node;
+        const type = flowType(stableNode);
+        const isSelected = selected.has(node.id);
+        const zIndex = node.kind === 'group' ? -1 : 1;
+        const dragHandle = node.kind === 'group' ? '.nmx-board-group header' : undefined;
+        const dragging = Boolean(runtime?.dragging);
+        const rawPos = runtime?.position ?? node.position;
+        const position = previous && previous.position.x === rawPos.x && previous.position.y === rawPos.y ? previous.position : rawPos;
+        const measured = runtime?.measured ?? previous?.measured;
+        const style = previous?.style && previous.style.width === node.size.width && previous.style.height === node.size.height
+            ? previous.style : { width: node.size.width, height: node.size.height };
+        const title = displayTitle(stableNode);
+        let data: CanvasCardData | CanvasGroupData;
+        if (stableNode.kind === 'group') {
+            const prevGroup = prevData as CanvasGroupData | undefined;
+            data = prevGroup && prevGroup.node === stableNode && prevGroup.title === title ? prevGroup : { node: stableNode, title };
+        } else {
+            const status = statusOf(props, node);
+            const hasToolProgress = props.toolProgress.has(node.id);
+            const toolProgress = props.toolProgress.get(node.id);
+            const generation = node.kind === 'imageGen' || node.kind === 'videoGen';
+            const hasReference = generation && (referenceTargets.has(node.id) || ('inputs' in node.payload && Boolean(node.payload.inputs?.length)));
+            const isSingle = single === node.id;
+            const isRenaming = renaming === node.id;
+            const version = canvasCurrentVersion(stableNode);
+            const versionId = version?.id;
+            const submitting = isSingle && props.submitting.has(node.id);
+            const storyBusy = Boolean(isSingle && node.kind === 'text' && props.storyBusy);
+            const portraitOfId = isSingle && node.kind === 'imageGen' && version ? characterBySourceEdge.get(node.id) : undefined;
+            const compared = Boolean(isSingle && version && (version.kind === 'image' || version.kind === 'video') && canvasVersionReady(version)
+                && compare.some(entry => entry.uri === version.uri));
+            const prevCard = prevData as CanvasCardData | undefined;
+            const nextStatus = prevCard && sameCanvasStatus(prevCard.status, status) ? prevCard.status : status;
+            data = prevCard
+                && prevCard.node === stableNode
+                && prevCard.status === nextStatus
+                && prevCard.hasToolProgress === hasToolProgress
+                && prevCard.toolProgress === toolProgress
+                && prevCard.hasReference === hasReference
+                && prevCard.isSingle === isSingle
+                && prevCard.isRenaming === isRenaming
+                && prevCard.versionId === versionId
+                && prevCard.title === title
+                && prevCard.submitting === submitting
+                && prevCard.canExtractVersion === canExtractVersion
+                && prevCard.canDownload === canDownload
+                && prevCard.canPlanStory === canPlanStory
+                && prevCard.storyBusy === storyBusy
+                && prevCard.portraitOfId === portraitOfId
+                && prevCard.compared === compared
+                ? prevCard
+                : { node: stableNode, status: nextStatus, hasToolProgress, toolProgress, hasReference, isSingle, isRenaming, versionId, title, submitting, canExtractVersion, canDownload, canPlanStory, storyBusy, portraitOfId, compared };
+        }
+        if (previous
+            && previous.type === type
+            && previous.position === position
+            && previous.data === data
+            && Boolean(previous.selected) === isSelected
+            && previous.style === style
+            && previous.zIndex === zIndex
+            && previous.dragHandle === dragHandle
+            && previous.measured === measured
+            && Boolean(previous.dragging) === dragging
+            && (node.kind !== 'group' || previous.selectable === true)) {
+            return previous;
+        }
+        return {
+            id: node.id, type, position, data, selected: isSelected, style, zIndex,
+            ...(measured ? { measured } : {}),
+            ...(dragging ? { dragging: true } : {}),
+            ...(node.kind === 'group' ? { dragHandle, selectable: true } : {})
+        };
+    }, [selected, props, referenceTargets, single, renaming, characterBySourceEdge, canExtractVersion, canDownload, canPlanStory, compare]);
+    const flowNodes = React.useMemo<FlowNode[]>(() => {
+        const prevById = prevFlowNodesByIdRef.current;
+        const useRuntime = runtimeNodes.epoch === canvasEpoch && !dragCopy.current;
+        const source = dragPreview.length ? [...canvas.nodes, ...dragPreview] : canvas.nodes;
+        const nextNodes = source.map(node => {
+            const previous = prevById.get(node.id);
+            const runtime = runtimeNodes.byId.get(node.id);
+            const effectiveRuntime = useRuntime
+                ? (runtime ? { position: runtime.position, dragging: runtime.dragging, measured: runtime.measured } : undefined)
+                : (runtime?.measured ? { measured: runtime.measured } : undefined);
+            return toFlow(node, previous, effectiveRuntime);
+        });
+        prevFlowNodesByIdRef.current = new Map(nextNodes.map(node => [node.id, node]));
+        const prevList = prevFlowNodesListRef.current;
+        if (nextNodes.length === prevList.length && nextNodes.every((item, index) => item === prevList[index])) return prevList;
+        prevFlowNodesListRef.current = nextNodes;
+        return nextNodes;
+    }, [canvas, canvasEpoch, dragPreview, runtimeNodes, toFlow]);
     const flowNodesRef = React.useRef(flowNodes);
     flowNodesRef.current = flowNodes;
-    // Keep React Flow's measurements across document updates, so wires keep their ports between renders.
-    React.useEffect(() => {
-        setFlowNodes(previous => {
-            const measured = new Map(previous.map(node => [node.id, node.measured]));
-            return [...canvas.nodes, ...dragPreview].map(node => { const flowNode = toFlow(node); const size = measured.get(node.id); return size ? { ...flowNode, measured: size } : flowNode; });
-        });
-    }, [canvas, toFlow, dragPreview]);
-    const flowEdges = React.useMemo<FlowEdge[]>(() => [...canvas.edges.map(edge => ({ id: edge.id, source: edge.sourceNodeId, target: edge.targetNodeId, type: 'canvasWire',
-        ariaLabel: `${t(`role.${edge.role}` as CanvasTextKey)}: ${nodes.get(edge.sourceNodeId)?.title ?? edge.sourceNodeId} → ${nodes.get(edge.targetNodeId)?.title ?? edge.targetNodeId}`,
-        selected: selectedEdges.has(edge.id), animated: settings.wireAnimation,
-        ...(settings.wireFocusOnly && !selected.has(edge.sourceNodeId) && !selected.has(edge.targetNodeId) && !selectedEdges.has(edge.id) ? { className: 'is-dim' } : {}) })), ...(canvas.sequenceLinks ?? []).map(link => ({ id: link.id, source: link.sourceNodeId, target: link.targetNodeId, sourceHandle: 'sequence-out', targetHandle: 'sequence-in', type: 'sequenceWire', markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--cv-sequence)', width: 18, height: 18 }, selected: selectedEdges.has(link.id), ariaLabel: `${props.locale.startsWith('zh') ? '播放顺序' : 'Playback order'}: ${nodes.get(link.sourceNodeId)?.title ?? link.sourceNodeId} → ${nodes.get(link.targetNodeId)?.title ?? link.targetNodeId}` }))],
-        [canvas, nodes, t, props.locale, selectedEdges, selected, settings.wireAnimation, settings.wireFocusOnly]);
+    const prevFlowEdgesRef = React.useRef<ReadonlyMap<string, FlowEdge>>(new Map());
+    const prevFlowEdgesListRef = React.useRef<FlowEdge[]>([]);
+    const flowEdges = React.useMemo<FlowEdge[]>(() => {
+        const previousMap = prevFlowEdgesRef.current;
+        const nextMap = new Map<string, FlowEdge>();
+        const seqArrowColor = 'var(--cv-sequence)';
+        const wireFocusOnly = settings.wireFocusOnly;
+        const wireAnimation = settings.wireAnimation;
+        const built: FlowEdge[] = [
+            ...canvas.edges.map(edge => {
+                const isSelected = selectedEdges.has(edge.id);
+                const roles = isSelected ? canvasAlternativeRoles(canvas, edge) : EMPTY_ROLES;
+                const ariaLabel = `${t(`role.${edge.role}` as CanvasTextKey)}: ${nodes.get(edge.sourceNodeId)?.title ?? edge.sourceNodeId} → ${nodes.get(edge.targetNodeId)?.title ?? edge.targetNodeId}`;
+                const className = wireFocusOnly && !selected.has(edge.sourceNodeId) && !selected.has(edge.targetNodeId) && !isSelected ? 'is-dim' : undefined;
+                const prev = previousMap.get(edge.id);
+                const prevData = prev?.data as CanvasWireData | undefined;
+                if (prev && prevData
+                    && prev.source === edge.sourceNodeId
+                    && prev.target === edge.targetNodeId
+                    && Boolean(prev.selected) === isSelected
+                    && Boolean(prev.animated) === wireAnimation
+                    && prev.className === className
+                    && prev.ariaLabel === ariaLabel
+                    && sameCanvasValue(prevData.edge, edge)
+                    && sameStringArray(prevData.roles, roles)) {
+                    nextMap.set(edge.id, prev);
+                    return prev;
+                }
+                const nextEdge: FlowEdge = {
+                    id: edge.id, source: edge.sourceNodeId, target: edge.targetNodeId, type: 'canvasWire',
+                    ariaLabel, selected: isSelected, animated: wireAnimation,
+                    data: { edge: prevData && sameCanvasValue(prevData.edge, edge) ? prevData.edge : edge, roles },
+                    ...(className ? { className } : {})
+                };
+                nextMap.set(edge.id, nextEdge);
+                return nextEdge;
+            }),
+            ...(canvas.sequenceLinks ?? []).map(link => {
+                const isSelected = selectedEdges.has(link.id);
+                const ariaLabel = `${props.locale.startsWith('zh') ? '播放顺序' : 'Playback order'}: ${nodes.get(link.sourceNodeId)?.title ?? link.sourceNodeId} → ${nodes.get(link.targetNodeId)?.title ?? link.targetNodeId}`;
+                const prev = previousMap.get(link.id);
+                if (prev
+                    && prev.type === 'sequenceWire'
+                    && prev.source === link.sourceNodeId
+                    && prev.target === link.targetNodeId
+                    && Boolean(prev.selected) === isSelected
+                    && prev.ariaLabel === ariaLabel) {
+                    nextMap.set(link.id, prev);
+                    return prev;
+                }
+                const nextEdge: FlowEdge = {
+                    id: link.id, source: link.sourceNodeId, target: link.targetNodeId,
+                    sourceHandle: 'sequence-out', targetHandle: 'sequence-in', type: 'sequenceWire',
+                    markerEnd: { type: MarkerType.ArrowClosed, color: seqArrowColor, width: 18, height: 18 },
+                    selected: isSelected, ariaLabel
+                };
+                nextMap.set(link.id, nextEdge);
+                return nextEdge;
+            })
+        ];
+        prevFlowEdgesRef.current = nextMap;
+        const prevList = prevFlowEdgesListRef.current;
+        if (built.length === prevList.length && built.every((edge, index) => edge === prevList[index])) return prevList;
+        prevFlowEdgesListRef.current = built;
+        return built;
+    }, [canvas, nodes, t, props.locale, selectedEdges, selected, settings.wireAnimation, settings.wireFocusOnly]);
     // Members of a dragged group move with it.
     const dragOrigin = React.useRef<Map<string, CanvasPoint>>();
 
     const onNodesChange = React.useCallback((changes: NodeChange[]) => {
-        const { canvas: curCanvas, nodes: curNodes, toFlow: curToFlow, props: curProps } = boardHandlersRef.current;
+        const { canvas: curCanvas, canvasEpoch: curEpoch, nodes: curNodes, props: curProps } = boardHandlersRef.current;
+        const clearRuntimeDrag = (prev: { readonly epoch: number; readonly byId: ReadonlyMap<string, FlowNode>; readonly seq: number }) => {
+            const measuredOnly = new Map<string, FlowNode>();
+            for (const [id, item] of prev.byId) {
+                if (!item.measured) continue;
+                const docPos = activeCanvas.current.nodes.find(node => node.id === id)?.position ?? item.position;
+                measuredOnly.set(id, { ...item, dragging: false, position: docPos });
+            }
+            return { epoch: -1, byId: measuredOnly, seq: prev.seq + 1 };
+        };
         const positions = changes.filter((item): item is Extract<NodeChange, { type: 'position' }> => item.type === 'position');
         const selection = changes.filter((item): item is Extract<NodeChange, { type: 'select' }> => item.type === 'select');
         if (selection.length) setSelected(previous => {
@@ -1172,7 +1471,11 @@ function Board(props: ComicCanvasProps): React.ReactElement {
             return next;
         });
         const measured = changes.filter(item => item.type === 'dimensions');
-        if (measured.length && !positions.length) { setFlowNodes(current => applyNodeChanges(measured, current)); return; }
+        if (measured.length && !positions.length) {
+            const next = applyNodeChanges(measured, flowNodesRef.current);
+            setRuntimeNodes(prev => ({ epoch: curEpoch, byId: new Map(next.map(item => [item.id, item])), seq: prev.seq + 1 }));
+            return;
+        }
         if (!positions.length) return;
         const copying = dragCopy.current;
         if (copying) {
@@ -1184,41 +1487,35 @@ function Board(props: ComicCanvasProps): React.ReactElement {
                 if (copying.active && copying.plan) {
                     const result = commitCanvasDragCopy(activeCanvas.current, copying.plan, copying.offset, now());
                     if (result.ok) { change(result.canvas, true); setSelected(new Set(result.ids)); }
-                    else { curProps.onNotice(`${panelText(curProps.locale, 'pasteRefused')} ${result.message}`); setFlowNodes(activeCanvas.current.nodes.map(curToFlow)); }
-                } else setFlowNodes(activeCanvas.current.nodes.map(curToFlow));
+                    else { curProps.onNotice(`${panelText(curProps.locale, 'pasteRefused')} ${result.message}`); setRuntimeNodes(clearRuntimeDrag); }
+                } else setRuntimeNodes(clearRuntimeDrag);
             } else {
                 const previews = copying.active && copying.plan ? copying.plan.nodes.map(node => ({ ...node,
                     position: { x: node.position.x + copying.offset.x, y: node.position.y + copying.offset.y } })) : [];
                 setDragPreview(previews);
-                // React Flow continues reporting the source IDs; only the transient copies follow those positions.
-                setFlowNodes(current => {
-                    const measuredById = new Map(current.map(node => [node.id, node.measured]));
-                    return [...activeCanvas.current.nodes, ...previews].map(node => ({ ...curToFlow(node), measured: measuredById.get(node.id) }));
-                });
+                setRuntimeNodes(prev => prev.byId.size ? clearRuntimeDrag(prev) : prev);
             }
             return;
         }
-        setFlowNodes(current => {
-            let next = applyNodeChanges([...measured, ...positions], current);
-            const roots = new Set(canvasDragMoveRoots(curCanvas, positions.map(item => item.id)));
-            for (const item of positions.filter(item => roots.has(item.id))) {
-                const node = curNodes.get(item.id);
-                if (node?.kind !== 'group' || !item.position) continue;
-                const start = dragOrigin.current?.get(node.id) ?? node.position;
-                const dx = item.position.x - start.x, dy = item.position.y - start.y;
-                const members = canvasDragGroupMembers(curCanvas, node.id);
-                next = next.map(flowNode => members.has(flowNode.id)
-                    ? { ...flowNode, position: { x: (curNodes.get(flowNode.id)?.position.x ?? 0) + dx, y: (curNodes.get(flowNode.id)?.position.y ?? 0) + dy } } : flowNode);
-            }
-            return next;
-        });
+        let nextRuntime = applyNodeChanges([...measured, ...positions], flowNodesRef.current);
+        const moveRoots = new Set(canvasDragMoveRoots(curCanvas, positions.map(item => item.id)));
+        for (const item of positions.filter(item => moveRoots.has(item.id))) {
+            const node = curNodes.get(item.id);
+            if (node?.kind !== 'group' || !item.position) continue;
+            const start = dragOrigin.current?.get(node.id) ?? node.position;
+            const dx = item.position.x - start.x, dy = item.position.y - start.y;
+            const members = canvasDragGroupMembers(curCanvas, node.id);
+            nextRuntime = nextRuntime.map(flowNode => members.has(flowNode.id)
+                ? { ...flowNode, position: { x: (curNodes.get(flowNode.id)?.position.x ?? 0) + dx, y: (curNodes.get(flowNode.id)?.position.y ?? 0) + dy } } : flowNode);
+        }
+        setRuntimeNodes(prev => ({ epoch: curEpoch, byId: new Map(nextRuntime.map(item => [item.id, item])), seq: prev.seq + 1 }));
         const done = positions.filter(item => item.dragging === false);
         if (!done.length) return;
         let next = curCanvas;
         const moved = new Set<string>();
         const roots = new Set(canvasDragMoveRoots(curCanvas, done.map(item => item.id)));
         for (const item of done.filter(item => roots.has(item.id))) {
-            const flowNode = flowNodesRef.current.find(candidate => candidate.id === item.id);
+            const flowNode = nextRuntime.find(candidate => candidate.id === item.id) ?? flowNodesRef.current.find(candidate => candidate.id === item.id);
             const position = item.position ?? flowNode?.position;
             const node = curNodes.get(item.id);
             if (!position || !node || moved.has(node.id)) continue;
@@ -1459,7 +1756,6 @@ function Board(props: ComicCanvasProps): React.ReactElement {
         boardHandlersRef.current.menuFor(event, nodeId);
     }, []);
 
-    const single = selected.size === 1 ? [...selected][0] : undefined;
     const [aiDialog, setAiDialog] = React.useState<{ readonly nodeId: string; readonly tool: CanvasImageToolId }>();
     const libraryScope = `${props.libraryScope ?? canvas.projectId}:${canvas.id}`;
     const [libraryOpen, setLibraryOpen] = React.useState<CanvasPoint & { scope: string; target?: { nodeId: string; role: CanvasInputRole } }>();
@@ -1492,7 +1788,7 @@ function Board(props: ComicCanvasProps): React.ReactElement {
         if (runNow) run(ids);
     };
     boardHandlersRef.current = {
-        canvas, nodes, toFlow, props,
+        canvas, canvasEpoch, nodes, props, t,
         run: ids => {
             if (settings.submitDelaySeconds > 0) {
                 setPendingRun(prev => ({
@@ -1553,6 +1849,93 @@ function Board(props: ComicCanvasProps): React.ReactElement {
             }
         }
     };
+    const mediaUrl = React.useCallback((uri: string) => boardHandlersRef.current.props.mediaUrl(uri), []);
+    const renameNode = React.useCallback((nodeId: string, title: string): void => {
+        const curCanvas = boardHandlersRef.current.canvas;
+        change({ ...curCanvas, nodes: curCanvas.nodes.map(item => item.id === nodeId ? { ...item, title } : item) }, true);
+    }, [change]);
+    const importAt = React.useCallback((position: CanvasPoint, files?: readonly File[], target?: { readonly nodeId: string; readonly role: CanvasInputRole }): void => {
+        boardHandlersRef.current.props.onImport(position, files, target);
+    }, []);
+    const usePortrait = React.useCallback((characterId: string, nodeId: string): void => {
+        boardHandlersRef.current.props.onUsePortrait(characterId, nodeId);
+    }, []);
+    const setNodePins = React.useCallback((nodeId: string, colors: readonly PinColor[]): void => {
+        change(setCanvasNodePins(boardHandlersRef.current.canvas, nodeId, colors, now()), true);
+    }, [change]);
+    const planStory = React.useCallback((nodeId: string): void => {
+        boardHandlersRef.current.props.onPlanStory?.(nodeId);
+    }, []);
+    const removeEdge = React.useCallback((edgeId: string): void => {
+        change(deleteFromCanvas(boardHandlersRef.current.canvas, [], [edgeId], now()), true);
+    }, [change]);
+    const rerouteEdge = React.useCallback((edgeId: string, role: CanvasInputRole): void => {
+        const { canvas: curCanvas, props: curProps, t: curT } = boardHandlersRef.current;
+        const result = rerouteCanvasEdge(curCanvas, edgeId, role, now());
+        if (result.error) curProps.onNotice(curT('connectFailed', { reason: curT(`issue.${result.error}` as CanvasTextKey) }));
+        else change(result.canvas, true);
+    }, [change]);
+    const disconnectSequence = React.useCallback((linkId: string): void => {
+        change(applyCanvasCommand(boardHandlersRef.current.canvas, { type: 'sequence.disconnect', linkId }, { now: now() }), true);
+    }, [change]);
+    const selectVersion = React.useCallback((nodeId: string, versionId: string): void => {
+        change(applyCanvasCommand(boardHandlersRef.current.canvas, { type: 'node.selectVersion', nodeId, versionId }, { now: now() }), true);
+    }, [change]);
+    const textContext = React.useMemo<CanvasContextValue>(() => ({
+        props: {
+            get canvas() { return boardHandlersRef.current.canvas; },
+            get locale() { return boardHandlersRef.current.props.locale; }
+        } as unknown as ComicCanvasProps,
+        t,
+        nodes: new Map(),
+        setRenaming,
+        selectNode,
+        change,
+        menuFor,
+        open,
+        run,
+        openTool,
+        aiEdit,
+        extractFrame,
+        pickReference,
+        saveAssets,
+        download,
+        openHistory,
+        openStoryboard,
+        openDirector,
+        compare: [],
+        toggleCompare
+    }), [t, selectNode, change, menuFor, open, run, openTool, aiEdit, extractFrame, pickReference, saveAssets, download, openHistory, openStoryboard, openDirector, toggleCompare]);
+    const boardContext = React.useMemo<CanvasBoardContextValue>(() => ({
+        t,
+        locale: props.locale,
+        mediaUrl,
+        change,
+        selectNode,
+        setRenaming,
+        renameNode,
+        menuFor,
+        open,
+        openTool,
+        aiEdit,
+        extractFrame,
+        pickReference,
+        saveAssets,
+        download,
+        openHistory,
+        openDirector,
+        toggleCompare,
+        importAt,
+        usePortrait,
+        setNodePins,
+        planStory,
+        removeEdge,
+        rerouteEdge,
+        disconnectSequence,
+        selectVersion,
+        textContext
+    }), [t, props.locale, mediaUrl, change, selectNode, renameNode, menuFor, open, openTool, aiEdit, extractFrame, pickReference, saveAssets, download, openHistory, openDirector, toggleCompare, importAt, usePortrait, setNodePins, planStory, removeEdge, rerouteEdge, disconnectSequence, selectVersion, textContext]);
+
     const contextNodes = React.useMemo(() => dragPreview.length ? new Map([...nodes, ...dragPreview.map(node => [node.id, node] as const)]) : nodes, [nodes, dragPreview]);
     const context = React.useMemo<CanvasContextValue>(() => ({
         props, t, nodes: contextNodes, ...(single ? { single } : {}), ...(renaming ? { renaming } : {}),
@@ -1583,7 +1966,7 @@ function Board(props: ComicCanvasProps): React.ReactElement {
         };
     }, [side]);
 
-    return <CanvasContext.Provider value={context}>
+    return <CanvasBoardContext.Provider value={boardContext}>
         <SurfaceTooltips scope='.nmx-board, .nmx-board-modal-layer, .nmx-canvas-floating-host, .nmx-canvas-history, .nmx-canvas-tabs, .nmx-desk-footer, .nmx-desk-header' />
         <div ref={root} className={`nmx-board${settings.wireHoverHighlight ? '' : ' no-wire-hover'}`} style={{ ['--cv-wire-width' as string]: `${settings.wireWidth}px` }} tabIndex={-1}
             onPointerDownCapture={event => {
@@ -1683,7 +2066,7 @@ function Board(props: ComicCanvasProps): React.ReactElement {
                     onSaveWorld={world => { if (node.kind === 'world') change(applyCanvasCommand(canvas, { type: 'node.setWorld', nodeId: node.id, world }, { now: now() }), true); }}
                     onCapture={capture => props.onDirectorCapture(node.id, capture)} onImportModel={props.onDirectorImport} />;
             })()}
-            {single && <NodePanelOverlay key={single} nodeId={single} hidden={nodeDragging || keyboard.navigating} />}
+            {single && <CanvasContext.Provider value={context}><NodePanelOverlay key={single} nodeId={single} hidden={nodeDragging || keyboard.navigating} /></CanvasContext.Provider>}
 
             {!canvas.nodes.length && <div className='nmx-board-empty'><strong>{t('empty')}</strong><span>{t('emptyHint')}</span></div>}
             <ReturnToNodes canvas={canvas} root={root} t={t} />
@@ -1845,16 +2228,39 @@ function Board(props: ComicCanvasProps): React.ReactElement {
                 <button type='button' className='nmx-board-lightbox-close' aria-label={t('cancel')} title={t('cancel')} onPointerDown={event => event.stopPropagation()} onClick={() => setPreview(undefined)}><i className='codicon codicon-close' aria-hidden='true'></i></button>
             </div></CanvasModalLayer>}
         </div>
-    </CanvasContext.Provider>;
+    </CanvasBoardContext.Provider>;
 }
 
 function ReturnToNodes(props: { readonly canvas: CanvasDocument; readonly root: React.RefObject<HTMLDivElement>; readonly t: T }): React.ReactElement | null {
     const flow = useReactFlow();
     const viewport = useViewport();
-    const rect = props.root.current?.getBoundingClientRect();
-    if (!rect || !props.canvas.nodes.length) return null;
+    const [size, setSize] = React.useState<{ readonly width: number; readonly height: number }>();
+    React.useEffect(() => {
+        const element = props.root.current;
+        if (!element) { setSize(undefined); return; }
+        const measure = (): void => {
+            const width = element.clientWidth || element.getBoundingClientRect().width;
+            const height = element.clientHeight || element.getBoundingClientRect().height;
+            setSize(prev => prev && prev.width === width && prev.height === height ? prev : { width, height });
+        };
+        measure();
+        if (typeof ResizeObserver === 'undefined') {
+            window.addEventListener('resize', measure);
+            return () => window.removeEventListener('resize', measure);
+        }
+        const observer = new ResizeObserver(entries => {
+            const entry = entries[0]?.contentRect;
+            if (!entry) { measure(); return; }
+            const width = element.clientWidth || entry.width;
+            const height = element.clientHeight || entry.height;
+            setSize(prev => prev && prev.width === width && prev.height === height ? prev : { width, height });
+        });
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, [props.root]);
+    if (!size || size.width <= 0 || size.height <= 0 || !props.canvas.nodes.length) return null;
     const left = -viewport.x / viewport.zoom, top = -viewport.y / viewport.zoom;
-    const right = left + rect.width / viewport.zoom, bottom = top + rect.height / viewport.zoom;
+    const right = left + size.width / viewport.zoom, bottom = top + size.height / viewport.zoom;
     if (props.canvas.nodes.some(node => node.position.x < right && node.position.x + node.size.width > left && node.position.y < bottom && node.position.y + node.size.height > top)) return null;
     return <button type='button' className='nmx-board-return' onClick={() => void flow.fitView({ padding: 0.15, duration: 250 })}>
         <span>{props.t('noViewNodes')}</span><strong>{props.t('backToNodes')}</strong></button>;

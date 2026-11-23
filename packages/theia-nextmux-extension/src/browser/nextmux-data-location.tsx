@@ -68,7 +68,7 @@ export function DataLocationSection(props: {
         if (!result.ok) { setBusy(false); setError(reason(result.error || 'move_failed')); }
     };
     const fixed = state.mode === 'portable' || state.mode === 'override';
-    return <section className='nmx-local-data-diagnostics nmx-data-location' data-data-location={state.mode}>
+    return <section className='nmx-data-location' data-data-location={state.mode}>
         <i className='codicon codicon-folder-library' aria-hidden='true'></i>
         <span><strong>{t('title')}</strong>
             <small>{state.mode === 'portable' ? t('portable') : state.mode === 'override' ? t('override') : t('lead')}</small>

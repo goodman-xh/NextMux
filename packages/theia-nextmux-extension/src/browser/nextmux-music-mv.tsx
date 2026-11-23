@@ -225,7 +225,7 @@ export function MusicMvView(props: MusicMvViewProps): React.ReactElement {
                     <button type='button' className='nmx-primary-button' disabled={disabled} onClick={() => { setRebuild(false); props.onRebuild(); }}>{t('rebuild')}</button></div></div>}
             <div className='nmx-music-mv-grid'>{props.segments.map((segment, index) => <article key={segment.id} className='nmx-music-mv-segment'>
                 <header><strong data-nmx-literal>{t('segment', { n: index + 1 })}</strong><small data-nmx-literal>{t('seconds', { n: ((segment.endMs - segment.startMs) / 1_000).toFixed(1) })}</small></header>
-                <div className='nmx-music-mv-thumbnail'>{segment.url ? segment.source === 'upload-image' ? <img src={segment.url} alt='' /> : <video src={segment.url} muted preload='metadata' playsInline />
+                <div className='nmx-music-mv-thumbnail'>{segment.url ? segment.source === 'upload-image' ? <img src={segment.url} alt='' loading='lazy' decoding='async' /> : <video src={segment.url} muted preload='metadata' playsInline />
                     : <i className={`codicon codicon-${segment.source === 'upload-image' ? 'file-media' : 'device-camera-video'}`} aria-hidden='true' />}
                     <span className={`nmx-music-mv-badge ${segment.running ? 'is-generating' : segment.url ? 'is-ready' : ''}`}>{t(segment.running ? 'running' : segment.url ? 'ready' : 'missing')}</span></div>
                 <small className='nmx-music-mv-range' data-nmx-literal>{clock(segment.startMs)} – {clock(segment.endMs)}</small>

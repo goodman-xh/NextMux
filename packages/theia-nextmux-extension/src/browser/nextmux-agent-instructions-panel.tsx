@@ -15,7 +15,7 @@ type Key = 'nav' | 'title' | 'intro' | 'personal' | 'personalHint' | 'project' |
 
 const en: Readonly<Record<Key, string>> = {
     nav: 'AI instructions', title: 'AI instructions (AGENTS.md)',
-    intro: 'Every AI conversation reads these standing instructions before it starts. They use the open AGENTS.md format, so Codex, Cursor and other agents read the project file too.',
+    intro: 'Every AI conversation reads these standing instructions before it starts.',
     personal: 'Personal habits', personalHint: 'Applies to every project on this computer.',
     project: 'Project instructions', projectHint: 'Applies only to the project folder you choose. Saved as AGENTS.md in that folder; commit it to share with your team.',
     chooseProject: 'Project', noProject: 'Open a project to edit its AGENTS.md.',
@@ -32,7 +32,7 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, string
     en,
     'zh-CN': {
         nav: 'AI 指令', title: 'AI 指令（AGENTS.md）',
-        intro: '每次 AI 对话开始前都会先读取这里的长期指令。采用开放的 AGENTS.md 格式，Codex、Cursor 等其他 AI 工具也会读取项目里的这个文件。',
+        intro: '每次 AI 对话开始前都会先读取这里的长期指令。',
         personal: '个人习惯', personalHint: '对这台电脑上的所有项目生效。',
         project: '项目指令', projectHint: '只对下面选中的项目文件夹生效，保存为该文件夹根目录的 AGENTS.md，可提交到仓库与团队共享。',
         chooseProject: '项目', noProject: '打开一个项目后即可编辑它的 AGENTS.md。',
@@ -45,7 +45,7 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, string
     },
     'zh-TW': {
         nav: 'AI 指令', title: 'AI 指令（AGENTS.md）',
-        intro: '每次 AI 對話開始前都會先讀取這裡的長期指令。採用開放的 AGENTS.md 格式，Codex、Cursor 等其他 AI 工具也會讀取專案裡的這個檔案。',
+        intro: '每次 AI 對話開始前都會先讀取這裡的長期指令。',
         personal: '個人習慣', personalHint: '對這台電腦上的所有專案生效。',
         project: '專案指令', projectHint: '只對下方選取的專案資料夾生效，儲存為該資料夾根目錄的 AGENTS.md，可提交到儲存庫與團隊共享。',
         chooseProject: '專案', noProject: '開啟一個專案後即可編輯它的 AGENTS.md。',
@@ -58,7 +58,7 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, string
     },
     ja: {
         nav: 'AI 指示', title: 'AI 指示（AGENTS.md）',
-        intro: 'AI との会話は毎回、開始前にこの指示を読み込みます。オープンな AGENTS.md 形式なので、Codex や Cursor などもプロジェクトのファイルを読み込みます。',
+        intro: 'AI との会話は毎回、開始前にこの指示を読み込みます。',
         personal: '個人の習慣', personalHint: 'このコンピューターのすべてのプロジェクトに適用されます。',
         project: 'プロジェクトの指示', projectHint: 'プロジェクトのルートに AGENTS.md として保存され、リポジトリでチームと共有できます。',
         chooseProject: 'プロジェクト', noProject: 'プロジェクトを開くと AGENTS.md を編集できます。',
@@ -70,7 +70,7 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, string
     },
     ko: {
         nav: 'AI 지침', title: 'AI 지침(AGENTS.md)',
-        intro: '모든 AI 대화는 시작 전에 이 지침을 먼저 읽습니다. 개방형 AGENTS.md 형식이라 Codex, Cursor 등도 프로젝트 파일을 읽습니다.',
+        intro: '모든 AI 대화는 시작 전에 이 지침을 먼저 읽습니다.',
         personal: '개인 습관', personalHint: '이 컴퓨터의 모든 프로젝트에 적용됩니다.',
         project: '프로젝트 지침', projectHint: '프로젝트 루트의 AGENTS.md로 저장되며 저장소로 팀과 공유할 수 있습니다.',
         chooseProject: '프로젝트', noProject: '프로젝트를 열면 AGENTS.md를 편집할 수 있습니다.',
@@ -82,7 +82,7 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, string
     },
     es: {
         nav: 'Instrucciones de IA', title: 'Instrucciones de IA (AGENTS.md)',
-        intro: 'Cada conversación con la IA lee estas instrucciones permanentes antes de empezar. Usan el formato abierto AGENTS.md, así que Codex, Cursor y otros agentes también leen el archivo del proyecto.',
+        intro: 'Cada conversación con la IA lee estas instrucciones permanentes antes de empezar.',
         personal: 'Hábitos personales', personalHint: 'Se aplica a todos los proyectos de este equipo.',
         project: 'Instrucciones del proyecto', projectHint: 'Se guarda como AGENTS.md en la raíz del proyecto; confírmalo en el repositorio para compartirlo.',
         chooseProject: 'Proyecto', noProject: 'Abre un proyecto para editar su AGENTS.md.',
@@ -94,7 +94,7 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, string
     },
     fr: {
         nav: 'Instructions IA', title: 'Instructions IA (AGENTS.md)',
-        intro: 'Chaque conversation avec l’IA lit ces instructions permanentes avant de commencer. Elles utilisent le format ouvert AGENTS.md : Codex, Cursor et d’autres agents lisent aussi le fichier du projet.',
+        intro: 'Chaque conversation avec l’IA lit ces instructions permanentes avant de commencer.',
         personal: 'Habitudes personnelles', personalHint: 'S’applique à tous les projets de cet ordinateur.',
         project: 'Instructions du projet', projectHint: 'Enregistré sous AGENTS.md à la racine du projet ; versionnez-le pour le partager avec l’équipe.',
         chooseProject: 'Projet', noProject: 'Ouvrez un projet pour modifier son AGENTS.md.',
@@ -106,7 +106,7 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, string
     },
     de: {
         nav: 'KI-Anweisungen', title: 'KI-Anweisungen (AGENTS.md)',
-        intro: 'Jede KI-Unterhaltung liest diese dauerhaften Anweisungen vor dem Start. Sie nutzen das offene AGENTS.md-Format, daher lesen auch Codex, Cursor und andere Agenten die Projektdatei.',
+        intro: 'Jede KI-Unterhaltung liest diese dauerhaften Anweisungen vor dem Start.',
         personal: 'Persönliche Gewohnheiten', personalHint: 'Gilt für alle Projekte auf diesem Computer.',
         project: 'Projektanweisungen', projectHint: 'Wird als AGENTS.md im Projektstamm gespeichert; per Commit mit dem Team teilen.',
         chooseProject: 'Projekt', noProject: 'Öffnen Sie ein Projekt, um seine AGENTS.md zu bearbeiten.',
@@ -118,7 +118,7 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, string
     },
     'pt-BR': {
         nav: 'Instruções de IA', title: 'Instruções de IA (AGENTS.md)',
-        intro: 'Toda conversa com a IA lê estas instruções permanentes antes de começar. Elas usam o formato aberto AGENTS.md, então Codex, Cursor e outros agentes também leem o arquivo do projeto.',
+        intro: 'Toda conversa com a IA lê estas instruções permanentes antes de começar.',
         personal: 'Hábitos pessoais', personalHint: 'Vale para todos os projetos deste computador.',
         project: 'Instruções do projeto', projectHint: 'Salvo como AGENTS.md na raiz do projeto; faça commit para compartilhar com a equipe.',
         chooseProject: 'Projeto', noProject: 'Abra um projeto para editar o AGENTS.md dele.',
@@ -130,7 +130,7 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, string
     },
     ru: {
         nav: 'Инструкции ИИ', title: 'Инструкции ИИ (AGENTS.md)',
-        intro: 'Каждый диалог с ИИ перед началом читает эти постоянные инструкции. Используется открытый формат AGENTS.md, поэтому Codex, Cursor и другие агенты тоже читают файл проекта.',
+        intro: 'Каждый диалог с ИИ перед началом читает эти постоянные инструкции.',
         personal: 'Личные привычки', personalHint: 'Действует для всех проектов на этом компьютере.',
         project: 'Инструкции проекта', projectHint: 'Сохраняется как AGENTS.md в корне проекта; добавьте в репозиторий, чтобы поделиться с командой.',
         chooseProject: 'Проект', noProject: 'Откройте проект, чтобы изменить его AGENTS.md.',
@@ -142,7 +142,7 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, string
     },
     ar: {
         nav: 'تعليمات الذكاء الاصطناعي', title: 'تعليمات الذكاء الاصطناعي (AGENTS.md)',
-        intro: 'تقرأ كل محادثة مع الذكاء الاصطناعي هذه التعليمات الدائمة قبل أن تبدأ. تستخدم صيغة AGENTS.md المفتوحة، لذا يقرأ Codex وCursor ووكلاء آخرون ملف المشروع أيضًا.',
+        intro: 'تقرأ كل محادثة مع الذكاء الاصطناعي هذه التعليمات الدائمة قبل أن تبدأ.',
         personal: 'عاداتي الشخصية', personalHint: 'تنطبق على كل المشاريع على هذا الحاسوب.',
         project: 'تعليمات المشروع', projectHint: 'تُحفظ باسم AGENTS.md في جذر المشروع؛ أضفها إلى المستودع لمشاركتها مع الفريق.',
         chooseProject: 'المشروع', noProject: 'افتح مشروعًا لتعديل ملف AGENTS.md الخاص به.',
@@ -154,7 +154,7 @@ const catalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Key, string
     },
     hi: {
         nav: 'AI निर्देश', title: 'AI निर्देश (AGENTS.md)',
-        intro: 'हर AI बातचीत शुरू होने से पहले ये स्थायी निर्देश पढ़ती है। ये खुले AGENTS.md फ़ॉर्मैट में हैं, इसलिए Codex, Cursor और अन्य एजेंट भी प्रोजेक्ट की फ़ाइल पढ़ते हैं।',
+        intro: 'हर AI बातचीत शुरू होने से पहले ये स्थायी निर्देश पढ़ती है।',
         personal: 'निजी आदतें', personalHint: 'इस कंप्यूटर के सभी प्रोजेक्ट पर लागू।',
         project: 'प्रोजेक्ट निर्देश', projectHint: 'प्रोजेक्ट रूट में AGENTS.md के रूप में सहेजा जाता है; टीम से साझा करने के लिए कमिट करें।',
         chooseProject: 'प्रोजेक्ट', noProject: 'AGENTS.md बदलने के लिए कोई प्रोजेक्ट खोलें।',
@@ -313,20 +313,23 @@ export function AgentInstructionsSettings(props: AgentInstructionsSettingsProps)
     const [alternatives, setAlternatives] = React.useState<readonly AgentInstructionAlternative[]>([]);
     const [failed, setFailed] = React.useState(false);
     const [loadFailure, setLoadFailure] = React.useState<DomainMessage | undefined>();
+    const [projectFailure, setProjectFailure] = React.useState<DomainMessage | undefined>();
     const [projectDirty, setProjectDirty] = React.useState(false);
     const generation = React.useRef(0);
     const load = React.useCallback(async (): Promise<void> => {
         const current = ++generation.current;
         setFailed(false);
+        setProjectFailure(undefined);
         try {
             const snapshot = await props.api.getAgentInstructions(props.project || undefined);
             if (current !== generation.current) return;
             setPersonal(snapshot.personal); setProject(snapshot.project); setAlternatives(snapshot.projectAlternatives || []);
+            setProjectFailure(snapshot.projectError);
         } catch (error) {
             if (current === generation.current) { setLoadFailure(domainMessageFromError(error)); setFailed(true); }
         }
     }, [props.api, props.project]);
-    React.useEffect(() => { setProject(undefined); void load(); }, [load]);
+    React.useEffect(() => { setProject(undefined); setProjectFailure(undefined); void load(); }, [load]);
     React.useEffect(() => {
         if (typeof window === 'undefined') return undefined;
         const onExternalSaved = (event: Event): void => {
@@ -337,6 +340,7 @@ export function AgentInstructionsSettings(props: AgentInstructionsSettingsProps)
                 setPersonal(detail.file);
             } else if (scope === 'project' && detail.workspaceRoot && detail.workspaceRoot === props.project) {
                 setProject(detail.file);
+                setProjectFailure(undefined);
                 if (detail.file.exists) setAlternatives([]);
             }
         };
@@ -350,7 +354,7 @@ export function AgentInstructionsSettings(props: AgentInstructionsSettingsProps)
         <InstructionEditor locale={props.locale} scope='personal' file={personal} api={props.api} onSaved={setPersonal}
             onReload={() => void load()} onOpen={props.onOpenFile} onDirtyChange={onDirtyChange} />
         <InstructionEditor locale={props.locale} scope='project' file={props.project ? project : undefined} workspaceRoot={props.project} api={props.api}
-            onSaved={file => { setProject(file); if (file.exists) setAlternatives([]); }} onReload={() => void load()} onOpen={props.onOpenFile} onDirtyChange={onDirtyChange}
+            onSaved={file => { setProject(file); setProjectFailure(undefined); if (file.exists) setAlternatives([]); }} onReload={() => void load()} onOpen={props.onOpenFile} onDirtyChange={onDirtyChange}
             alternatives={props.project ? alternatives : []}>
             {props.projects.length ? <label className='nmx-agent-instructions-project'>
                 <span>{t('chooseProject')}</span>
@@ -360,6 +364,7 @@ export function AgentInstructionsSettings(props: AgentInstructionsSettingsProps)
                 </select>
                 {projectDirty && <small className='nmx-agent-instructions-note'>{t('unsaved')}</small>}
             </label> : <p className='nmx-agent-instructions-note'>{t('noProject')}</p>}
+            {props.project && projectFailure && !project && <p className='nmx-agent-instructions-note is-error' role='alert'>{componentDomainMessage(props.locale, projectFailure) || t('failed')} <button type='button' onClick={() => void load()}>{t('reload')}</button></p>}
         </InstructionEditor>
     </section>;
 }

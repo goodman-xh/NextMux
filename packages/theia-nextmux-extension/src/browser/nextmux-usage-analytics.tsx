@@ -13,6 +13,7 @@ import type { NextMuxPlatformService, PlatformMerchantUsageSummary, PlatformUsag
 import type { NextMuxDesktopLocale } from './nextmux-locale';
 import { modelUsageText } from './nextmux-model-usage-locale';
 import { relayMerchantNumber } from './nextmux-relay-marketplace';
+import { StickyHorizontalScroll } from './nextmux-sticky-scroll';
 import { usageAnalyticsText } from './nextmux-usage-analytics-locale';
 import { USAGE_DAY_MS, usageByDay, usageByModel, usagePercentile, usagePrimaryCurrency, usageProviderCacheRate, usageProviderTotals, usageRatio, usageRowTokens } from './nextmux-usage-stats';
 
@@ -163,15 +164,19 @@ export function UsageAnalytics(props: UsageAnalyticsProps): React.ReactElement {
     const f = formatter(locale);
     const text = (key: Parameters<typeof usageAnalyticsText>[1], values?: Readonly<Record<string, string | number>>) => usageAnalyticsText(locale, key, values);
     const currency = props.currency || usagePrimaryCurrency([...(data?.providers || []).map(row => row.currency), ...(data?.records || []).map(row => row.currency)]);
-    const totals = usageProviderTotals(data?.providers || [], currency);
-    const daily = data ? usageByDay(data.records, data.since, data.until, currency) : [];
-    const models = data ? usageByModel(data.records, currency) : [];
-    const sampleRecords = (data?.records || []).filter(record => record.currency === currency);
-    const metered = sampleRecords.filter(record => record.inputTokens !== null || record.outputTokens !== null).length;
-    const cacheHit = daily.reduce((sum, day) => sum + day.cacheHit, 0);
-    const cacheTotal = daily.reduce((sum, day) => sum + day.cacheTotal, 0);
-    const cacheRate = !data ? null : variant === 'summary' ? usageProviderCacheRate(data.providers, currency) : usageRatio(cacheHit, cacheTotal);
-    const p95 = usagePercentile(sampleRecords.flatMap(record => record.durationMs === null ? [] : [record.durationMs]), 95);
+    const computed = React.useMemo(() => {
+        const totals = usageProviderTotals(data?.providers || [], currency);
+        const daily = data ? usageByDay(data.records, data.since, data.until, currency) : [];
+        const models = data ? usageByModel(data.records, currency) : [];
+        const sampleRecords = (data?.records || []).filter(record => record.currency === currency);
+        const metered = sampleRecords.filter(record => record.inputTokens !== null || record.outputTokens !== null).length;
+        const cacheHit = daily.reduce((sum, day) => sum + day.cacheHit, 0);
+        const cacheTotal = daily.reduce((sum, day) => sum + day.cacheTotal, 0);
+        const cacheRate = !data ? null : variant === 'summary' ? usageProviderCacheRate(data.providers, currency) : usageRatio(cacheHit, cacheTotal);
+        const p95 = usagePercentile(sampleRecords.flatMap(record => record.durationMs === null ? [] : [record.durationMs]), 95);
+        return { totals, daily, models, sampleRecords, metered, cacheRate, p95 };
+    }, [data, currency, variant]);
+    const { totals, daily, models, sampleRecords, metered, cacheRate, p95 } = computed;
     const hasTokens = data ? metered > 0 || totals.inputTokens + totals.outputTokens > 0 : false;
     const ready = Boolean(data) && !error;
     const kpis: readonly { key: string; label: string; value: string; hint: string; icon: string }[] = [
@@ -245,7 +250,7 @@ export function UsageAnalytics(props: UsageAnalyticsProps): React.ReactElement {
                     </div>
                     <section className='nmx-usage-card nmx-usage-table-card'>
                         <header><h3>{text('byModel')}</h3></header>
-                        <div className='nmx-usage-table-scroll'><table className='nmx-usage-table'>
+                        <StickyHorizontalScroll targetSelector='.nmx-usage-table-scroll'><div className='nmx-usage-table-scroll'><table className='nmx-usage-table'>
                             <thead><tr><th>{text('model')}</th><th>{text('requests')}</th><th>{text('successRate')}</th><th>{text('input')}</th><th>{text('output')}</th><th>{text('cacheHitRate')}</th><th>{text('p50')}</th><th>{text('spend')}</th></tr></thead>
                             <tbody>{visibleModels.map(model => <tr key={model.model} data-usage-model={model.model}>
                                 <th scope='row' data-nmx-literal title={model.model}>{model.label || '—'}</th>
@@ -257,12 +262,12 @@ export function UsageAnalytics(props: UsageAnalyticsProps): React.ReactElement {
                                 <td>{f.duration(usagePercentile(model.durations, 50))}</td>
                                 <td><strong>{f.money(model.chargedMicros, currency)}</strong></td>
                             </tr>)}</tbody>
-                        </table></div>
+                        </table></div></StickyHorizontalScroll>
                         {!visibleModels.length && <p className='nmx-usage-note'>{query ? modelUsageText(locale, 'noMatch') : text('empty')}</p>}
                     </section>
                     <section className='nmx-usage-card nmx-usage-table-card'>
                         <header><h3>{text('byRelay')}</h3></header>
-                        <div className='nmx-usage-table-scroll'><table className='nmx-usage-table'>
+                        <StickyHorizontalScroll targetSelector='.nmx-usage-table-scroll'><div className='nmx-usage-table-scroll'><table className='nmx-usage-table'>
                             <thead><tr><th>{text('relay')}</th><th>{text('requests')}</th><th>{text('successRate')}</th><th>{text('failovers')}</th><th>{text('avgLatency')}</th><th>{text('tokens')}</th><th>{text('evidence')}</th><th>{text('spend')}</th></tr></thead>
                             <tbody>{providers.map(row => <tr key={`${row.merchantId}:${row.currency}`} data-usage-relay={row.merchantId || 'platform'}>
                                 <th scope='row' data-nmx-literal>{row.merchantId ? row.providerName : modelUsageText(locale, 'platformRoute')}<small dir='ltr'>{row.merchantId ? relayMerchantNumber(row.merchantId) : ''}</small></th>
@@ -274,7 +279,7 @@ export function UsageAnalytics(props: UsageAnalyticsProps): React.ReactElement {
                                 <td className={`is-${row.modelEvidence}`}>{evidenceText(locale, row)}</td>
                                 <td><strong>{f.money(row.chargedMicros, row.currency)}</strong></td>
                             </tr>)}</tbody>
-                        </table></div>
+                        </table></div></StickyHorizontalScroll>
                         {!providers.length && <p className='nmx-usage-note'>{query ? modelUsageText(locale, 'noMatch') : text('empty')}</p>}
                     </section>
                 </>}

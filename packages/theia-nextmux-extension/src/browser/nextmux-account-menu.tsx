@@ -1,7 +1,33 @@
 import * as React from '@theia/core/shared/react';
+import type { PlatformWallet } from '../common/nextmux-platform-protocol';
 import type { NextMuxDesktopLocale } from './nextmux-locale';
+import { formatBalanceMicros } from './nextmux-money-format';
 import { ImeTextarea } from './nextmux-ime-field';
 import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
+
+/** Fallback wallet shown when a signed-in account has no `customer_wallets` row yet (brand-new / $0 balance). */
+export const DEFAULT_ZERO_USD_WALLET: PlatformWallet = {
+    currency: 'USD',
+    availableMicros: 0,
+    reservedMicros: 0,
+    usageDebtMicros: 0,
+    lifetimeCreditedMicros: 0,
+    lifetimeSpentMicros: 0,
+    lifetimeRefundedMicros: 0,
+    updatedAt: 0
+};
+
+/**
+ * Resolve the wallets to show in signed-in UI surfaces.
+ * New or $0 users may have an empty `wallets` array until their first ledger write; keep showing a concrete USD $0.00 wallet instead of placeholders.
+ */
+export function resolveDisplayWallets(
+    linked: boolean | undefined,
+    wallets: readonly PlatformWallet[] | undefined
+): readonly PlatformWallet[] {
+    if (Array.isArray(wallets) && wallets.length > 0) return wallets;
+    return linked ? [DEFAULT_ZERO_USD_WALLET] : [];
+}
 
 /**
  * The account sheet that rises from the avatar in the lower-left corner:
@@ -118,7 +144,7 @@ export function AccountMenu(props: AccountMenuProps): React.ReactElement {
         </header>
         {props.linked
             ? <div className='nmx-account-sheet-balance' role='none'>
-                <span><small>{t('balance')}</small><strong data-nmx-literal>{props.balance || '—'}</strong></span>
+                <span><small>{t('balance')}</small><strong data-nmx-literal>{props.balance || formatBalanceMicros(props.locale, 'USD', 0)}</strong></span>
                 <button type='button' role='menuitem' className='nmx-account-sheet-topup' onClick={props.onTopUp}>{t('topUp')}</button>
             </div>
             : <button type='button' role='menuitem' className='nmx-account-sheet-signin' onClick={props.onSignIn}><i className='codicon codicon-sign-in'></i><span>{t('signIn')}</span></button>}
