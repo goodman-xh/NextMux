@@ -26,6 +26,7 @@ function createSyntheticChangeEvent<T extends HTMLInputElement | HTMLTextAreaEle
  */
 function useImeSafeValue<T extends HTMLInputElement | HTMLTextAreaElement>(
     value: string | number | readonly string[] | undefined,
+    defaultValue: string | number | readonly string[] | undefined,
     onChange: React.ChangeEventHandler<T> | undefined,
     onCompositionStart: React.CompositionEventHandler<T> | undefined,
     onCompositionEnd: React.CompositionEventHandler<T> | undefined,
@@ -37,7 +38,12 @@ function useImeSafeValue<T extends HTMLInputElement | HTMLTextAreaElement>(
     React.InputHTMLAttributes<T>,
     'value' | 'onChange' | 'onCompositionStart' | 'onCompositionEnd' | 'onBlur' | 'onKeyDown'
 > {
-    const incoming = value === undefined || value === null ? '' : String(value);
+    const isControlled = value !== undefined;
+    const incoming = value !== undefined && value !== null
+        ? String(value)
+        : defaultValue !== undefined && defaultValue !== null
+            ? String(defaultValue)
+            : '';
     const [local, setLocal] = React.useState(incoming);
     const [seen, setSeen] = React.useState(incoming);
     const composing = React.useRef(false);
@@ -64,7 +70,7 @@ function useImeSafeValue<T extends HTMLInputElement | HTMLTextAreaElement>(
         onChangeRef.current?.(createSyntheticChangeEvent(pendingTarget));
     }, []);
 
-    if (incoming !== seen) {
+    if (isControlled && incoming !== seen) {
         setSeen(incoming);
         if (!composing.current) {
             const isAckOfLastCommit = pendingTargetRef.current !== undefined && incoming === lastCommittedRef.current;
@@ -153,11 +159,11 @@ export interface ImeTextareaProps extends React.TextareaHTMLAttributes<HTMLTextA
 }
 
 export const ImeInput = React.forwardRef<HTMLInputElement, ImeInputProps>(function ImeInput(props, ref) {
-    const { value, onChange, onCompositionStart, onCompositionEnd, onBlur, onKeyDown, commitDelayMs, ...rest } = props;
-    return <input ref={ref} {...PLAIN_TEXT_ENTRY} {...rest} {...useImeSafeValue(value, onChange, onCompositionStart, onCompositionEnd, onBlur, onKeyDown, commitDelayMs, true)} />;
+    const { value, defaultValue, onChange, onCompositionStart, onCompositionEnd, onBlur, onKeyDown, commitDelayMs, ...rest } = props;
+    return <input ref={ref} {...PLAIN_TEXT_ENTRY} {...rest} {...useImeSafeValue(value, defaultValue, onChange, onCompositionStart, onCompositionEnd, onBlur, onKeyDown, commitDelayMs, true)} />;
 });
 
 export const ImeTextarea = React.forwardRef<HTMLTextAreaElement, ImeTextareaProps>(function ImeTextarea(props, ref) {
-    const { value, onChange, onCompositionStart, onCompositionEnd, onBlur, onKeyDown, commitDelayMs, ...rest } = props;
-    return <textarea ref={ref} {...PLAIN_TEXT_ENTRY} {...rest} {...useImeSafeValue(value, onChange, onCompositionStart, onCompositionEnd, onBlur, onKeyDown, commitDelayMs, false)} />;
+    const { value, defaultValue, onChange, onCompositionStart, onCompositionEnd, onBlur, onKeyDown, commitDelayMs, ...rest } = props;
+    return <textarea ref={ref} {...PLAIN_TEXT_ENTRY} {...rest} {...useImeSafeValue(value, defaultValue, onChange, onCompositionStart, onCompositionEnd, onBlur, onKeyDown, commitDelayMs, false)} />;
 });

@@ -1,7 +1,7 @@
 import * as React from '@theia/core/shared/react';
 import { createPortal } from '@theia/core/shared/react-dom';
 import type { CanvasAssetVersion, CanvasDocument, CanvasMediaKind } from '@nextmux/comic-core/canvas';
-import { CanvasModalLayer } from './nextmux-comic-canvas-modal';
+import { CanvasModalLayer, useKeepAliveHostHidden } from './nextmux-comic-canvas-modal';
 import { canvasText } from './nextmux-comic-canvas-text';
 import { canvasFloatText } from './nextmux-comic-canvas-float-text';
 import { canvasHistoryText, type CanvasHistoryTextKey } from './nextmux-comic-canvas-history-text';
@@ -24,6 +24,7 @@ export interface CanvasGenerationHistoryDialogProps {
 }
 
 export function CanvasGenerationHistoryDialog(props: CanvasGenerationHistoryDialogProps): React.ReactElement {
+    const [keepAliveAnchor, hiddenInKeepAlive] = useKeepAliveHostHidden();
     const h = (key: CanvasHistoryTextKey, values?: Readonly<Record<string, string | number>>): string => canvasHistoryText(props.locale, key, values);
     const nodeLayout = Boolean(props.initialNodeId);
     const [query, setQuery] = React.useState(''), [kind, setKind] = React.useState<CanvasMediaKind | 'all'>('all');
@@ -46,13 +47,14 @@ export function CanvasGenerationHistoryDialog(props: CanvasGenerationHistoryDial
     const rectRef = React.useRef(rect); rectRef.current = rect;
     const drag = React.useRef<{ readonly id: number; readonly x: number; readonly y: number; readonly rect: CanvasHistoryWindow; readonly resize: boolean }>();
     React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-    React.useEffect(() => { if (nodeLayout) return; main.current?.focus({ preventScroll: true }); return () => { if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true }); }; }, [nodeLayout, previousFocus]);
+    React.useEffect(() => { if (!nodeLayout && !hiddenInKeepAlive) main.current?.focus({ preventScroll: true }); }, [nodeLayout, hiddenInKeepAlive]);
+    React.useEffect(() => () => { if (!nodeLayout && previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true }); }, [nodeLayout, previousFocus]);
     React.useEffect(() => { const resize = (): void => { const next = { width: window.innerWidth, height: window.innerHeight }; setViewport(next); setRect(value => clampCanvasHistoryWindow(value, next)); };
         window.addEventListener('resize', resize); return () => window.removeEventListener('resize', resize); }, []);
     // The floating window is not modal, so focus is often on the canvas: Escape anywhere closes it. Its own keydown
     // (focus inside) and any modal dialog opened above it handle Escape first and stop it before this listener.
     React.useEffect(() => {
-        if (nodeLayout) return;
+        if (nodeLayout || hiddenInKeepAlive) return;
         const modalAbove = (): boolean => {
             try { return [...document.querySelectorAll('dialog[open]')].some(dialog => dialog.matches(':modal')); }
             catch { return document.querySelector('dialog[open]') !== null; }
@@ -64,7 +66,7 @@ export function CanvasGenerationHistoryDialog(props: CanvasGenerationHistoryDial
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [nodeLayout]);
+    }, [nodeLayout, hiddenInKeepAlive]);
     const entries = collectCanvasHistory(props.canvases);
     const scoped = props.initialCanvasId ? entries.filter(entry => entry.canvasId === props.initialCanvasId) : entries;
     const nodes = [...new Map(scoped.map(entry => [JSON.stringify([entry.canvasId, entry.nodeId]), entry])).entries()];
@@ -162,7 +164,7 @@ export function CanvasGenerationHistoryDialog(props: CanvasGenerationHistoryDial
     const dockRight = rect.left + rect.width + 392 <= viewport.width - 12, dockLeft = rect.left >= 404;
     const drawerStyle: React.CSSProperties = dockRight ? { left: rect.width + 12 } : dockLeft ? { right: rect.width + 12 }
         : { left: Math.max(0, rect.width - Math.min(380, rect.width)), width: Math.min(380, rect.width), top: 52 };
-    return <>{createPortal(<section ref={main} className='nmx-canvas-history is-global' role='dialog' aria-label={h('title')} tabIndex={-1}
+    return <><span ref={keepAliveAnchor} hidden />{!hiddenInKeepAlive && createPortal(<section ref={main} className='nmx-canvas-history is-global' role='dialog' aria-label={h('title')} tabIndex={-1}
         lang={props.locale} dir={props.locale === 'ar' ? 'rtl' : 'ltr'} style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
         onKeyDown={keyDown} onMouseDown={event => event.stopPropagation()} onPointerMove={move} onPointerUp={end} onPointerCancel={end}>
         <header title={canvasFloatText(props.locale, 'move')} onPointerDown={event => begin(event, false)}><strong>{h('title')}</strong>

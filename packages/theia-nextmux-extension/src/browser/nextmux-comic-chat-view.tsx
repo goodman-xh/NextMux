@@ -7,6 +7,7 @@ import { relayText } from './nextmux-relay-locale';
 import { publicMerchantDepositText } from '../common/nextmux-public-merchants';
 import { DepositVerifiedHint, depositVerifiedHintText, type DepositVerifiedHintAnchor } from './nextmux-deposit-verified';
 import { ImeTextarea } from './nextmux-ime-field';
+import { useKeepAliveHostHidden } from './nextmux-comic-canvas-modal';
 import { registerPendingCanvasEditFlush } from './nextmux-comic-canvas-culling';
 import type * as VirtualListModule from './nextmux-virtual-list';
 import type { VirtualListContainerProps, VirtualScrollerContainerProps } from './nextmux-virtual-list';
@@ -943,6 +944,7 @@ const ComicChatModelOptionRow = React.memo(function ComicChatModelOptionRow(prop
 });
 
 export function ComicChatComposer(props: ComicChatComposerProps): React.ReactElement {
+    const [keepAliveAnchor, hiddenInKeepAlive] = useKeepAliveHostHidden();
     const t = (key: ComicChatTextKey, values?: Readonly<Record<string, string | number>>): string => comicChatText(props.locale, key, values);
     const [popover, setPopover] = React.useState<'add' | 'cast' | 'models'>();
     const [tab, setTab] = React.useState<ComicChatMode>(props.mode);
@@ -1357,7 +1359,8 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                 })()}
             </div>
         </div>
-        {preview && createPortal(<ComicChatReferencePreview locale={props.locale} reference={preview} onClose={() => setPreview(undefined)} />,
+        <span ref={keepAliveAnchor} hidden />
+        {preview && !hiddenInKeepAlive && createPortal(<ComicChatReferencePreview locale={props.locale} reference={preview} onClose={() => setPreview(undefined)} />,
             box.current?.closest<HTMLElement>('.nmx-shell') ?? document.body)}
     </div>;
 }

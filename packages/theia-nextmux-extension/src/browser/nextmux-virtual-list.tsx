@@ -99,6 +99,77 @@ export interface VirtualGridProps<T, Context = unknown> {
     };
 }
 
+function forwardContextProp(context: unknown): Record<string, unknown> | undefined {
+    return context !== undefined ? { context } : undefined;
+}
+
+function stripInternalContext<P extends { context?: unknown }>(props: P): Omit<P, 'context'> {
+    const { context: _internalContext, ...rest } = props;
+    return rest;
+}
+
+interface SharedSlotSource<Context> {
+    readonly context?: Context;
+    readonly header?: React.ReactNode;
+    readonly footer?: React.ReactNode;
+    readonly empty?: React.ReactNode;
+    readonly components?: {
+        readonly Scroller?: React.ComponentType<VirtualScrollerContainerProps>;
+        readonly Header?: React.ComponentType;
+        readonly Footer?: React.ComponentType;
+        readonly EmptyPlaceholder?: React.ComponentType;
+    };
+}
+
+function useSharedVirtualSlots<Context>(
+    latestRef: React.RefObject<SharedSlotSource<Context>>,
+    hasScroller: boolean,
+    hasHeader: boolean,
+    hasFooter: boolean,
+    hasEmpty = false
+): {
+    readonly scrollerSlot?: React.ComponentType<VirtualScrollerContainerProps>;
+    readonly headerSlot?: React.ComponentType;
+    readonly footerSlot?: React.ComponentType;
+    readonly emptySlot?: React.ComponentType;
+} {
+    const scrollerSlot = React.useMemo(() => hasScroller
+        ? React.forwardRef<HTMLDivElement, VirtualScrollerContainerProps>(function VirtualScrollerSlot(scrollerProps, ref) {
+            const current = latestRef.current;
+            const CustomScroller = current?.components?.Scroller;
+            const restProps = stripInternalContext(scrollerProps as VirtualScrollerContainerProps & { context?: unknown });
+            if (!CustomScroller) return <div {...restProps} ref={ref} />;
+            return <CustomScroller {...restProps} {...forwardContextProp(current?.context)} ref={ref} />;
+        })
+        : undefined, [latestRef, hasScroller]);
+
+    const headerSlot = React.useMemo(() => hasHeader
+        ? function VirtualHeaderSlot() {
+            const current = latestRef.current;
+            const CustomHeader = current?.components?.Header;
+            return CustomHeader ? <CustomHeader {...forwardContextProp(current?.context)} /> : <>{current?.header}</>;
+        }
+        : undefined, [latestRef, hasHeader]);
+
+    const footerSlot = React.useMemo(() => hasFooter
+        ? function VirtualFooterSlot() {
+            const current = latestRef.current;
+            const CustomFooter = current?.components?.Footer;
+            return CustomFooter ? <CustomFooter {...forwardContextProp(current?.context)} /> : <>{current?.footer}</>;
+        }
+        : undefined, [latestRef, hasFooter]);
+
+    const emptySlot = React.useMemo(() => hasEmpty
+        ? function VirtualEmptySlot() {
+            const current = latestRef.current;
+            const CustomEmpty = current?.components?.EmptyPlaceholder;
+            return CustomEmpty ? <CustomEmpty {...forwardContextProp(current?.context)} /> : <>{current?.empty}</>;
+        }
+        : undefined, [latestRef, hasEmpty]);
+
+    return { scrollerSlot, headerSlot, footerSlot, emptySlot };
+}
+
 /**
  * Virtualized vertical list backed by `react-virtuoso` when `items.length > threshold`.
  * Below the threshold, renders plain children without virtual scroller scaffolding so small
@@ -138,47 +209,100 @@ export function VirtualList<T, Context = unknown>(props: VirtualListProps<T, Con
         components
     } = props;
 
+    const latestRef = React.useRef({
+        context,
+        components,
+        listClassName,
+        listStyle,
+        itemClassName,
+        header,
+        footer,
+        empty
+    });
+    latestRef.current = {
+        context,
+        components,
+        listClassName,
+        listStyle,
+        itemClassName,
+        header,
+        footer,
+        empty
+    };
+
+    const customList = components?.List;
+    const customItem = components?.Item;
+    const customScroller = components?.Scroller;
+    const customHeader = components?.Header;
+    const customFooter = components?.Footer;
+    const customEmpty = components?.EmptyPlaceholder;
+
+    const hasScroller = Boolean(customScroller);
+    const needsList = Boolean(customList || listClassName || listStyle);
+    const needsItem = Boolean(customItem || itemClassName);
+    const hasHeader = Boolean(customHeader || header !== undefined);
+    const hasFooter = Boolean(customFooter || footer !== undefined);
+    const hasEmpty = Boolean(customEmpty || empty !== undefined);
+
+    const { scrollerSlot, headerSlot, footerSlot, emptySlot } = useSharedVirtualSlots(latestRef, hasScroller, hasHeader, hasFooter, hasEmpty);
+
+    const listSlot = React.useMemo<Components<T, Context>['List'] | undefined>(() => needsList
+        ? React.forwardRef<HTMLDivElement, VirtualListContainerProps>(function VirtualListContainer(listProps, ref) {
+            const current = latestRef.current;
+            const CustomList = current.components?.List;
+            const restProps = stripInternalContext(listProps as VirtualListContainerProps & { context?: unknown });
+            const mergedClass = [listProps.className, current.listClassName].filter(Boolean).join(' ') || undefined;
+            const mergedStyle = current.listStyle ? { ...listProps.style, ...current.listStyle } : listProps.style;
+            if (CustomList) {
+                return <CustomList {...restProps} {...forwardContextProp(current.context)} ref={ref} className={mergedClass} style={mergedStyle} />;
+            }
+            return <div {...restProps} ref={ref} className={mergedClass} style={mergedStyle} />;
+        }) as Components<T, Context>['List']
+        : undefined, [needsList]);
+
+    const itemSlot = React.useMemo<Components<T, Context>['Item'] | undefined>(() => needsItem
+        ? function VirtualListItem(itemProps: VirtualListItemContainerProps<T>) {
+            const current = latestRef.current;
+            const CustomItem = current.components?.Item;
+            const restProps = stripInternalContext(itemProps as VirtualListItemContainerProps<T> & { context?: unknown });
+            const mergedClass = [itemProps.className, current.itemClassName].filter(Boolean).join(' ') || undefined;
+            if (CustomItem) {
+                return <CustomItem {...restProps} {...forwardContextProp(current.context)} className={mergedClass} />;
+            }
+            return <div {...restProps} className={mergedClass} />;
+        } as Components<T, Context>['Item']
+        : undefined, [needsItem]);
+
     const virtuosoComponents = React.useMemo<Components<T, Context>>(() => {
-        const CustomList = components?.List;
-        const CustomItem = components?.Item;
-        const CustomScroller = components?.Scroller;
-        const CustomHeader = components?.Header;
-        const CustomFooter = components?.Footer;
-        const CustomEmpty = components?.EmptyPlaceholder;
-        const needsList = Boolean(CustomList || listClassName || listStyle);
-        const needsItem = Boolean(CustomItem || itemClassName);
-        if (!needsList && !needsItem && !CustomScroller && !CustomHeader && !CustomFooter && !CustomEmpty && header === undefined && footer === undefined && empty === undefined) {
+        if (!scrollerSlot && !listSlot && !itemSlot && !headerSlot && !footerSlot && !emptySlot) {
             return EMPTY_COMPONENTS as Components<T, Context>;
         }
         const next: Components<T, Context> = {};
-        if (CustomScroller) next.Scroller = CustomScroller as Components<T, Context>['Scroller'];
-        if (needsList) {
-            next.List = React.forwardRef<HTMLDivElement, VirtualListContainerProps>(function VirtualListContainer(listProps, ref) {
-                const mergedClass = [listProps.className, listClassName].filter(Boolean).join(' ') || undefined;
-                const mergedStyle = listStyle ? { ...listProps.style, ...listStyle } : listProps.style;
-                if (CustomList) {
-                    return <CustomList {...listProps} ref={ref} className={mergedClass} style={mergedStyle} />;
-                }
-                return <div {...listProps} ref={ref} className={mergedClass} style={mergedStyle} />;
-            }) as Components<T, Context>['List'];
-        }
-        if (needsItem) {
-            next.Item = function VirtualListItem(itemProps: VirtualListItemContainerProps<T>) {
-                const mergedClass = [itemProps.className, itemClassName].filter(Boolean).join(' ') || undefined;
-                if (CustomItem) {
-                    return <CustomItem {...itemProps} className={mergedClass} />;
-                }
-                return <div {...itemProps} className={mergedClass} />;
-            } as Components<T, Context>['Item'];
-        }
-        if (CustomHeader) next.Header = CustomHeader as Components<T, Context>['Header'];
-        else if (header !== undefined) next.Header = () => <>{header}</>;
-        if (CustomFooter) next.Footer = CustomFooter as Components<T, Context>['Footer'];
-        else if (footer !== undefined) next.Footer = () => <>{footer}</>;
-        if (CustomEmpty) next.EmptyPlaceholder = CustomEmpty as Components<T, Context>['EmptyPlaceholder'];
-        else if (empty !== undefined) next.EmptyPlaceholder = () => <>{empty}</>;
+        if (scrollerSlot) next.Scroller = scrollerSlot as Components<T, Context>['Scroller'];
+        if (listSlot) next.List = listSlot;
+        if (itemSlot) next.Item = itemSlot;
+        if (headerSlot) next.Header = headerSlot as Components<T, Context>['Header'];
+        if (footerSlot) next.Footer = footerSlot as Components<T, Context>['Footer'];
+        if (emptySlot) next.EmptyPlaceholder = emptySlot as Components<T, Context>['EmptyPlaceholder'];
         return next;
-    }, [components?.List, components?.Item, components?.Scroller, components?.Header, components?.Footer, components?.EmptyPlaceholder, listClassName, listStyle, itemClassName, header, footer, empty]);
+    }, [scrollerSlot, listSlot, itemSlot, headerSlot, footerSlot, emptySlot]);
+
+    // Virtuoso memoizes List/Header/Footer/EmptyPlaceholder and only re-renders them when props/context change.
+    const virtuosoContext = React.useMemo(() => ({
+        context,
+        customList,
+        customItem,
+        customScroller,
+        customHeader,
+        customFooter,
+        customEmpty,
+        listClassName,
+        listStyle,
+        itemClassName,
+        header,
+        footer,
+        empty
+    }), [context, customList, customItem, customScroller, customHeader, customFooter, customEmpty, listClassName, listStyle, itemClassName, header, footer, empty]);
 
     if (items.length <= threshold) {
         const CustomScroller = components?.Scroller;
@@ -229,7 +353,8 @@ export function VirtualList<T, Context = unknown>(props: VirtualListProps<T, Con
     if (style !== undefined) optionalProps.style = style;
     if (role !== undefined) optionalProps.role = role;
     if (ariaLabel !== undefined) optionalProps['aria-label'] = ariaLabel;
-    if (context !== undefined) optionalProps.context = context;
+    if (virtuosoComponents !== EMPTY_COMPONENTS) optionalProps.context = virtuosoContext;
+    else if (context !== undefined) optionalProps.context = context;
     if (itemKey) optionalProps.computeItemKey = (index: number, item: T) => itemKey(item, index);
     if (overscan !== undefined) optionalProps.overscan = overscan;
     else if (increaseViewportBy === undefined) optionalProps.overscan = DEFAULT_OVERSCAN;
@@ -292,31 +417,84 @@ export function VirtualGrid<T, Context = unknown>(props: VirtualGridProps<T, Con
         components
     } = props;
 
+    const latestRef = React.useRef({
+        context,
+        components,
+        listStyle,
+        header,
+        footer
+    });
+    latestRef.current = {
+        context,
+        components,
+        listStyle,
+        header,
+        footer
+    };
+
+    const customList = components?.List;
+    const customItem = components?.Item;
+    const customScroller = components?.Scroller;
+    const customHeader = components?.Header;
+    const customFooter = components?.Footer;
+
+    const hasScroller = Boolean(customScroller);
+    const needsList = Boolean(customList || listStyle);
+    const hasItem = Boolean(customItem);
+    const hasHeader = Boolean(customHeader || header !== undefined);
+    const hasFooter = Boolean(customFooter || footer !== undefined);
+
+    const { scrollerSlot, headerSlot, footerSlot } = useSharedVirtualSlots(latestRef, hasScroller, hasHeader, hasFooter);
+
+    const listSlot = React.useMemo<GridComponents<Context>['List'] | undefined>(() => needsList
+        ? React.forwardRef<HTMLDivElement, GridListProps>(function VirtualGridList(listProps, ref) {
+            const current = latestRef.current;
+            const CustomList = current.components?.List;
+            const restProps = stripInternalContext(listProps as GridListProps & { context?: unknown });
+            const mergedStyle = current.listStyle ? { ...listProps.style, ...current.listStyle } : listProps.style;
+            if (CustomList) {
+                return <CustomList {...restProps} {...forwardContextProp(current.context)} ref={ref} style={mergedStyle} />;
+            }
+            return <div {...restProps} ref={ref} style={mergedStyle} />;
+        }) as GridComponents<Context>['List']
+        : undefined, [needsList]);
+
+    const itemSlot = React.useMemo<GridComponents<Context>['Item'] | undefined>(() => hasItem
+        ? function VirtualGridItem(itemProps: GridItemProps) {
+            const current = latestRef.current;
+            const CustomItem = current.components?.Item;
+            const restProps = stripInternalContext(itemProps as GridItemProps & { context?: unknown });
+            if (CustomItem) {
+                return <CustomItem {...restProps} {...forwardContextProp(current.context)} />;
+            }
+            return <div {...restProps} />;
+        } as GridComponents<Context>['Item']
+        : undefined, [hasItem]);
+
     const gridComponents = React.useMemo<GridComponents<Context>>(() => {
-        const CustomList = components?.List;
-        const CustomItem = components?.Item;
-        const CustomScroller = components?.Scroller;
-        const CustomHeader = components?.Header;
-        const CustomFooter = components?.Footer;
-        if (!CustomList && !CustomItem && !CustomScroller && !CustomHeader && !CustomFooter && !listStyle && header === undefined && footer === undefined) {
+        if (!scrollerSlot && !listSlot && !itemSlot && !headerSlot && !footerSlot) {
             return EMPTY_COMPONENTS as GridComponents<Context>;
         }
         const next: GridComponents<Context> = {};
-        if (CustomScroller) next.Scroller = CustomScroller as GridComponents<Context>['Scroller'];
-        if (CustomList || listStyle) {
-            next.List = React.forwardRef<HTMLDivElement, GridListProps>(function VirtualGridList(listProps, ref) {
-                const mergedStyle = listStyle ? { ...listProps.style, ...listStyle } : listProps.style;
-                if (CustomList) return <CustomList {...listProps} ref={ref} style={mergedStyle} />;
-                return <div {...listProps} ref={ref} style={mergedStyle} />;
-            }) as GridComponents<Context>['List'];
-        }
-        if (CustomItem) next.Item = CustomItem as GridComponents<Context>['Item'];
-        if (CustomHeader) next.Header = CustomHeader as GridComponents<Context>['Header'];
-        else if (header !== undefined) next.Header = () => <>{header}</>;
-        if (CustomFooter) next.Footer = CustomFooter as GridComponents<Context>['Footer'];
-        else if (footer !== undefined) next.Footer = () => <>{footer}</>;
+        if (scrollerSlot) next.Scroller = scrollerSlot as GridComponents<Context>['Scroller'];
+        if (listSlot) next.List = listSlot;
+        if (itemSlot) next.Item = itemSlot;
+        if (headerSlot) next.Header = headerSlot as GridComponents<Context>['Header'];
+        if (footerSlot) next.Footer = footerSlot as GridComponents<Context>['Footer'];
         return next;
-    }, [components?.List, components?.Item, components?.Scroller, components?.Header, components?.Footer, listStyle, header, footer]);
+    }, [scrollerSlot, listSlot, itemSlot, headerSlot, footerSlot]);
+
+    const gridContext = React.useMemo(() => ({
+        context,
+        customList,
+        customItem,
+        customScroller,
+        customHeader,
+        customFooter,
+        listStyle,
+        header,
+        footer
+    }), [context, customList, customItem, customScroller, customHeader, customFooter, listStyle, header, footer]);
 
     if (items.length <= threshold) {
         const CustomScroller = components?.Scroller;
@@ -367,7 +545,8 @@ export function VirtualGrid<T, Context = unknown>(props: VirtualGridProps<T, Con
     if (style !== undefined) optionalProps.style = style;
     if (role !== undefined) optionalProps.role = role;
     if (ariaLabel !== undefined) optionalProps['aria-label'] = ariaLabel;
-    if (context !== undefined) optionalProps.context = context;
+    if (gridComponents !== EMPTY_COMPONENTS) optionalProps.context = gridContext;
+    else if (context !== undefined) optionalProps.context = context;
     if (itemKey) optionalProps.computeItemKey = (index: number, item: T) => itemKey(item, index);
     if (overscan !== undefined) optionalProps.overscan = overscan;
     else if (increaseViewportBy === undefined) optionalProps.overscan = DEFAULT_OVERSCAN;

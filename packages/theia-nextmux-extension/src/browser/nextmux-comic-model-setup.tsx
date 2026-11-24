@@ -17,6 +17,7 @@ import {
 import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
 import { DepositVerifiedHint, depositVerifiedHintText, type DepositVerifiedHintAnchor, type DepositVerifiedStore } from './nextmux-deposit-verified';
 import { DEFAULT_VIRTUAL_LIST_THRESHOLD, VirtualList } from './nextmux-virtual-list';
+import { useKeepAliveHostHidden } from './nextmux-comic-canvas-modal';
 import type { VirtuosoHandle } from 'react-virtuoso';
 
 /**
@@ -473,6 +474,7 @@ const ComicSetupModelRow = React.memo(function ComicSetupModelRow(props: {
  * is used meanwhile. Closing flies the panel back into its button; nothing here re-renders the app while it moves.
  */
 export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement {
+    const [keepAliveAnchor, hiddenInKeepAlive] = useKeepAliveHostHidden();
     const t = (key: SetupKey, values?: Readonly<Record<string, string | number>>): string => comicModelSetupText(props.locale, key, values);
     const p = (key: PanelKey, values?: Readonly<Record<string, string | number>>): string => comicModelPanelText(props.locale, key, values);
     const panel = React.useRef<HTMLElement>(null);
@@ -533,14 +535,15 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
     // The panel's height changes with the tab and function shown: keep the flight to the button current.
     React.useLayoutEffect(() => { if (phase === 'open') aim(); }, [phase, active, tab, props.auto]); // eslint-disable-line react-hooks/exhaustive-deps
     React.useLayoutEffect(() => {
-        if (!place) return;
+        if (!place || hiddenInKeepAlive) return;
         aim();
         if (phase !== 'enter') return;
         const frame = requestAnimationFrame(() => requestAnimationFrame(() => { setPhase('open'); panel.current?.focus({ preventScroll: true }); }));
         return () => cancelAnimationFrame(frame);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [place]);
+    }, [place, hiddenInKeepAlive]);
     React.useEffect(() => {
+        if (hiddenInKeepAlive) return;
         // Any press outside the panel (the page, the conversation box, the sidebar) closes it; the press still
         // reaches what was pressed. Other model pickers' own portals (price cards) count as inside.
         const outside = (event: Event): void => {
@@ -554,7 +557,7 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
         window.addEventListener('resize', resize);
         return () => { document.removeEventListener('pointerdown', outside, true); window.removeEventListener('resize', resize); cancelAnimationFrame(frame); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [close, measure]);
+    }, [close, measure, hiddenInKeepAlive]);
     const firstRequest = React.useRef(props.closeRequest);
     React.useEffect(() => { if (props.closeRequest !== firstRequest.current) close(); }, [props.closeRequest, close]);
 
@@ -769,7 +772,7 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
         {step && renderModels(step)}
     </section>;
 
-    return ReactDOM.createPortal(<div className='nmx-model-picker-portal nmx-desktop-widget' dir={rtl ? 'rtl' : 'ltr'} lang={props.locale}>
+    return <><span ref={keepAliveAnchor} hidden />{!hiddenInKeepAlive && ReactDOM.createPortal(<div className='nmx-model-picker-portal nmx-desktop-widget' dir={rtl ? 'rtl' : 'ltr'} lang={props.locale}>
         <div className={`nmx-model-picker-surface nmx-shell ${props.themeClass}`}>
             <section ref={panel} data-comic-model-panel className={`nmx-comic-setup is-${phase} ${props.intro ? 'is-intro' : ''} ${props.auto ? 'is-auto' : 'is-manual'}`} role='dialog' aria-modal='false' aria-labelledby={`${id}-title`}
                 tabIndex={-1} onKeyDown={keyDown} style={place ? { top: place.top, [rtl ? 'left' : 'right']: place.side, maxHeight: place.maxHeight } : { visibility: 'hidden' }}>
@@ -799,7 +802,7 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
                 </footer>
             </section>
         </div>
-    </div>, document.body);
+    </div>, document.body)}</>;
 }
 
 /** The studio header's entry to the panel; it pulses when the panel lands in it. */

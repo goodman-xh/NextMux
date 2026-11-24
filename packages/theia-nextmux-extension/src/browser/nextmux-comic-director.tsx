@@ -14,6 +14,7 @@ import { directorCatalogueText } from './nextmux-comic-director-catalogue-text';
 import { directorText } from './nextmux-comic-director-text';
 import { normalizeDirectorScene } from './nextmux-comic-director-validation';
 import { canvasText } from './nextmux-comic-canvas-text';
+import { useKeepAliveHostHidden } from './nextmux-comic-canvas-modal';
 import { ImeInput, ImeTextarea } from './nextmux-ime-field';
 
 export interface DirectorCapture {
@@ -53,6 +54,7 @@ function VectorFields(props: { readonly label: string; readonly value: SceneVect
 
 /** Full-screen overlay structure; all presentation belongs to Claude's nmx-director-* stylesheet. */
 export function DirectorStage(props: DirectorStageProps): React.ReactElement {
+    const [keepAliveAnchor, hiddenInKeepAlive] = useKeepAliveHostHidden();
     const t = (key: string): string => directorText(props.locale, key);
     const ct = (key: Parameters<typeof canvasText>[1]): string => canvasText(props.locale, key);
     const name = (category: Parameters<typeof directorCatalogueText>[1], key: string): string => directorCatalogueText(props.locale, category, key);
@@ -104,9 +106,15 @@ export function DirectorStage(props: DirectorStageProps): React.ReactElement {
         finally { if (!disposed.current) { setBusy(false); setProgress(0); } }
     };
     React.useEffect(() => {
+        if (hiddenInKeepAlive) {
+            setPlaying(false);
+            setReady(false);
+            return;
+        }
+        if (!host.current) return;
         disposed.current = false; let cancelled = false;
         overlay.current?.focus({ preventScroll: true });
-        void createDirectorRuntime(host.current!, {
+        void createDirectorRuntime(host.current, {
             resolveAssetUrl: props.resolveAssetUrl,
             onSelect: ids => { setSelected(ids); setTab('properties'); },
             onTransform: (key, transform) => transformHandler.current(key, transform),
@@ -117,7 +125,7 @@ export function DirectorStage(props: DirectorStageProps): React.ReactElement {
             try { value.update(sceneRef.current); setReady(true); } catch { setError(t('error')); }
         }, () => { if (!cancelled) setError(t('error')); });
         return () => { cancelled = true; disposed.current = true; recorder.current?.abort(); runtime.current?.dispose(); runtime.current = undefined; };
-    }, []);
+    }, [hiddenInKeepAlive]);
     React.useEffect(() => {
         if (!runtime.current) return;
         try { runtime.current.update(scene, { sample: !editing }); if (!editing) runtime.current.renderFrame(frame); if (!ready) setReady(true); }
@@ -221,7 +229,7 @@ export function DirectorStage(props: DirectorStageProps): React.ReactElement {
     const filtered = (category: Parameters<typeof directorCatalogueText>[1], key: string): boolean => name(category, key).toLocaleLowerCase().includes(search.toLocaleLowerCase());
     // Portaled to the body: two layout-less layers carry the desktop's theme variables (as the model picker does).
     const themeClass = document.querySelector('.nmx-shell.nmx-theme-light') ? 'nmx-theme-light' : 'nmx-theme-dark';
-    return createPortal(<div className='nmx-director-portal nmx-desktop-widget' lang={props.locale}><div className={`nmx-director-surface nmx-shell ${themeClass}`}><div ref={overlay} className='nmx-director-stage' role='dialog' aria-modal='true' aria-label={world ? t('world') : t('stage')} tabIndex={-1}
+    return <><span ref={keepAliveAnchor} hidden />{!hiddenInKeepAlive && createPortal(<div className='nmx-director-portal nmx-desktop-widget' lang={props.locale}><div className={`nmx-director-surface nmx-shell ${themeClass}`}><div ref={overlay} className='nmx-director-stage' role='dialog' aria-modal='true' aria-label={world ? t('world') : t('stage')} tabIndex={-1}
         onPointerDownCapture={event => {
             const target = event.target as Element | null;
             if (pendingTemplate && !busy && !target?.closest('.nmx-director-template-confirm')) setPendingTemplate(undefined);
@@ -358,7 +366,7 @@ export function DirectorStage(props: DirectorStageProps): React.ReactElement {
             })}>{t('apply')}</button>
             <button type='button' onClick={() => { const url = URL.createObjectURL(new Blob([json], { type: 'application/json' })); const link = document.createElement('a'); link.href = url; link.download = 'director-scene.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }}>{t('download')}</button>
             <button type='button' onClick={() => setJson(undefined)}>{ct('cancel')}</button></section>}
-    </div></div></div>, document.body);
+    </div></div></div>, document.body)}</>;
 }
 
 export function emptyDirectorScene(): SceneDocument { return createSceneDocument(); }

@@ -10,6 +10,37 @@ const THEME_CUSTOM_PROPS = [
     '--cv-border', '--cv-border-strong', '--cv-text', '--cv-muted'
 ];
 
+/**
+ * Tracks whether the enclosing `.nmx-keepalive-host` is currently backgrounded (`.nmx-keepalive-hidden`).
+ * Callers that portal overlays outside the host must render `<span ref={anchor} hidden />` in-place
+ * and suppress their portal while `hidden` is true so backgrounded overlays never leak across sections.
+ */
+export function useKeepAliveHostHidden(): readonly [React.RefObject<HTMLSpanElement>, boolean] {
+    const anchor = React.useRef<HTMLSpanElement>(null);
+    const [hidden, setHidden] = React.useState(false);
+    React.useLayoutEffect(() => {
+        const host = anchor.current?.closest<HTMLElement>('.nmx-keepalive-host');
+        if (!host) {
+            setHidden(false);
+            return;
+        }
+        const sync = (): void => {
+            const next = host.classList.contains('nmx-keepalive-hidden');
+            setHidden(prev => (prev === next ? prev : next));
+        };
+        sync();
+        if (typeof MutationObserver === 'undefined') return;
+        const observer = new MutationObserver(sync);
+        observer.observe(host, { attributes: true, attributeFilter: ['class'] });
+        return () => observer.disconnect();
+    }, []);
+    React.useEffect(() => {
+        notifyModalChromeChanged();
+        return () => notifyModalChromeChanged();
+    }, [hidden]);
+    return [anchor, hidden] as const;
+}
+
 /** Canvas modal editors must sit above a form that has moved outside the desk's stacking context. */
 export function CanvasModalLayer(props: { readonly locale: string; readonly children: React.ReactNode; readonly inPlace?: boolean; readonly initialFocusSelector?: string }): React.ReactElement {
     const anchor = React.useRef<HTMLSpanElement>(null), host = React.useRef<HTMLDialogElement>(null);

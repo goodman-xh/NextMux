@@ -38113,7 +38113,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         const applyTransition = (): void => {
             this.stopVoiceInput(false);
-            if (section !== 'comic') this.clearComicLibrarySurfaces();
+            if (section !== 'comic') {
+                this.clearComicLibrarySurfaces();
+                this.comicModelsSheetOpen = false;
+                this.comicStudioIsolatedPicker = undefined;
+                // The create/studio dialog stays as it is: it renders inside the Comic keep-alive host (hidden with
+                // it, never over Coding), and closing it here would make the next render start a fresh, empty form
+                // (renderComicStudioModal) — the prompt, files and a running generation's takes gone on return.
+                this.comicRelayPickerOpen = false;
+                this.comicModelPickerOpen = false;
+            }
             if (this.activeSection === 'settings' && this.settingsPanel === 'system' && section !== 'settings') {
                 this.stopMicrophoneCapture(false);
             }
@@ -51388,7 +51397,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 this.dismissFloatingSurfaces(event.target);
             }} onFocusCapture={event => this.captureEditingCommandTarget(event.target)} onChange={this.commitNativeChoice} onContextMenu={event => { this.handleChatContextMenu(event); this.handleLibraryChatContextMenu(event); }}>
                 {/* The last line of defence: whatever part breaks without a boundary of its own, the window shows a card, never goes blank. */}
-                {this.guard('window', () => this.renderWindowParts(), undefined, 'section')}
+                <PanelBoundary key='guard:window' name='window' locale={this.desktopLocale} variant='section' render={() => this.renderWindowParts()} />
             </div>;
         } finally {
             this.inRenderPass = false;
@@ -51475,37 +51484,29 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onFinish={() => this.setOnboardingStep('done')} />}
             {(this.activeSection !== 'coding' || this.codingPanel !== 'thread' || Boolean(this.activeVisualTab?.()) || Boolean(this.activeCouncilChildId)) && this.renderGlobalTransientToast?.()}
         </>;
+        const renderTitlebar = (): React.ReactNode => <>
+            <div className='nmx-titlebar-actions' aria-label='窗口导航' onMouseDown={event => event.stopPropagation()}>
+                <button data-context-panel-toggle aria-label={this.contextPanelCollapsed ? '展开侧栏' : '收起侧栏'} title={this.contextPanelCollapsed ? '展开侧栏' : '收起侧栏'} onClick={() => this.toggleContextPanel()}><i className={`codicon codicon-layout-sidebar-left${this.contextPanelCollapsed ? '' : '-off'}`}></i></button>
+                <button aria-label='返回上一页' title={backTitle} data-nmx-tip={backTitle} disabled={typeof this.canNavigateBack === 'function' ? !this.canNavigateBack() : !this.hasDismissibleSurface() && this.navigationBackStack.length === 0} onClick={() => this.commandNavigateBack()}><i className='codicon codicon-arrow-left'></i></button>
+                <button aria-label='前进到下一页' title={forwardTitle} data-nmx-tip={forwardTitle} disabled={typeof this.canNavigateForward === 'function' ? !this.canNavigateForward() : this.navigationForwardStack.length === 0} onClick={() => this.commandNavigateForward()}><i className='codicon codicon-arrow-right'></i></button>
+                {this.guard('window-menu', () => this.renderConversationWindowMenu(), undefined, 'section')}
+            </div>
+            {/* Every part of the window has its own boundary: one broken part shows a card, never a blank window. */}
+            {this.guard('titlebar', () => this.renderTitlebarPrimaryNavigation(), undefined, 'section')}
+            {this.guard('work-context-titlebar', () => this.renderWorkContextTitlebar(), undefined, 'section')}
+        </>;
         return <>
                 <div className='nmx-titlebar-drag-region' aria-hidden='true'></div>
-                {this.island ? this.island('titlebar', () => <>
-                    <div className='nmx-titlebar-actions' aria-label='窗口导航' onMouseDown={event => event.stopPropagation()}>
-                        <button data-context-panel-toggle aria-label={this.contextPanelCollapsed ? '展开侧栏' : '收起侧栏'} title={this.contextPanelCollapsed ? '展开侧栏' : '收起侧栏'} onClick={() => this.toggleContextPanel()}><i className={`codicon codicon-layout-sidebar-left${this.contextPanelCollapsed ? '' : '-off'}`}></i></button>
-                        <button aria-label='返回上一页' title={backTitle} data-nmx-tip={backTitle} disabled={typeof this.canNavigateBack === 'function' ? !this.canNavigateBack() : !this.hasDismissibleSurface() && this.navigationBackStack.length === 0} onClick={() => this.commandNavigateBack()}><i className='codicon codicon-arrow-left'></i></button>
-                        <button aria-label='前进到下一页' title={forwardTitle} data-nmx-tip={forwardTitle} disabled={typeof this.canNavigateForward === 'function' ? !this.canNavigateForward() : this.navigationForwardStack.length === 0} onClick={() => this.commandNavigateForward()}><i className='codicon codicon-arrow-right'></i></button>
-                        {this.guard('window-menu', () => this.renderConversationWindowMenu(), undefined, 'section')}
-                    </div>
-                    {/* Every part of the window has its own boundary: one broken part shows a card, never a blank window. */}
-                    {this.guard('titlebar', () => this.renderTitlebarPrimaryNavigation(), undefined, 'section')}
-                    {this.guard('work-context-titlebar', () => this.renderWorkContextTitlebar(), undefined, 'section')}
-                </>, 'section') : <>
-                    <div className='nmx-titlebar-actions' aria-label='窗口导航' onMouseDown={event => event.stopPropagation()}>
-                        <button data-context-panel-toggle aria-label={this.contextPanelCollapsed ? '展开侧栏' : '收起侧栏'} title={this.contextPanelCollapsed ? '展开侧栏' : '收起侧栏'} onClick={() => this.toggleContextPanel()}><i className={`codicon codicon-layout-sidebar-left${this.contextPanelCollapsed ? '' : '-off'}`}></i></button>
-                        <button aria-label='返回上一页' title={backTitle} data-nmx-tip={backTitle} disabled={typeof this.canNavigateBack === 'function' ? !this.canNavigateBack() : !this.hasDismissibleSurface() && this.navigationBackStack.length === 0} onClick={() => this.commandNavigateBack()}><i className='codicon codicon-arrow-left'></i></button>
-                        <button aria-label='前进到下一页' title={forwardTitle} data-nmx-tip={forwardTitle} disabled={typeof this.canNavigateForward === 'function' ? !this.canNavigateForward() : this.navigationForwardStack.length === 0} onClick={() => this.commandNavigateForward()}><i className='codicon codicon-arrow-right'></i></button>
-                        {this.guard('window-menu', () => this.renderConversationWindowMenu(), undefined, 'section')}
-                    </div>
-                    {this.guard('titlebar', () => this.renderTitlebarPrimaryNavigation(), undefined, 'section')}
-                    {this.guard('work-context-titlebar', () => this.renderWorkContextTitlebar(), undefined, 'section')}
-                </>}
-                {!this.contextPanelCollapsed && this.guard('sidebar', () => this.renderContextPanel(), undefined, 'section')}
+                {this.island ? this.island('titlebar', renderTitlebar, 'section') : renderTitlebar()}
+                {!this.contextPanelCollapsed && (this.island ? this.island('sidebar', () => this.renderContextPanel(), 'section') : this.guard('sidebar', () => this.renderContextPanel(), undefined, 'section'))}
                 {!this.contextPanelCollapsed && (this.activeSection === 'coding' || this.activeSection === 'comic') && <div className='nmx-context-panel-resize' role='separator' tabIndex={0} aria-label='调整项目与对话宽度' aria-orientation='vertical' aria-controls='nmx-context-panel nmx-workspace' aria-valuemin={NextMuxDesktopWidget.CONTEXT_PANEL_MIN_WIDTH} aria-valuemax={this.contextPanelMaximumWidth()} aria-valuenow={this.contextPanelWidth} onPointerDown={event => this.beginContextPanelResize(event)} onKeyDown={event => this.handlePaneResizeKey(event, 'context')}></div>}
                 <section id='nmx-workspace' className='nmx-workspace' aria-live='polite'>
-                    {this.activeSection === 'models' && (this.island ? this.island('model-center', () => this.renderModelCenter(), 'section') : this.guard('models', () => this.renderModelCenter(), undefined, 'section'))}
-                    {this.activeSection === 'coding' && this.guard('coding', () => this.renderCodingWorkbench(), undefined, 'section', 'coding-thread', 'terminal', 'coding-popovers', 'coding-modals')}
+                    {this.activeSection === 'models' && (this.island ? this.island('model-center', () => this.renderModelCenter(), 'section', undefined, 'models') : this.guard('models', () => this.renderModelCenter(), undefined, 'section'))}
+                    {this.activeSection === 'coding' && (this.island ? this.island('coding', () => this.renderCodingWorkbench(), 'section', undefined, 'coding-thread', 'terminal', 'coding-popovers', 'coding-modals', 'popovers', 'modals') : this.guard('coding', () => this.renderCodingWorkbench(), undefined, 'section'))}
                     {comicMounted && <div className={comicActive ? 'nmx-keepalive-host' : 'nmx-keepalive-host nmx-keepalive-hidden'} aria-hidden={!comicActive || undefined} ref={node => { if (node) node.inert = !comicActive; }}>
-                        {this.keepAliveIsland ? this.keepAliveIsland('comic', comicActive, () => this.renderComicWorkbench(), 'comic-popovers', 'comic-thread', 'comic-composer') : this.guard('comic', () => this.renderComicWorkbench(), undefined, 'section')}
+                        {this.keepAliveIsland ? this.keepAliveIsland('comic', comicActive, () => this.renderComicWorkbench(), 'comic-popovers', 'comic-thread', 'comic-composer', 'popovers', 'modals') : this.guard('comic', () => this.renderComicWorkbench(), undefined, 'section')}
                     </div>}
-                    {this.activeSection === 'settings' && this.guard('settings', () => this.renderSettings(), undefined, 'section')}
+                    {this.activeSection === 'settings' && (this.island ? this.island('settings', () => this.renderSettings(), 'section', undefined, 'coding-popovers', 'modals') : this.guard('settings', () => this.renderSettings(), undefined, 'section'))}
                 </section>
                 {this.keepAliveIsland ? this.keepAliveIsland('work-context', Boolean(workContextActive), () => this.renderWorkContext()) : this.guard('work-context', () => this.renderWorkContext(), undefined, 'section')}
                 {this.island ? this.island('modals', renderOverlayModals, 'overlay') : renderOverlayModals()}
@@ -51533,10 +51534,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /**
      * A part of the app that cannot take the rest down with it: a render error there shows a small card (close /
      * try again) instead of unmounting the whole widget and leaving a blank window. onDismiss closes what opened it.
+     * Crash-only boundary without `version` memoization so `updateRegion` updates inside islanded parents are never swallowed.
      */
-    protected guard(name: string, render: () => React.ReactNode, onDismiss?: () => void, variant: 'overlay' | 'section' = 'overlay', ...deps: readonly string[]): React.ReactNode {
-        const version = typeof this.getRegionVersion === 'function' ? this.getRegionVersion(name, ...deps) : undefined;
-        return <PanelBoundary key={`guard:${name}`} name={name} locale={this.desktopLocale} variant={variant} {...(version !== undefined ? { version } : {})} render={render} {...(onDismiss ? { onDismiss } : {})} />;
+    protected guard(name: string, render: () => React.ReactNode, onDismiss?: () => void, variant: 'overlay' | 'section' = 'overlay'): React.ReactNode {
+        return <PanelBoundary key={`guard:${name}`} name={name} locale={this.desktopLocale} variant={variant} render={render} {...(onDismiss ? { onDismiss } : {})} />;
     }
 
     /** Closes a comic sheet whose render failed (the panel's own open flag). */
@@ -51795,7 +51796,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
             {this.relaySourceTab !== 'my-api' && !this.platformSession?.linked && <p className='nmx-relay-sign-in-note' role='note' title={relayText(this.desktopLocale, 'signInNotice')}>
                 <i className='codicon codicon-account' aria-hidden='true'></i><span>{relayText(this.desktopLocale, 'signInNotice')}</span></p>}
             <div className={`nmx-relay-options is-${this.relaySourceTab}`} id='nmx-relay-source-panel' role='tabpanel' aria-labelledby={`nmx-relay-source-${this.relaySourceTab}`}
-                ref={el => { this.relayOptionsScrollEl = el; }}
+                ref={(this as { __relayScrollRef?: (el: HTMLElement | null) => void }).__relayScrollRef ??= el => {
+                    const changed = !this.relayOptionsScrollEl && el;
+                    this.relayOptionsScrollEl = el;
+                    if (changed && el) {
+                        queueMicrotask(() => {
+                            if (!this.isDisposed && this.relayOptionsScrollEl === el) {
+                                if (this.updateRegion) this.updateRegion(['popovers', 'coding-popovers', 'comic-popovers', 'modals']);
+                                else this.update();
+                            }
+                        });
+                    }
+                }}
                 onScroll={event => this.handlePublicMerchantScroll(event)}>{directoryLoading && <div className='nmx-relay-loading-center' role='status'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i><span>{relayText(this.desktopLocale, 'directoryLoading')}</span></div>}{savedOfficialRelayUnavailable && <div className='nmx-route-empty is-warning'><span>{relayText(this.desktopLocale, 'savedRelayUnavailable')}</span></div>}
             {/* Column titles only over rows: an empty list shows its message alone, not five orphaned titles above it. */}
             {(this.relaySourceTab === 'merchant' || this.relaySourceTab === 'favorite') && relayOptions.length > 0 && <div className='nmx-relay-grid-head' aria-hidden='true'>
@@ -59072,7 +59084,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     {this.renderScheduleDialog()}
                     {this.renderCouncilModals()}
                 </>;
-                return this.island ? this.island('coding-modals', renderCodingModals, 'overlay') : renderCodingModals();
+                return this.island ? this.island('coding-modals', renderCodingModals, 'overlay', undefined, 'coding-popovers', 'modals') : renderCodingModals();
             })()}
         </>;
     }
