@@ -13,7 +13,11 @@ import {
     isCanvasDurationValid, reconcileCanvasGenerationParameters, resolveCanvasGenerationOptions, validateCanvasGenerationParameters,
     type CanvasCapabilityInput, type CanvasCapabilityIssue, type CanvasDurationRule, type CanvasModelCapability
 } from '@nextmux/comic-core/canvas-capabilities';
-import { ImeInput, ImeTextarea } from './nextmux-ime-field';
+import { ImeInput, ImeTextarea, isImeFieldComposing } from './nextmux-ime-field';
+import {
+    computeCulledCanvasNodeIds, flushPendingCanvasEdits, registerPendingCanvasEditFlush, sameCulledNodeIdSet,
+    type CanvasCullingNodeInput, type CanvasCullingViewport, type CanvasCullingViewportSize
+} from './nextmux-comic-canvas-culling';
 import {
     canvasAlternativeRoles, canvasConnectTargets, canvasCurrentVersion, canvasKindIcon, canvasLatestJob, canvasNodeBusy, canvasOutputKind, canvasPendingUpstream,
     canvasId, canvasVersionReady, connectCanvasNodes, canvasMediaCardSize, canvasBatchPlacementOffset, createCanvasNode, deleteFromCanvas, duplicateCanvasNodes, placeCanvasNode, rerouteCanvasEdge,
@@ -349,6 +353,130 @@ function sameStringArray(left: readonly string[], right: readonly string[]): boo
 
 const CanvasContext = React.createContext<CanvasContextValue | undefined>(undefined);
 const CanvasBoardContext = React.createContext<CanvasBoardContextValue | undefined>(undefined);
+const PANEL_NODE_KINDS: ReadonlySet<CanvasNode['kind']> = new Set(['imageGen', 'videoGen', 'frameExtract', 'composition']);
+
+class CanvasCullingStore {
+    private viewport: CanvasCullingViewport;
+    private viewportSize: CanvasCullingViewportSize = { width: 0, height: 0 };
+    private nodes: readonly CanvasCullingNodeInput[] = [];
+    private selectedIds: ReadonlySet<string> = new Set();
+    private draggedIds: ReadonlySet<string> = new Set();
+    private focusedIds: Set<string> = new Set();
+    private editingIds: ReadonlySet<string> = new Set();
+    private playingCounts: Map<string, number> = new Map();
+    private playingIds: Set<string> = new Set();
+    private culledIds: Set<string> = new Set();
+    private listeners: Map<string, Set<() => void>> = new Map();
+
+    constructor(initialViewport: CanvasCullingViewport) {
+        this.viewport = initialViewport.zoom > 0 ? initialViewport : { x: 0, y: 0, zoom: 1 };
+    }
+
+    isCulled(id: string): boolean {
+        return this.culledIds.has(id);
+    }
+
+    subscribe(id: string, listener: () => void): () => void {
+        let bucket = this.listeners.get(id);
+        if (!bucket) {
+            bucket = new Set();
+            this.listeners.set(id, bucket);
+        }
+        bucket.add(listener);
+        return () => {
+            const current = this.listeners.get(id);
+            if (!current) return;
+            current.delete(listener);
+            if (current.size === 0) this.listeners.delete(id);
+        };
+    }
+
+    setViewport(viewport: CanvasCullingViewport): void {
+        if (viewport.x === this.viewport.x && viewport.y === this.viewport.y && viewport.zoom === this.viewport.zoom) return;
+        this.viewport = viewport;
+        this.recompute();
+    }
+
+    setViewportSize(size: CanvasCullingViewportSize): void {
+        if (size.width === this.viewportSize.width && size.height === this.viewportSize.height) return;
+        this.viewportSize = size;
+        this.recompute();
+    }
+
+    setInputs(inputs: {
+        readonly nodes: readonly CanvasCullingNodeInput[];
+        readonly selectedIds: ReadonlySet<string>;
+        readonly draggedIds: ReadonlySet<string>;
+        readonly editingIds: ReadonlySet<string>;
+    }): void {
+        this.nodes = inputs.nodes;
+        this.selectedIds = inputs.selectedIds;
+        this.draggedIds = inputs.draggedIds;
+        this.editingIds = inputs.editingIds;
+        const alive = new Set(inputs.nodes.map(node => node.id));
+        for (const id of [...this.focusedIds]) if (!alive.has(id)) this.focusedIds.delete(id);
+        for (const id of [...this.playingIds]) {
+            if (!alive.has(id)) {
+                this.playingIds.delete(id);
+                this.playingCounts.delete(id);
+            }
+        }
+        this.recompute();
+    }
+
+    setFocusedIds(ids: ReadonlySet<string>): void {
+        if (sameCulledNodeIdSet(this.focusedIds, ids)) return;
+        this.focusedIds = new Set(ids);
+        this.recompute();
+    }
+
+    setPlayingIds(ids: ReadonlySet<string>): void {
+        if (sameCulledNodeIdSet(this.playingIds, ids)) return;
+        this.playingIds = new Set(ids);
+        this.playingCounts.clear();
+        for (const id of ids) this.playingCounts.set(id, 1);
+        this.recompute();
+    }
+
+    private recompute(): void {
+        const next = computeCulledCanvasNodeIds({
+            nodes: this.nodes,
+            viewport: this.viewport,
+            viewportSize: this.viewportSize,
+            selectedIds: this.selectedIds,
+            draggedIds: this.draggedIds,
+            focusedIds: this.focusedIds,
+            editingIds: this.editingIds,
+            playingIds: this.playingIds
+        });
+        if (sameCulledNodeIdSet(this.culledIds, next)) return;
+        const prev = this.culledIds;
+        this.culledIds = next;
+        const changed: string[] = [];
+        for (const id of prev) if (!next.has(id)) changed.push(id);
+        for (const id of next) if (!prev.has(id)) changed.push(id);
+        for (const id of changed) {
+            const bucket = this.listeners.get(id);
+            if (!bucket) continue;
+            for (const listener of [...bucket]) listener();
+        }
+    }
+}
+
+const CanvasCullingContext = React.createContext<CanvasCullingStore | undefined>(undefined);
+const CanvasCullingSubscriber = React.memo(function CanvasCullingSubscriber({ store }: { readonly store: CanvasCullingStore }): null {
+    const viewport = useViewport();
+    React.useLayoutEffect(() => {
+        store.setViewport(viewport);
+    }, [store, viewport.x, viewport.y, viewport.zoom]);
+    return null;
+});
+function useIsCanvasNodeCulled(nodeId: string): boolean {
+    const store = React.useContext(CanvasCullingContext);
+    const subscribe = React.useCallback((listener: () => void) => store ? store.subscribe(nodeId, listener) : () => undefined, [store, nodeId]);
+    const getSnapshot = React.useCallback(() => store ? store.isCulled(nodeId) : false, [store, nodeId]);
+    return React.useSyncExternalStore(subscribe, getSnapshot, () => false);
+}
 const now = (): string => new Date().toISOString();
 
 /** Keep the exact compiled prefix beside the text, including its single body separator. */
@@ -432,12 +560,12 @@ function MediaPreview(props: { readonly node: CanvasNode; readonly url: (uri: st
     if (!version || !canvasVersionReady(version)) return null;
     const src = props.url(version.uri);
     if (version.kind === 'video') {
-        return <video className='nmx-board-media' src={src} muted loop playsInline preload='metadata'
+        return <video className='nmx-board-media' src={src} muted loop playsInline preload='none'
             onMouseEnter={event => { void event.currentTarget.play().catch(() => undefined); }}
             onMouseLeave={event => { event.currentTarget.pause(); }}
             onDoubleClick={() => props.onOpen(version.uri, 'video')} />;
     }
-    if (version.kind === 'audio') return <audio className='nmx-board-audio' src={src} controls preload='metadata' />;
+    if (version.kind === 'audio') return <audio className='nmx-board-audio' src={src} controls preload='none' />;
     return <img className='nmx-board-media' src={src} alt='' loading='lazy' decoding='async' draggable={false} onDoubleClick={() => props.onOpen(version.uri, 'image')} />;
 }
 const MemoMediaPreview = React.memo(MediaPreview);
@@ -464,6 +592,7 @@ function CanvasCard(flow: NodeProps): React.ReactElement | null {
     const { t, locale } = board;
     const data = flow.data as CanvasCardData | undefined;
     const node = data?.node;
+    const culled = useIsCanvasNodeCulled(node?.id ?? '');
     if (!node || !data) return null;
     const { status, hasToolProgress, toolProgress, hasReference, isSingle, isRenaming, title } = data;
     const generation = node.kind === 'imageGen' || node.kind === 'videoGen';
@@ -472,7 +601,8 @@ function CanvasCard(flow: NodeProps): React.ReactElement | null {
     const output = canvasOutputKind(node);
     const origin = originLabel(t, node);
     const statusText = status.key === 'waiting' ? t('status.waiting') : t(`status.${status.key}` as CanvasTextKey);
-    return <div className={`nmx-board-node is-${node.kind}${flow.selected ? ' is-selected' : ''}${status.busy ? ' is-busy' : ''}${status.key === 'failed' ? ' is-failed' : ''}${node.orphaned ? ' is-orphaned' : ''}`}
+    const effectiveCulled = culled && !flow.selected && !isRenaming;
+    return <div className={`nmx-board-node is-${node.kind}${flow.selected ? ' is-selected' : ''}${effectiveCulled ? ' is-culled' : ''}${status.busy ? ' is-busy' : ''}${status.key === 'failed' ? ' is-failed' : ''}${node.orphaned ? ' is-orphaned' : ''}`}
         onContextMenu={event => board.menuFor(event, node.id)}>
         <header className='nmx-board-node-title'>
             <i className={`codicon codicon-${canvasKindIcon(node.kind)}`} aria-hidden='true'></i>
@@ -491,28 +621,30 @@ function CanvasCard(flow: NodeProps): React.ReactElement | null {
             {generation && (status.busy || status.key === 'failed') && <small className={`nmx-board-node-state is-${status.key}`}>{statusText}</small>}
         </header>
         <div className='nmx-board-node-body'>
-            {(node.kind === 'sceneComposer' || node.kind === 'world') && <button type='button' className='nmx-director-open nodrag' onClick={() => board.openDirector(node.id)}>
-                {directorText(locale, node.kind === 'world' ? 'world' : 'stage')}</button>}
-            {node.kind === 'text' && <TextBody node={node} />}
-            {node.kind === 'character' && <CharacterBody node={node} />}
-            {node.kind !== 'text' && node.kind !== 'character' && <>
-                <MemoMediaPreview node={node} url={board.mediaUrl} onOpen={board.open} />
-                {!version && <div className='nmx-board-placeholder'>
-                    <i className={`codicon codicon-${canvasKindIcon(node.kind)}`} aria-hidden='true'></i>
-                    <span>{node.kind === 'frameExtract' ? t('extract') : hasReference ? comicAssetLibraryText(locale, 'referenceAdded') : generation ? t('promptPlaceholder') : t('noResult')}</span>
-                </div>}
-                {hasToolProgress && <div className='nmx-board-progress' role='status'>
-                    <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>
-                    <span>{toolText(locale, 'running')}{toolProgress !== undefined ? ` ${Math.round((toolProgress ?? 0) * 100)}%` : ''}</span>
-                </div>}
-                {status.busy && <div className='nmx-board-progress' role='status'>
-                    <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>
-                    <span>{statusText}{status.progress !== undefined ? ` ${Math.round(status.progress)}%` : ''}</span>
-                </div>}
-                {status.key === 'failed' && status.error && <div className='nmx-board-error' title={status.error} data-nmx-literal>{status.error}</div>}
+            {!effectiveCulled && <>
+                {(node.kind === 'sceneComposer' || node.kind === 'world') && <button type='button' className='nmx-director-open nodrag' onClick={() => board.openDirector(node.id)}>
+                    {directorText(locale, node.kind === 'world' ? 'world' : 'stage')}</button>}
+                {node.kind === 'text' && <TextBody node={node} />}
+                {node.kind === 'character' && <CharacterBody node={node} />}
+                {node.kind !== 'text' && node.kind !== 'character' && <>
+                    <MemoMediaPreview node={node} url={board.mediaUrl} onOpen={board.open} />
+                    {!version && <div className='nmx-board-placeholder'>
+                        <i className={`codicon codicon-${canvasKindIcon(node.kind)}`} aria-hidden='true'></i>
+                        <span>{node.kind === 'frameExtract' ? t('extract') : hasReference ? comicAssetLibraryText(locale, 'referenceAdded') : generation ? t('promptPlaceholder') : t('noResult')}</span>
+                    </div>}
+                    {hasToolProgress && <div className='nmx-board-progress' role='status'>
+                        <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>
+                        <span>{toolText(locale, 'running')}{toolProgress !== undefined ? ` ${Math.round((toolProgress ?? 0) * 100)}%` : ''}</span>
+                    </div>}
+                    {status.busy && <div className='nmx-board-progress' role='status'>
+                        <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>
+                        <span>{statusText}{status.progress !== undefined ? ` ${Math.round(status.progress)}%` : ''}</span>
+                    </div>}
+                    {status.key === 'failed' && status.error && <div className='nmx-board-error' title={status.error} data-nmx-literal>{status.error}</div>}
+                </>}
+                {node.orphaned && <div className='nmx-board-orphaned'>{t('orphaned')}</div>}
+                {flow.selected && <MemoVersionSwitcher node={node} t={t} selectVersion={board.selectVersion} />}
             </>}
-            {node.orphaned && <div className='nmx-board-orphaned'>{t('orphaned')}</div>}
-            {flow.selected && <MemoVersionSwitcher node={node} t={t} selectVersion={board.selectVersion} />}
         </div>
         {takesInput && <Handle type='target' position={Position.Left} className='nmx-board-handle is-in' />}
         {output !== 'group' && <Handle type='source' position={Position.Right} className={`nmx-board-handle is-out is-${output}`} />}
@@ -528,23 +660,42 @@ function CanvasCard(flow: NodeProps): React.ReactElement | null {
     </div>;
 }
 
+/** Isolated viewport subscriber so panning/zooming moves only the anchored panel container, never redrawing its form. */
+function NodePanelPositioner(props: {
+    readonly nodeId: string;
+    readonly nodeX: number;
+    readonly nodeY: number;
+    readonly nodeWidth: number;
+    readonly nodeHeight: number;
+    readonly hidden: boolean;
+    readonly children: React.ReactNode;
+}): React.ReactElement {
+    const { x, y, zoom } = useViewport();
+    const left = (props.nodeX + props.nodeWidth / 2) * zoom + x;
+    const top = (props.nodeY + props.nodeHeight) * zoom + y + 10;
+    return <div className='nmx-board-panel-layer nodrag nopan nowheel' data-node-panel={props.nodeId}
+        data-interacting={props.hidden ? 'true' : 'false'} style={{ left, top, visibility: props.hidden ? 'hidden' : undefined }}>
+        {props.children}
+    </div>;
+}
+
 /** Match the reference NodeToolbar: screen-sized form, centered below its owner, no viewport clamping. */
 function NodePanelOverlay(props: { readonly nodeId: string; readonly hidden: boolean }): React.ReactElement | null {
     const context = React.useContext(CanvasContext)!;
-    const { x, y, zoom } = useViewport();
     const node = context.nodes.get(props.nodeId);
-    if (!node || !(node.kind === 'imageGen' || node.kind === 'videoGen' || node.kind === 'frameExtract' || node.kind === 'composition')) return null;
-    const left = (node.position.x + node.size.width / 2) * zoom + x;
-    const top = (node.position.y + node.size.height) * zoom + y + 10;
-    return <div className='nmx-board-panel-layer nodrag nopan nowheel' data-node-panel={node.id}
-        data-interacting={props.hidden ? 'true' : 'false'} style={{ left, top, visibility: props.hidden ? 'hidden' : undefined }}>
-        {node.kind === 'frameExtract' ? <FramePanel node={node} /> : <CanvasFloatingForm locale={context.props.locale} title={node.title || context.t(`kind.${node.kind}` as CanvasTextKey)}>
-        {node.kind === 'videoGen' && node.payload.continuity && <CanvasContinuitySummary locale={context.props.locale} canvas={context.props.canvas} nodeId={node.id} record={node.payload.continuity}
-            onRemove={() => { const { continuity: _removed, ...payload } = node.payload; context.change({ ...context.props.canvas,
-                nodes: context.props.canvas.nodes.map(item => item.id === node.id ? { ...node, payload } : item) }, true); }} />}
-        {node.kind === 'composition' ? <CompositionPanel node={node} /> : <GenerationPanel node={node} />}
-        </CanvasFloatingForm>}
-    </div>;
+    if (!node || !PANEL_NODE_KINDS.has(node.kind)) return null;
+    const body = node.kind === 'frameExtract'
+        ? <FramePanel node={node} />
+        : <CanvasFloatingForm locale={context.props.locale} title={node.title || context.t(`kind.${node.kind}` as CanvasTextKey)}>
+            {node.kind === 'videoGen' && node.payload.continuity && <CanvasContinuitySummary locale={context.props.locale} canvas={context.props.canvas} nodeId={node.id} record={node.payload.continuity}
+                onRemove={() => { const { continuity: _removed, ...payload } = node.payload; context.change({ ...context.props.canvas,
+                    nodes: context.props.canvas.nodes.map(item => item.id === node.id ? { ...node, payload } : item) }, true); }} />}
+            {node.kind === 'composition' ? <CompositionPanel node={node} /> : node.kind === 'imageGen' || node.kind === 'videoGen' ? <GenerationPanel node={node} /> : null}
+        </CanvasFloatingForm>;
+    return <NodePanelPositioner nodeId={node.id} nodeX={node.position.x} nodeY={node.position.y}
+        nodeWidth={node.size.width} nodeHeight={node.size.height} hidden={props.hidden}>
+        {body}
+    </NodePanelPositioner>;
 }
 
 function TextBody(props: { readonly node: Extract<CanvasNode, { kind: 'text' }> }): React.ReactElement {
@@ -552,28 +703,57 @@ function TextBody(props: { readonly node: Extract<CanvasNode, { kind: 'text' }> 
     return <CanvasContext.Provider value={board.textContext}><InlineCanvasText node={props.node} /></CanvasContext.Provider>;
 }
 
-/** Edit the actual card. Each focus session is one undo step; every committed IME change is saved. */
-function InlineCanvasText({ node }: { readonly node: Extract<CanvasNode, { kind: 'text' | 'imageGen' | 'videoGen' }> }): React.ReactElement {
+/** Edit the actual card locally first with 250ms debounce, flushing synchronously on blur/unmount/lifecycle events. */
+function InlineCanvasText({ node, onHasTextChange }: {
+    readonly node: Extract<CanvasNode, { kind: 'text' | 'imageGen' | 'videoGen' }>;
+    readonly onHasTextChange?: (hasText: boolean) => void;
+}): React.ReactElement {
     const context = React.useContext(CanvasContext)!;
     const current = React.useRef(context); current.current = context;
     const recorded = React.useRef(false);
     const composing = React.useRef(false);
+    const focused = React.useRef(false);
+    const dirty = React.useRef(false);
+    const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+    const onHasTextRef = React.useRef(onHasTextChange); onHasTextRef.current = onHasTextChange;
     const value = node.kind === 'text' ? node.payload.text : node.kind === 'videoGen' ? deriveCanvasCameraPrompt(node.payload.prompt,
         (context.props.canvas.settings.nodeCamera as Readonly<Record<string, unknown>> | undefined)?.[node.id]).body : node.payload.prompt;
     const published = React.useRef(value);
     const pending = React.useRef<string[]>([]);
-    const [draft, setDraft] = React.useState(value);
+    const [syncedValue, setSyncedValue] = React.useState(value);
+    const lastNotifiedHasText = React.useRef(Boolean(value.trim()));
+    const notifyHasText = React.useCallback((text: string): void => {
+        const nextHas = Boolean(text.trim());
+        if (nextHas === lastNotifiedHasText.current) return;
+        lastNotifiedHasText.current = nextHas;
+        onHasTextRef.current?.(nextHas);
+    }, []);
     React.useEffect(() => {
+        const elementValue = textareaRef.current?.value;
         const acknowledged = pending.current.lastIndexOf(value);
         if (acknowledged >= 0) {
             pending.current.splice(0, acknowledged + 1);
             // Widget renders are batched. An acknowledgement of an earlier
             // keystroke must not replace text entered since that render began.
             if (pending.current.length) return;
-        } else pending.current = [];
-        published.current = value; setDraft(value);
-    }, [value]);
-    const commit = (text: string): void => {
+            published.current = value;
+            if (elementValue === undefined || elementValue === value) {
+                dirty.current = false;
+                setSyncedValue(value);
+                notifyHasText(value);
+            }
+            return;
+        }
+        if (composing.current || (focused.current && dirty.current && value === published.current)) {
+            return;
+        }
+        pending.current = [];
+        dirty.current = false;
+        published.current = value;
+        setSyncedValue(value);
+        notifyHasText(value);
+    }, [value, notifyHasText]);
+    const commit = React.useCallback((text: string): void => {
         if (text === published.current) return;
         const owner = current.current, canvas = owner.props.canvas;
         const latest = canvas.nodes.find(item => item.id === node.id);
@@ -589,18 +769,49 @@ function InlineCanvasText({ node }: { readonly node: Extract<CanvasNode, { kind:
             : applyCanvasCommand(canvas, { type: 'node.setParameters', nodeId: node.id, parameters: latest.payload.parameters, prompt }, { now: now() });
         if (cameraEdit) next = withCameraState(next, node.id, cameraEdit.state);
         published.current = text; pending.current.push(text); owner.change(next, !recorded.current); recorded.current = true;
-    };
-    return <ImeTextarea className='nmx-board-inline-text nodrag nopan nowheel' value={draft} rows={node.kind === 'text' ? 4 : 3}
+    }, [node.id]);
+    const commitRef = React.useRef(commit);
+    commitRef.current = commit;
+    const flushNow = React.useCallback((): void => {
+        const element = textareaRef.current;
+        if (!element || composing.current || isImeFieldComposing(element)) return;
+        const text = element.value;
+        dirty.current = false;
+        commitRef.current(text);
+    }, []);
+    React.useEffect(() => registerPendingCanvasEditFlush(flushNow), [flushNow]);
+    React.useEffect(() => () => flushNow(), [flushNow]);
+    return <ImeTextarea ref={textareaRef} commitDelayMs={250} className='nmx-board-inline-text nodrag nopan nowheel' value={syncedValue} rows={node.kind === 'text' ? 4 : 3}
         aria-label={context.t(node.kind === 'text' ? 'textPlaceholder' : 'prompt')}
         placeholder={context.t(node.kind === 'text' ? 'textPlaceholder' : 'promptPlaceholder')}
-        onFocus={() => context.selectNode(node.id)} onBlur={() => { recorded.current = false; }}
+        onFocus={() => { focused.current = true; context.selectNode(node.id); }}
+        onBlur={event => {
+            focused.current = false;
+            if (!composing.current) {
+                dirty.current = false;
+                commit(event.currentTarget.value);
+            }
+            recorded.current = false;
+        }}
+        onInput={event => {
+            dirty.current = true;
+            notifyHasText(event.currentTarget.value);
+        }}
         onMouseDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()}
         onKeyDown={event => { event.stopPropagation(); if (event.key === 'Escape' && !event.nativeEvent.isComposing) event.currentTarget.blur(); }}
-        onCompositionStart={() => { composing.current = true; }}
-        onCompositionEnd={event => { composing.current = false; setDraft(event.currentTarget.value); commit(event.currentTarget.value); }}
+        onCompositionStart={() => { composing.current = true; dirty.current = true; }}
+        onCompositionEnd={event => {
+            composing.current = false;
+            dirty.current = false;
+            notifyHasText(event.currentTarget.value);
+            commit(event.currentTarget.value);
+        }}
         onChange={event => {
-            const text = event.currentTarget.value; setDraft(text);
-            if (!composing.current) commit(text);
+            if (!composing.current) {
+                dirty.current = false;
+                notifyHasText(event.currentTarget.value);
+                commit(event.currentTarget.value);
+            }
         }} />;
 }
 
@@ -679,7 +890,7 @@ function ReferenceMedia({ version, label, mediaUrl }: { readonly version: Canvas
     const [failed, setFailed] = React.useState(false);
     if (version && canvasVersionReady(version) && !failed) {
         if (version.kind === 'image') return <img src={mediaUrl(version.uri)} alt={label} loading='lazy' decoding='async' onError={() => setFailed(true)} />;
-        if (version.kind === 'video') return <video src={mediaUrl(version.uri)} muted playsInline preload='metadata' aria-label={label} onError={() => setFailed(true)} />;
+        if (version.kind === 'video') return <video src={mediaUrl(version.uri)} muted playsInline preload='none' aria-label={label} onError={() => setFailed(true)} />;
     }
     return <i className={`codicon codicon-${version?.kind === 'audio' ? 'unmute' : 'device-camera-video'}`} aria-label={label} />;
 }
@@ -758,10 +969,19 @@ function GenerationPanel(props: { readonly node: Extract<CanvasNode, { kind: 'im
     const resolved = model ? resolveCanvasGenerationOptions(model, node.payload.mode, node.payload.parameters, capabilityInputs(canvas, node.id)) : undefined;
     const [prompt, setPrompt] = React.useState(node.payload.prompt);
     const seen = React.useRef(node.payload.prompt);
-    if (seen.current !== node.payload.prompt) { seen.current = node.payload.prompt; if (prompt !== node.payload.prompt) setPrompt(node.payload.prompt); }
-    // The prompt is saved on blur; readiness already follows what is typed, so 生成 is usable while the field still has focus.
+    const [hasLivePromptText, setHasLivePromptText] = React.useState(() => Boolean(node.payload.prompt.trim()));
+    if (seen.current !== node.payload.prompt) {
+        seen.current = node.payload.prompt;
+        if (prompt !== node.payload.prompt) setPrompt(node.payload.prompt);
+        setHasLivePromptText(Boolean(node.payload.prompt.trim()));
+    }
+    // The prompt commits local-first (250ms debounce); enable 生成 immediately on the first non-empty keystroke.
     const draft = prompt === node.payload.prompt ? node : { ...node, payload: { ...node.payload, prompt } } as typeof node;
-    const problems = nodeProblems(t, owner.locale, draft === node ? canvas : { ...canvas, nodes: canvas.nodes.map(item => item.id === node.id ? draft : item) }, draft, capability, Boolean(route));
+    const rawProblems = nodeProblems(t, owner.locale, draft === node ? canvas : { ...canvas, nodes: canvas.nodes.map(item => item.id === node.id ? draft : item) }, draft, capability, Boolean(route));
+    const emptyPromptIssue = t('promptPlaceholder');
+    const problems = hasLivePromptText && rawProblems.blocking.includes(emptyPromptIssue)
+        ? { ...rawProblems, blocking: rawProblems.blocking.filter(item => item !== emptyPromptIssue) }
+        : rawProblems;
     const status = statusOf(owner, node);
     const estimate = owner.estimateOf?.(node);
     const commitPrompt = (value: string): void => {
@@ -838,6 +1058,7 @@ function GenerationPanel(props: { readonly node: Extract<CanvasNode, { kind: 'im
     const retryBlocked = owner.jobOf(node)?.retryBlocked === true;
     const run = (): void => {
         if (owner.submitting.has(node.id) || owner.jobOf(node)?.retryPending || owner.jobOf(node)?.retryBlocked) return;
+        flushPendingCanvasEdits();
         commitPrompt(prompt); context.run(withUpstream ? [...problems.upstream, node.id] : [node.id]);
     };
     const resumable = !status.busy && Boolean(owner.onResumeGeneration && owner.jobOf(node)?.resumable);
@@ -882,9 +1103,9 @@ function GenerationPanel(props: { readonly node: Extract<CanvasNode, { kind: 'im
             </div>}
             {kind === 'video' && <button type='button' className={`nmx-board-field is-camera${(canvas.settings.nodeStoryboard as Record<string, unknown> | undefined)?.[node.id] ? ' is-set' : ''}`}
                 title={storyboardText(owner.locale, 'open')}
-                onClick={() => context.openStoryboard(node.id, prompt)}>
+                onClick={() => { flushPendingCanvasEdits(); context.openStoryboard(node.id, prompt); }}>
                 <i className='codicon codicon-list-ordered' aria-hidden='true'></i><span>{storyboardText(owner.locale, 'open')}</span></button>}
-            {kind === 'video' && <button ref={cameraTrigger} type='button' className={`nmx-board-field is-camera${camera && (camera.selection.movements.length > 0 || camera.selection.speed !== 'normal') ? ' is-set' : ''}`} title={panelText(owner.locale, 'camera')} onClick={() => setCameraOpen(!cameraOpen)} aria-expanded={cameraOpen}>
+            {kind === 'video' && <button ref={cameraTrigger} type='button' className={`nmx-board-field is-camera${camera && (camera.selection.movements.length > 0 || camera.selection.speed !== 'normal') ? ' is-set' : ''}`} title={panelText(owner.locale, 'camera')} onClick={() => { if (!cameraOpen) flushPendingCanvasEdits(); setCameraOpen(!cameraOpen); }} aria-expanded={cameraOpen}>
                 <i className='codicon codicon-device-camera-video' aria-hidden='true'></i><span>{panelText(owner.locale, 'camera')}</span></button>}
             {variants.length > 0 && <label className='nmx-board-field is-resolution' title={t('resolution')}>
                 <select aria-label={t('resolution')} value={String(node.payload.parameters.resolution ?? resolved?.variant?.resolution ?? '')} onChange={event => setParameters({ resolution: event.currentTarget.value })}>
@@ -908,7 +1129,7 @@ function GenerationPanel(props: { readonly node: Extract<CanvasNode, { kind: 'im
         {kind === 'video' && camera && <CameraTags locale={owner.locale} selection={camera.selection} onChange={applyCamera} />}
         {owner.startFrameBusy?.(node.id) && <div className='nmx-board-panel-note' role='status'>{owner.startFrameStatus?.(node.id) ? t(`status.${owner.startFrameStatus(node.id)}` as CanvasTextKey) : comicStartFrameText(owner.locale, 'preparing')}
             <button type='button' className='nmx-link-button' title={t('stop')} onClick={() => owner.onCancelStartFrame?.(node.id)}>{t('stop')}</button></div>}
-        <InlineCanvasText node={node} />
+        <InlineCanvasText node={node} onHasTextChange={setHasLivePromptText} />
         {problems.blocking.length > 0 && <ul className='nmx-board-problems'>
             {problems.blocking.slice(0, 4).map(text => <li key={text} data-nmx-literal>{text}</li>)}
             {fixable && <li><button type='button' className='nmx-link-button' onClick={fit}>{t('fitModel')}</button></li>}
@@ -1641,8 +1862,9 @@ function Board(props: ComicCanvasProps): React.ReactElement {
     };
 
     const copySelection = async (): Promise<void> => {
+        flushPendingCanvasEdits();
         try {
-            const text = serializeCanvasClipboard(canvas, [...selected]);
+            const text = serializeCanvasClipboard(activeCanvas.current, [...selected]);
             await writeCanvasClipboardText(text);
             props.onNotice(panelText(props.locale, 'copied', { n: selected.size }));
         } catch { props.onNotice(panelText(props.locale, 'clipboardUnavailable')); }
@@ -1730,9 +1952,9 @@ function Board(props: ComicCanvasProps): React.ReactElement {
                 else { setSelected(new Set()); setSelectedEdges(new Set()); }
                 break;
             }
-            case 'undo': if (props.canUndo) props.onUndo(); break;
-            case 'redo': if (props.canRedo) props.onRedo(); break;
-            case 'duplicate': duplicate([...selected]); break;
+            case 'undo': flushPendingCanvasEdits(); if (props.canUndo) props.onUndo(); break;
+            case 'redo': flushPendingCanvasEdits(); if (props.canRedo) props.onRedo(); break;
+            case 'duplicate': flushPendingCanvasEdits(); duplicate([...selected]); break;
             case 'copy': if (selected.size) void copySelection(); else return false; break;
             case 'paste': void pasteClipboard(); break;
             case 'group': groupSelection(); break;
@@ -1790,6 +2012,7 @@ function Board(props: ComicCanvasProps): React.ReactElement {
     boardHandlersRef.current = {
         canvas, canvasEpoch, nodes, props, t,
         run: ids => {
+            flushPendingCanvasEdits();
             if (settings.submitDelaySeconds > 0) {
                 setPendingRun(prev => ({
                     ids: [...new Set([...(prev?.ids ?? []), ...ids])],
@@ -1966,6 +2189,123 @@ function Board(props: ComicCanvasProps): React.ReactElement {
         };
     }, [side]);
 
+    const cullingStoreRef = React.useRef<CanvasCullingStore>();
+    if (!cullingStoreRef.current) cullingStoreRef.current = new CanvasCullingStore(canvas.viewport);
+    const cullingStore = cullingStoreRef.current;
+
+    const cullingInputs = React.useMemo(() => {
+        const cullingNodes: CanvasCullingNodeInput[] = [];
+        const draggedIds = new Set<string>();
+        for (const item of flowNodes) {
+            const data = item.data as CanvasCardData | CanvasGroupData | undefined;
+            const docNode = data?.node;
+            cullingNodes.push({
+                id: item.id,
+                position: item.position,
+                size: {
+                    width: item.measured?.width ?? docNode?.size.width ?? 0,
+                    height: item.measured?.height ?? docNode?.size.height ?? 0
+                }
+            });
+            if (item.dragging) draggedIds.add(item.id);
+        }
+        return { nodes: cullingNodes, draggedIds };
+    }, [flowNodes]);
+
+    const editingIds = React.useMemo(() => {
+        const ids = new Set<string>();
+        if (renaming) ids.add(renaming);
+        if (director) ids.add(director);
+        if (aiDialog) ids.add(aiDialog.nodeId);
+        if (toolDialog) ids.add(toolDialog.nodeId);
+        if (frameDialog) ids.add(frameDialog.nodeId);
+        if (storyboardFor) ids.add(storyboardFor.nodeId);
+        return ids;
+    }, [renaming, director, aiDialog, toolDialog, frameDialog, storyboardFor]);
+
+    React.useLayoutEffect(() => {
+        cullingStore.setInputs({
+            nodes: cullingInputs.nodes,
+            selectedIds: selected,
+            draggedIds: cullingInputs.draggedIds,
+            editingIds
+        });
+    }, [cullingStore, cullingInputs, selected, editingIds]);
+
+    React.useEffect(() => {
+        const element = root.current;
+        if (!element) return;
+        const playingMedia = new Map<HTMLMediaElement, string>();
+        const syncSize = (entryRect?: { readonly width: number; readonly height: number }): void => {
+            const width = element.clientWidth || entryRect?.width || element.getBoundingClientRect().width;
+            const height = element.clientHeight || entryRect?.height || element.getBoundingClientRect().height;
+            cullingStore.setViewportSize({ width, height });
+        };
+        const syncFocused = (target?: EventTarget | null): void => {
+            const candidate = target instanceof Element ? target : (typeof document !== 'undefined' ? document.activeElement : null);
+            const nodeId = candidate instanceof Element
+                ? (candidate.closest('.react-flow__node[data-id]')?.getAttribute('data-id')
+                    ?? candidate.closest('[data-node-panel]')?.getAttribute('data-node-panel')
+                    ?? undefined)
+                : undefined;
+            cullingStore.setFocusedIds(nodeId ? new Set([nodeId]) : new Set());
+        };
+        const syncPlaying = (): void => {
+            cullingStore.setPlayingIds(new Set(playingMedia.values()));
+        };
+        const onFocusIn = (event: FocusEvent): void => syncFocused(event.target);
+        const onFocusOut = (event: FocusEvent): void => {
+            if (event.relatedTarget instanceof Element) syncFocused(event.relatedTarget);
+            else cullingStore.setFocusedIds(new Set());
+        };
+        const onMediaPlay = (event: Event): void => {
+            const target = event.target;
+            if (!(target instanceof HTMLMediaElement)) return;
+            const nodeId = target.closest('.react-flow__node[data-id]')?.getAttribute('data-id');
+            if (!nodeId) return;
+            playingMedia.set(target, nodeId);
+            syncPlaying();
+        };
+        const onMediaStop = (event: Event): void => {
+            const target = event.target;
+            if (!(target instanceof HTMLMediaElement) || !playingMedia.has(target)) return;
+            playingMedia.delete(target);
+            syncPlaying();
+        };
+        syncSize();
+        syncFocused();
+        element.addEventListener('focusin', onFocusIn);
+        element.addEventListener('focusout', onFocusOut);
+        element.addEventListener('play', onMediaPlay, true);
+        element.addEventListener('pause', onMediaStop, true);
+        element.addEventListener('ended', onMediaStop, true);
+        element.addEventListener('emptied', onMediaStop, true);
+        if (typeof ResizeObserver !== 'undefined') {
+            const observer = new ResizeObserver(entries => syncSize(entries[0]?.contentRect));
+            observer.observe(element);
+            return () => {
+                observer.disconnect();
+                element.removeEventListener('focusin', onFocusIn);
+                element.removeEventListener('focusout', onFocusOut);
+                element.removeEventListener('play', onMediaPlay, true);
+                element.removeEventListener('pause', onMediaStop, true);
+                element.removeEventListener('ended', onMediaStop, true);
+                element.removeEventListener('emptied', onMediaStop, true);
+            };
+        }
+        const onResize = (): void => syncSize();
+        window.addEventListener('resize', onResize);
+        return () => {
+            window.removeEventListener('resize', onResize);
+            element.removeEventListener('focusin', onFocusIn);
+            element.removeEventListener('focusout', onFocusOut);
+            element.removeEventListener('play', onMediaPlay, true);
+            element.removeEventListener('pause', onMediaStop, true);
+            element.removeEventListener('ended', onMediaStop, true);
+            element.removeEventListener('emptied', onMediaStop, true);
+        };
+    }, [cullingStore]);
+
     return <CanvasBoardContext.Provider value={boardContext}>
         <SurfaceTooltips scope='.nmx-board, .nmx-board-modal-layer, .nmx-canvas-floating-host, .nmx-canvas-history, .nmx-canvas-tabs, .nmx-desk-footer, .nmx-desk-header' />
         <div ref={root} className={`nmx-board${settings.wireHoverHighlight ? '' : ' no-wire-hover'}`} style={{ ['--cv-wire-width' as string]: `${settings.wireWidth}px` }} tabIndex={-1}
@@ -1977,7 +2317,8 @@ function Board(props: ComicCanvasProps): React.ReactElement {
                 });
             }}
             onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={onDrop}>
-            <ReactFlow nodes={flowNodes} edges={flowEdges} nodeTypes={NODE_TYPES} edgeTypes={EDGE_TYPES}
+            <CanvasCullingContext.Provider value={cullingStore}>
+                <ReactFlow nodes={flowNodes} edges={flowEdges} nodeTypes={NODE_TYPES} edgeTypes={EDGE_TYPES}
                 // Every card stays mounted (no onlyRenderVisibleElements): unmounting a card panned out of view would stop
                 // its playing audio, close its open menus and rename, drop the selected card's toolbar that still shows
                 // above the edge, and take it out of Tab order. Cards are memoized and off-screen images load lazily.
@@ -2042,7 +2383,9 @@ function Board(props: ComicCanvasProps): React.ReactElement {
                 }}>
                 {settings.showGrid && <Background variant={BackgroundVariant.Dots} gap={settings.gridSpacing} size={settings.gridDotSize} className='nmx-board-grid' />}
                 {settings.minimap && <MiniMap pannable zoomable className='nmx-board-minimap' nodeBorderRadius={8} />}
+                <CanvasCullingSubscriber store={cullingStore} />
             </ReactFlow>
+            </CanvasCullingContext.Provider>
 
             <SaveBadge state={props.saveState} t={t} onRetry={props.onRetrySave} />
             {side === 'edges' && <CanvasEdgeAuditPanel locale={props.locale} canvas={canvas} onClose={() => setSide(undefined)}
@@ -2066,7 +2409,11 @@ function Board(props: ComicCanvasProps): React.ReactElement {
                     onSaveWorld={world => { if (node.kind === 'world') change(applyCanvasCommand(canvas, { type: 'node.setWorld', nodeId: node.id, world }, { now: now() }), true); }}
                     onCapture={capture => props.onDirectorCapture(node.id, capture)} onImportModel={props.onDirectorImport} />;
             })()}
-            {single && <CanvasContext.Provider value={context}><NodePanelOverlay key={single} nodeId={single} hidden={nodeDragging || keyboard.navigating} /></CanvasContext.Provider>}
+            {single && (() => {
+                const singleNode = nodes.get(single);
+                if (!singleNode || !PANEL_NODE_KINDS.has(singleNode.kind)) return null;
+                return <CanvasContext.Provider value={context}><NodePanelOverlay key={single} nodeId={single} hidden={nodeDragging || keyboard.navigating} /></CanvasContext.Provider>;
+            })()}
 
             {!canvas.nodes.length && <div className='nmx-board-empty'><strong>{t('empty')}</strong><span>{t('emptyHint')}</span></div>}
             <ReturnToNodes canvas={canvas} root={root} t={t} />

@@ -1,6 +1,8 @@
 import * as React from '@theia/core/shared/react';
 import { platformShortcutText } from './nextmux-shortcut-text';
 import { getComicAssetDurationFrames } from '@nextmux/comic-core/media-timing';
+import { ImeInput } from './nextmux-ime-field';
+import { DEFAULT_VIRTUAL_LIST_THRESHOLD, VirtualGrid } from './nextmux-virtual-list';
 import {
     evaluateComicCompositionProperty, splitComicCompositionClip, trimComicCompositionClip, resizeComicCompositionClip, setComicCompositionFade,
     type ComicComposition, type ComicCompositionClip, type ComicCompositionTrack,
@@ -88,7 +90,7 @@ const MultitrackAssetCard = React.memo(function MultitrackAssetCard(props: {
             {asset.url && asset.kind === 'image'
                 ? <img src={asset.url} alt='' loading='lazy' decoding='async' />
                 : asset.url && asset.kind === 'video'
-                    ? <video src={asset.url} muted preload='metadata' />
+                    ? <video src={asset.url} muted preload='none' />
                     : <i className={`codicon codicon-${asset.kind === 'image' ? 'file-media' : asset.kind === 'video' ? 'device-camera-video' : 'music'}`} />}
             {props.durationLabel ? <span className='nmx-mt-asset-duration'>{props.durationLabel}</span> : null}
             {asset.used ? <span className='nmx-mt-asset-used'>{props.usedLabel}</span> : null}
@@ -127,23 +129,71 @@ const MultitrackClip = React.memo(function MultitrackClip(props: {
     </div>;
 });
 
+const MultitrackGridItem = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(function MultitrackGridItem(props, ref) {
+    return <div {...props} ref={ref} style={{ ...props.style, minWidth: 0, display: 'flex', flexDirection: 'column' }} />;
+});
+
+/** Exported for unit testing visible-window clip culling. */
+export function isMultitrackClipVisibleInWindow(options: {
+    readonly from: number;
+    readonly durationFrames: number;
+    readonly lane: number;
+    readonly trackOffset: number;
+    readonly pixels: number;
+    readonly left: number;
+    readonly right: number;
+    readonly scrollTop: number;
+    readonly trackHeight: number;
+    readonly preserve: boolean;
+}): boolean {
+    if (options.preserve) return true;
+    const clipStartX = options.from * options.pixels;
+    const clipEndX = (options.from + options.durationFrames) * options.pixels;
+    const laneTop = options.trackOffset + options.lane * 54;
+    const laneBottom = laneTop + 66;
+    return clipEndX >= options.left
+        && clipStartX <= options.right
+        && laneBottom >= options.scrollTop - 100
+        && laneTop <= options.scrollTop + options.trackHeight + 100;
+}
+
 /** Independent clips, not shot-linked sound lanes. Every completed gesture is one persisted undo step. */
 export class ComicMultitrack extends React.Component<ComicMultitrackProps, State> {
     protected controller?: ComicEditorController;
     protected root: HTMLElement | null = null;
     protected scroller: HTMLDivElement | null = null;
+    protected libraryScroller: HTMLDivElement | null = null;
     protected ruler: HTMLDivElement | null = null;
+    protected rulerPlayheadEl: HTMLDivElement | null = null;
+    protected trackPlayheadEls = new Map<string, HTMLDivElement>();
     protected scrub?: { pointerId: number; clientX: number; offset: number };
     protected drag?: Drag;
     protected keyDrag?: { clip: ComicCompositionClip; property: ComicCompositionProperty; frame: number; x: number; pointerId: number; base: ComicComposition; preview?: ComicComposition };
     protected resize?: { y: number; height: number };
     protected mounted = false;
     protected saving = false;
-    protected lastTimelineTick = 0;
+    protected liveFrame = 0;
     protected trackLayoutCache?: { value: ComicComposition; rows: { track: ComicCompositionTrack; offset: number; height: number; clips: { clip: ComicCompositionClip; lane: number }[] }[] };
     constructor(props: ComicMultitrackProps) {
         super(props);
         this.state = { selected: [], frame: 0, zoom: 48, snap: true, pending: false, property: 'x', trackHeight: 240, filter: 'all', search: '', keys: false, scrollLeft: 0, scrollTop: 0, viewportWidth: 1400 };
+    }
+    protected bindLibraryScroller = (element: HTMLDivElement | null): void => {
+        if (this.libraryScroller === element) return;
+        this.libraryScroller = element;
+        if (element && this.mounted) this.forceUpdate();
+    };
+    protected syncPlayheadDom(frame: number): void {
+        this.liveFrame = frame;
+        const left = `${frame * this.pixels()}px`;
+        if (this.rulerPlayheadEl) {
+            this.rulerPlayheadEl.style.left = left;
+            this.rulerPlayheadEl.setAttribute('aria-valuenow', String(frame));
+            this.rulerPlayheadEl.setAttribute('aria-valuetext', formatEditorTime(frame / this.props.fps));
+        }
+        for (const el of this.trackPlayheadEls.values()) {
+            el.style.left = left;
+        }
     }
     protected scrollerObserver?: ResizeObserver;
     protected scrollFrame?: number;
@@ -310,10 +360,10 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
     protected async addText(): Promise<void> {
         const value = this.value(), existing = value.tracks.find(track => track.kind === 'text' && !track.locked), trackId = existing?.id || uid('track'), id = uid('clip');
         const next: ComicComposition = { ...value, tracks: existing ? value.tracks : [...value.tracks, { id: trackId, title: this.t('text'), kind: 'text' }],
-            clips: [...value.clips, { id, trackId, kind: 'text', purpose: 'title', text: this.t('text'), from: this.state.frame, durationFrames: Math.round(this.props.fps * 3), sourceStartFrames: 0, textStyle: { fontSize: 56, color: '#ffffff', align: 'center' } }] };
+            clips: [...value.clips, { id, trackId, kind: 'text', purpose: 'title', text: this.t('text'), from: this.liveFrame, durationFrames: Math.round(this.props.fps * 3), sourceStartFrames: 0, textStyle: { fontSize: 56, color: '#ffffff', align: 'center' } }] };
         if (await this.commit(next)) this.setState({ selected: [id], trackId });
     }
-    protected async insert(asset: ComicCutAsset, trackId?: string, frame = this.state.frame): Promise<void> {
+    protected async insert(asset: ComicCutAsset, trackId?: string, frame = this.liveFrame): Promise<void> {
         if (this.blocked()) return;
         const kind = asset.kind === 'video' || asset.kind === 'image' ? 'video' : 'audio';
         if (trackId && !this.value().tracks.some(item => item.id === trackId && item.kind === kind && !item.locked)) return;
@@ -344,20 +394,20 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
     protected split(): void {
         const value = this.value(); let changed = false;
         const clips = value.clips.flatMap(clip => {
-            const frame = Math.round((this.controller?.state().seconds ?? this.state.frame/this.props.fps)*this.props.fps) - clip.from;
+            const frame = Math.round((this.controller?.state().seconds ?? this.liveFrame/this.props.fps)*this.props.fps) - clip.from;
             if (!this.state.selected.includes(clip.id) || !this.editable(clip) || frame < 1 || frame >= clip.durationFrames) return [clip];
             changed = true; return [...splitComicCompositionClip(clip, frame, uid('clip'))];
         });
         if (changed) void this.commit({ ...value, clips });
     }
-    protected seek(frame: number): void { const next = Math.max(0, Math.round(frame)); this.controller?.seek(next / this.props.fps, true); this.setState({ frame: next }); }
+    protected seek(frame: number): void { const next = Math.max(0, Math.round(frame)); this.syncPlayheadDom(next); this.controller?.seek(next / this.props.fps, true); this.setState({ frame: next }); }
     /** Scrubbing changes only playback position; it never creates a composition or an undo step. */
     protected beginScrub(event: React.PointerEvent<HTMLElement>, handle = false): void {
         if (event.button !== 0 || !event.isPrimary || this.scrub || this.drag || this.keyDrag || !this.ruler || !this.root) return;
         event.preventDefault(); event.stopPropagation();
         if (event.currentTarget.tabIndex >= 0) event.currentTarget.focus({ preventScroll: true });
         this.controller?.pause();
-        const offset = handle ? event.clientX - this.ruler.getBoundingClientRect().left - this.state.frame * this.pixels() : 0;
+        const offset = handle ? event.clientX - this.ruler.getBoundingClientRect().left - this.liveFrame * this.pixels() : 0;
         this.scrub = { pointerId: event.pointerId, clientX: event.clientX, offset };
         this.root.setPointerCapture(event.pointerId);
         this.scrubTo(event.clientX);
@@ -367,7 +417,7 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
         this.scrub.clientX = clientX;
         // The live ruler rect already includes horizontal scrolling; pixels() includes the current zoom.
         const frame = Math.max(0, Math.min(this.duration(), Math.round((clientX - this.ruler.getBoundingClientRect().left - this.scrub.offset) / this.pixels())));
-        if (frame !== this.state.frame) this.seek(frame);
+        if (frame !== this.liveFrame) this.seek(frame);
     }
     protected finishScrub = (): void => {
         const pointerId = this.scrub?.pointerId; this.scrub = undefined;
@@ -375,7 +425,7 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
     };
     protected snap(from: number, duration: number, base: ComicComposition, ids: readonly string[]): number {
         if (!this.state.snap) return from;
-        const points = [0, this.state.frame, ...base.clips.filter(clip => !ids.includes(clip.id)).flatMap(clip => [clip.from, clip.from + clip.durationFrames])];
+        const points = [0, this.liveFrame, ...base.clips.filter(clip => !ids.includes(clip.id)).flatMap(clip => [clip.from, clip.from + clip.durationFrames])];
         let best = from, distance = 7 / this.pixels();
         for (const point of points) for (const edge of [from, from + duration]) if (Math.abs(point - edge) < distance) { distance = Math.abs(point - edge); best = from + point - edge; }
         return Math.max(0, best);
@@ -438,7 +488,7 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
         this.drag = undefined; if (this.root?.hasPointerCapture(event.pointerId)) this.root.releasePointerCapture(event.pointerId);
         if (drag.preview) void this.commit(drag.preview); else this.setState({ draft: undefined });
     };
-    protected local(clip: ComicCompositionClip): number { return Math.max(0, Math.min(clip.durationFrames, this.state.frame - clip.from)); }
+    protected local(clip: ComicCompositionClip): number { return Math.max(0, Math.min(clip.durationFrames, this.liveFrame - clip.from)); }
     protected setProperty(clip: ComicCompositionClip, property: ComicCompositionProperty, value: number, key = false): void {
         if (!Number.isFinite(value)) return;
         const [visualKind,visualId,visualParam]=property.split(':');const curve=clip.effects?.find(e=>e.id===visualId&&e.type==='gpu-curves'),channel=/^(master|red|green|blue)(Shadow|Highlight)[XY]$/.exec(visualParam??'')?.[1];
@@ -469,7 +519,7 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
         }
         if (this.state.keys) return;
         if (event.key === ' ') { event.preventDefault(); event.stopPropagation(); if (!event.repeat) { if (this.controller?.state().playing) this.controller.pause(); else this.controller?.play(); } return; }
-        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); this.seek(this.state.frame + (event.key === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? this.props.fps : 1)); return; }
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); this.seek(this.liveFrame + (event.key === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? this.props.fps : 1)); return; }
         if (key === 'home' || key === 'end') { event.preventDefault(); this.seek(key === 'home' ? 0 : this.duration()); return; }
         if (mod && key === 'a') { event.preventDefault(); this.setState({ selected: this.value().clips.map(clip => clip.id) }); return; }
         if (mod && key === 'e') { event.preventDefault(); if (!this.props.exportDisabled) this.props.actions.exportVideo(); return; }
@@ -481,11 +531,11 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
         if (mod && key === 'd') { event.preventDefault(); this.duplicate(); }
         if (!mod && key === 's' || mod && key === 'b') { event.preventDefault(); this.split(); }
         if (!mod && (key === 'q' || key === 'w')) {
-            event.preventDefault(); const clip = this.selected(), at = clip ? this.state.frame - clip.from : 0;
+            event.preventDefault(); const clip = this.selected(), at = clip ? this.liveFrame - clip.from : 0;
             if (clip && this.editable(clip) && at > 0 && at < clip.durationFrames) this.patchClip(clip.id, trimComicCompositionClip(clip, key === 'q' ? at : 0, key === 'w' ? at : clip.durationFrames));
         }
         if (!mod && key === 'k') this.controller?.pause();
-        if (!mod && key === 'j') this.seek(this.state.frame - this.props.fps);
+        if (!mod && key === 'j') this.seek(this.liveFrame - this.props.fps);
         if (!mod && key === 'l') { if (this.controller?.state().playing) this.controller.setSpeed(Math.min(4, this.controller.state().speed * 2)); else this.controller?.play(); }
     };
     protected fit(): void { if (this.scroller && this.duration()) this.setState({ zoom: Math.max(8, Math.min(240, (this.scroller.clientWidth - 240) / (this.duration() / this.props.fps))) }); }
@@ -567,13 +617,50 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
     };
     protected keyframeTitle = (clip: ComicCompositionClip, property: ComicCompositionProperty, frame: number): string =>
         `${property.includes(':') ? comicVisualPropertyLabel(this.props.locale, clip, property) : this.t(property as ComicMultitrackTextKey)} · ${frame}`;
-    protected renderAsset(asset: ComicCutAsset): React.ReactNode {
-        if (!this.matchesAsset(asset)) return null;
+    protected trackPlayheadCallbacks = new Map<string, (el: HTMLDivElement | null) => void>();
+    protected bindRulerPlayhead = (element: HTMLDivElement | null): void => {
+        this.rulerPlayheadEl = element;
+    };
+    protected bindTrackPlayhead(trackId: string): (el: HTMLDivElement | null) => void {
+        let cb = this.trackPlayheadCallbacks.get(trackId);
+        if (!cb) {
+            cb = (el: HTMLDivElement | null) => {
+                if (el) this.trackPlayheadEls.set(trackId, el);
+                else {
+                    this.trackPlayheadEls.delete(trackId);
+                    this.trackPlayheadCallbacks.delete(trackId);
+                }
+            };
+            this.trackPlayheadCallbacks.set(trackId, cb);
+        }
+        return cb;
+    }
+    protected renderAssetCard = (asset: ComicCutAsset): React.ReactElement => {
         return <MultitrackAssetCard key={asset.id} asset={asset} blocked={this.blocked()}
             hintTitle={`${asset.title}${asset.origin ? ` (${asset.origin})` : ''} · ${this.cut('addToTimeline')}`}
             usedLabel={this.cut('used')} addLabel={this.cut('addToTimeline')}
             durationLabel={asset.durationMs && asset.durationMs > 0 && asset.kind !== 'image' ? formatEditorTime(asset.durationMs / 1000) : undefined}
             onDragStartAsset={this.handleAssetDragStart} onDragEndAsset={this.handleAssetDragEnd} onInsertAsset={this.handleAssetInsert} />;
+    };
+    protected assetKey = (asset: ComicCutAsset): string => asset.id;
+    protected renderAssetGrid(filtered: readonly ComicCutAsset[], emptyNode?: React.ReactNode): React.ReactNode {
+        if (!filtered.length) return <div className='nmx-mt-assets'>{emptyNode}</div>;
+        if (filtered.length <= DEFAULT_VIRTUAL_LIST_THRESHOLD) {
+            return <div className='nmx-mt-assets'>{filtered.map(this.renderAssetCard)}</div>;
+        }
+        return <VirtualGrid<ComicCutAsset>
+            items={filtered}
+            itemKey={this.assetKey}
+            listClassName='nmx-mt-assets'
+            customScrollParent={this.libraryScroller}
+            style={this.libraryScroller ? undefined : { height: 320 }}
+            components={{ Item: MultitrackGridItem }}
+            renderItem={asset => this.renderAssetCard(asset)}
+        />;
+    }
+    protected renderAsset(asset: ComicCutAsset): React.ReactNode {
+        if (!this.matchesAsset(asset)) return null;
+        return this.renderAssetCard(asset);
     }
     protected renderBin(): React.ReactNode {
         const searchLabel = this.t('searchMaterials');
@@ -583,10 +670,10 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
             <div className='nmx-mt-bin-tabs'>{(['all','video','image','audio'] as const).map(filter => <button type='button' key={filter} aria-pressed={this.state.filter === filter} onClick={() => this.setState({ filter })}>{this.cut(filter)}</button>)}</div>
             <div className='nmx-mt-bin-search'>
                 <i className='codicon codicon-search' aria-hidden='true' />
-                <input type='search' value={this.state.search} placeholder={searchLabel} aria-label={searchLabel} onChange={event => this.setState({ search: event.currentTarget.value })} />
+                <ImeInput type='search' commitDelayMs={100} value={this.state.search} placeholder={searchLabel} aria-label={searchLabel} onChange={event => this.setState({ search: event.currentTarget.value })} />
                 {this.state.search && <button type='button' className='nmx-mt-bin-search-clear' title={dismissLabel} aria-label={dismissLabel} onClick={() => this.setState({ search: '' })}><i className='codicon codicon-close' aria-hidden='true' /></button>}
             </div>
-            <div className='nmx-mt-library'>{this.props.groups?.length ? this.props.groups.map(group => {
+            <div className='nmx-mt-library' ref={this.bindLibraryScroller}>{this.props.groups?.length ? this.props.groups.map(group => {
                 const filtered = group.assets.filter(asset => this.matchesAsset(asset));
                 return <section key={group.key} className={`nmx-mt-group-section${group.open ? ' is-open' : ''}`}>
                     <button type='button' className='nmx-mt-group' title={group.title} aria-label={group.title} aria-expanded={group.open} onClick={group.onToggle}>
@@ -595,11 +682,11 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
                         <span className='nmx-mt-group-title'>{group.title}</span>
                         <span className='nmx-mt-group-count'>{group.loading ? '…' : filtered.length}</span>
                     </button>
-                    {group.open && <div className='nmx-mt-assets'>{filtered.map(asset => this.renderAsset(asset))}{!filtered.length && <small className='nmx-mt-group-empty'>{group.loading ? '…' : (this.state.search.trim() ? this.t('noneMatch') : (group.empty || this.t('noneInProject')))}</small>}</div>}
+                    {group.open && this.renderAssetGrid(filtered, <small className='nmx-mt-group-empty'>{group.loading ? '…' : (this.state.search.trim() ? this.t('noneMatch') : (group.empty || this.t('noneInProject')))}</small>)}
                 </section>;
             }) : (() => {
                 const filtered = this.props.assets.filter(asset => this.matchesAsset(asset));
-                return <div className='nmx-mt-assets'>{filtered.map(asset => this.renderAsset(asset))}{!filtered.length && this.state.search.trim() && <small className='nmx-mt-group-empty'>{this.t('noneMatch')}</small>}</div>;
+                return this.renderAssetGrid(filtered, this.state.search.trim() ? <small className='nmx-mt-group-empty'>{this.t('noneMatch')}</small> : undefined);
             })()}</div>
             <button type='button' className='nmx-mt-import' disabled={this.blocked()} onClick={this.props.actions.pickFiles}>{this.cut('import')}</button>
         </aside>;
@@ -681,8 +768,8 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
         for(const asset of this.props.mediaAssets)assetTitles.set(asset.id,asset.title);
         return <div className='nmx-mt-timeline' style={{height:this.state.trackHeight}} ref={this.bindScroller} onScroll={event=>{this.pendingScroll={scrollLeft:event.currentTarget.scrollLeft,scrollTop:event.currentTarget.scrollTop,viewportWidth:event.currentTarget.clientWidth};if(this.scrollFrame===undefined)this.scrollFrame=requestAnimationFrame(this.flushScroll);if(this.scrub)this.scrubTo(this.scrub.clientX);}}>
             <div className='nmx-mt-ruler-row'><div className='nmx-mt-track-label'><select aria-label={this.t('addTrack')} value='' disabled={this.blocked()} onChange={event=>{if(event.currentTarget.value)void this.addTrack(event.currentTarget.value as ComicCompositionTrack['kind']);}}><option value=''>{this.t('addTrack')}</option>{(['video','audio','text'] as const).map(kind=><option key={kind} value={kind}>{this.t(kind)}</option>)}</select><button type='button' disabled={this.blocked()} title={this.t('addText')} onClick={()=>void this.addText()}>T+</button></div>
-                <div className='nmx-mt-ruler' ref={element=>{this.ruler=element;}} style={{width}} onPointerDown={event=>this.beginScrub(event)}>{Array.from({length:Math.min(200,lastTick-firstTick+1)},(_,i)=><span key={i+firstTick} style={{left:(i+firstTick)*step*this.state.zoom}}>{formatEditorTime((i+firstTick)*step)}</span>)}<div className='nmx-mt-playhead nmx-mt-playhead-handle' style={{left:this.state.frame*pixels}}
-                    role='slider' tabIndex={0} aria-label={this.cut('playhead')} aria-orientation='horizontal' aria-valuemin={0} aria-valuemax={this.duration()} aria-valuenow={this.state.frame} aria-valuetext={formatEditorTime(this.state.frame/this.props.fps)} onPointerDown={event=>this.beginScrub(event,true)} /></div></div>
+                <div className='nmx-mt-ruler' ref={element=>{this.ruler=element;}} style={{width}} onPointerDown={event=>this.beginScrub(event)}>{Array.from({length:Math.min(200,lastTick-firstTick+1)},(_,i)=><span key={i+firstTick} style={{left:(i+firstTick)*step*this.state.zoom}}>{formatEditorTime((i+firstTick)*step)}</span>)}<div ref={this.bindRulerPlayhead} className='nmx-mt-playhead nmx-mt-playhead-handle' style={{left:this.liveFrame*pixels}}
+                    role='slider' tabIndex={0} aria-label={this.cut('playhead')} aria-orientation='horizontal' aria-valuemin={0} aria-valuemax={this.duration()} aria-valuenow={this.liveFrame} aria-valuetext={formatEditorTime(this.liveFrame/this.props.fps)} onPointerDown={event=>this.beginScrub(event,true)} /></div></div>
             {this.trackLayouts().map(({track,height,offset,clips},index)=><div className={`nmx-mt-track is-${track.kind}${track.locked?' is-locked':''}${track.hidden?' is-hidden':''}${this.state.dropTrackId===track.id?' is-drop-target':''}`} key={track.id} data-track-id={track.id} style={{height}}>
                 <div className='nmx-mt-track-label' onClick={()=>this.setState({trackId:track.id})}><input key={`${track.id}:${track.title}`} aria-label={this.t('rename')} defaultValue={this.trackTitle(track)} disabled={this.blocked()||track.locked} onBlur={event=>{if(event.currentTarget.value.trim()&&event.currentTarget.value!==this.trackTitle(track))this.patchTrack(track.id,{title:event.currentTarget.value.trim()});}} />
                     <div>{this.tool('arrow-up',this.t('up'),()=>this.moveTrack(track.id,1),index===0||track.locked)}{this.tool('arrow-down',this.t('down'),()=>this.moveTrack(track.id,-1),index===value.tracks.length-1||track.locked)}
@@ -693,14 +780,25 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
                     {this.tool('trash',this.t('deleteTrack'),()=>this.removeTrack(track.id),track.locked)}</div>
                 </div><div className='nmx-mt-track-content' style={{width,height:height-1}} onDragOver={event=>{if(!track.locked&&!this.blocked()){event.preventDefault();event.dataTransfer.dropEffect='copy';if(this.state.dropTrackId!==track.id)this.setState({dropTrackId:track.id});}}}
                     onDragLeave={event=>{if(this.state.dropTrackId===track.id&&!event.currentTarget.contains(event.relatedTarget as Node|null))this.setState({dropTrackId:undefined});}} onDrop={event=>this.drop(event,track)} onPointerDown={event=>{if(event.target===event.currentTarget){this.setState({selected:[],trackId:track.id});const rect=event.currentTarget.getBoundingClientRect();this.seek((event.clientX-rect.left)/pixels);}}}>
-                    {clips.filter(({clip,lane})=>((clip.from+clip.durationFrames)*pixels>=left&&clip.from*pixels<=right&&offset+lane*54+66>=this.state.scrollTop-100&&offset+lane*54<=this.state.scrollTop+this.state.trackHeight+100||Boolean(this.drag?.ids.includes(clip.id)))).map(({clip,lane})=>{
+                    {clips.filter(({clip,lane})=>isMultitrackClipVisibleInWindow({
+                        from: clip.from,
+                        durationFrames: clip.durationFrames,
+                        lane,
+                        trackOffset: offset,
+                        pixels,
+                        left,
+                        right,
+                        scrollTop: this.state.scrollTop,
+                        trackHeight: this.state.trackHeight,
+                        preserve: Boolean(this.drag?.ids.includes(clip.id)) || this.state.selected.includes(clip.id) || this.keyDrag?.clip.id === clip.id
+                    })).map(({clip,lane})=>{
                         const isSelected=this.state.selected.includes(clip.id);
                         const clipLabel=clip.title||clip.text||(clip.assetId?assetTitles.get(clip.assetId):undefined)||defaultClipLabel;
                         return <MultitrackClip key={clip.id} clip={clip} lane={lane} selected={isSelected} pixels={pixels} fps={this.props.fps}
                             property={isSelected?this.state.property:undefined} clipLabel={clipLabel} keyframeTitle={this.keyframeTitle}
                             onBegin={this.handleBeginClip} onMove={this.move} onEnd={this.end} onCancel={this.handleCancelClip}
                             onSelect={this.handleSelectClip} onBeginKeyframe={this.handleBeginKeyframe} onSeekKeyframe={this.handleSeekKeyframe} />;
-                    })}<div className='nmx-mt-playhead' style={{left:this.state.frame*pixels}} aria-hidden='true' onPointerDown={event=>this.beginScrub(event,true)} /></div>
+                    })}<div ref={this.bindTrackPlayhead(track.id)} className='nmx-mt-playhead' style={{left:this.liveFrame*pixels}} aria-hidden='true' onPointerDown={event=>this.beginScrub(event,true)} /></div>
             </div>)}
         </div>;
     }
@@ -711,7 +809,17 @@ export class ComicMultitrack extends React.Component<ComicMultitrackProps, State
             {this.renderToolbar()}{this.state.error&&<div className='nmx-mt-error' role='alert'>{this.t('saveFailed')}<button type='button' aria-label={comicCutLayoutText(this.props.locale,'dismiss')} title={comicCutLayoutText(this.props.locale,'dismiss')} data-nmx-tip={comicCutLayoutText(this.props.locale,'dismiss')} onClick={()=>this.setState({error:false})}>×</button></div>}
             {this.state.keys&&<div className='nmx-mt-shortcuts' role='dialog' aria-label={this.cut('keys')}><strong className='nmx-mt-shortcuts-title'>{this.cut('keys')}</strong><button type='button' aria-label={comicCutLayoutText(this.props.locale,'dismiss')} title={comicCutLayoutText(this.props.locale,'dismiss')} data-nmx-tip={comicCutLayoutText(this.props.locale,'dismiss')} onClick={()=>this.setState({keys:false})}><i className='codicon codicon-close' aria-hidden='true' /></button>{this.cut('keyActions').split('|').slice(1).map((label,i)=><div key={i}><span>{shortcut(label)}</span><kbd>{shortcut(['Space','J / K / L','← / →','Home / End','S','Q / W','⌘D','Delete','⌘Z','⇧⌘Z','= / −','\\','⌘E'][i])}</kbd></div>)}</div>}
             <div className={`nmx-mt-main${this.state.selected.length?' has-selection':''}`}>{this.renderBin()}<ComicMultitrackPlayer {...this.props.player} composition={this.value()} mediaAssets={this.props.mediaAssets} fps={this.props.fps} projectCanvas={this.props.projectCanvas} locale={this.props.locale}
-                onController={controller=>{this.controller=controller;this.props.player?.onController?.(controller);}} onTick={seconds=>{const frame=Math.round(seconds*this.props.fps),now=performance.now();if(frame!==this.state.frame&&(!this.controller?.state().playing||now-this.lastTimelineTick>=50)){this.lastTimelineTick=now;this.setState({frame});}}} />{this.renderInspector()}</div>
+                onController={controller=>{this.controller=controller;this.props.player?.onController?.(controller);}} onTick={seconds=>{
+                    const frame=Math.round(seconds*this.props.fps);
+                    if(this.controller?.state().playing){
+                        if(frame!==this.liveFrame)this.syncPlayheadDom(frame);
+                        return;
+                    }
+                    if(frame!==this.liveFrame||frame!==this.state.frame){
+                        this.syncPlayheadDom(frame);
+                        this.setState({frame});
+                    }
+                }} />{this.renderInspector()}</div>
             <div className='nmx-mt-resizer' role='separator' tabIndex={0} aria-orientation='horizontal' aria-label={comicCutLayoutText(this.props.locale,'timelineSize')} aria-valuenow={this.state.trackHeight} aria-valuemin={130} aria-valuemax={Math.max(130,(this.root?.clientHeight||700)-220)}
                 onKeyDown={event=>{if(['ArrowUp','ArrowDown','Home','End'].includes(event.key)){event.preventDefault();event.stopPropagation();this.setState({trackHeight:Math.max(130,Math.min((this.root?.clientHeight||700)-220,event.key==='Home'?130:event.key==='End'?10000:this.state.trackHeight+(event.key==='ArrowUp'?24:-24)))});}}}
                 onDoubleClick={()=>this.setState({trackHeight:240})} onPointerDown={event=>{event.currentTarget.setPointerCapture(event.pointerId);this.resize={y:event.clientY,height:this.state.trackHeight};}}

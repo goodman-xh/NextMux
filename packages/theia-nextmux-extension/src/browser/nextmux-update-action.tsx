@@ -86,15 +86,17 @@ export function resolveDesktopUpdateActionModel(state: NextMuxDesktopUpdateState
     const downloading = state.phase === 'downloading';
     const code = state.errorCode;
     const installFailed = Boolean(code?.startsWith('UPDATE_INSTALL_'));
-    const failed = state.phase === 'available' && (installFailed || isUpdateDownloadErrorCode(code) || !code && Boolean(state.error));
+    const ready = state.phase === 'ready';
+    const preparingReady = ready && Boolean(state.preparing);
+    const failed = (state.phase === 'available' && (installFailed || isUpdateDownloadErrorCode(code) || !code && Boolean(state.error)))
+        || (ready && installFailed);
     // A ready update restarts NextMux to install it, like the Updates panel's "Restart to update": the quit still asks
     // first when work is running. Closing NextMux installs it too; the tooltip (readyHint) says both.
-    const ready = state.phase === 'ready';
     const text = desktopUpdateText(locale, downloading ? 'downloadingDock' : ready ? 'restartDock' : failed ? 'retry' : 'update');
     // While downloading, the dock button shows only the whole percent ("0%".."100%"), without words or parentheses.
     // The widget renders only when this whole percent changes (downloadTickNeedsNoRender), at most a hundred times a download.
     const percent = downloading ? desktopUpdateProgressPercent(state.progress) : undefined;
-    const baseHint = desktopUpdateText(locale, ready ? 'readyHint' : state.preparing ? 'preparing'
+    const baseHint = desktopUpdateText(locale, preparingReady ? 'preparing' : ready ? 'readyHint' : state.preparing ? 'preparing'
         : failed ? 'downloadFailed' : downloading ? 'backgroundHint' : 'availableHint');
     const detail = failed ? String(state.error || state.message || code || '').trim() : '';
     return {
@@ -102,15 +104,18 @@ export function resolveDesktopUpdateActionModel(state: NextMuxDesktopUpdateState
         hint: installFailed && detail ? detail : detail ? `${baseHint} · ${detail}` : baseHint,
         tone: failed ? 'warning' : 'default',
         action: state.phase === 'available' ? 'download' : ready ? 'restart' : 'details',
-        disabled: Boolean(busy) || downloading,
+        disabled: Boolean(busy) || downloading || preparingReady,
         ...(percent === undefined ? {} : { percent }),
     };
 }
+
+let restartInFlight = false;
 
 /**
  * "Restart to update" from the dock: the caller's handler when there is one, else the same desktop bridge call as the
  * Updates panel's restart button (installUpdate quits through the normal quit check, so running work still gets its
  * prompt). Without a bridge (a browser preview), or when the update can no longer be installed, the Updates panel opens.
+ * Guards against duplicate concurrent restart clicks and recovers cleanly on cancel or failure.
  */
 function restartToInstallUpdate(onRestart: (() => void) | undefined, onDetails: () => void): void {
     if (onRestart) {
@@ -122,7 +127,11 @@ function restartToInstallUpdate(onRestart: (() => void) | undefined, onDetails: 
         onDetails();
         return;
     }
-    void bridge.installUpdate().then(started => { if (!started) onDetails(); }, () => onDetails());
+    if (restartInFlight) return;
+    restartInFlight = true;
+    void bridge.installUpdate()
+        .then(started => { if (!started) onDetails(); }, () => onDetails())
+        .finally(() => { restartInFlight = false; });
 }
 
 export function DesktopUpdateAction({ state, locale, busy, onDownload, onDetails, onRestart }: {
@@ -133,8 +142,8 @@ export function DesktopUpdateAction({ state, locale, busy, onDownload, onDetails
 }): React.ReactElement | null {
     if (!updateAppearsInDock(state)) return null;
     const model = resolveDesktopUpdateActionModel(state, locale, busy);
-    return <button type='button' className={`nmx-account-update is-${state.phase}${model.tone === 'warning' ? ' is-warning' : ''}`} data-nmx-literal
-        disabled={model.disabled} title={model.hint} aria-label={`${model.label} · ${model.hint}`} aria-busy={state.phase === 'downloading'}
+    return <button type='button' className={`nmx-account-update is-${state.phase}${model.tone === 'warning' ? ' is-warning' : ''}${state.phase === 'ready' && state.preparing ? ' is-preparing' : ''}`} data-nmx-literal
+        disabled={model.disabled} title={model.hint} aria-label={`${model.label} · ${model.hint}`} aria-busy={state.phase === 'downloading' || Boolean(state.phase === 'ready' && state.preparing)}
         onClick={() => {
             if (model.disabled) return;
             if (model.action === 'download') onDownload();

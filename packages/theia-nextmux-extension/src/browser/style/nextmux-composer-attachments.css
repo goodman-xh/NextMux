@@ -52,10 +52,14 @@
     unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
+/* body.nmx-widget-active: the NextMux widget is the visible page (the widget sets it). Until it is set, the
+   :where(:has(…)) beside it answers the same question at no specificity; once it is set, :is() matches the class first
+   and the :has() is never evaluated. body.nmx-theme-light-active (the widget) and body.theia-light (Theia, switched with
+   the same theme by applyDesktopTheme) mean the light theme, with no document-wide :has(.nmx-theme-light) to re-check. */
 .nmx-desktop-widget,
 .nmx-desktop-widget .nmx-shell,
 .nmx-shell,
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) {
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) {
     --nmx-ui-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
     --nmx-numeric-font: var(--nmx-ui-font) !important;
     --theia-ui-font-family: var(--nmx-ui-font) !important;
@@ -75,9 +79,9 @@ body.mac :is(.nmx-desktop-widget, .nmx-desktop-widget .nmx-shell, .nmx-shell, .n
 
 .nmx-desktop-widget,
 .nmx-desktop-widget .nmx-shell,
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)),
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))),
 .nmx-model-effort-portal,
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .lm-Menu) {
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) :is(#theia-top-panel, .lm-Menu) {
     font-family: var(--nmx-ui-font) !important;
     font-feature-settings: 'kern' 1, 'liga' 1;
 }
@@ -692,13 +696,13 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
  * the native window buttons are hidden while any modal is open
  * (nextmux-modal-chrome.ts).
  * ------------------------------------------------------------------------ */
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay {
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay {
     background: rgba(0, 0, 0, .58);
     -webkit-app-region: no-drag;
     font-family: var(--nmx-ui-font);
     animation: nmx-drop-overlay-in 160ms ease-out both;
 }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogBlock {
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay .dialogBlock {
     min-width: min(400px, calc(100vw - 40px));
     max-width: min(560px, calc(100vw - 40px));
     padding: 6px 4px 2px;
@@ -708,7 +712,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay
     border-radius: 14px;
     box-shadow: 0 26px 80px rgba(0, 0, 0, .58);
 }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogTitle {
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay .dialogTitle {
     min-height: 40px;
     padding: 4px 10px 0 18px;
     color: #ebe8e9;
@@ -716,7 +720,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay
     font-size: 16px;
     font-weight: 620;
 }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogTitle i.closeButton {
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay .dialogTitle i.closeButton {
     width: 28px;
     height: 28px;
     display: grid;
@@ -724,10 +728,10 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay
     border-radius: 7px;
     opacity: .7;
 }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogTitle i.closeButton:hover { opacity: 1; background: rgba(255, 255, 255, .08); }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogContent { padding: 6px 18px 10px; line-height: 1.6; font-size: 14px; }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogControl { gap: 8px; padding: 8px 14px 14px; }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogControl .theia-button {
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay .dialogTitle i.closeButton:hover { opacity: 1; background: rgba(255, 255, 255, .08); }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay .dialogContent { padding: 6px 18px 10px; line-height: 1.6; font-size: 14px; }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay .dialogControl { gap: 8px; padding: 8px 14px 14px; }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay .dialogControl .theia-button {
     min-width: 76px;
     height: 32px;
     margin: 0;
@@ -739,43 +743,46 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay
     font: inherit;
     font-size: 14px;
 }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogControl .theia-button.main {
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay .dialogControl .theia-button.main {
     border-color: #d7d4d5;
     color: #242223;
     background: #dedcdd;
 }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogControl .theia-button:hover:not(:disabled) { filter: brightness(1.12); }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay .dialogControl .theia-button:focus-visible { outline: 2px solid #d74470; outline-offset: 2px; }
-body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay { background: rgba(61, 55, 58, .24); }
-body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay .dialogBlock { color: #302b2e; background: #fff; border-color: #d8d3d6; box-shadow: 0 18px 48px rgba(53, 45, 49, .16); }
-body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay .dialogTitle { color: #242124; }
-body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay .dialogTitle i.closeButton:hover { background: rgba(0, 0, 0, .06); }
-body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay .dialogControl .theia-button { color: #393336; background: #f4f2f3; border-color: #d8d3d6; }
-body:has(.nmx-shell.nmx-theme-light) .lm-Widget.dialogOverlay .dialogControl .theia-button.main { color: #fff; background: #2c282a; border-color: #2c282a; }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay .dialogControl .theia-button:hover:not(:disabled) { filter: brightness(1.12); }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay .dialogControl .theia-button:focus-visible { outline: 2px solid #d74470; outline-offset: 2px; }
+/* The light theme on the same dialogs: one class more specific than the rules above (the theme on top of the widget's
+ * own), so it wins by specificity, not by coming later. Before, :has(#…widget) gave the dark rules an ID and these
+ * never applied: light-theme Theia dialogs stayed dark. */
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))):is(.nmx-theme-light-active, .theia-light) .lm-Widget.dialogOverlay { background: rgba(61, 55, 58, .24); }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))):is(.nmx-theme-light-active, .theia-light) .lm-Widget.dialogOverlay .dialogBlock { color: #302b2e; background: #fff; border-color: #d8d3d6; box-shadow: 0 18px 48px rgba(53, 45, 49, .16); }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))):is(.nmx-theme-light-active, .theia-light) .lm-Widget.dialogOverlay .dialogTitle { color: #242124; }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))):is(.nmx-theme-light-active, .theia-light) .lm-Widget.dialogOverlay .dialogTitle i.closeButton:hover { background: rgba(0, 0, 0, .06); }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))):is(.nmx-theme-light-active, .theia-light) .lm-Widget.dialogOverlay .dialogControl .theia-button { color: #393336; background: #f4f2f3; border-color: #d8d3d6; }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))):is(.nmx-theme-light-active, .theia-light) .lm-Widget.dialogOverlay .dialogControl .theia-button.main { color: #fff; background: #2c282a; border-color: #2c282a; }
 /* A Theia confirmation (an extension or the workbench asking with actions, TheiaConfirmationActionDialog): the panel keeps
  * one width whatever the message; a long file path breaks anywhere instead of being cut off at the panel's edge, and a long
  * message scrolls inside it. The heading reads from the start like every NextMux dialog; buttons that do not fit in one row
  * move onto a second row, right-aligned, and a label longer than the panel wraps inside its button (never cut short). */
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogBlock { width: min(520px, calc(100vw - 40px)); min-width: 0; }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogTitle { gap: 8px; text-align: start; }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogTitle > div { min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogTitle i.closeButton { flex: none; }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogContent { max-height: min(48vh, 360px); overscroll-behavior: contain; }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .nmx-theia-confirm-message { overflow-wrap: anywhere; user-select: text; }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogControl { flex-wrap: wrap; }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogControl .theia-button { max-width: 100%; height: auto; min-height: 32px; padding-block: 6px; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogBlock { width: min(520px, calc(100vw - 40px)); min-width: 0; }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogTitle { gap: 8px; text-align: start; }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogTitle > div { min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogTitle i.closeButton { flex: none; }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogContent { max-height: min(48vh, 360px); overscroll-behavior: contain; }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay.nmx-theia-confirm .nmx-theia-confirm-message { overflow-wrap: anywhere; user-select: text; }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogControl { flex-wrap: wrap; }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay.nmx-theia-confirm .dialogControl .theia-button { max-width: 100%; height: auto; min-height: 32px; padding-block: 6px; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) {
-    body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Widget.dialogOverlay { animation: none; }
+    body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) .lm-Widget.dialogOverlay { animation: none; }
 }
 
 /* Theia's HTML window controls (Windows, and Linux with the custom title bar)
  * sit on the NextMux title row: same height, no separate background block. */
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls {
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) #window-controls {
     height: 40px;
     background: transparent;
 }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .control-button { line-height: 40px; }
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .control-button:not(#close-button):hover { background: rgba(128, 128, 128, .18); }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) #window-controls .control-button { line-height: 40px; }
+body:is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))) #window-controls .control-button:not(#close-button):hover { background: rgba(128, 128, 128, .18); }
 
 /* ---------------------------------------------------------------------------
  * Local files and media referenced in conversation Markdown
@@ -2019,13 +2026,13 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #window-controls .contro
     --nmx-user-bubble: #dfdcd8;
     --nmx-user-bubble-border: #d0cbc7;
 }
-#theia-app-shell:has(.nmx-theme-light) :is(#theia-main-content-panel, #nextmux\.desktop\.widget) { background: #ecebe8 !important; }
+body:is(.nmx-theme-light-active, .theia-light) #theia-app-shell :is(#theia-main-content-panel, #nextmux\.desktop\.widget) { background: #ecebe8 !important; }
 .nmx-shell.nmx-theme-light :is(.nmx-workspace, .nmx-workspace-scroll, .nmx-coding-stage, .nmx-task-thread, .nmx-work-context, .nmx-context-browser, .nmx-context-files, .nmx-context-file-list, .nmx-context-file-preview, .nmx-browser-view, .nmx-composer-dock, .nmx-workspace-topbar, .nmx-conversation-tabs) {
     background-color: #ecebe8 !important;
 }
 .nmx-shell.nmx-theme-light .nmx-workspace-topbar.nmx-coding-topbar { background: #ecebe8 !important; }
 .nmx-shell.nmx-theme-light :is(.nmx-context-panel, .nmx-context-account-dock) { background: #e4e2de !important; }
-#theia-app-shell:has(.nmx-theme-light) #theia-top-panel { background: #e4e2de !important; }
+body:is(.nmx-theme-light-active, .theia-light) #theia-app-shell #theia-top-panel { background: #e4e2de !important; }
 /* The model and relay drawers keep the pickers' own white surface and border (nextmux.css): painted here, their frame
    turned warm grey around a still-white list. `:where` keeps this rule's specificity for every other surface. */
 .nmx-shell.nmx-theme-light :is(.nmx-composer, .nmx-composer-popover:not(:where(.nmx-model-picker-popover, .nmx-slash-command-popover)), .nmx-header-popover, .nmx-account-menu, .nmx-session-menu, .nmx-project-menu, .nmx-model-picker, .nmx-model-effort-menu, .nmx-follow-up-menu, .nmx-settings-panel, .nmx-settings-group) {
@@ -2393,7 +2400,7 @@ body:has(.nmx-onboarding-backdrop) .theia-preload { display: none !important; }
 .nmx-inactive-window-buttons > i:nth-child(1) { left: 12.75px; }
 .nmx-inactive-window-buttons > i:nth-child(2) { left: 34.75px; }
 .nmx-inactive-window-buttons > i:nth-child(3) { left: 56.75px; }
-body.nmx-window-inactive:not(.nmx-window-fullscreen):not(.nmx-modal-open):has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-shell.nmx-theme-light) .nmx-inactive-window-buttons { display: block; }
+body.nmx-window-inactive:not(.nmx-window-fullscreen):not(.nmx-modal-open):is(.nmx-widget-active, :where(:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)))):is(.nmx-theme-light-active, .theia-light) .nmx-inactive-window-buttons { display: block; }
 
 /* The file tab's right-click menu (nextmux-file-tab-menu.tsx), like a system context menu. */
 .nmx-shell .nmx-file-tab-menu-backdrop { position: fixed; inset: 0; z-index: 90; }

@@ -445,7 +445,8 @@ global.OriginFracture=OriginFracture;
     document.documentElement.classList.remove("nmx-splash-active");
     window.dispatchEvent(new CustomEvent("nextmux-splash-done"));
   };
-  if (new URLSearchParams(window.location.search).get("nextmuxConversation")) { root.remove(); return; }
+  const search = new URLSearchParams(window.location.search);
+  if (search.get("nextmuxConversation") || window.nextmuxDesktop?.isUpdateArrival === true || search.get("nextmuxUpdateArrival") === "1") { root.remove(); done(); return; }
   // Out of Theia's own launch layer, which it removes as soon as its shell is attached.
   document.body.appendChild(root);
   const theme = read("nextmux.desktop.theme.v1");

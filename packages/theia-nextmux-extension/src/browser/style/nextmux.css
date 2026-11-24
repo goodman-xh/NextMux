@@ -23522,3 +23522,51 @@ span.nmx-md-video[data-nmx-video] {
     outline: 1.5px solid var(--nmx-focus-ring, #a9a2a7);
     outline-offset: -1.5px;
 }
+
+/* ---------------------------------------------------------------------------
+ * Keep-alive hosts: a surface kept mounted while out of sight (a section left for another, the work-context drawer,
+ * the terminal) keeps its DOM, state, media and subscriptions; only its rendering stops. .nmx-keepalive-hidden skips
+ * its style, layout and paint (content-visibility) and its pointer input, and leaves the flow over its parent (its
+ * containing block): a visible sibling host keeps the whole area, and an editor, terminal or canvas inside still
+ * measures a real size, never 0x0. Animations pause, pseudo-elements' (shimmers, spinners) included. Removing the
+ * class renders it again in the same frame.
+ * ------------------------------------------------------------------------ */
+.nmx-keepalive-host {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    width: 100%;
+}
+
+.nmx-keepalive-hidden {
+    position: absolute !important;
+    inset: 0;
+    content-visibility: hidden !important;
+    contain-intrinsic-size: auto 900px;
+    pointer-events: none !important;
+}
+
+.nmx-keepalive-hidden,
+.nmx-keepalive-hidden *,
+.nmx-keepalive-hidden *::before,
+.nmx-keepalive-hidden *::after {
+    animation-play-state: paused !important;
+}
+
+/* Hosts of Electron webviews (the work-context drawer, its browser pane, an inactive browser tab) carry the class on
+   themselves, not on a bare wrapper, and two things set them apart. content-visibility skips only an element's
+   contents: these paint their own background, border and shadow, which would stay drawn over the shell, the closed
+   drawer as a dark panel over the sidebar. And the pages inside keep running for owned background automation, which
+   needs laid-out boxes and running frames, which a skipped subtree does not have. So they keep the v0.1.35 placement:
+   rendered, transparent, off-screen at a fixed size. */
+.nmx-shell :is(.nmx-work-context, .nmx-context-browser, .nmx-browser-view).nmx-keepalive-hidden {
+    position: fixed !important;
+    inset: 0 auto auto -10000px !important;
+    width: 1024px !important;
+    height: 768px !important;
+    opacity: 0 !important;
+    content-visibility: visible !important;
+}

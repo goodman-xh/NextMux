@@ -129,6 +129,34 @@ const MERCHANT_CONSOLE_HINTS: Readonly<Record<NextMuxDesktopLocale, string>> = {
     ar: 'طالما لديك API، يمكنك الانضمام كتاجر',
     hi: 'जब तक आपके पास API है, आप मर्चेंट बन सकते हैं'
 };
+const UPDATE_DIAGNOSTICS_LABELS: Readonly<Record<NextMuxDesktopLocale, { readonly copyButton: string; readonly copied: string; readonly copyFailed: string }>> = {
+    'zh-CN': { copyButton: '复制更新诊断', copied: '已复制更新诊断', copyFailed: '复制更新诊断失败' },
+    'zh-TW': { copyButton: '複製更新診斷', copied: '已複製更新診斷', copyFailed: '複製更新診斷失敗' },
+    en: { copyButton: 'Copy update diagnostics', copied: 'Update diagnostics copied', copyFailed: 'Failed to copy update diagnostics' },
+    ja: { copyButton: '更新診断をコピー', copied: '更新診断をコピーしました', copyFailed: '更新診断のコピーに失敗しました' },
+    ko: { copyButton: '업데이트 진단 복사', copied: '업데이트 진단을 복사했습니다', copyFailed: '업데이트 진단을 복사하지 못했습니다' },
+    es: { copyButton: 'Copiar diagnóstico de actualización', copied: 'Diagnóstico de actualización copiado', copyFailed: 'No se pudo copiar el diagnóstico de actualización' },
+    fr: { copyButton: 'Copier le diagnostic de mise à jour', copied: 'Diagnostic de mise à jour copié', copyFailed: 'Impossible de copier le diagnostic de mise à jour' },
+    de: { copyButton: 'Update-Diagnose kopieren', copied: 'Update-Diagnose kopiert', copyFailed: 'Update-Diagnose konnte nicht kopiert werden' },
+    'pt-BR': { copyButton: 'Copiar diagnóstico de atualização', copied: 'Diagnóstico de atualização copiado', copyFailed: 'Falha ao copiar o diagnóstico de atualização' },
+    ru: { copyButton: 'Копировать диагностику обновления', copied: 'Диагностика обновления скопирована', copyFailed: 'Не удалось скопировать диагностику обновления' },
+    ar: { copyButton: 'نسخ تشخيص التحديث', copied: 'تم نسخ تشخيص التحديث', copyFailed: 'تعذر نسخ تشخيص التحديث' },
+    hi: { copyButton: 'अपडेट डायग्नोस्टिक्स कॉपी करें', copied: 'अपडेट डायग्नोस्टिक्स कॉपी हो गया', copyFailed: 'अपडेट डायग्नोस्टिक्स कॉपी नहीं हो सका' }
+};
+const UPDATE_INSTALL_STATUS_LABELS: Readonly<Record<NextMuxDesktopLocale, { readonly cancelled: string; readonly runningTasksBlocked: string }>> = {
+    'zh-CN': { cancelled: '已取消重启更新，更新仍已准备就绪', runningTasksBlocked: '当前仍有任务运行，完成后再重启安装更新' },
+    'zh-TW': { cancelled: '已取消重新啟動更新，更新仍已準備就緒', runningTasksBlocked: '目前仍有任務執行中，完成後再重新啟動安裝更新' },
+    en: { cancelled: 'Update restart cancelled; update remains ready to install', runningTasksBlocked: 'Tasks are still running; restart after they finish to install the update' },
+    ja: { cancelled: '更新のための再起動をキャンセルしました（更新は準備済みのままです）', runningTasksBlocked: '実行中のタスクがあります。完了後に再起動して更新をインストールしてください' },
+    ko: { cancelled: '업데이트 다시 시작이 취소되었습니다. 업데이트는 설치 준비 상태로 유지됩니다', runningTasksBlocked: '실행 중인 작업이 있습니다. 작업 완료 후 다시 시작해 업데이트를 설치하세요' },
+    es: { cancelled: 'Reinicio de actualización cancelado; la actualización sigue lista', runningTasksBlocked: 'Aún hay tareas en curso; reinicia al terminar para instalar la actualización' },
+    fr: { cancelled: 'Redémarrage annulé ; la mise à jour reste prête à être installée', runningTasksBlocked: 'Des tâches sont encore en cours ; redémarrez une fois terminées pour installer la mise à jour' },
+    de: { cancelled: 'Neustart abgebrochen; das Update bleibt installationsbereit', runningTasksBlocked: 'Es laufen noch Aufgaben; starten Sie nach Abschluss neu, um das Update zu installieren' },
+    'pt-BR': { cancelled: 'Reinicialização cancelada; a atualização continua pronta para instalar', runningTasksBlocked: 'Ainda há tarefas em execução; reinicie ao concluir para instalar a atualização' },
+    ru: { cancelled: 'Перезапуск для обновления отменён; обновление готово к установке', runningTasksBlocked: 'Выполняются задачи; перезапустите после завершения, чтобы установить обновление' },
+    ar: { cancelled: 'تم إلغاء إعادة التشغيل للتحديث؛ لا يزال التحديث جاهزًا للتثبيت', runningTasksBlocked: 'لا تزال هناك مهام قيد التشغيل؛ أعد التشغيل بعد انتهائها لتثبيت التحديث' },
+    hi: { cancelled: 'अपडेट रीस्टार्ट रद्द किया गया; अपडेट इंस्टॉल के लिए तैयार है', runningTasksBlocked: 'अभी कार्य चल रहे हैं; उनके पूरे होने के बाद अपडेट इंस्टॉल करने के लिए रीस्टार्ट करें' }
+};
 /** Where developers upload plugins for review (the website's plugin pages). */
 import { DataLocationSection } from './nextmux-data-location';
 import { ConversationTabGlyph, ConversationTabStrip, ConversationVisualTabView, conversationTabsText, LIVE_FRAME_FRESH_MS, liveVideoFrameAgeMs, type ConversationTabPluginParts, type ConversationTabScheduledTask, conversationWindowText as tabWindowText, type ComputerViewCapability, type ConversationWindowControls, type ConversationWindowPlacement, type ConversationWindowStartOptions, type ConversationWindowTextKey } from './nextmux-conversation-tabs-view';
@@ -195,7 +223,7 @@ import { BillingFailureSource, billingShortfall, isInsufficientBalanceFailure, p
 import { billingMovementReferenceLabel } from './nextmux-billing-labels';
 import { CommunitySkillCard } from './nextmux-community-skill-card';
 import { ProjectMemoryPanel } from './nextmux-project-memory-panel';
-import { installModalChrome } from './nextmux-modal-chrome';
+import { installModalChrome, notifyModalChromeChanged, registerModalChromeOverlay } from './nextmux-modal-chrome';
 import { installInactiveWindowButtons } from './nextmux-inactive-window-buttons';
 import { AgentInstructionsSettings, agentInstructionsText } from './nextmux-agent-instructions-panel';
 import { projectMemoryText } from './nextmux-project-memory-locale';
@@ -345,6 +373,9 @@ import { walletBalanceText } from './nextmux-wallet-balance-text';
 import { shouldClearBalanceNotice } from './nextmux-balance-notice-recovery';
 import { parseVideoProfilesPayload, videoModelProfile, type MeasuredVideoProfile, type VideoModelProfile } from '../common/nextmux-video-profiles';
 import { ImeInput, ImeTextarea, isImeFieldComposing } from './nextmux-ime-field';
+import { getCachedDateTimeFormat, getCachedNumberFormat } from './nextmux-intl-cache';
+import { DEFAULT_VIRTUAL_LIST_THRESHOLD, VirtualList } from './nextmux-virtual-list';
+import { createRegionProfilerCallback, isRenderTraceEnabled, recordRegionRender } from './nextmux-render-trace';
 import { agentCommandLogText, agentCommandTranscript, conversationAgentCommands, hasRunningAgentCommand, type AgentCommandEntry } from './nextmux-agent-command-log';
 import { COMIC_VOICE_INTENT_THRESHOLD, type ClassifyComicVoiceIntentResult } from '../common/nextmux-voice-intent';
 import { SYSTEM_NOTIFICATIONS_KEY, systemNotificationsEnabled, taskNotificationText, type TaskNotificationKey } from './nextmux-task-notification-text';
@@ -3989,8 +4020,8 @@ const COMIC_EXPORT_DIRECTORY_KEY = 'nextmux.desktop.comicExportDirectory.v1';
  * frame. Continuous input (pointer moves, wheel, scroll) and background work (streams, timers, IPC) are coalesced.
  */
 const IMMEDIATE_RENDER_EVENT_TYPES: ReadonlySet<string> = new Set([
-    'auxclick', 'beforeinput', 'blur', 'change', 'click', 'compositionend', 'compositionstart', 'compositionupdate',
-    'contextmenu', 'copy', 'cut', 'dblclick', 'dragend', 'dragstart', 'drop', 'focus', 'focusin', 'focusout', 'input',
+    'auxclick', 'blur', 'change', 'click',
+    'contextmenu', 'copy', 'cut', 'dblclick', 'dragend', 'dragstart', 'drop', 'focus', 'focusin', 'focusout',
     'keydown', 'keypress', 'keyup', 'mousedown', 'mouseup', 'paste', 'pointercancel', 'pointerdown', 'pointerup',
     'reset', 'select', 'submit', 'touchcancel', 'touchend', 'touchstart'
 ]);
@@ -4557,7 +4588,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             ? `${entry.state}|${(entry.fullOfferingIds || []).join(',')}` : '';
     }
 
-    protected relayMetricTooltip: { readonly key: string; readonly text: string; readonly anchor: HTMLElement; readonly seal?: boolean } | undefined;
+    protected relayMetricTooltip: { readonly key: string; readonly text: string; readonly anchor: HTMLElement; readonly seal?: boolean; readonly rect?: { readonly left: number; readonly bottom: number } } | undefined;
     protected modelEvidenceTooltip: { readonly text: string; readonly left: number; readonly top: number; readonly width: number } | undefined;
     /** The anchor whose own title the portal tooltip holds back while it shows, as nextmux-hover-tips.ts does. */
     protected modelEvidenceHeldTitle: { readonly anchor: HTMLElement; readonly title: string } | undefined;
@@ -4597,14 +4628,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
             return;
         }
         this.modelEvidenceTooltip = { text, left, top, width };
-        this.update();
+        if (this.updateRegion) this.updateRegion('popovers');
+        else this.update();
     }
 
     protected hideModelEvidenceTooltip(): void {
         this.releaseModelEvidenceTitle?.();
         if (!this.modelEvidenceTooltip) return;
         this.modelEvidenceTooltip = undefined;
-        this.update();
+        if (this.updateRegion) this.updateRegion('popovers');
+        else this.update();
     }
 
     /** Gives the held anchor its title back, unless a render has set one meanwhile or the anchor is gone. */
@@ -6363,6 +6396,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 if (this.activeCodingSessionId) this.persistActiveCodingSessionState();
             }
             this.flushComposerDraft();
+            if (this.comicChatDraftWriteTimer !== undefined) {
+                this.writeComicChatDrafts?.(true);
+            }
+            this.cancelModelHoverIntent?.();
+            this.cancelModelEffortPickerClose?.();
+            this.cancelComicModelHoverClose?.();
+            this.releaseModelEvidenceTitle?.();
+            if (this.titlebarResizeObserver) {
+                this.titlebarResizeObserver.disconnect();
+                this.titlebarResizeObserver = undefined;
+            }
         } });
         this.update();
         this.scheduleSurfaceLocalization();
@@ -6409,26 +6453,73 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
     }
 
+    protected titlebarResizeObserver: ResizeObserver | undefined;
+    protected observedTitlebarElements: WeakSet<Element> | undefined;
+    protected inRenderPass = false;
+    protected cachedShellWidth = 0;
+    protected cachedWorkspaceWidth = 0;
+    protected cachedTerminalRenderedWidth = 0;
+
+    protected attachTitlebarResizeObserver(): void {
+        if (typeof ResizeObserver === 'undefined' || !this.node || this.isDisposed) return;
+        const observer = this.titlebarResizeObserver ??= new ResizeObserver(() => this.schedulePaneResizeUpdate());
+        const observed = this.observedTitlebarElements ??= new WeakSet<Element>();
+        for (const selector of ['.nmx-shell', '.nmx-titlebar-primary-nav', '.nmx-titlebar-actions', '.nmx-workspace']) {
+            const el = this.node.querySelector<HTMLElement>(selector);
+            if (el && !observed.has(el)) {
+                observed.add(el);
+                observer.observe(el);
+            }
+        }
+    }
+
+    protected syncWidgetBodyState(active?: boolean): void {
+        if (typeof document === 'undefined' || !document.body?.classList) return;
+        if (active !== undefined) {
+            document.body.classList.toggle('nmx-widget-active', Boolean(active) && !this.isDisposed);
+        }
+        if (typeof this.resolvedDesktopTheme === 'function') {
+            document.body.classList.toggle('nmx-theme-light-active', this.resolvedDesktopTheme() === 'light');
+        }
+    }
+
     protected paneShellWidth(): number {
+        if (this.inRenderPass) {
+            return this.cachedShellWidth || this.lastResponsiveShellWidth || (typeof window !== 'undefined' ? window.innerWidth : 0);
+        }
         const shell = this.node.querySelector<HTMLElement>('.nmx-shell');
-        return shell?.getBoundingClientRect().width || this.node.getBoundingClientRect().width || window.innerWidth;
+        const width = shell?.getBoundingClientRect().width || this.node.getBoundingClientRect().width || window.innerWidth;
+        if (width > 0) this.cachedShellWidth = width;
+        return width;
     }
 
     protected paneWorkspaceWidth(): number {
-        const workspace = this.node.querySelector<HTMLElement>('.nmx-workspace');
         const calculated = this.paneShellWidth() - (this.contextPanelCollapsed ? 0 : this.contextPanelWidth);
+        if (this.inRenderPass) {
+            return this.cachedWorkspaceWidth > 0 ? Math.min(this.cachedWorkspaceWidth, calculated) : calculated;
+        }
+        const workspace = this.node.querySelector<HTMLElement>('.nmx-workspace');
         const rendered = workspace?.getBoundingClientRect().width || 0;
+        if (rendered > 0) this.cachedWorkspaceWidth = rendered;
         return rendered > 0 ? Math.min(rendered, calculated) : calculated;
     }
 
     protected terminalAvailableWidth(): number {
         const contextWidth = this.contextPanelCollapsed ? 0 : this.contextPanelWidth;
+        if (this.inRenderPass) {
+            if (this.cachedTerminalRenderedWidth > 0) return this.cachedTerminalRenderedWidth;
+            const cachedWork = Math.max(0, (this.cachedWorkspaceWidth || 0) - contextWidth - (this.workContextOpen ? this.workContextWidth : 0));
+            if (cachedWork > 0) return cachedWork;
+            return Math.max(0, this.paneShellWidth() - contextWidth - (this.workContextOpen ? this.workContextWidth : 0));
+        }
         const terminal = this.node.querySelector<HTMLElement>('.nmx-terminal-drawer.is-open');
         const rendered = terminal?.getBoundingClientRect().width || 0;
+        if (rendered > 0) this.cachedTerminalRenderedWidth = rendered;
         if (rendered > 0) return rendered;
         const workspaceNode = this.node.querySelector<HTMLElement>('.nmx-workspace');
-        const workspace = Math.max(0, (workspaceNode?.getBoundingClientRect().width || 0)
-            - contextWidth - (this.workContextOpen ? this.workContextWidth : 0));
+        const rawWorkspaceWidth = workspaceNode?.getBoundingClientRect().width || 0;
+        if (rawWorkspaceWidth > 0) this.cachedWorkspaceWidth = rawWorkspaceWidth;
+        const workspace = Math.max(0, rawWorkspaceWidth - contextWidth - (this.workContextOpen ? this.workContextWidth : 0));
         if (workspace > 0) return workspace;
         // During the frame between state mutation and DOM commit, use the same
         // authoritative state as the CSS variables so drag limits never jump.
@@ -6754,6 +6845,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.paneResizeUpdateFrame = window.requestAnimationFrame(() => {
             this.paneResizeUpdateFrame = 0;
             if (this.isDisposed) return;
+            this.popoverMeasureRevision = (this.popoverMeasureRevision ?? 0) + 1;
+            this.popoverAnchorGeometryCache?.clear();
             const signature = this.paneResizeSignature();
             const stage = this.node.querySelector<HTMLElement>('.nmx-task-view');
             const previousStageWidth = stage ? Math.round(stage.clientWidth) : 0;
@@ -6762,6 +6855,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // persisted preference is unchanged. Perform the measurement and
             // ReactWidget flush outside ResizeObserver's delivery lifecycle.
             this.syncPaneCssVariables();
+            this.attachTitlebarResizeObserver?.();
             const stageWidth = stage ? Math.round(stage.clientWidth) : 0;
             const threadWidthChanged = stageWidth !== previousStageWidth
                 || Boolean(this.threadReadingAnchor && this.threadReadingAnchor.sessionId === this.activeCodingSessionId
@@ -6942,6 +7036,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 target: this.themeService,
                 storage: window.localStorage
             });
+            this.syncWidgetBodyState?.();
         };
         // Paint the requested theme immediately without dirtying the user's
         // settings file while Theia is still restoring preferences.
@@ -8812,7 +8907,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             style={{ '--nmx-depth-cols': Math.min(6, contextChoices.length) } as React.CSSProperties}>
                             {contextChoices.map(tokens => {
                                 const shortLabel = contextWindowTokenLabel(tokens);
-                                const fullTokens = (() => { try { return tokens.toLocaleString(this.desktopLocale); } catch { return String(tokens); } })();
+                                const fullTokens = (() => { try { return typeof getCachedNumberFormat === 'function' ? getCachedNumberFormat(this.desktopLocale).format(tokens) : tokens.toLocaleString(this.desktopLocale); } catch { return String(tokens); } })();
                                 const contextTip = `${contextBudgetText(this.desktopLocale, 'window')}: ${shortLabel} (${fullTokens} Tokens)`;
                                 return <button key={tokens} type='button' role='radio' aria-checked={activeContextTokens === tokens}
                                     data-context-window={tokens} className={activeContextTokens === tokens ? 'is-active' : ''} dir='ltr'
@@ -9192,14 +9287,35 @@ export class NextMuxDesktopWidget extends ReactWidget {
         let controls = this.computerWindowControls.get(key);
         if (!controls) {
             const widget = this;
+            type ExtraWindowState = {
+                canPark?: boolean;
+                parkReason?: string;
+                elevated?: boolean;
+                canElevate?: boolean;
+                selfElevated?: boolean;
+                captureError?: string;
+                selfThrottles?: boolean;
+                desktopFollow?: boolean;
+                tether?: 'behind' | 'corner';
+            };
             // One record of the tab's switches, shared by its header and the AI's tabs.set (listeners follow changes).
-            const state: { placement?: ConversationWindowPlacement; sound?: boolean; userInput: boolean; parkReason?: string;
-                selfThrottles?: boolean; desktopFollow?: boolean; tether?: 'behind' | 'corner' } = { userInput: false, sound: preferredSound ?? false };
-            // Windows facts the tab's realtime prompt reads (only what the app side reported).
-            const windowFacts = (current: { readonly selfThrottles?: boolean; readonly desktopFollow?: boolean; readonly tether?: string } | undefined):
-                { selfThrottles?: boolean; desktopFollow?: boolean; tether?: 'behind' | 'corner' } => {
+            const state: { placement?: ConversationWindowPlacement; sound?: boolean; userInput: boolean } & ExtraWindowState = {
+                userInput: false,
+                sound: preferredSound ?? false,
+                ...(typeof widget.computerViewCapability?.selfElevated === 'boolean' ? { selfElevated: widget.computerViewCapability.selfElevated } : {}),
+                ...(typeof widget.computerViewCapability?.canElevate === 'boolean' ? { canElevate: widget.computerViewCapability.canElevate } : {})
+            };
+            // Windows facts the tab's realtime prompt & recovery UI read (only what the app side reported).
+            const windowFacts = (current: ({ readonly canPark?: boolean; readonly elevated?: boolean; readonly canElevate?: boolean; readonly selfElevated?: boolean;
+                readonly captureError?: string; readonly selfThrottles?: boolean; readonly desktopFollow?: boolean; readonly tether?: string }) | undefined):
+                ExtraWindowState => {
                 const tether = current?.tether === 'behind' || current?.tether === 'corner' ? current.tether : undefined;
                 return {
+                    ...(typeof current?.canPark === 'boolean' ? { canPark: current.canPark } : {}),
+                    ...(typeof current?.elevated === 'boolean' ? { elevated: current.elevated } : {}),
+                    ...(typeof current?.canElevate === 'boolean' ? { canElevate: current.canElevate } : {}),
+                    ...(typeof current?.selfElevated === 'boolean' ? { selfElevated: current.selfElevated } : {}),
+                    ...(typeof current?.captureError === 'string' && current.captureError ? { captureError: current.captureError } : {}),
                     ...(current?.selfThrottles === true ? { selfThrottles: true } : {}),
                     ...(typeof current?.desktopFollow === 'boolean' ? { desktopFollow: current.desktopFollow } : {}),
                     ...(tether ? { tether } : {})
@@ -9223,19 +9339,20 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (this.computerWindowStateSync.size > 64) this.computerWindowStateSync.delete(this.computerWindowStateSync.keys().next().value!);
             void bridge.computerWindowState?.(conversationId, ref.pid, ref.windowId).then(current => {
                 if (!current?.ok) return;
+                const extra = current as typeof current & ExtraWindowState;
                 changed({
                     ...(current.placement === 'tab' || current.placement === 'desktop' ? { placement: current.placement } : {}),
                     ...(typeof current.sound === 'boolean' ? { sound: widget.computerWindowSoundPreferences.get(key) ?? current.sound } : {}),
                     userInput: current.keyboardMouse === true,
-                    ...(typeof current.parkReason === 'string' ? { parkReason: current.parkReason } : {}),
-                    ...windowFacts(current)
+                    ...(typeof current.parkReason === 'string' ? { parkReason: current.parkReason } : extra.canPark === true ? { parkReason: undefined } : {}),
+                    ...windowFacts(extra)
                 });
             }).catch(() => undefined);
             controls = {
                 state,
                 setVisible: visible => widget.setConversationWindowVisible(conversationId, ref.pid, ref.windowId, visible),
                 subscribe: listener => { listeners.add(listener); return () => { listeners.delete(listener); }; },
-                get canPark() { return widget.computerViewCapability?.park === true; },
+                get canPark() { return widget.computerViewCapability?.park === true && state.canPark !== false; },
                 get canPoint() { return widget.computerViewCapability?.pointer === true && Boolean(bridge.computerWindowPointer); },
                 get canMute() { return widget.computerViewCapability?.sound === true && Boolean(bridge.setComputerWindowSound); },
                 get canLock() { return widget.computerViewCapability?.lock !== false; },
@@ -9246,11 +9363,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         if (!armed?.ok) {
                             const current = await bridge.computerWindowState?.(conversationId, ref.pid, ref.windowId).catch(() => undefined);
                             if (current?.ok) {
+                                const extra = current as typeof current & ExtraWindowState;
                                 changed({
                                     ...(current.placement === 'tab' || current.placement === 'desktop' ? { placement: current.placement } : {}),
                                     ...(typeof current.sound === 'boolean' ? { sound: widget.computerWindowSoundPreferences.get(key) ?? current.sound } : {}),
                                     userInput: current.keyboardMouse === true,
-                                    ...(typeof current.parkReason === 'string' ? { parkReason: current.parkReason } : {})
+                                    ...(typeof current.parkReason === 'string' ? { parkReason: current.parkReason } : extra.canPark === true ? { parkReason: undefined } : {}),
+                                    ...windowFacts(extra)
                                 });
                             }
                             if (armed?.error === 'window_not_viewable' || armed?.error === 'window_not_capturable') {
@@ -9365,7 +9484,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     const list = targets.some(w => w.pid === activeRef.pid && w.windowId === activeRef.windowId)
                         ? targets
                         : [{ pid: activeRef.pid, windowId: activeRef.windowId, title: currentTab.target }];
-                    let result: { ok?: boolean; placement?: ConversationWindowPlacement; selfThrottles?: boolean; desktopFollow?: boolean; tether?: string } | undefined;
+                    let result: ({ ok?: boolean; placement?: ConversationWindowPlacement; canPark?: boolean; parkReason?: string; elevated?: boolean;
+                        canElevate?: boolean; selfElevated?: boolean; captureError?: string; selfThrottles?: boolean; desktopFollow?: boolean; tether?: string }) | undefined;
                     for (const w of list) {
                         const isActive = w.pid === activeRef.pid && w.windowId === activeRef.windowId;
                         const r = await bridge.placeComputerWindow!(conversationId, w.pid, w.windowId, placement, placement === 'desktop' && isActive);
@@ -9373,9 +9493,57 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         if (r?.ok) widget.computerWindowStateSync.get(`${conversationId}:${w.pid}:${w.windowId}`)?.({ placement: r.placement });
                     }
                     if (!result?.ok || !result.placement) return undefined;
-                    if (widget.computerViewCapability?.park) widget.rememberComputerWindowPlacement(placement);
-                    changed({ placement: result.placement, ...windowFacts(result) });
+                    if (widget.computerViewCapability?.park && state.canPark !== false) widget.rememberComputerWindowPlacement(placement);
+                    changed({
+                        placement: result.placement,
+                        ...(typeof result.parkReason === 'string' ? { parkReason: result.parkReason } : result.canPark === true ? { parkReason: undefined } : {}),
+                        ...windowFacts(result)
+                    });
                     return result.placement;
+                },
+                elevate: async () => {
+                    widget.loadConversationTabs();
+                    const currentTab = visualTabsFor(widget.conversationTabs, conversationId).find(item => item.id === tab.id) || tab;
+                    const activeRef = currentTab.windowRef || ref;
+                    type ElevatePlace = (conversationId: string, pid: number, windowId: number, placement: string, activate: boolean) => Promise<{
+                        readonly ok?: boolean;
+                        readonly placement?: ConversationWindowPlacement;
+                        readonly error?: string;
+                        readonly canPark?: boolean;
+                        readonly parkReason?: string;
+                        readonly elevated?: boolean;
+                        readonly canElevate?: boolean;
+                        readonly selfElevated?: boolean;
+                        readonly captureError?: string;
+                    }>;
+                    const rawResult = await (bridge.placeComputerWindow as unknown as ElevatePlace)(
+                        conversationId, activeRef.pid, activeRef.windowId, 'elevate', false
+                    ).catch((error: { message?: string }) => ({ ok: false, error: error?.message || 'elevation_failed' }));
+                    if (!rawResult?.ok) {
+                        return { ok: false, error: String((rawResult as { readonly error?: string })?.error || 'elevation_cancelled') };
+                    }
+                    if (widget.computerViewCapability) {
+                        widget.computerViewCapability = { ...widget.computerViewCapability, selfElevated: true, canElevate: false };
+                    }
+                    const okResult = rawResult as {
+                        readonly placement?: ConversationWindowPlacement;
+                        readonly canPark?: boolean;
+                        readonly parkReason?: string;
+                        readonly elevated?: boolean;
+                        readonly captureError?: string;
+                    };
+                    const nextPatch = {
+                        ...(okResult.placement === 'tab' || okResult.placement === 'desktop' ? { placement: okResult.placement } : {}),
+                        canPark: typeof okResult.canPark === 'boolean' ? okResult.canPark : true,
+                        parkReason: typeof okResult.parkReason === 'string' ? okResult.parkReason : undefined,
+                        ...(typeof okResult.elevated === 'boolean' ? { elevated: okResult.elevated } : {}),
+                        canElevate: false,
+                        selfElevated: true,
+                        captureError: typeof okResult.captureError === 'string' && okResult.captureError ? okResult.captureError : undefined
+                    };
+                    changed(nextPatch);
+                    widget.computerWindowStateSync?.get(`${conversationId}:${activeRef.pid}:${activeRef.windowId}`)?.(nextPatch);
+                    return { ok: true };
                 },
                 terminateProcess: async () => {
                     widget.loadConversationTabs();
@@ -9419,7 +9587,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     };
     protected readonly inputBlockedNotices = new Map<string, number>();
     /** Per tab window: apply the switches the app side reports ('state' events). */
-    protected readonly computerWindowStateSync = new Map<string, (patch: { placement?: ConversationWindowPlacement; sound?: boolean; userInput?: boolean; parkReason?: string }) => void>();
+    protected readonly computerWindowStateSync = new Map<string, (patch: { placement?: ConversationWindowPlacement; sound?: boolean; userInput?: boolean;
+        canPark?: boolean; parkReason?: string; elevated?: boolean; canElevate?: boolean; selfElevated?: boolean; captureError?: string }) => void>();
     /** Tabs torn off into windows of their own (apps/desktop/computer-tab-window.cjs), by conversation and tab. */
     protected readonly detachedComputerTabs = new Set<string>();
     protected tabWindowEventsBound = false;
@@ -9454,10 +9623,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const currentTabs = visualTabsFor(this.conversationTabs, event.conversationId);
             const existing = findConversationTabByTarget(currentTabs, undefined, event.pid, event.windowId);
             if (event.type === 'state') {
+                const stateEvent = event as typeof event & {
+                    readonly canPark?: boolean; readonly parkReason?: string;
+                    readonly elevated?: boolean; readonly canElevate?: boolean; readonly selfElevated?: boolean; readonly captureError?: string;
+                };
                 this.computerWindowStateSync.get(`${event.conversationId}:${event.pid}:${event.windowId}`)?.({
                     ...(event.placement === 'tab' || event.placement === 'desktop' ? { placement: event.placement } : {}),
                     ...(typeof event.sound === 'boolean' ? { sound: event.sound } : {}),
-                    ...(typeof event.keyboardMouse === 'boolean' ? { userInput: event.keyboardMouse } : {}) });
+                    ...(typeof event.keyboardMouse === 'boolean' ? { userInput: event.keyboardMouse } : {}),
+                    ...(typeof stateEvent.canPark === 'boolean' ? { canPark: stateEvent.canPark } : {}),
+                    ...(typeof stateEvent.parkReason === 'string' ? { parkReason: stateEvent.parkReason } : stateEvent.canPark === true ? { parkReason: undefined } : {}),
+                    ...(typeof stateEvent.elevated === 'boolean' ? { elevated: stateEvent.elevated } : {}),
+                    ...(typeof stateEvent.canElevate === 'boolean' ? { canElevate: stateEvent.canElevate } : {}),
+                    ...(typeof stateEvent.selfElevated === 'boolean' ? { selfElevated: stateEvent.selfElevated } : {}),
+                    captureError: typeof stateEvent.captureError === 'string' && stateEvent.captureError ? stateEvent.captureError : undefined
+                });
                 return;
             }
             if (event.type === 'input-blocked') {
@@ -9504,8 +9684,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     if (this.tabEarlyRebinds.size > 64) this.tabEarlyRebinds.delete(this.tabEarlyRebinds.values().next().value!);
                     this.markConversationTabDisconnected(event.conversationId, existing.id);
                     const platform = navigator.userAgent.includes('Windows') ? 'win32' : 'darwin';
-                    void this.handleTabToolRequest({ id: `tab-rebind-${Date.now()}`, conversationId: event.conversationId, expiresAt: Date.now() + 45_000,
-                        action: 'tabOpenApp', input: { app: existing.appId || existing.title, onlyIfRunning: true } }, platform).catch(() => undefined);
+                    const selector = existing.appId || existing.title;
+                    const tryRebind = () => this.handleTabToolRequest({ id: `tab-rebind-${Date.now()}`, conversationId: event.conversationId, expiresAt: Date.now() + 45_000,
+                        action: 'tabOpenApp', input: { app: selector, onlyIfRunning: true } }, platform).catch(() => ({ ok: false }));
+                    void tryRebind().then(result => {
+                        if (result?.ok) return;
+                        setTimeout(() => {
+                            if (this.isDisposed || !this.codingSessions.some(session => session.id === event.conversationId)) return;
+                            const latestTab = visualTabsFor(this.conversationTabs, event.conversationId).find(item => item.id === existing.id);
+                            if (!latestTab || latestTab.status === 'connected' && latestTab.windowRef) return;
+                            void tryRebind();
+                        }, 900);
+                    });
                     return;
                 }
                 this.markConversationTabDisconnected(event.conversationId, existing.id);
@@ -10568,7 +10758,90 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected async installDesktopUpdate(): Promise<void> {
-        await window.nextmuxDesktop?.installUpdate?.();
+        if (this.updateBusy) return;
+        this.updateBusy = true;
+        this.updateError = '';
+        this.updateMessage = '';
+        this.update();
+        let accepted = false;
+        try {
+            const rawResult: unknown = await window.nextmuxDesktop?.installUpdate?.();
+            let fallbackError = '';
+            let fallbackMessage = '';
+            if (rawResult === true) {
+                accepted = true;
+            } else if (rawResult && typeof rawResult === 'object') {
+                const outcome = rawResult as {
+                    readonly ok?: boolean;
+                    readonly cancelled?: boolean;
+                    readonly runningTasksBlocked?: boolean;
+                    readonly error?: string;
+                };
+                if (outcome.ok === true && !outcome.cancelled && !outcome.runningTasksBlocked) {
+                    accepted = true;
+                } else if (outcome.runningTasksBlocked) {
+                    const labels = UPDATE_INSTALL_STATUS_LABELS[this.desktopLocale] || UPDATE_INSTALL_STATUS_LABELS.en;
+                    fallbackMessage = labels.runningTasksBlocked;
+                } else if (outcome.cancelled) {
+                    const labels = UPDATE_INSTALL_STATUS_LABELS[this.desktopLocale] || UPDATE_INSTALL_STATUS_LABELS.en;
+                    fallbackMessage = labels.cancelled;
+                } else {
+                    fallbackError = outcome.error?.trim() || desktopUpdateText(this.desktopLocale, 'restartHint');
+                }
+            } else {
+                fallbackError = desktopUpdateText(this.desktopLocale, 'restartHint');
+            }
+            if (!accepted && typeof window.nextmuxDesktop?.getUpdateState === 'function') {
+                try {
+                    this.applyDesktopUpdateState(await window.nextmuxDesktop.getUpdateState());
+                } catch { /* retain ready state on transient IPC read error */ }
+            }
+            if (!accepted) {
+                if (fallbackMessage && !this.updateError) this.updateMessage = fallbackMessage;
+                else if (fallbackError && !this.updateError && !this.updateMessage) this.updateError = fallbackError;
+            }
+        } catch (error) {
+            this.updateError = error instanceof Error && error.message.trim()
+                ? error.message
+                : desktopUpdateText(this.desktopLocale, 'restartHint');
+        } finally {
+            if (!accepted) this.updateBusy = false;
+            this.update();
+        }
+    }
+
+    protected async copyDesktopUpdateDiagnostics(): Promise<void> {
+        const labels = UPDATE_DIAGNOSTICS_LABELS[this.desktopLocale] || UPDATE_DIAGNOSTICS_LABELS.en;
+        let payload: unknown;
+        try {
+            const bridge = window as unknown as {
+                readonly nextmuxDesktopUpdate?: { readonly getDiagnostics?: () => Promise<unknown> };
+                readonly nextmuxDesktop?: { readonly getUpdateDiagnostics?: () => Promise<unknown> };
+            };
+            const reader = bridge.nextmuxDesktopUpdate?.getDiagnostics ?? bridge.nextmuxDesktop?.getUpdateDiagnostics;
+            payload = reader ? await reader() : undefined;
+        } catch {
+            payload = undefined;
+        }
+        const fallbackDiagnostics = {
+            version: this.updateState?.currentVersion || undefined,
+            phase: this.updateState?.phase || 'idle',
+            checkedAt: this.updateState?.checkedAt || 0,
+            errorCode: this.updateState?.errorCode,
+            error: this.updateState?.error || this.updateError || undefined,
+            platform: typeof navigator !== 'undefined' ? navigator.platform : '',
+            locale: this.desktopLocale
+        };
+        const text = JSON.stringify(payload ?? fallbackDiagnostics, null, 2);
+        try {
+            await this.copyToClipboard(text, labels.copied);
+            this.updateMessage = labels.copied;
+            this.updateError = '';
+        } catch {
+            this.updateError = labels.copyFailed;
+        }
+        if (this.updateRegion) this.updateRegion('settings');
+        else this.update();
     }
 
     protected async checkForDesktopUpdates(): Promise<void> {
@@ -13105,7 +13378,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected flushComposerDraftsForExit(): void {
         try { this.journalComposerDraft(true); } catch { /* best effort while the page goes away */ }
         try { if (this.composerDraftPersistTimer !== undefined) this.flushComposerDraft(); } catch { /* best effort */ }
+        try {
+            if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event === 'function') {
+                window.dispatchEvent(new Event('nmx:flush-pending-edits'));
+            }
+        } catch { /* best effort */ }
         try { if ((this as unknown as { comicChatState?: unknown }).comicChatState) this.rememberComicChatDraft?.(true); } catch { /* best effort */ }
+        try { if (this.comicChatDraftWriteTimer !== undefined) this.writeComicChatDrafts?.(true); } catch { /* best effort */ }
     }
 
     protected restoreComposerDraft(session: CodingSessionRecord): void {
@@ -15133,168 +15412,191 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 <i className='codicon codicon-search' aria-hidden='true' />
                                 <ImeInput
                                     value={this.comicStudioModelQuery}
+                                    commitDelayMs={100}
                                     placeholder={modelPickerListText(this.desktopLocale, 'search')}
                                     aria-label={modelPickerListText(this.desktopLocale, 'search')}
                                     onChange={event => {
                                         this.comicStudioModelQuery = event.currentTarget.value;
                                         this.closeComicModelHoverImmediately();
-                                        this.update();
+                                        if (this.updateRegion) this.updateRegion(['comic-popovers', 'popovers']);
+                                        else this.update();
                                     }}
                                 />
                             </div>
                         )}
-                        {filtered.length > 0 ? (
-                            <div
-                                className='nmx-model-picker-list'
-                                role='listbox'
-                                aria-label={comicStepName(this.desktopLocale, capability)}
-                                onScroll={() => {
-                                    this.noteModelListScroll?.();
-                                    if (this.comicModelHoverKey) {
-                                        this.closeComicModelHoverImmediately();
-                                        this.update();
-                                    } else this.hideModelEvidenceTooltip?.();
-                                }}
-                            >
-                                {filtered.map(item => {
-                                    const selected = item.key === selectedCandidate?.key;
-                                    const offering = item.offering;
-                                    const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
-                                    const variantTag = offering
-                                        ? (ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering)))
-                                        : '';
-                                    const rawFidelity = offering?.fidelity;
-                                    const fidelity = measuredModelFidelity(rawFidelity);
-                                    const authenticityPending = Boolean(offering) && fidelity === undefined;
-                                    const authenticityDefault = Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
-                                    const authenticityHint = authenticityPending
-                                        ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint')
-                                        : authenticityDefault
-                                            ? modelPickerEvidenceText(this.desktopLocale, 'authenticityDefaultHint')
-                                            : undefined;
-                                    const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
-                                    const hoverOpen = this.comicModelHoverKey === item.key;
-                                    const hoverPlacement = hoverOpen ? this.comicModelHoverPlacement : undefined;
-                                    const evidenceRows: { readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }[] = [
-                                        {
-                                            label: item.source.kind === 'official'
-                                                ? relayText(this.desktopLocale, 'apiName')
-                                                : item.source.kind === 'local'
-                                                    ? relayText(this.desktopLocale, 'local')
-                                                    : relayText(this.desktopLocale, 'relayTitle'),
-                                            value: offering?.providerName || comicStepSourceLabel(this.desktopLocale, item.source)
-                                        }
-                                    ];
-                                    if (offering) {
+                        {filtered.length > 0 ? (() => {
+                            const renderStudioOption = (item: typeof filtered[number]): React.ReactNode => {
+                                const selected = item.key === selectedCandidate?.key;
+                                const offering = item.offering;
+                                const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
+                                const variantTag = offering
+                                    ? (ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering)))
+                                    : '';
+                                const rawFidelity = offering?.fidelity;
+                                const fidelity = measuredModelFidelity(rawFidelity);
+                                const authenticityPending = Boolean(offering) && fidelity === undefined;
+                                const authenticityDefault = Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
+                                const authenticityHint = authenticityPending
+                                    ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint')
+                                    : authenticityDefault
+                                        ? modelPickerEvidenceText(this.desktopLocale, 'authenticityDefaultHint')
+                                        : undefined;
+                                const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
+                                const hoverOpen = this.comicModelHoverKey === item.key;
+                                const hoverPlacement = hoverOpen ? this.comicModelHoverPlacement : undefined;
+                                const evidenceRows: { readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }[] = [
+                                    {
+                                        label: item.source.kind === 'official'
+                                            ? relayText(this.desktopLocale, 'apiName')
+                                            : item.source.kind === 'local'
+                                                ? relayText(this.desktopLocale, 'local')
+                                                : relayText(this.desktopLocale, 'relayTitle'),
+                                        value: offering?.providerName || comicStepSourceLabel(this.desktopLocale, item.source)
+                                    }
+                                ];
+                                if (offering) {
+                                    evidenceRows.push({
+                                        label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'),
+                                        value: relayPercentText(this.desktopLocale, fidelity),
+                                        unmeasured: authenticityPending,
+                                        hint: authenticityHint
+                                    });
+                                }
+                                if (!offering) {
+                                    evidenceRows.push({
+                                        label: relayText(this.desktopLocale, 'price'),
+                                        value: item.source.kind === 'local' ? this.comicChatT('free') : this.comicChatT('providerBilled')
+                                    });
+                                }
+                                // A model's video and reference rules are read for its open card only, not for every row on each render.
+                                if (capability === 'video' && hoverPlacement) {
+                                    const aspects = this.comicChatAspectChoices(item);
+                                    if (aspects.length > 0) evidenceRows.push({ label: this.comicChatT('aspect'), value: aspects.join(' / ') });
+                                    const durations = this.comicChatSecondsChoices(item, modalRefCount);
+                                    if (durations.length > 0) evidenceRows.push({ label: canvasText(this.desktopLocale, 'duration'), value: durations.map(n => `${n}s`).join(' / ') });
+                                    if (videoModelGuide(item.model).nativeAudio) evidenceRows.push({ label: canvasText(this.desktopLocale, 'audio'), value: this.comicChatT('sound') });
+                                }
+                                if ((capability === 'image' || capability === 'video') && hoverPlacement) {
+                                    const refPolicy = this.comicChatReferencePolicy(capability, item);
+                                    if (refPolicy.limit > 0) {
                                         evidenceRows.push({
-                                            label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'),
-                                            value: relayPercentText(this.desktopLocale, fidelity),
-                                            unmeasured: authenticityPending,
-                                            hint: authenticityHint
+                                            label: refPolicy.firstFrame ? this.comicChatT('firstFrame') : this.comicChatT('reference'),
+                                            value: refPolicy.firstFrame ? this.comicChatT('count', { n: 1 }) : this.comicChatT('referencesLimit', { n: refPolicy.limit })
                                         });
                                     }
-                                    if (!offering) {
-                                        evidenceRows.push({
-                                            label: relayText(this.desktopLocale, 'price'),
-                                            value: item.source.kind === 'local' ? this.comicChatT('free') : this.comicChatT('providerBilled')
-                                        });
-                                    }
-                                    // A model's video and reference rules are read for its open card only, not for every row on each render.
-                                    if (capability === 'video' && hoverPlacement) {
-                                        const aspects = this.comicChatAspectChoices(item);
-                                        if (aspects.length > 0) evidenceRows.push({ label: this.comicChatT('aspect'), value: aspects.join(' / ') });
-                                        const durations = this.comicChatSecondsChoices(item, modalRefCount);
-                                        if (durations.length > 0) evidenceRows.push({ label: canvasText(this.desktopLocale, 'duration'), value: durations.map(n => `${n}s`).join(' / ') });
-                                        if (videoModelGuide(item.model).nativeAudio) evidenceRows.push({ label: canvasText(this.desktopLocale, 'audio'), value: this.comicChatT('sound') });
-                                    }
-                                    if ((capability === 'image' || capability === 'video') && hoverPlacement) {
-                                        const refPolicy = this.comicChatReferencePolicy(capability, item);
-                                        if (refPolicy.limit > 0) {
-                                            evidenceRows.push({
-                                                label: refPolicy.firstFrame ? this.comicChatT('firstFrame') : this.comicChatT('reference'),
-                                                value: refPolicy.firstFrame ? this.comicChatT('count', { n: 1 }) : this.comicChatT('referencesLimit', { n: refPolicy.limit })
-                                            });
-                                        }
-                                    }
-                                    const optionTitle = [item.label, ...evidenceRows.map(metric => `${metric.label}: ${metric.value}`)].filter(Boolean).join(' · ');
-                                    const hover = (event: React.PointerEvent<HTMLElement>): void => this.intendModelHover?.(item.key, this.comicModelHoverKey, event,
-                                        anchor => this.openComicModelHover(item.key, anchor, detailGeometry));
-                                    return (
-                                        <div
-                                            className={`nmx-model-option ${selected ? 'is-selected' : ''}`}
-                                            key={item.key}
-                                            data-model-id={item.key}
-                                            onPointerEnter={hover}
-                                            onPointerMove={hover}
-                                            onFocus={event => this.openComicModelHover(item.key, event.currentTarget, detailGeometry)}
-                                            onBlur={() => this.scheduleComicModelHoverClose()}
-                                            onPointerLeave={() => { this.cancelModelHoverIntent?.(item.key); this.scheduleComicModelHoverClose(); }}
+                                }
+                                const optionTitle = [item.label, ...evidenceRows.map(metric => `${metric.label}: ${metric.value}`)].filter(Boolean).join(' · ');
+                                const hover = (event: React.PointerEvent<HTMLElement>): void => this.intendModelHover?.(item.key, this.comicModelHoverKey, event,
+                                    anchor => this.openComicModelHover(item.key, anchor, detailGeometry));
+                                return (
+                                    <div
+                                        className={`nmx-model-option ${selected ? 'is-selected' : ''}`}
+                                        key={item.key}
+                                        data-model-id={item.key}
+                                        onPointerEnter={hover}
+                                        onPointerMove={hover}
+                                        onFocus={event => this.openComicModelHover(item.key, event.currentTarget, detailGeometry)}
+                                        onBlur={() => this.scheduleComicModelHoverClose()}
+                                        onPointerLeave={() => { this.cancelModelHoverIntent?.(item.key); this.scheduleComicModelHoverClose(); }}
+                                    >
+                                        <button
+                                            type='button'
+                                            role='option'
+                                            aria-selected={selected}
+                                            aria-label={optionTitle}
+                                            onClick={() => {
+                                                this.selectComicStepModelForKind(kind, capability, item.key);
+                                                this.reconcileComicStudioModalParameters();
+                                                this.closeComicStudioIsolatedPicker(true);
+                                            }}
                                         >
-                                            <button
-                                                type='button'
-                                                role='option'
-                                                aria-selected={selected}
-                                                aria-label={optionTitle}
-                                                onClick={() => {
-                                                    this.selectComicStepModelForKind(kind, capability, item.key);
-                                                    this.reconcileComicStudioModalParameters();
-                                                    this.closeComicStudioIsolatedPicker(true);
-                                                }}
+                                            <span>
+                                                <strong data-nmx-literal>{item.label}</strong>
+                                                {variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
+                                                    onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)}
+                                                    onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
+                                                {offering && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}
+                                            </span>
+                                            {selected && <i className='codicon codicon-check' />}
+                                        </button>
+                                        {hoverOpen && hoverPlacement && ReactDOM.createPortal(
+                                            <div
+                                                className={`nmx-model-effort-portal nmx-comic-model-effort-portal nmx-theme-${this.resolvedDesktopTheme()}`}
+                                                dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'}
+                                                lang={this.desktopLocale}
+                                                style={{ display: 'block', position: 'fixed', top: 0, left: 0, width: 0, height: 0, zIndex: 12050 }}
+                                                onPointerEnter={() => this.cancelComicModelHoverClose()}
+                                                onPointerLeave={() => this.scheduleComicModelHoverClose()}
                                             >
-                                                <span>
-                                                    <strong data-nmx-literal>{item.label}</strong>
-                                                    {variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
-                                                        onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)}
-                                                        onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
-                                                    {offering && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}
-                                                </span>
-                                                {selected && <i className='codicon codicon-check' />}
-                                            </button>
-                                            {hoverOpen && hoverPlacement && ReactDOM.createPortal(
-                                                <div
-                                                    className={`nmx-model-effort-portal nmx-comic-model-effort-portal nmx-theme-${this.resolvedDesktopTheme()}`}
-                                                    dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'}
-                                                    lang={this.desktopLocale}
-                                                    style={{ display: 'block', position: 'fixed', top: 0, left: 0, width: 0, height: 0, zIndex: 12050 }}
+                                                <section
+                                                    className={`nmx-model-effort-menu nmx-model-evidence-menu is-${hoverPlacement.side}`}
+                                                    data-model-id={item.key}
+                                                    ref={element => { if (element) this.fitComicModelHoverMenu(element, detailGeometry); }}
+                                                    data-compact={(hoverPlacement.width !== undefined && hoverPlacement.width < 240) || undefined}
+                                                    style={{
+                                                        top: `${hoverPlacement.top}px`,
+                                                        left: `${hoverPlacement.left}px`,
+                                                        width: hoverPlacement.width === undefined ? undefined : `${hoverPlacement.width}px`,
+                                                        maxHeight: `${hoverPlacement.maxHeight}px`,
+                                                        zIndex: 12050
+                                                    }}
+                                                    aria-label={optionTitle}
+                                                    onFocus={() => this.cancelComicModelHoverClose()}
+                                                    onBlur={() => this.scheduleComicModelHoverClose()}
                                                     onPointerEnter={() => this.cancelComicModelHoverClose()}
                                                     onPointerLeave={() => this.scheduleComicModelHoverClose()}
                                                 >
-                                                    <section
-                                                        className={`nmx-model-effort-menu nmx-model-evidence-menu is-${hoverPlacement.side}`}
-                                                        data-model-id={item.key}
-                                                        ref={element => { if (element) this.fitComicModelHoverMenu(element, detailGeometry); }}
-                                                        data-compact={(hoverPlacement.width !== undefined && hoverPlacement.width < 240) || undefined}
-                                                        style={{
-                                                            top: `${hoverPlacement.top}px`,
-                                                            left: `${hoverPlacement.left}px`,
-                                                            width: hoverPlacement.width === undefined ? undefined : `${hoverPlacement.width}px`,
-                                                            maxHeight: `${hoverPlacement.maxHeight}px`,
-                                                            zIndex: 12050
-                                                        }}
-                                                        aria-label={optionTitle}
-                                                        onFocus={() => this.cancelComicModelHoverClose()}
-                                                        onBlur={() => this.scheduleComicModelHoverClose()}
-                                                        onPointerEnter={() => this.cancelComicModelHoverClose()}
-                                                        onPointerLeave={() => this.scheduleComicModelHoverClose()}
-                                                    >
-                                                        <header><strong data-nmx-literal>{item.label}</strong></header>
-                                                        <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}
-                                                            role={metric.hint ? 'group' : undefined} aria-label={metric.hint ? `${metric.label}: ${metric.value}. ${metric.hint}` : undefined}
-                                                            tabIndex={metric.hint ? 0 : undefined}
-                                                            onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
-                                                            onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
-                                                            onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
-                                                            onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-nmx-literal data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd></div>)}</dl>
-                                                        {offering && <OfferingPriceCard locale={this.desktopLocale} offering={offering} collapsible pullOutDrawer />}
-                                                    </section>
-                                                </div>,
-                                                document.body
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ) : (
+                                                    <header><strong data-nmx-literal>{item.label}</strong></header>
+                                                    <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}
+                                                        role={metric.hint ? 'group' : undefined} aria-label={metric.hint ? `${metric.label}: ${metric.value}. ${metric.hint}` : undefined}
+                                                        tabIndex={metric.hint ? 0 : undefined}
+                                                        onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
+                                                        onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
+                                                        onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
+                                                        onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-nmx-literal data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd></div>)}</dl>
+                                                    {offering && <OfferingPriceCard locale={this.desktopLocale} offering={offering} collapsible pullOutDrawer />}
+                                                </section>
+                                            </div>,
+                                            document.body
+                                        )}
+                                    </div>
+                                );
+                            };
+                            const threshold = typeof DEFAULT_VIRTUAL_LIST_THRESHOLD === 'number' ? DEFAULT_VIRTUAL_LIST_THRESHOLD : 30;
+                            const handleScroll = (): void => {
+                                this.noteModelListScroll?.();
+                                if (this.comicModelHoverKey) {
+                                    this.closeComicModelHoverImmediately();
+                                    if (this.updateRegion) this.updateRegion(['comic-popovers', 'popovers']);
+                                    else this.update();
+                                } else this.hideModelEvidenceTooltip?.();
+                            };
+                            if (typeof VirtualList === 'function' && filtered.length > threshold) {
+                                return (
+                                    <VirtualList
+                                        className='nmx-model-picker-list'
+                                        role='listbox'
+                                        aria-label={comicStepName(this.desktopLocale, capability)}
+                                        items={filtered}
+                                        threshold={threshold}
+                                        defaultItemHeight={32}
+                                        itemKey={item => item.key}
+                                        onScroll={handleScroll}
+                                        renderItem={item => renderStudioOption(item)}
+                                    />
+                                );
+                            }
+                            return (
+                                <div
+                                    className='nmx-model-picker-list'
+                                    role='listbox'
+                                    aria-label={comicStepName(this.desktopLocale, capability)}
+                                    onScroll={handleScroll}
+                                >
+                                    {filtered.map(renderStudioOption)}
+                                </div>
+                            );
+                        })() : (
                             <div className='nmx-model-picker-list nmx-model-picker-empty-list'>
                                 {(relayLoading || officialLoading) ? (
                                     <div className='nmx-merchant-catalog-status is-centered' role='status'>
@@ -17408,7 +17710,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.comicWorkspaceOptions = [...this.comicWorkspaceOptions, { path, label: title }];
             this.persistComicWorkspaceSelection();
         }
-        if (path !== this.activeComicWorkspaceRoot) this.selectComicWorkspaceRoot(path);
+        if (path !== this.activeComicWorkspaceRoot) {
+            if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event === 'function') {
+                window.dispatchEvent(new Event('nmx:flush-pending-edits'));
+            }
+            this.selectComicWorkspaceRoot(path);
+        }
         // The comic already open (its desk closed to the home): its card reopens the desk.
         else if (this.comicUsesDesk(this.comicProject())) this.openComicDesk();
     }
@@ -17540,6 +17847,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected closeComicProject(): void {
         if (!this.activeComicWorkspaceRoot || this.comicStage !== 'idle') return;
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event === 'function') {
+            window.dispatchEvent(new Event('nmx:flush-pending-edits'));
+        }
         this.setComicPrompt(this.comicPrompt);
         this.activeComicWorkspaceRoot = '';
         this.persistComicWorkspaceSelection();
@@ -20351,8 +20661,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 {run?.status === 'failed' && run.message && <div className='nmx-agent-inline-error' data-nmx-literal>{run.status === 'failed' ? modelFailureText(this.desktopLocale, run.failure || run.message) : run.message}{run.failure && this.renderModelFailureAction(run.failure)}</div>}
                 {this.renderComicDeskPicture(project, running)}
                 <details className='nmx-desk-style'><summary>{t('stylePanel')}</summary>
-                    <ImeTextarea rows={5} value={this.comicStyleBibleDraft} placeholder='画风、色彩、人物稳定特征与全片禁用项' onChange={event => this.setComicStyleBibleDraft(event.currentTarget.value)} />
-                    <button className='nmx-secondary-button' disabled={!this.comicStyleBibleDirty || this.comicStage !== 'idle'} onClick={() => void this.saveComicStyleBible()}>保存视觉设定</button>
+                    <ImeTextarea rows={5} value={this.comicStyleBibleDraft} placeholder={localizeDesktopSurface(this.desktopLocale, '画风、色彩、人物稳定特征与全片禁用项')} onChange={event => this.setComicStyleBibleDraft(event.currentTarget.value)} />
+                    <button className='nmx-secondary-button' disabled={!this.comicStyleBibleDirty || this.comicStage !== 'idle'} onClick={() => void this.saveComicStyleBible()}>{localizeDesktopSurface(this.desktopLocale, '保存视觉设定')}</button>
                 </details>
             </aside>
         </div>;
@@ -20935,14 +21245,65 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return { choices, routes };
     }
 
+    protected comicCanvasCapabilityVersion = 0;
+    private comicCanvasCapabilityFlushPending = false;
+    private comicCanvasFamiliesCache?: WeakMap<ComicCanvasSession, Map<'image' | 'video', {
+        readonly locale: NextMuxDesktopLocale;
+        readonly capabilityVersion: number;
+        readonly catalogRevision: number;
+        readonly offeringsRef: readonly PlatformOffering[] | undefined;
+        readonly connectionsRef: readonly OfficialModelConnection[] | undefined;
+        readonly merchantCatalogRef: PlatformMerchantCatalogPage | undefined;
+        readonly directoryVersion: string;
+        readonly capacityRef: unknown;
+        readonly favoriteCount: number;
+        readonly defaultsRef: unknown;
+        readonly value: readonly CanvasModelFamily[];
+    }>>;
+
+    protected scheduleComicCanvasCapabilityFlush(): void {
+        if (this.comicCanvasCapabilityFlushPending || this.isDisposed) return;
+        this.comicCanvasCapabilityFlushPending = true;
+        queueMicrotask(() => {
+            this.comicCanvasCapabilityFlushPending = false;
+            if (this.isDisposed) return;
+            if (this.activeSection && this.activeSection !== 'comic') return;
+            if (this.updateRegion) this.updateRegion('comic');
+            else this.update();
+        });
+    }
+
     /** The fixed model list in spec order with each model's routes; reading it starts each route's capability check. */
     protected canvasModelFamilies(session: ComicCanvasSession, kind: 'image' | 'video'): readonly CanvasModelFamily[] {
         const locale = this.desktopLocale;
+        const capVersionBefore = this.comicCanvasCapabilityVersion ?? 0;
+        const offeringsRef = this.platformCatalog?.offerings;
+        const connectionsRef = this.officialModels?.connections;
+        const merchantCatalogRef = this.selectedMerchantCatalog;
+        const directoryVersion = this.publicMerchantDirectoryVersion ?? '';
+        const capacityRef = this.relayCapacitySnapshot;
+        const favoriteCount = this.favoriteMerchantLabels?.size ?? 0;
+        const defaultsRef = this.comicPlatformDefaults;
+        const sessionCache = this.comicCanvasFamiliesCache?.get(session);
+        const cached = sessionCache?.get(kind);
+        if (cached
+            && cached.locale === locale
+            && cached.capabilityVersion === capVersionBefore
+            && cached.catalogRevision === this.catalogSnapshotRevision
+            && cached.offeringsRef === offeringsRef
+            && cached.connectionsRef === connectionsRef
+            && cached.merchantCatalogRef === merchantCatalogRef
+            && cached.directoryVersion === directoryVersion
+            && cached.capacityRef === capacityRef
+            && cached.favoriteCount === favoriteCount
+            && cached.defaultsRef === defaultsRef) {
+            return cached.value;
+        }
         const routes = this.canvasModelChoices(kind).choices.map(choice => {
             const state = this.canvasCapabilityOf(session, choice);
             return { ...choice, state, ...(state.capability ? { capabilityHint: state.capability } : {}) };
         });
-        return groupCanvasRegistryRoutes(kind, routes).map(group => {
+        const value = groupCanvasRegistryRoutes(kind, routes).map(group => {
             // One source can serve several variants of a model (Pro and Std, preview and release); name the variant then.
             const repeated = new Set(group.routes.map(route => route.source).filter((source, index, all) => all.indexOf(source) !== index));
             const members = group.routes.map(route => {
@@ -20957,6 +21318,26 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const reason = available ? undefined : members[0]?.reason ?? canvasText(locale, 'familyReason.NO_ROUTE');
             return { id: group.family.id, name: group.family.displayName, vendor: group.family.vendor, available, ...(reason ? { reason } : {}), routes: members };
         });
+        const rootCache = this.comicCanvasFamiliesCache ??= new WeakMap();
+        let perKind = rootCache.get(session);
+        if (!perKind) {
+            perKind = new Map();
+            rootCache.set(session, perKind);
+        }
+        perKind.set(kind, {
+            locale,
+            capabilityVersion: this.comicCanvasCapabilityVersion ?? 0,
+            catalogRevision: this.catalogSnapshotRevision,
+            offeringsRef,
+            connectionsRef,
+            merchantCatalogRef,
+            directoryVersion,
+            capacityRef,
+            favoriteCount,
+            defaultsRef,
+            value
+        });
+        return value;
     }
 
     /** Resolves the canvas platform default (`kind === 'canvas'`, fallback active comic kind) when the user has not explicitly picked a model or own API. */
@@ -21050,15 +21431,24 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (known) return known;
         const loading: CanvasCapabilityState = { loading: true };
         session.capabilities.set(key, loading);
+        this.comicCanvasCapabilityVersion = (this.comicCanvasCapabilityVersion ?? 0) + 1;
         const loads = this.comicCanvasCapabilityLoads.get(session) ?? new Map<string, Promise<CanvasModelCapability>>();
         this.comicCanvasCapabilityLoads.set(session, loads);
         const pending = this.platformService.getComicCanvasCapability({ connectionId: choice.connectionId, modelId: choice.modelId, kind: choice.kind });
         loads.set(key, pending);
         void pending.then(capability => {
             session.capabilities.set(key, { capability });
+            this.comicCanvasCapabilityVersion = (this.comicCanvasCapabilityVersion ?? 0) + 1;
             this.reconcileComicCanvasRoutes(session, choice, capability);
             this.fitComicCanvasSettings(session, choice, capability);
-        }, error => { session.capabilities.set(key, { error: modelFailureText(this.desktopLocale, error) }); }).finally(() => { if (loads.get(key) === pending) loads.delete(key); this.update(); });
+        }, error => {
+            session.capabilities.set(key, { error: modelFailureText(this.desktopLocale, error) });
+            this.comicCanvasCapabilityVersion = (this.comicCanvasCapabilityVersion ?? 0) + 1;
+        }).finally(() => {
+            if (loads.get(key) === pending) loads.delete(key);
+            if (this.scheduleComicCanvasCapabilityFlush) this.scheduleComicCanvasCapabilityFlush();
+            else this.update();
+        });
         return loading;
     }
 
@@ -22805,7 +23195,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const cutLast = cutClips.at(-1);
         const cutSeconds = Math.round(cutLast ? cutLast.start + cutLast.duration : 0);
         const cutBusy = this.comicCutBusy || this.comicTimelineLoading || this.comicStage !== 'idle' || this.comicExternalChange || this.comicHasDirtyDraft();
-        return <><ComicDesk locale={this.desktopLocale} projectTitle={project.title} step={desk.step} reachable={reachable} adapting={desk.adapting}
+        return <><div style={{ display: 'contents' }} data-nmx-i18n='rendered'><ComicDesk locale={this.desktopLocale} projectTitle={project.title} step={desk.step} reachable={reachable} adapting={desk.adapting}
             {...(desk.adapting && this.comicAdaptation.status === 'running' && this.comicAdaptation.progress ? { adaptProgress: this.comicAdaptation.progress } : {})}
             episodes={episodes} focusEpisode={desk.focusEpisode} focusClip={desk.focusClip} cards={cards} focusCard={desk.focusCard} library={this.comicCharacterLibrary}
             {...(desk.countdown ? { countdown: { target: desk.countdown.target, seconds: Math.max(0, Math.ceil((desk.countdown.endsAt - Date.now()) / 1_000)) } } : {})}
@@ -22854,7 +23244,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onExport: () => this.openComicExportSheet()
             } : {})}
             {...(desk.step === 'canvas' ? this.comicCanvasDeskProps(project) : {})}
-            onMinimize={() => this.minimizeComicDesk()} />{this.renderComicTimelineChoice()}</>;
+            onMinimize={() => this.minimizeComicDesk()} /></div>{this.renderComicTimelineChoice()}</>;
     }
 
     /**
@@ -24190,9 +24580,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const amountMicros = price?.mode === 'direct' ? rate?.amountMicros : rate?.amountMicros ?? price?.audioSecondMicros;
         const unitSize = rate?.unitSize ?? 1;
         if (!price || amountMicros === undefined || amountMicros === null) return '';
-        const amount = new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency: price.currency, maximumFractionDigits: 6 }).format(amountMicros / 1_000_000);
-        const unit = unitSize === 60 ? new Intl.NumberFormat(this.desktopLocale, { style: 'unit', unit: 'minute' }).format(1)
-            : new Intl.NumberFormat(this.desktopLocale, { style: 'unit', unit: 'second' }).format(unitSize);
+        const fmtNum = (options?: Intl.NumberFormatOptions) =>
+            typeof getCachedNumberFormat === 'function' ? getCachedNumberFormat(this.desktopLocale, options) : new Intl.NumberFormat(this.desktopLocale, options);
+        const amount = fmtNum({ style: 'currency', currency: price.currency, maximumFractionDigits: 6 }).format(amountMicros / 1_000_000);
+        const unit = unitSize === 60 ? fmtNum({ style: 'unit', unit: 'minute' }).format(1)
+            : fmtNum({ style: 'unit', unit: 'second' }).format(unitSize);
         return `${amount} / ${unit}`;
     }
 
@@ -32234,7 +32626,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const used = cache.historyTokens + draftTokens;
         const ratio = Math.min(1, used / Math.max(1, cache.windowTokens));
         const percent = Math.min(100, Math.round(ratio * 100));
-        const tokens = (value: number): string => new Intl.NumberFormat(this.desktopLocale, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+        const tokens = (value: number): string => (typeof getCachedNumberFormat === 'function'
+            ? getCachedNumberFormat(this.desktopLocale, { notation: 'compact', maximumFractionDigits: 1 })
+            : new Intl.NumberFormat(this.desktopLocale, { notation: 'compact', maximumFractionDigits: 1 })).format(value);
         const radius = 7;
         const circumference = 2 * Math.PI * radius;
         const popoverId = `nmx-context-ring-${codingSession.id}`;
@@ -35060,6 +35454,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.contextFileDirty = editorRecoveryDirty(snapshot);
             this.contextFileActiveSide = 'current';
             this.contextFileSaveStatus = 'idle'; this.pendingFileSave = undefined; this.contextFilePreviewLoading = false;
+            this.prepareSectionTransition?.('coding');
             this.activeSection = 'coding'; this.codingPanel = 'thread'; this.workContextMode = 'file'; this.workContextOpen = true;
             this.editorRecoveryPanelOpen = false; this.persistActiveCodingSessionState();
         } catch (error) {
@@ -35458,6 +35853,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.checkpointDiffLoading = false;
         const inComicChat = this.activeSection === 'comic' && this.comicChatUi?.()?.surface === 'chat' && !this.comicChatUi?.()?.editor;
         if (!inComicChat && (this.activeSection !== 'coding' || this.codingPanel !== 'thread')) {
+            this.prepareSectionTransition?.('coding');
             this.rememberNavigation();
             this.activeSection = 'coding';
             this.codingPanel = 'thread';
@@ -35972,8 +36368,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const page = this.browserPageStates.get(browser.id);
         const loading = Boolean(browser.url && page?.loading);
         const browserLabels = ownedBrowserText(this.desktopLocale);
-        return <section key={browser.id} className={`nmx-browser-view${active ? '' : ' is-inactive'}${browser.mobile ? ' is-mobile' : ''}`} data-browser-id={browser.id} aria-label={browserTitle} aria-hidden={!active} ref={node => { if (node) node.inert = !active; }}
-            style={active ? undefined : { display: 'flex', position: 'fixed', left: -10000, top: 0, width: 1024, height: 768, opacity: 0, pointerEvents: 'none' }}>
+        return <section key={browser.id} className={`nmx-browser-view${active ? '' : ' is-inactive nmx-keepalive-hidden'}${browser.mobile ? ' is-mobile' : ''}`} data-browser-id={browser.id} aria-label={browserTitle} aria-hidden={!active} ref={node => { if (node) node.inert = !active; }}>
             <form className={loading ? 'is-loading' : undefined} onSubmit={event => event.preventDefault()}>
                 <button type='button' disabled={page !== undefined && !page.canGoBack} aria-label={workbenchText(this.desktopLocale, 'back')} title={workbenchText(this.desktopLocale, 'back')} onClick={() => this.codingBrowserElement(browser.id)?.goBack?.()}><i className='codicon codicon-arrow-left'></i></button>
                 <button type='button' disabled={page !== undefined && !page.canGoForward} aria-label={workbenchText(this.desktopLocale, 'forward')} title={workbenchText(this.desktopLocale, 'forward')} onClick={() => this.codingBrowserElement(browser.id)?.goForward?.()}><i className='codicon codicon-arrow-right'></i></button>
@@ -36100,13 +36495,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
         </div>;
     }
 
+    protected workContextMountedOnce = false;
+    protected terminalMountedOnce = false;
+
     protected renderWorkContext(): React.ReactNode {
         if (typeof reconcileNextMuxEditorModelCache === 'function') {
             reconcileNextMuxEditorModelCache(this.contextFileTabs ? [...this.contextFileTabs.keys()] : []);
         }
         const drawerVisible = (this.workContextOpen || this.workContextClosing) && (this.isWorkContextSectionActive?.() ?? (this.activeSection === 'coding'));
+        if (drawerVisible) this.workContextMountedOnce = true;
         const mountedBrowserIds: Set<string> = this.mountedBrowserIds ?? (this.mountedBrowserIds = new Set<string>());
-        if (!drawerVisible && this.mountedBrowserIds.size === 0) return undefined;
+        if (!drawerVisible && !this.workContextMountedOnce && this.mountedBrowserIds.size === 0) return undefined;
         const browsers = this.currentCodingBrowsers();
         const activeBrowser = browsers.find(browser => browser.id === this.activeBrowserId) || browsers[0];
         const preview = this.contextFileOpening || this.contextFilePreview;
@@ -36135,7 +36534,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const isCurrentEditor = (): boolean => fileGeneration.session === this.activeCodingSessionId
             && (fileGeneration.request === this.contextFilePreviewRequestToken || preview === this.contextFilePreview)
             && preview?.uri === this.contextFilePreview?.uri && preview?.recoveryKey === this.contextFilePreview?.recoveryKey;
-        return <aside id='nmx-work-context' className={`nmx-work-context ${this.workContextClosing ? 'is-closing' : ''} ${this.workContextIsOverlay() && this.workContextOpen ? 'is-editor-maximized' : ''}`} style={drawerVisible ? undefined : { position: 'fixed', left: -10000, top: 0, width: 1024, height: 768, opacity: 0, pointerEvents: 'none' }} aria-hidden={!drawerVisible || this.workContextClosing || undefined} aria-label={agentMode ? agentChildText(this.desktopLocale, 'agents') : fileMode ? agentChildText(this.desktopLocale, 'files') : workbenchText(this.desktopLocale, 'browser')}>
+        return <aside id='nmx-work-context' className={`nmx-work-context ${this.workContextClosing ? 'is-closing' : ''} ${this.workContextIsOverlay() && this.workContextOpen ? 'is-editor-maximized' : ''}${drawerVisible ? '' : ' nmx-keepalive-hidden'}`} aria-hidden={!drawerVisible || this.workContextClosing || undefined} aria-label={agentMode ? agentChildText(this.desktopLocale, 'agents') : fileMode ? agentChildText(this.desktopLocale, 'files') : workbenchText(this.desktopLocale, 'browser')}>
             <div className='nmx-work-context-resize' role='separator' tabIndex={0} aria-label='调整对话与右侧面板宽度' aria-orientation='vertical' aria-controls='nmx-work-context' aria-valuemin={NextMuxDesktopWidget.WORK_CONTEXT_MIN_WIDTH} aria-valuemax={this.workContextMaximumWidth()} aria-valuenow={this.effectiveWorkContextWidth()} onPointerDown={event => this.beginWorkContextResize(event)} onKeyDown={event => this.handlePaneResizeKey(event, 'work-context')}></div>
             {drawerVisible && fileMode && fileTabs.length > 0 && <header className='nmx-work-context-header is-file'>
                 <nav className='nmx-file-editor-tabs' role='tablist' aria-label={fileDrawerText(this.desktopLocale, 'openFiles')}
@@ -36172,14 +36571,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 {this.contextFileHistoryLoading && !this.contextFileHistory.length ? <div className='nmx-context-file-history-empty'><i className='codicon codicon-loading codicon-modifier-spin'></i>{fileDrawerText(this.desktopLocale, 'loading')}</div>
                     : this.contextFileHistory.length ? <div role='list'>{this.contextFileHistory.map(entry => <button key={entry.id} data-history-kind={entry.kind} className={entry.current ? 'is-current' : ''}
                         disabled={Boolean(entry.current || preview?.readOnly || this.contextFileSaveStatus === 'saving' || preview && this.contextFileSavingUris.has(preview.uri) || this.contextFileSaveAllActive || this.contextFileHistorySelecting)}
-                        title={`${entry.current ? entry.label : fileDrawerText(this.desktopLocale, 'restoreVersion')} · ${entry.timestamp ? new Date(entry.timestamp).toLocaleString(this.desktopLocale) : entry.label}`}
-                        onClick={() => this.requestContextFileHistory(entry)}><i className={`codicon codicon-${entry.current ? 'file-code' : 'history'}`}></i><span><strong>{entry.label}</strong>{entry.timestamp > 0 && <time dateTime={new Date(entry.timestamp).toISOString()}>{new Date(entry.timestamp).toLocaleString(this.desktopLocale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time>}</span>{!entry.current && <small>{entry.checkpointId && this.isCheckpointRestored(entry.checkpointId) ? localizeDesktopSurface(this.desktopLocale, '已恢复') : fileDrawerText(this.desktopLocale, 'restoreVersion')}</small>}</button>)}</div>
+                        title={`${entry.current ? entry.label : fileDrawerText(this.desktopLocale, 'restoreVersion')} · ${entry.timestamp ? (typeof getCachedDateTimeFormat === 'function' ? getCachedDateTimeFormat(this.desktopLocale).format(entry.timestamp) : new Date(entry.timestamp).toLocaleString(this.desktopLocale)) : entry.label}`}
+                        onClick={() => this.requestContextFileHistory(entry)}><i className={`codicon codicon-${entry.current ? 'file-code' : 'history'}`}></i><span><strong>{entry.label}</strong>{entry.timestamp > 0 && <time dateTime={new Date(entry.timestamp).toISOString()}>{typeof getCachedDateTimeFormat === 'function' ? getCachedDateTimeFormat(this.desktopLocale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(entry.timestamp) : new Date(entry.timestamp).toLocaleString(this.desktopLocale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time>}</span>{!entry.current && <small>{entry.checkpointId && this.isCheckpointRestored(entry.checkpointId) ? localizeDesktopSurface(this.desktopLocale, '已恢复') : fileDrawerText(this.desktopLocale, 'restoreVersion')}</small>}</button>)}</div>
                         : <div className='nmx-context-file-history-empty'>{fileDrawerText(this.desktopLocale, 'emptyHistory')}</div>}
                 {(this.contextFileHistoryLegacy.length > 0 || this.contextFileHistorySources.some(source => !source.done)) && <button disabled={this.contextFileHistoryLoading} onClick={() => void this.loadContextFileHistory(true)}>{this.contextFileHistoryLoading ? fileDrawerText(this.desktopLocale, 'loading') : modelUsageText(this.desktopLocale, 'loadMore')}</button>}
                 {this.contextFileHistoryError && <div className='nmx-context-file-history-empty' role='status'>{this.contextFileHistoryError}</div>}
             </section>}
-            {<div id='nmx-context-panel-browser' role='tabpanel' aria-labelledby='nmx-context-tab-browser' className={`nmx-context-browser${artifactPreview ? ' has-artifact-preview' : ''}`} aria-hidden={fileMode || agentMode || !drawerVisible} ref={node => { if (node) node.inert = fileMode || agentMode || !drawerVisible; }}
-                style={fileMode || agentMode ? { position: 'fixed', left: -10000, top: 0, width: 1024, height: 768, opacity: 0, pointerEvents: 'none' } : undefined}>
+            {<div id='nmx-context-panel-browser' role='tabpanel' aria-labelledby='nmx-context-tab-browser' className={`nmx-context-browser${artifactPreview ? ' has-artifact-preview' : ''}${fileMode || agentMode ? ' nmx-keepalive-hidden' : ''}`} aria-hidden={fileMode || agentMode || !drawerVisible} ref={node => { if (node) node.inert = fileMode || agentMode || !drawerVisible; }}
+                style={fileMode || agentMode ? undefined : { position: 'relative' }}>
                 {/* An artifact preview covers the tabs; the browser views stay mounted (hidden) so their pages survive it. */}
                 {!artifactPreview && this.renderBrowserTabStrip(browsers, activeBrowser)}
                 {retainedBrowsers.map(browser => this.renderCodingBrowserView(browser, !artifactPreview && drawerVisible && !this.workContextClosing && !fileMode && !agentMode && browser.id === activeBrowser?.id))}
@@ -37214,6 +37613,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             && (snapshot.section !== 'settings' || targetSettingsPanel !== 'system')) {
             this.stopMicrophoneCapture(false);
         }
+        this.prepareSectionTransition?.(snapshot.section);
         this.activeSection = snapshot.section;
         this.codingPanel = snapshot.codingPanel;
         this.activeCodingSessionId = targetSessionId;
@@ -37668,13 +38068,30 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.update();
     }
 
-    protected selectSection(section: DesktopSection): void {
-        this.stopVoiceInput(false);
-        if (section !== 'comic') this.clearComicLibrarySurfaces();
-        if (this.activeSection === 'settings' && this.settingsPanel === 'system' && section !== 'settings') {
-            this.stopMicrophoneCapture(false);
+    protected prepareSectionTransition(targetSection: DesktopSection): void {
+        if (this.visitedSections) this.visitedSections.add(targetSection);
+        else this.visitedSections = new Set<DesktopSection>([targetSection]);
+        if (this.activeSection === 'comic' && targetSection !== 'comic') {
+            if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event === 'function') {
+                window.dispatchEvent(new Event('nmx:flush-pending-edits'));
+            }
+            if (this.comicChatDraftWriteTimer !== undefined) {
+                this.writeComicChatDrafts?.(true);
+            }
+            this.cancelComicModelHoverClose?.();
+            this.closeComicModelHoverImmediately?.();
         }
+    }
+
+    protected selectSection(section: DesktopSection): void {
+        if (this.visitedSections) this.visitedSections.add(section);
+        else this.visitedSections = new Set<DesktopSection>([section]);
         if (section === this.activeSection) {
+            this.stopVoiceInput(false);
+            if (section !== 'comic') this.clearComicLibrarySurfaces();
+            if (this.activeSection === 'settings' && this.settingsPanel === 'system' && section !== 'settings') {
+                this.stopMicrophoneCapture(false);
+            }
             // An explicit click on the already visible startup section is
             // still user intent. Refresh a delayed restore before it can
             // replace that choice with stale persisted navigation.
@@ -37683,32 +38100,63 @@ export class NextMuxDesktopWidget extends ReactWidget {
             else this.update();
             return;
         }
-        this.rememberNavigation();
-        this.resetSlashCommandState?.();
-        this.activeSection = section;
-        this.accountMenuOpen = false;
-        this.codingPopover = '';
-        if (section === 'coding' || section === 'comic') {
-            this.syncModelRoute();
+        const leavingComic = this.activeSection === 'comic' && section !== 'comic';
+        if (leavingComic) {
+            if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event === 'function') {
+                window.dispatchEvent(new Event('nmx:flush-pending-edits'));
+            }
+            if (this.comicChatDraftWriteTimer !== undefined) {
+                this.writeComicChatDrafts?.(true);
+            }
+            this.cancelComicModelHoverClose?.();
+            this.closeComicModelHoverImmediately?.();
         }
+        const applyTransition = (): void => {
+            this.stopVoiceInput(false);
+            if (section !== 'comic') this.clearComicLibrarySurfaces();
+            if (this.activeSection === 'settings' && this.settingsPanel === 'system' && section !== 'settings') {
+                this.stopMicrophoneCapture(false);
+            }
+            this.rememberNavigation();
+            this.resetSlashCommandState?.();
+            this.activeSection = section;
+            this.accountMenuOpen = false;
+            this.codingPopover = '';
+            this.invalidatePopoverAnchorGeometry?.();
+            if (section === 'coding' || section === 'comic') {
+                this.syncModelRoute();
+            }
+            this.constrainPaneSizes();
+            this.persistDesktopRestoreState();
+            this.update();
+        };
+        if (this.batchUpdate) this.batchUpdate(applyTransition);
+        else applyTransition();
 
+        const schedulePostPaint = (task: () => void): void => {
+            if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+                window.requestAnimationFrame(() => { if (!this.isDisposed && this.activeSection === section) task(); });
+            } else {
+                queueMicrotask(() => { if (!this.isDisposed && this.activeSection === section) task(); });
+            }
+        };
         if (section === 'comic') {
-            if (!this.comicPlatformDefaultsAt || Date.now() - this.comicPlatformDefaultsAt > 10 * 60_000) void this.loadComicPlatformDefaults?.();
-            else this.preloadPlatformDefaultMerchants?.(this.comicPlatformDefaults);
-            this.ensureComicChatDirectories?.();
-            void this.loadComicLibrary();
-            void this.refreshComicCharacterLibrary();
+            schedulePostPaint(() => {
+                if (!this.comicPlatformDefaultsAt || Date.now() - this.comicPlatformDefaultsAt > 10 * 60_000) void this.loadComicPlatformDefaults?.();
+                else this.preloadPlatformDefaultMerchants?.(this.comicPlatformDefaults);
+                this.ensureComicChatDirectories?.();
+                void this.loadComicLibrary();
+                void this.refreshComicCharacterLibrary();
+                if (this.comicWorkspaceRoot !== this.activeComicWorkspaceRoot) {
+                    void this.loadComicProject();
+                }
+                if (this.mediaWorkspaceRoot !== this.activeComicWorkspaceRoot) {
+                    void this.loadMediaState(true);
+                }
+            });
+        } else if (section === 'coding') {
+            schedulePostPaint(() => void this.loadContextFiles());
         }
-        if (section === 'comic' && this.comicWorkspaceRoot !== this.activeComicWorkspaceRoot) {
-            void this.loadComicProject();
-        }
-        if (section === 'comic' && this.mediaWorkspaceRoot !== this.activeComicWorkspaceRoot) {
-            void this.loadMediaState(true);
-        }
-        if (section === 'coding') void this.loadContextFiles();
-        this.constrainPaneSizes();
-        this.persistDesktopRestoreState();
-        this.update();
     }
 
     protected selectModelCenterView(view: ModelCenterView): void {
@@ -37717,6 +38165,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.activeSection === 'settings' && this.settingsPanel === 'system' || this.microphoneTestSession?.active) {
             this.stopMicrophoneCapture?.(false);
         }
+        this.prepareSectionTransition?.('models');
         this.rememberNavigation();
         this.activeSection = 'models';
         this.codingPopover = '';
@@ -37733,6 +38182,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.activeSection === 'settings' && this.settingsPanel === 'system' || this.microphoneTestSession?.active) {
             this.stopMicrophoneCapture?.(false);
         }
+        this.prepareSectionTransition?.('models');
         this.rememberNavigation();
         this.activeSection = 'models';
         this.modelCenterView = 'capability';
@@ -37756,6 +38206,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.activeSection === 'settings' && this.settingsPanel === 'system' && targetPanel !== 'system') {
             this.stopMicrophoneCapture(false);
         }
+        this.prepareSectionTransition?.('settings');
         if (this.activeSection !== 'settings') {
             this.accountMenuOpen = false;
             this.settingsReturnSnapshot = this.navigationSnapshot();
@@ -37848,6 +38299,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const agentTaskActive = this.agentStage === 'running' || Boolean(this.activeAgentRunId);
         this.flushComposerDraft();
         this.persistActiveCodingSessionState();
+        this.prepareSectionTransition?.('coding');
         this.rememberNavigation();
         this.disconnectInactiveConversationTabs?.('');
         this.activeSection = 'coding';
@@ -37914,6 +38366,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.activeSection === 'settings' && this.settingsPanel === 'system' || this.microphoneTestSession?.active) {
             this.stopMicrophoneCapture?.(false);
         }
+        this.prepareSectionTransition?.('coding');
         this.rememberNavigation();
         this.resetSlashCommandState?.();
         this.activeSection = 'coding';
@@ -37944,8 +38397,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (popover === 'routes' && this.modelPickerRelayOpen) {
                 this.modelPickerRelayOpen = false;
                 this.closeModelEffortPickerImmediately();
+                this.invalidatePopoverAnchorGeometry?.();
+                this.capturePopoverAnchorGeometry?.('.nmx-route-button');
                 this.ensureDetachedPickerCatalogs?.(false);
-                this.update();
+                if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']);
+                else this.update();
                 this.focusModelPickerFirstOption();
                 return;
             }
@@ -37955,8 +38411,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (popover !== 'routes') this.rememberNavigation();
         this.clearNavigationSurfaces();
         this.codingPopover = popover;
-        if (popover === 'routes') this.ensureDetachedPickerCatalogs?.(false);
-        this.update();
+        this.invalidatePopoverAnchorGeometry?.();
+        if (popover === 'routes') {
+            this.capturePopoverAnchorGeometry?.('.nmx-route-button');
+            this.ensureDetachedPickerCatalogs?.(false);
+        }
+        if (popover === 'routes' || popover === 'permission') {
+            if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']);
+            else this.update();
+        } else {
+            this.update();
+        }
         if (popover === 'routes') {
             this.focusModelPickerFirstOption();
         }
@@ -38000,14 +38465,20 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             this.modelPickerRelayOpen = true;
             this.closeModelEffortPickerImmediately();
-            this.update();
+            this.invalidatePopoverAnchorGeometry?.();
+            this.capturePopoverAnchorGeometry?.('.nmx-composer-relay-button');
+            if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']);
+            else this.update();
             return;
         }
         this.clearNavigationSurfaces();
         this.codingPopover = 'routes';
         this.modelPickerRelayOpen = true;
         this.modelPickerQuery = '';
-        this.update();
+        this.invalidatePopoverAnchorGeometry?.();
+        this.capturePopoverAnchorGeometry?.('.nmx-composer-relay-button');
+        if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']);
+        else this.update();
     }
 
     protected dismissComposerPicker(): void {
@@ -38023,6 +38494,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.relayMetricTooltip = undefined;
         this.releaseModelEvidenceTitle?.();
         this.modelEvidenceTooltip = undefined;
+        this.invalidatePopoverAnchorGeometry?.();
         this.closeModelEffortPickerImmediately();
         this.update();
         if (trigger) requestAnimationFrame(() => {
@@ -38088,7 +38560,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.modelPickerEffortModelId = modelId;
         this.modelPickerEffortLevelCount = levelCount;
         this.modelPickerEffortPlacement = this.calculateModelEffortPlacement(anchor, levelCount);
-        this.update();
+        if (this.updateRegion) this.updateRegion(['coding-popovers', 'modals', 'popovers']);
+        else this.update();
     }
 
     protected showFileWorkContext(): void {
@@ -38781,8 +39254,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!this.modelPickerEffortModelId) return;
         this.modelPickerEffortCloseTimer = window.setTimeout(() => {
             this.modelPickerEffortCloseTimer = undefined;
+            if (this.isDisposed) return;
             this.closeModelEffortPickerImmediately();
-            this.update();
+            if (this.updateRegion) this.updateRegion(['coding-popovers', 'modals', 'popovers']);
+            else this.update();
         }, 180);
     }
 
@@ -38861,13 +39336,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return this.calculateModelPickerPlacement(Number.MAX_SAFE_INTEGER).maxHeight;
     }
 
-    /**
-     * Model and source selection use one shared drawer width. Keeping the
-     * width in the placement helper (rather than only in CSS) is important:
-     * the fixed portal must be clamped to the viewport before it is painted,
-     * otherwise a narrow window can still overflow horizontally.
-     */
-    protected calculateModelPickerPlacement(panelHeight: number, panelWidth = 264, triggerSelector?: string, surfaceSelector?: string): AnchoredFloatingPanelPlacement & { readonly detail?: { readonly side: 'left' | 'right'; readonly left: number; readonly width: number } } {
+    protected popoverMeasureRevision = 0;
+    protected popoverAnchorGeometryCache?: Map<string, {
+        readonly anchor: { readonly top: number; readonly right: number; readonly bottom: number; readonly left: number };
+        readonly baseSafeTop: number;
+        readonly safeBottom: number;
+        readonly portaledPreferBelow: boolean;
+    }>;
+
+    protected invalidatePopoverAnchorGeometry(): void {
+        this.popoverMeasureRevision = (this.popoverMeasureRevision ?? 0) + 1;
+        this.popoverAnchorGeometryCache?.clear();
+    }
+
+    protected measurePopoverAnchorGeometry(triggerSelector?: string, surfaceSelector?: string): {
+        readonly anchor: { readonly top: number; readonly right: number; readonly bottom: number; readonly left: number };
+        readonly baseSafeTop: number;
+        readonly safeBottom: number;
+        readonly portaledPreferBelow: boolean;
+    } {
         const viewport = {
             width: Math.max(1, window.innerWidth),
             height: Math.max(1, window.innerHeight)
@@ -38909,6 +39396,72 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const portaledPreferBelow = isPortaledTrigger
             && triggerRect !== undefined
             && (viewport.height - safeBottom - anchor.bottom - 10) > (anchor.top - 10 - baseSafeTop);
+        return { anchor, baseSafeTop, safeBottom, portaledPreferBelow };
+    }
+
+    protected capturePopoverAnchorGeometry(triggerSelector?: string, surfaceSelector?: string): void {
+        if (typeof window === 'undefined' || typeof Element === 'undefined' || !(this.node instanceof Element)) return;
+        const selector = triggerSelector || (this.modelPickerRelayOpen ? '.nmx-composer-relay-button' : '.nmx-route-button');
+        const cacheKey = `${window.innerWidth}x${window.innerHeight}|${this.activeSection}|${Boolean(this.terminalDrawerOpen)}|${this.terminalDrawerHeight}|${this.desktopLocale}|${this.popoverMeasureRevision ?? 0}|${selector}|${surfaceSelector || ''}`;
+        const cache = this.popoverAnchorGeometryCache ??= new Map();
+        cache.set(cacheKey, this.measurePopoverAnchorGeometry(triggerSelector, surfaceSelector));
+    }
+
+    /**
+     * Model and source selection use one shared drawer width. Keeping the
+     * width in the placement helper (rather than only in CSS) is important:
+     * the fixed portal must be clamped to the viewport before it is painted,
+     * otherwise a narrow window can still overflow horizontally.
+     */
+    protected calculateModelPickerPlacement(panelHeight: number, panelWidth = 264, triggerSelector?: string, surfaceSelector?: string): AnchoredFloatingPanelPlacement & { readonly detail?: { readonly side: 'left' | 'right'; readonly left: number; readonly width: number } } {
+        const viewport = {
+            width: Math.max(1, window.innerWidth),
+            height: Math.max(1, window.innerHeight)
+        };
+        const selector = triggerSelector || (this.modelPickerRelayOpen
+            ? '.nmx-composer-relay-button'
+            : '.nmx-route-button');
+        const canCacheRealDom = typeof Element !== 'undefined' && this.node instanceof Element && typeof this.measurePopoverAnchorGeometry === 'function';
+        const cacheKey = `${viewport.width}x${viewport.height}|${this.activeSection}|${Boolean(this.terminalDrawerOpen)}|${this.terminalDrawerHeight}|${this.desktopLocale}|${this.popoverMeasureRevision ?? 0}|${selector}|${surfaceSelector || ''}`;
+        let measured = canCacheRealDom ? this.popoverAnchorGeometryCache?.get(cacheKey) : undefined;
+        if (!measured) {
+            if (typeof this.measurePopoverAnchorGeometry === 'function') {
+                measured = this.measurePopoverAnchorGeometry(triggerSelector, surfaceSelector);
+            } else {
+                const trigger = this.node?.querySelector<HTMLElement>(selector)
+                    || (triggerSelector && typeof document !== 'undefined' ? document.querySelector<HTMLElement>(triggerSelector) : null);
+                const isPortaledTrigger = Boolean(trigger && (!this.node || !this.node.contains?.(trigger)));
+                const triggerRect = trigger?.getBoundingClientRect();
+                const surfaceRect = surfaceSelector ? trigger?.closest<HTMLElement>(surfaceSelector)?.getBoundingClientRect() : undefined;
+                const fallbackBottom = Math.max(1, viewport.height - 16);
+                const anchor = triggerRect ? {
+                    top: surfaceRect?.top ?? triggerRect.top,
+                    right: triggerRect.right,
+                    bottom: surfaceRect?.bottom ?? triggerRect.bottom,
+                    left: triggerRect.left
+                } : {
+                    top: fallbackBottom - 32,
+                    right: viewport.width - 16,
+                    bottom: fallbackBottom,
+                    left: Math.max(8, viewport.width - 180)
+                };
+                const titlebarBottom = this.node?.querySelector<HTMLElement>('.nmx-titlebar-primary-nav')?.getBoundingClientRect().bottom || 40;
+                const workspaceTopbarBottom = isPortaledTrigger
+                    ? titlebarBottom
+                    : (this.node?.querySelector<HTMLElement>(this.activeSection === 'comic' ? '.nmx-comic-topbar' : '.nmx-coding-topbar')?.getBoundingClientRect().bottom
+                        || titlebarBottom);
+                const terminalTop = !isPortaledTrigger && this.terminalDrawerOpen
+                    ? this.node?.querySelector<HTMLElement>('.nmx-terminal-drawer.is-open')?.getBoundingClientRect().top
+                    : undefined;
+                const baseSafeTop = Math.max(titlebarBottom, workspaceTopbarBottom) + 6;
+                const safeBottom = terminalTop === undefined ? 8 : Math.max(8, viewport.height - terminalTop + 8);
+                const portaledPreferBelow = isPortaledTrigger && triggerRect !== undefined && (viewport.height - safeBottom - anchor.bottom - 10) > (anchor.top - 10 - baseSafeTop);
+                measured = { anchor, baseSafeTop, safeBottom, portaledPreferBelow };
+            }
+            if (canCacheRealDom) (this.popoverAnchorGeometryCache ??= new Map()).set(cacheKey, measured);
+        }
+        const { anchor, baseSafeTop, safeBottom, portaledPreferBelow } = measured;
+        const isPortaledTrigger = portaledPreferBelow || Boolean(triggerSelector && typeof document !== 'undefined' && !this.node?.querySelector?.(selector));
         const placement = placeAnchoredFloatingPanel(anchor, viewport, panelWidth, panelHeight, {
             edge: 8,
             gap: 10,
@@ -38993,7 +39546,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     <button type='button' aria-label={localizeDesktopSurface(this.desktopLocale, '关闭搜索')} title={localizeDesktopSurface(this.desktopLocale, '关闭搜索')}
                         onClick={() => this.closeNavigationSurface()}><i className='codicon codicon-close' aria-hidden='true'></i></button></header>
                 <div className='nmx-conversation-search-input'><i className='codicon codicon-search' aria-hidden='true'></i>
-                    <ImeInput autoFocus value={this.codingSearchQuery} aria-label={localizeDesktopSurface(this.desktopLocale, '搜索全局对话')}
+                    <ImeInput autoFocus value={this.codingSearchQuery} commitDelayMs={100} aria-label={localizeDesktopSurface(this.desktopLocale, '搜索全局对话')}
                         placeholder={localizeDesktopSurface(this.desktopLocale, '关键词、对话 ID 或消息 ID')}
                         onChange={event => this.setCodingSearchQuery(event.currentTarget.value)} onKeyDown={event => {
                             if (event.nativeEvent.isComposing || event.keyCode === 229 || event.key !== 'Enter') return;
@@ -40273,12 +40826,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected formatMoneyMicros(currency: string, micros: number): string {
         try {
-            return new Intl.NumberFormat(this.desktopLocale, {
-                style: 'currency',
-                currency,
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 6
-            }).format(Number(micros || 0) / 1_000_000);
+            const formatter = typeof getCachedNumberFormat === 'function'
+                ? getCachedNumberFormat(this.desktopLocale, { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 6 })
+                : new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 6 });
+            return formatter.format(Number(micros || 0) / 1_000_000);
         } catch {
             return `${currency} ${(Number(micros || 0) / 1_000_000).toFixed(6)}`;
         }
@@ -41035,15 +41586,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected savedFixedOfferingsForMerchant(merchantId: string, catalog?: PlatformMerchantCatalogPage): readonly PlatformOffering[] {
         const matches: PlatformOffering[] = [];
+        let changed = false;
         for (const [key, entry] of this.savedFixedOfferings || []) {
             if (key !== this.savedFixedOfferingKey(entry.merchantId, entry.offering.id)
                 || this.catalogRemovedMerchants.has(entry.merchantId)
                 || entry.merchantId === merchantId && catalog && !catalog.nextCursor) {
                 this.savedFixedOfferings.delete(key);
+                changed = true;
                 continue;
             }
             if (entry.merchantId === merchantId) matches.push(entry.offering);
         }
+        if (changed) this.savedFixedOfferingRevision++;
         return matches;
     }
 
@@ -42541,7 +43095,113 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return value;
     }
 
+    private relayOptionsCache?: Map<'coding' | 'comic', {
+        readonly offeringsRef: readonly PlatformOffering[] | undefined;
+        readonly catalogRevision: number;
+        readonly selectedMerchantCatalog: PlatformMerchantCatalogPage | undefined;
+        readonly relaySourceTab: RelaySourceTab;
+        readonly relaySortMode: RelaySortMode;
+        readonly favoritePageRef: unknown;
+        readonly publicPageRef: unknown;
+        readonly publicDirectoryVersion: string;
+        readonly selectedPublicMerchant: PublicMerchantIdentity | undefined;
+        readonly activeRelayKey: string;
+        readonly connectionsRef: readonly OfficialModelConnection[] | undefined;
+        readonly favoriteKey: string;
+        readonly desktopLocale: NextMuxDesktopLocale;
+        readonly savedFixedRevision: number;
+        readonly savedFixedEntries: readonly (readonly [string, { readonly merchantId: string; readonly offering: PlatformOffering }])[];
+        readonly merchantSnapshots: readonly (readonly [
+            string,
+            { readonly catalog: PlatformMerchantCatalogPage; readonly updatedAt: number },
+            PlatformMerchantCatalogPage | undefined,
+            readonly PlatformOffering[] | undefined,
+            number,
+            number,
+            string | undefined,
+            number
+        ])[];
+        readonly discoveredModels: readonly (readonly [string, readonly PlatformMerchantDiscoveredModel[], number])[];
+        readonly registryModelsRef: readonly PlatformRegistryModel[] | undefined;
+        readonly comicPaginationCursors: readonly (readonly [string, string])[];
+        readonly cutShortMerchants: readonly string[];
+        readonly removedMerchants: readonly string[];
+        readonly sessionUserId: string | undefined;
+        readonly sessionLinked: boolean | undefined;
+        readonly globalModelsRef: unknown;
+        readonly capacityRef: unknown;
+        readonly minuteBucket: number;
+        readonly managedOfferingsFn: unknown;
+        readonly codingVerdictFn: unknown;
+        readonly officialNoTextFn: unknown;
+        readonly comicOfficialRoutesFn: unknown;
+        readonly merchantCatalogCompleteFn: unknown;
+        readonly options: readonly RelayOption[];
+        readonly byKey: ReadonlyMap<string, RelayOption>;
+    }>;
+
     protected relayOptions(workbench: 'coding' | 'comic' = this.activeSection === 'comic' ? 'comic' : 'coding'): readonly RelayOption[] {
+        const minuteBucket = Math.floor(Date.now() / 60_000);
+        const favoriteKey = this.favoriteMerchantLabels?.size
+            ? [...this.favoriteMerchantLabels.entries()].map(([id, label]) => `${id}\0${label}`).join('\n')
+            : '';
+        const selectedMatchesActive = Boolean(this.selectedPublicMerchant && managedRelayKey(this.selectedPublicMerchant.id) === this.activeRelayKey);
+        const offeringsRef = this.platformCatalog?.offerings;
+        const connectionsRef = this.officialModels?.connections;
+        const savedFixedRevision = this.savedFixedOfferingRevision ?? 0;
+        const cached = this.relayOptionsCache?.get(workbench);
+        if (cached
+            && cached.offeringsRef === offeringsRef
+            && cached.catalogRevision === this.catalogSnapshotRevision
+            && cached.selectedMerchantCatalog === this.selectedMerchantCatalog
+            && cached.relaySourceTab === this.relaySourceTab
+            && cached.relaySortMode === this.relaySortMode
+            && cached.favoritePageRef === this.favoriteMerchantPage
+            && cached.publicPageRef === this.publicMerchantPage
+            && cached.publicDirectoryVersion === (this.publicMerchantDirectoryVersion ?? '')
+            && cached.selectedPublicMerchant === this.selectedPublicMerchant
+            && (!this.selectedPublicMerchant || cached.activeRelayKey === (selectedMatchesActive ? this.activeRelayKey : ''))
+            && cached.connectionsRef === connectionsRef
+            && cached.favoriteKey === favoriteKey
+            && cached.desktopLocale === this.desktopLocale
+            && cached.savedFixedRevision === savedFixedRevision
+            && cached.savedFixedEntries.length === (this.savedFixedOfferings?.size ?? 0)
+            && (!this.savedFixedOfferings?.size || cached.savedFixedEntries.every(([key, entry]) => this.savedFixedOfferings?.get(key) === entry))
+            && cached.merchantSnapshots.length === (this.merchantPickerSnapshots?.size ?? 0)
+            && (!this.merchantPickerSnapshots?.size || cached.merchantSnapshots.every(([id, entry, catalog, offerings, offeringsLength, updatedAt, nextCursor, flags]) => {
+                const current = this.merchantPickerSnapshots?.get(id);
+                return current === entry
+                    && current?.catalog === catalog
+                    && current?.catalog?.offerings === offerings
+                    && (current?.catalog?.offerings?.length ?? 0) === offeringsLength
+                    && current?.updatedAt === updatedAt
+                    && current?.catalog?.nextCursor === nextCursor
+                    && ((current?.catalog?.discoveryPending ? 1 : 0) + (current?.catalog?.online === false ? 2 : 0)) === flags;
+            }))
+            && cached.discoveredModels.length === (this.merchantDiscoveredModels?.size ?? 0)
+            && (!this.merchantDiscoveredModels?.size || cached.discoveredModels.every(([id, models, len]) => {
+                const current = this.merchantDiscoveredModels?.get(id);
+                return current === models && (current?.length ?? 0) === len;
+            }))
+            && cached.registryModelsRef === this.registryModels
+            && cached.comicPaginationCursors.length === (this.comicStepPaginationCursors?.size ?? 0)
+            && (!this.comicStepPaginationCursors?.size || cached.comicPaginationCursors.every(([key, value]) => this.comicStepPaginationCursors?.get(key) === value))
+            && cached.cutShortMerchants.length === (this.merchantCatalogCutShort?.size ?? 0)
+            && (!this.merchantCatalogCutShort?.size || cached.cutShortMerchants.every(id => this.merchantCatalogCutShort?.has(id)))
+            && cached.removedMerchants.length === (this.catalogRemovedMerchants?.size ?? 0)
+            && (!this.catalogRemovedMerchants?.size || cached.removedMerchants.every(id => this.catalogRemovedMerchants?.has(id)))
+            && cached.sessionUserId === this.platformSession?.user?.id
+            && cached.sessionLinked === this.platformSession?.linked
+            && cached.globalModelsRef === this.globalModels
+            && cached.capacityRef === this.relayCapacitySnapshot
+            && cached.minuteBucket === minuteBucket
+            && cached.managedOfferingsFn === this.managedOfferings
+            && cached.codingVerdictFn === this.codingRelayVerdict
+            && cached.officialNoTextFn === this.officialConnectionMakesNoText
+            && cached.comicOfficialRoutesFn === this.comicOfficialModelRoutes
+            && cached.merchantCatalogCompleteFn === this.merchantCatalogComplete) {
+            return cached.options;
+        }
         const scopedMerchant = this.selectedMerchantCatalog?.merchantId;
         const offerings = scopedMerchant ? [...this.managedOfferings(workbench).filter(offering => this.offeringMerchantId(offering) !== scopedMerchant),
             ...this.managedOfferings(workbench, scopedMerchant)] : this.managedOfferings(workbench);
@@ -42567,8 +43227,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         });
         const options: RelayOption[] = [];
         const directoryMerchants = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage?.merchants : this.publicMerchantPage?.merchants;
+        const directoryById = directoryMerchants ? new Map(directoryMerchants.map(merchant => [merchant.id, merchant])) : undefined;
         // As for the merchant rows below: a selected store stands in only while the directory is pending.
-        const directoryOf = (merchantId: string): PublicMerchantIdentity | undefined => directoryMerchants?.find(merchant => merchant.id === merchantId)
+        const directoryOf = (merchantId: string): PublicMerchantIdentity | undefined => directoryById?.get(merchantId)
             || (directoryMerchants === undefined && this.selectedPublicMerchant?.id === merchantId ? this.selectedPublicMerchant : undefined);
         const now = Date.now();
         const isLatencyObservedAt = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0;
@@ -42609,7 +43270,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         for (const [merchantId, label] of this.favoriteMerchantLabels) if (!merchantLabels.has(merchantId)) merchantLabels.set(merchantId, label);
         for (const merchantId of merchantLabels.keys()) if (!merchants.has(merchantId)) merchants.set(merchantId, []);
         for (const [merchantId, values] of merchants) {
-            const directory = directoryMerchants?.find(merchant => merchant.id === merchantId)
+            const directory = directoryById?.get(merchantId)
                 // A selected merchant is only a fallback while its directory
                 // request is still pending. Once a favorite page is loaded,
                 // absence is meaningful and must not be masked by that stale
@@ -42684,7 +43345,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 } : {}) });
         }
         // Newest first, as sortOfficialConnectionsNewestFirst (written out: the relay test harnesses copy this method alone).
-        const connections = [...this.officialModels.connections].sort((left, right) => {
+        const connections = [...(connectionsRef || [])].sort((left, right) => {
             const leftParsed = Date.parse(left.createdAt || '');
             const rightParsed = Date.parse(right.createdAt || '');
             const diff = (Number.isFinite(rightParsed) ? rightParsed : Number.NEGATIVE_INFINITY)
@@ -42719,11 +43380,64 @@ export class NextMuxDesktopWidget extends ReactWidget {
             .filter(option => option.kind === 'managed')
             .sort((left, right) => compareMetric[this.relaySortMode](left, right) || left.label.localeCompare(right.label));
         const official = options.filter(option => option.kind === 'official');
-        return [...automatic, ...managed, ...official];
+        const result = [...automatic, ...managed, ...official];
+        const byKey = new Map<string, RelayOption>(result.map(option => [option.key, option]));
+        (this.relayOptionsCache ??= new Map()).set(workbench, {
+            offeringsRef,
+            catalogRevision: this.catalogSnapshotRevision,
+            selectedMerchantCatalog: this.selectedMerchantCatalog,
+            relaySourceTab: this.relaySourceTab,
+            relaySortMode: this.relaySortMode,
+            favoritePageRef: this.favoriteMerchantPage,
+            publicPageRef: this.publicMerchantPage,
+            publicDirectoryVersion: this.publicMerchantDirectoryVersion ?? '',
+            selectedPublicMerchant: this.selectedPublicMerchant,
+            activeRelayKey: selectedMatchesActive ? this.activeRelayKey : '',
+            connectionsRef,
+            favoriteKey,
+            desktopLocale: this.desktopLocale,
+            savedFixedRevision: this.savedFixedOfferingRevision ?? 0,
+            savedFixedEntries: this.savedFixedOfferings?.size ? [...this.savedFixedOfferings.entries()] : [],
+            merchantSnapshots: this.merchantPickerSnapshots?.size
+                ? [...this.merchantPickerSnapshots.entries()].map(([id, entry]) => [
+                    id,
+                    entry,
+                    entry?.catalog,
+                    entry?.catalog?.offerings,
+                    entry?.catalog?.offerings?.length ?? 0,
+                    entry?.updatedAt,
+                    entry?.catalog?.nextCursor,
+                    (entry?.catalog?.discoveryPending ? 1 : 0) + (entry?.catalog?.online === false ? 2 : 0)
+                ] as const)
+                : [],
+            discoveredModels: this.merchantDiscoveredModels?.size
+                ? [...this.merchantDiscoveredModels.entries()].map(([id, models]) => [id, models, models?.length ?? 0] as const)
+                : [],
+            registryModelsRef: this.registryModels,
+            comicPaginationCursors: this.comicStepPaginationCursors?.size ? [...this.comicStepPaginationCursors.entries()] : [],
+            cutShortMerchants: this.merchantCatalogCutShort?.size ? [...this.merchantCatalogCutShort] : [],
+            removedMerchants: this.catalogRemovedMerchants?.size ? [...this.catalogRemovedMerchants] : [],
+            sessionUserId: this.platformSession?.user?.id,
+            sessionLinked: this.platformSession?.linked,
+            globalModelsRef: this.globalModels,
+            capacityRef: this.relayCapacitySnapshot,
+            minuteBucket,
+            managedOfferingsFn: this.managedOfferings,
+            codingVerdictFn: this.codingRelayVerdict,
+            officialNoTextFn: this.officialConnectionMakesNoText,
+            comicOfficialRoutesFn: this.comicOfficialModelRoutes,
+            merchantCatalogCompleteFn: this.merchantCatalogComplete,
+            options: result,
+            byKey
+        });
+        return result;
     }
 
     protected relayOption(key = this.activeRelayKey, workbench: 'coding' | 'comic' = this.activeSection === 'comic' ? 'comic' : 'coding'): RelayOption | undefined {
-        return this.relayOptions(workbench).find(option => option.key === key);
+        const current = this.relayOptions(workbench);
+        const cached = this.relayOptionsCache?.get(workbench);
+        if (cached && cached.options === current) return cached.byKey.get(key);
+        return current.find(option => option.key === key);
     }
 
     /**
@@ -43557,7 +44271,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.reorderPublicMerchantPage?.(mode);
             void this.loadPublicMerchantPage({}, { silent: true });
         } else if (this.relaySourceTab !== 'my-api') void this.loadPublicMerchantPage();
-        this.update();
+        if (this.updateRegion) this.updateRegion(['popovers', 'coding-popovers', 'comic-popovers', 'modals']);
+        else this.update();
     }
 
     protected setRelaySourceTab(tab: RelaySourceTab): void {
@@ -43570,7 +44285,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.relaySourceTab = tab;
         this.relaySourceQuery = '';
         if (tab !== 'my-api') void this.loadPublicMerchantPage();
-        this.update();
+        if (this.updateRegion) this.updateRegion(['popovers', 'coding-popovers', 'comic-popovers', 'modals']);
+        else this.update();
     }
 
     protected setRelaySourceQuery(query: string): void {
@@ -43589,7 +44305,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 void this.loadPublicMerchantPage();
             }, 250);
         }
-        this.update();
+        if (this.updateRegion) this.updateRegion(['popovers', 'coding-popovers', 'comic-popovers', 'modals']);
+        else this.update();
     }
 
     /**
@@ -43741,7 +44458,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected handlePublicMerchantScroll(event: React.UIEvent<HTMLDivElement>): void {
-        if (this.relayMetricTooltip) { this.relayMetricTooltip = undefined; this.update(); }
+        if (this.relayMetricTooltip) {
+            this.relayMetricTooltip = undefined;
+            if (this.updateRegion) this.updateRegion(['popovers', 'coding-popovers', 'comic-popovers', 'modals']);
+            else this.update();
+        }
         const element = event.currentTarget;
         if (element.scrollHeight - element.scrollTop - element.clientHeight <= 72) this.loadNextPublicMerchantPage();
     }
@@ -43876,27 +44597,38 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.selectedMerchantCatalog = cached;
         if (!force && cached && !cached.discoveryPending && (this.merchantDiscoveryComplete?.(merchantId) ?? this.merchantDiscoveredModels.has(merchantId)) && (more && !cached.nextCursor
             || !more && this.merchantCatalogStatus !== 'failed' && Date.now() - (snapshot?.updatedAt || 0) < 30_000)) {
-            this.merchantCatalogStatus = cached.nextCursor ? 'partial' : 'ready';
-            this.leaveRelayWithoutCodingModels?.();
-            this.update();
+            const commitHit = (): void => {
+                this.merchantCatalogStatus = cached.nextCursor ? 'partial' : 'ready';
+                this.leaveRelayWithoutCodingModels?.();
+                this.update();
+            };
+            if (this.batchUpdate) this.batchUpdate(commitHit);
+            else commitHit();
             return;
         }
         const previous = more ? cached : undefined;
         let after = previous?.nextCursor;
         let offerings = new Map((previous?.offerings || []).map(offering => [offering.id, offering]));
+        let publishedInFinally = false;
         const publish = (page: PlatformMerchantCatalogPage): void => {
-            this.selectedMerchantCatalog = page;
-            this.merchantPickerSnapshots.delete(merchantId);
-            this.merchantPickerSnapshots.set(merchantId, { catalog: page, updatedAt: Date.now() });
-            while (this.merchantPickerSnapshots.size > 16) this.merchantPickerSnapshots.delete(this.merchantPickerSnapshots.keys().next().value!);
-            this.syncModelRoute();
-            this.update();
+            const commitPublish = (): void => {
+                this.selectedMerchantCatalog = page;
+                this.merchantPickerSnapshots.delete(merchantId);
+                this.merchantPickerSnapshots.set(merchantId, { catalog: page, updatedAt: Date.now() });
+                while (this.merchantPickerSnapshots.size > 16) this.merchantPickerSnapshots.delete(this.merchantPickerSnapshots.keys().next().value!);
+                this.syncModelRoute();
+                this.update();
+            };
+            if (this.batchUpdate) this.batchUpdate(commitPublish);
+            else commitPublish();
         };
         // A cached list stays on screen while it is refreshed in the background (stale-while-revalidate):
         // coming back to the composer must not show “loading” for models that are already known.
         const silent = !more && !force && Boolean(cached?.offerings.length);
-        if (silent) this.merchantCatalogStatus = cached!.nextCursor ? 'partial' : 'ready';
-        else {
+        if (silent) {
+            this.merchantCatalogStatus = cached!.nextCursor ? 'partial' : 'ready';
+            this.merchantCatalogError = false;
+        } else {
             this.merchantCatalogStatus = 'loading';
             this.merchantCatalogError = false;
             this.update();
@@ -43981,7 +44713,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     requestAnimationFrame(() => this.loadMorePickerModels());
                 }
                 // With the store's whole list read, one without a coding model is left (leaveRelayWithoutCodingModels).
-                if (current()) { this.leaveRelayWithoutCodingModels?.(); this.update(); }
+                if (current()) {
+                    const commitFinalize = (): void => {
+                        this.leaveRelayWithoutCodingModels?.();
+                        if (!publishedInFinally) this.update();
+                    };
+                    if (this.batchUpdate) this.batchUpdate(commitFinalize);
+                    else commitFinalize();
+                }
+                void publishedInFinally;
             }
         });
         this.merchantCatalogInFlight = { key, token, promise: operation };
@@ -44079,31 +44819,36 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected applyRelaySelection(option: RelayOption, quiet = false): void {
-        this.codingUserExplicitlySelected = true;
-        this.codingPlatformDefaultApplied = undefined;
-        this.automaticRelaySource = relaySourceSelected(this.automaticRelaySource, option.key);
-        this.selectedPublicMerchant = option.kind === 'managed'
-            ? (this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage)?.merchants.find(merchant => merchant.id === option.merchantId)
-                || (option.merchantId ? { id: option.merchantId, name: option.label, ...(option.publicCode ? { publicCode: option.publicCode } : {}),
-                    ...(option.storeTagline ? { storeTagline: option.storeTagline } : {}), ...(option.storeDescription ? { storeDescription: option.storeDescription } : {}),
-                    ...(option.depositVerified ? { depositVerified: true } : {}) } : undefined) : undefined;
-        this.activeRelayKey = option.key;
-        this.activeModelRouteId = '';
-        this.activeKeyPriceQuoteId = undefined;
-        window.localStorage.setItem('nextmux.desktop.activeRelay.v1', option.key);
-        const workbench = this.activeSection === 'comic' ? 'comic' : 'coding';
-        this.selectedModelIds = { ...this.selectedModelIds, [workbench]: '' };
-        window.localStorage.setItem(`nextmux.desktop.selectedModel.${workbench}.v1`, this.selectedModelIds[workbench]);
-        window.localStorage.removeItem(`nextmux.desktop.route.${workbench}`);
-        this.pendingRelaySwitch = undefined;
-        this.modelPickerRelayOpen = false;
-        this.codingPopover = '';
-        this.persistActiveRouteSelection();
-        if (option.merchantId) void this.loadSelectedMerchantCatalog(option.merchantId);
-        else if (option.kind === 'official' || option.key.startsWith('official:')) {
-            void this.ensureOfficialConnectionModelsLoaded?.(option.key);
-        }
-        this.update();
+        const apply = (): void => {
+            this.codingUserExplicitlySelected = true;
+            this.codingPlatformDefaultApplied = undefined;
+            this.automaticRelaySource = relaySourceSelected(this.automaticRelaySource, option.key);
+            this.selectedPublicMerchant = option.kind === 'managed'
+                ? (this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage)?.merchants.find(merchant => merchant.id === option.merchantId)
+                    || (option.merchantId ? { id: option.merchantId, name: option.label, ...(option.publicCode ? { publicCode: option.publicCode } : {}),
+                        ...(option.storeTagline ? { storeTagline: option.storeTagline } : {}), ...(option.storeDescription ? { storeDescription: option.storeDescription } : {}),
+                        ...(option.depositVerified ? { depositVerified: true } : {}) } : undefined) : undefined;
+            this.activeRelayKey = option.key;
+            this.activeModelRouteId = '';
+            this.activeKeyPriceQuoteId = undefined;
+            window.localStorage.setItem('nextmux.desktop.activeRelay.v1', option.key);
+            const workbench = this.activeSection === 'comic' ? 'comic' : 'coding';
+            this.selectedModelIds = { ...this.selectedModelIds, [workbench]: '' };
+            window.localStorage.setItem(`nextmux.desktop.selectedModel.${workbench}.v1`, this.selectedModelIds[workbench]);
+            window.localStorage.removeItem(`nextmux.desktop.route.${workbench}`);
+            this.pendingRelaySwitch = undefined;
+            this.modelPickerRelayOpen = false;
+            this.codingPopover = '';
+            this.invalidatePopoverAnchorGeometry?.();
+            this.persistActiveRouteSelection();
+            if (option.merchantId) void this.loadSelectedMerchantCatalog(option.merchantId);
+            else if (option.kind === 'official' || option.key.startsWith('official:')) {
+                void this.ensureOfficialConnectionModelsLoaded?.(option.key);
+            }
+            this.update();
+        };
+        if (this.batchUpdate) this.batchUpdate(apply);
+        else apply();
     }
 
     /**
@@ -50503,125 +51248,270 @@ export class NextMuxDesktopWidget extends ReactWidget {
         </div>;
     }
 
+    protected globalRenderEpoch = 0;
+    private regionVersions?: Map<string, number>;
+    private frozenRegionVersions?: Map<string, string>;
+    protected visitedSections?: Set<DesktopSection>;
+    private batchUpdateDepth = 0;
+    private batchPendingFullUpdate = false;
+    private batchPendingRegions?: Set<string>;
+    protected relayOptionsScrollEl: HTMLElement | null = null;
+    private relayMetricsRenderCache?: WeakMap<RelayOption, {
+        readonly locale: NextMuxDesktopLocale;
+        readonly dayBucket: number;
+        readonly metrics: readonly {
+            readonly kind: 'quality' | 'authenticity' | 'latency' | 'price';
+            readonly icon: string;
+            readonly value: number | undefined;
+            readonly text: string;
+            readonly display: string;
+            readonly fallback: boolean;
+            readonly note?: string;
+            readonly label: string;
+            readonly signal: ReturnType<typeof relayMetricSignal>;
+        }[];
+    }>;
+
+    protected getRegionVersion(name: string, ...subDeps: readonly string[]): string {
+        const versions = this.regionVersions;
+        const epoch = this.globalRenderEpoch ?? 0;
+        let ver = `${epoch}:${versions?.get(name) ?? 0}`;
+        for (let i = 0; i < subDeps.length; i++) {
+            ver += `:${versions?.get(subDeps[i]) ?? 0}`;
+        }
+        return ver;
+    }
+
+    protected frozenRegionActive: Map<string, boolean> | undefined;
+
+    protected getKeepAliveVersion(name: string, active: boolean, ...subDeps: readonly string[]): string {
+        const live = this.getRegionVersion(name, ...subDeps);
+        const cache = this.frozenRegionVersions ??= new Map<string, string>();
+        const activeCache = this.frozenRegionActive ??= new Map<string, boolean>();
+        const wasActive = activeCache.get(name);
+        activeCache.set(name, active);
+        if (active || wasActive === true) {
+            cache.set(name, live);
+            return live;
+        }
+        const existing = cache.get(name);
+        if (existing !== undefined) return existing;
+        cache.set(name, live);
+        return live;
+    }
+
+    protected bumpRegion(name: string): void {
+        const versions = this.regionVersions ??= new Map<string, number>();
+        versions.set(name, (versions.get(name) ?? 0) + 1);
+    }
+
+    protected updateRegion(names: string | readonly string[]): void {
+        const list = typeof names === 'string' ? [names] : names;
+        if ((this.batchUpdateDepth ?? 0) > 0) {
+            const pending = this.batchPendingRegions ??= new Set<string>();
+            for (let i = 0; i < list.length; i++) pending.add(list[i]);
+            return;
+        }
+        for (let i = 0; i < list.length; i++) this.bumpRegion(list[i]);
+        this.scheduleRenderUpdate();
+    }
+
+    protected batchUpdate(fn: () => void, regions?: string | readonly string[]): void {
+        this.batchUpdateDepth = (this.batchUpdateDepth ?? 0) + 1;
+        try {
+            fn();
+        } finally {
+            this.batchUpdateDepth = Math.max(0, (this.batchUpdateDepth ?? 1) - 1);
+            if (regions !== undefined) {
+                const list = typeof regions === 'string' ? [regions] : regions;
+                const pending = this.batchPendingRegions ??= new Set<string>();
+                for (let i = 0; i < list.length; i++) pending.add(list[i]);
+            }
+            if (this.batchUpdateDepth === 0) {
+                const full = Boolean(this.batchPendingFullUpdate);
+                const pendingRegions = this.batchPendingRegions ? [...this.batchPendingRegions] : [];
+                this.batchPendingFullUpdate = false;
+                this.batchPendingRegions?.clear();
+                if (full && regions === undefined) {
+                    this.update();
+                } else if (pendingRegions.length > 0) {
+                    for (let i = 0; i < pendingRegions.length; i++) this.bumpRegion(pendingRegions[i]);
+                    if (full) this.globalRenderEpoch = (this.globalRenderEpoch ?? 0) + 1;
+                    this.scheduleRenderUpdate();
+                } else if (full) {
+                    this.update();
+                }
+            }
+        }
+    }
+
+    protected island(name: string, render: () => React.ReactNode, variant: 'overlay' | 'section' = 'section', onDismiss?: () => void, ...deps: readonly string[]): React.ReactNode {
+        const version = typeof this.getRegionVersion === 'function' ? this.getRegionVersion(name, ...deps) : undefined;
+        if (typeof isRenderTraceEnabled === 'function' && isRenderTraceEnabled()) {
+            recordRegionRender(name, version);
+            return <React.Profiler id={name} onRender={createRegionProfilerCallback(name, () => version)}>
+                <PanelBoundary key={`guard:${name}`} name={name} locale={this.desktopLocale} variant={variant} {...(version !== undefined ? { version } : {})} render={render} {...(onDismiss ? { onDismiss } : {})} />
+            </React.Profiler>;
+        }
+        return <PanelBoundary key={`guard:${name}`} name={name} locale={this.desktopLocale} variant={variant} {...(version !== undefined ? { version } : {})} render={render} {...(onDismiss ? { onDismiss } : {})} />;
+    }
+
+    protected keepAliveIsland(name: string, active: boolean, render: () => React.ReactNode, ...deps: readonly string[]): React.ReactNode {
+        const version = typeof this.getKeepAliveVersion === 'function' ? this.getKeepAliveVersion(name, active, ...deps) : undefined;
+        if (typeof isRenderTraceEnabled === 'function' && isRenderTraceEnabled()) {
+            recordRegionRender(name, version);
+            return <React.Profiler id={name} onRender={createRegionProfilerCallback(name, () => version)}>
+                <PanelBoundary key={`guard:${name}`} name={name} locale={this.desktopLocale} variant='section' {...(version !== undefined ? { version } : {})} render={render} />
+            </React.Profiler>;
+        }
+        return <PanelBoundary key={`guard:${name}`} name={name} locale={this.desktopLocale} variant='section' {...(version !== undefined ? { version } : {})} render={render} />;
+    }
+
     protected render(): React.ReactNode {
-        const workContextSectionActive = this.workContextOpen && (this.isWorkContextSectionActive?.() ?? (this.activeSection === 'coding'));
-        const shellStyle = {
-            '--nmx-titlebar-left': `${this.contextPanelCollapsed ? 0 : this.contextPanelWidth}px`,
-            '--nmx-titlebar-right': `${workContextSectionActive ? this.effectiveWorkContextWidth() : 0}px`,
-            '--nmx-context-panel-width': `${this.contextPanelWidth}px`,
-            '--nmx-work-context-width': `${this.effectiveWorkContextWidth()}px`,
-            '--nmx-context-file-list-width': `${this.contextFileListWidth}px`,
-            '--nmx-terminal-list-width': `${this.effectiveTerminalListWidth()}px`,
-            '--nmx-terminal-drawer-height': `${this.terminalDrawerHeight}px`
-        } as React.CSSProperties;
-        return <div className={`nmx-shell nmx-theme-${this.resolvedDesktopTheme()} ${this.detachedConversationId ? 'is-detached-conversation' : ''}${this.detachedWindowHighlighted ? ' is-window-highlighted' : ''} ${this.contextPanelCollapsed ? 'is-context-collapsed' : ''} ${workContextSectionActive ? 'is-work-context-open' : ''} ${this.isTitlebarCompact() ? 'is-titlebar-compact' : ''} ${this.isTitlebarCrowded() ? 'is-titlebar-crowded' : ''} ${this.isTitlebarContextCloseOnly() ? 'is-titlebar-context-close-only' : ''}`} style={shellStyle} onMouseDown={event => {
-            this.captureEditingCommandTarget(event.target);
-            const target = event.target instanceof Element ? event.target : undefined;
-            this.threadFocusActive = Boolean(target?.closest('.nmx-coding-topbar, .nmx-coding-stage'))
-                && !Boolean(target?.closest('.nmx-work-context, .nmx-terminal-drawer, .nmx-sidebar-search'));
-            this.dismissFloatingSurfaces(event.target);
-        }} onFocusCapture={event => this.captureEditingCommandTarget(event.target)} onChange={this.commitNativeChoice} onContextMenu={event => { this.handleChatContextMenu(event); this.handleLibraryChatContextMenu(event); }}>
-            {/* The last line of defence: whatever part breaks without a boundary of its own, the window shows a card, never goes blank. */}
-            {this.guard('window', () => this.renderWindowParts(), undefined, 'section')}
-        </div>;
+        this.inRenderPass = true;
+        try {
+            const workContextSectionActive = this.workContextOpen && (this.isWorkContextSectionActive?.() ?? (this.activeSection === 'coding'));
+            const shellStyle = {
+                '--nmx-titlebar-left': `${this.contextPanelCollapsed ? 0 : this.contextPanelWidth}px`,
+                '--nmx-titlebar-right': `${workContextSectionActive ? this.effectiveWorkContextWidth() : 0}px`,
+                '--nmx-context-panel-width': `${this.contextPanelWidth}px`,
+                '--nmx-work-context-width': `${this.effectiveWorkContextWidth()}px`,
+                '--nmx-context-file-list-width': `${this.contextFileListWidth}px`,
+                '--nmx-terminal-list-width': `${this.effectiveTerminalListWidth()}px`,
+                '--nmx-terminal-drawer-height': `${this.terminalDrawerHeight}px`
+            } as React.CSSProperties;
+            return <div className={`nmx-shell nmx-theme-${this.resolvedDesktopTheme()} ${this.detachedConversationId ? 'is-detached-conversation' : ''}${this.detachedWindowHighlighted ? ' is-window-highlighted' : ''} ${this.contextPanelCollapsed ? 'is-context-collapsed' : ''} ${workContextSectionActive ? 'is-work-context-open' : ''} ${this.titlebarCompact ? 'is-titlebar-compact' : ''} ${this.titlebarCrowded ? 'is-titlebar-crowded' : ''} ${this.titlebarContextCloseOnly ? 'is-titlebar-context-close-only' : ''}`} style={shellStyle} onMouseDown={event => {
+                this.captureEditingCommandTarget(event.target);
+                const target = event.target instanceof Element ? event.target : undefined;
+                this.threadFocusActive = Boolean(target?.closest('.nmx-coding-topbar, .nmx-coding-stage'))
+                    && !Boolean(target?.closest('.nmx-work-context, .nmx-terminal-drawer, .nmx-sidebar-search'));
+                this.dismissFloatingSurfaces(event.target);
+            }} onFocusCapture={event => this.captureEditingCommandTarget(event.target)} onChange={this.commitNativeChoice} onContextMenu={event => { this.handleChatContextMenu(event); this.handleLibraryChatContextMenu(event); }}>
+                {/* The last line of defence: whatever part breaks without a boundary of its own, the window shows a card, never goes blank. */}
+                {this.guard('window', () => this.renderWindowParts(), undefined, 'section')}
+            </div>;
+        } finally {
+            this.inRenderPass = false;
+        }
     }
 
     /** Everything inside the window's shell (see render: one boundary around all of it, finer ones inside). */
     protected renderWindowParts(): React.ReactNode {
-        this.reconcileConversationSurfaces(this.activeCodingSessionId);
+        this.reconcileConversationSurfaces?.(this.activeCodingSessionId);
+        const visited = this.visitedSections ??= new Set<DesktopSection>([this.activeSection]);
+        visited.add(this.activeSection);
+        const comicMounted = visited.has('comic');
+        const comicActive = this.activeSection === 'comic';
+        const workContextActive = (this.workContextOpen || this.workContextClosing) && (this.isWorkContextSectionActive?.() ?? (this.activeSection === 'coding'));
         const mac = /Mac/i.test(navigator.platform || navigator.userAgent);
         const backTitle = `返回上一页 (${mac ? '⌘[' : 'Alt+←'})`;
         const forwardTitle = `前进到下一页 (${mac ? '⌘]' : 'Alt+→'})`;
+        const renderOverlayModals = (): React.ReactNode => <>
+            {this.guard('global-conversation-search', () => this.renderCodingSearchDialog?.(), () => this.closeNavigationSurface())}
+            {this.guard('checkpoint-diff', () => this.renderCheckpointDiffSheet())}
+            {this.guard('wallet-topup', () => this.renderWalletTopupSheet())}
+            {this.guard('feedback', () => this.renderFeedbackDialog())}
+            {this.renderGoalDrawer?.()}
+            {this.renderGoalCloseConfirmation?.()}
+            {this.guard('relay-switch', () => this.renderRelaySwitchConfirmation())}
+            {this.renderRestoreConfirmationDialog?.()}
+            {this.pendingDurableRetry && <NextMuxDurableRetryDialog locale={this.desktopLocale}
+                onCancel={() => this.settleDurableRetryConfirmation(false)} onConfirm={() => this.settleDurableRetryConfirmation(true)}
+                onKeyDown={event => this.trapDialogFocus(event)} />}
+            {this.renderChatContextMenu?.()}
+            {this.activeSection === 'comic' && this.comicStartFrameEditor && this.guard('character-start-frame', () => {
+                const editor = this.comicStartFrameEditor!, canvas = editor.session.doc;
+                if (!canvas || !this.comicCanvasIsTracked(editor.session)) return undefined;
+                const target = canvas.nodes.find(node => node.id === editor.nodeId);
+                const journal = canvas.settings.startFramePreparations;
+                const preparations = journal && typeof journal === 'object' && !Array.isArray(journal)
+                    ? Object.values(journal as Readonly<Record<string, { nodeId?: string; jobId?: string; result?: unknown }>>) : [];
+                return <ComicStartFramePanel key={`${editor.session.canvasId}:${editor.nodeId}`} locale={this.desktopLocale} canvas={canvas}
+                    canRegenerate={target?.kind === 'videoGen' && target.payload.mode === 'imageToVideo' && preparations.some(item => item.nodeId === editor.nodeId && Boolean(item.result || item.jobId))}
+                    preferredAspectRatio={target?.kind === 'videoGen' ? String(target.payload.parameters.aspectRatio ?? this.comicProject()?.canvas.aspectRatio ?? '') : undefined}
+                    initial={comicStartFrameSettings(canvas, editor.nodeId)} families={this.canvasModelFamilies(editor.session, 'image')}
+                    defaultRoute={this.canvasDefaultChoice('image', editor.session)} capabilityOf={choice => this.canvasCapabilityOf(editor.session, choice)}
+                    library={() => this.platformService.listComicAssetLibrary()} mediaUrl={uri => this.comicMediaUrl(uri) || ''}
+                    onClose={() => { this.comicStartFrameEditor = undefined; this.update(); }}
+                    onSave={(settings, regenerate) => { const current = editor.session.doc; if (!current || !this.comicCanvasIsTracked(editor.session)) return;
+                        this.changeComicCanvasSession(editor.session, setComicStartFrameSettings(current, editor.nodeId, settings), true);
+                        this.comicStartFrameEditor = undefined; this.update();
+                        if (regenerate) void this.submitComicCanvasNode(editor.session, editor.nodeId, undefined, false, true); }}/>
+            }, () => { this.comicStartFrameEditor = undefined; this.update(); })}
+            {this.activeSection==='comic'&&this.guard('unified-asset-library',()=>this.renderUnifiedComicAssetLibrary(),()=>{this.comicUnifiedLibraryFilter=undefined;this.update();})}
+            {this.activeSection==='comic'&&this.guard('comic-cast',()=>this.renderComicCastLibrary(),()=>{this.comicCastLibraryOpen=false;this.update();})}
+            {this.activeSection==='comic'&&this.comicLibraryContextMenu&&<ComicChatMenu x={this.comicLibraryContextMenu.x} y={this.comicLibraryContextMenu.y}
+                items={[{id:'save',label:comicAssetLibraryText(this.desktopLocale,'save'),icon:'library'}]}
+                onPick={()=>{const menu=this.comicLibraryContextMenu;if(menu)void this.saveChatLibraryAsset(menu.key,menu.request);this.comicLibraryContextMenu=undefined;this.update();}}
+                onClose={()=>{this.comicLibraryContextMenu=undefined;this.update();}}/>}
+            {this.projectMemoryPath && <ProjectMemoryPanel key={this.projectMemoryPath} workspaceRoot={this.projectMemoryPath} locale={this.desktopLocale} api={this.platformService}
+                onClose={() => { this.projectMemoryPath = ''; this.update(); }}
+                onOpenFile={relativePath => {
+                    const uri = URI.fromFilePath(this.projectMemoryPath).resolve(relativePath).toString();
+                    this.projectMemoryPath = ''; this.update(); void this.openContextFile(uri);
+                }}
+                onOpenDesign={async () => {
+                    const path = this.projectMemoryPath;
+                    const file = await this.platformService.ensureProjectDesign(path);
+                    if (this.projectMemoryPath !== path) return;
+                    this.projectMemoryPath = ''; this.update(); await this.openContextFile(URI.fromFilePath(file).toString());
+                }} />}
+            {this.microphoneToast && <MyApisErrorToast
+                locale={this.desktopLocale}
+                error={[this.microphoneToast.title, this.microphoneToast.detail].filter(Boolean).join('\n')}
+                toastKey={`mic-${this.microphoneToast.timestamp}`}
+                onDismiss={() => {
+                    if (typeof window !== 'undefined' && this.microphoneToastTimer !== undefined) {
+                        window.clearTimeout(this.microphoneToastTimer);
+                        this.microphoneToastTimer = undefined;
+                    }
+                    this.microphoneToast = undefined;
+                    this.update();
+                }} />}
+            {this.onboardingStep !== 'done' && !this.detachedConversationId && <NextMuxOnboarding step={this.onboardingStep} locale={this.onboardingLocale()} theme={this.themePreference} brand={this.renderBrandMark('nmx-onboarding-mark')}
+                bridge={window.nextmuxDesktop as SystemPermissionsBridge | undefined} permissionsAvailable={this.onboardingPermissionsAvailable()}
+                onPreviewTheme={theme => this.setDesktopTheme(theme)}
+                onAppearanceDone={(locale, theme) => this.finishOnboardingAppearance(locale, theme)}
+                onFinish={() => this.setOnboardingStep('done')} />}
+            {(this.activeSection !== 'coding' || this.codingPanel !== 'thread' || Boolean(this.activeVisualTab?.()) || Boolean(this.activeCouncilChildId)) && this.renderGlobalTransientToast?.()}
+        </>;
         return <>
                 <div className='nmx-titlebar-drag-region' aria-hidden='true'></div>
-                <div className='nmx-titlebar-actions' aria-label='窗口导航' onMouseDown={event => event.stopPropagation()}>
-                    <button data-context-panel-toggle aria-label={this.contextPanelCollapsed ? '展开侧栏' : '收起侧栏'} title={this.contextPanelCollapsed ? '展开侧栏' : '收起侧栏'} onClick={() => this.toggleContextPanel()}><i className={`codicon codicon-layout-sidebar-left${this.contextPanelCollapsed ? '' : '-off'}`}></i></button>
-                    <button aria-label='返回上一页' title={backTitle} data-nmx-tip={backTitle} disabled={!this.canNavigateBack()} onClick={() => this.commandNavigateBack()}><i className='codicon codicon-arrow-left'></i></button>
-                    <button aria-label='前进到下一页' title={forwardTitle} data-nmx-tip={forwardTitle} disabled={!this.canNavigateForward()} onClick={() => this.commandNavigateForward()}><i className='codicon codicon-arrow-right'></i></button>
-                    {this.guard('window-menu', () => this.renderConversationWindowMenu(), undefined, 'section')}
-                </div>
-                {/* Every part of the window has its own boundary: one broken part shows a card, never a blank window. */}
-                {this.guard('titlebar', () => this.renderTitlebarPrimaryNavigation(), undefined, 'section')}
-                {this.guard('work-context-titlebar', () => this.renderWorkContextTitlebar(), undefined, 'section')}
+                {this.island ? this.island('titlebar', () => <>
+                    <div className='nmx-titlebar-actions' aria-label='窗口导航' onMouseDown={event => event.stopPropagation()}>
+                        <button data-context-panel-toggle aria-label={this.contextPanelCollapsed ? '展开侧栏' : '收起侧栏'} title={this.contextPanelCollapsed ? '展开侧栏' : '收起侧栏'} onClick={() => this.toggleContextPanel()}><i className={`codicon codicon-layout-sidebar-left${this.contextPanelCollapsed ? '' : '-off'}`}></i></button>
+                        <button aria-label='返回上一页' title={backTitle} data-nmx-tip={backTitle} disabled={typeof this.canNavigateBack === 'function' ? !this.canNavigateBack() : !this.hasDismissibleSurface() && this.navigationBackStack.length === 0} onClick={() => this.commandNavigateBack()}><i className='codicon codicon-arrow-left'></i></button>
+                        <button aria-label='前进到下一页' title={forwardTitle} data-nmx-tip={forwardTitle} disabled={typeof this.canNavigateForward === 'function' ? !this.canNavigateForward() : this.navigationForwardStack.length === 0} onClick={() => this.commandNavigateForward()}><i className='codicon codicon-arrow-right'></i></button>
+                        {this.guard('window-menu', () => this.renderConversationWindowMenu(), undefined, 'section')}
+                    </div>
+                    {/* Every part of the window has its own boundary: one broken part shows a card, never a blank window. */}
+                    {this.guard('titlebar', () => this.renderTitlebarPrimaryNavigation(), undefined, 'section')}
+                    {this.guard('work-context-titlebar', () => this.renderWorkContextTitlebar(), undefined, 'section')}
+                </>, 'section') : <>
+                    <div className='nmx-titlebar-actions' aria-label='窗口导航' onMouseDown={event => event.stopPropagation()}>
+                        <button data-context-panel-toggle aria-label={this.contextPanelCollapsed ? '展开侧栏' : '收起侧栏'} title={this.contextPanelCollapsed ? '展开侧栏' : '收起侧栏'} onClick={() => this.toggleContextPanel()}><i className={`codicon codicon-layout-sidebar-left${this.contextPanelCollapsed ? '' : '-off'}`}></i></button>
+                        <button aria-label='返回上一页' title={backTitle} data-nmx-tip={backTitle} disabled={typeof this.canNavigateBack === 'function' ? !this.canNavigateBack() : !this.hasDismissibleSurface() && this.navigationBackStack.length === 0} onClick={() => this.commandNavigateBack()}><i className='codicon codicon-arrow-left'></i></button>
+                        <button aria-label='前进到下一页' title={forwardTitle} data-nmx-tip={forwardTitle} disabled={typeof this.canNavigateForward === 'function' ? !this.canNavigateForward() : this.navigationForwardStack.length === 0} onClick={() => this.commandNavigateForward()}><i className='codicon codicon-arrow-right'></i></button>
+                        {this.guard('window-menu', () => this.renderConversationWindowMenu(), undefined, 'section')}
+                    </div>
+                    {this.guard('titlebar', () => this.renderTitlebarPrimaryNavigation(), undefined, 'section')}
+                    {this.guard('work-context-titlebar', () => this.renderWorkContextTitlebar(), undefined, 'section')}
+                </>}
                 {!this.contextPanelCollapsed && this.guard('sidebar', () => this.renderContextPanel(), undefined, 'section')}
                 {!this.contextPanelCollapsed && (this.activeSection === 'coding' || this.activeSection === 'comic') && <div className='nmx-context-panel-resize' role='separator' tabIndex={0} aria-label='调整项目与对话宽度' aria-orientation='vertical' aria-controls='nmx-context-panel nmx-workspace' aria-valuemin={NextMuxDesktopWidget.CONTEXT_PANEL_MIN_WIDTH} aria-valuemax={this.contextPanelMaximumWidth()} aria-valuenow={this.contextPanelWidth} onPointerDown={event => this.beginContextPanelResize(event)} onKeyDown={event => this.handlePaneResizeKey(event, 'context')}></div>}
                 <section id='nmx-workspace' className='nmx-workspace' aria-live='polite'>
-                    {this.activeSection === 'models' && this.guard('models', () => this.renderModelCenter(), undefined, 'section')}
-                    {this.activeSection === 'coding' && this.guard('coding', () => this.renderCodingWorkbench(), undefined, 'section')}
-                    {this.activeSection === 'comic' && this.guard('comic', () => this.renderComicWorkbench(), undefined, 'section')}
+                    {this.activeSection === 'models' && (this.island ? this.island('model-center', () => this.renderModelCenter(), 'section') : this.guard('models', () => this.renderModelCenter(), undefined, 'section'))}
+                    {this.activeSection === 'coding' && this.guard('coding', () => this.renderCodingWorkbench(), undefined, 'section', 'coding-thread', 'terminal', 'coding-popovers', 'coding-modals')}
+                    {comicMounted && <div className={comicActive ? 'nmx-keepalive-host' : 'nmx-keepalive-host nmx-keepalive-hidden'} aria-hidden={!comicActive || undefined} ref={node => { if (node) node.inert = !comicActive; }}>
+                        {this.keepAliveIsland ? this.keepAliveIsland('comic', comicActive, () => this.renderComicWorkbench(), 'comic-popovers', 'comic-thread', 'comic-composer') : this.guard('comic', () => this.renderComicWorkbench(), undefined, 'section')}
+                    </div>}
                     {this.activeSection === 'settings' && this.guard('settings', () => this.renderSettings(), undefined, 'section')}
                 </section>
-                {this.guard('work-context', () => this.renderWorkContext(), undefined, 'section')}
-                {this.guard('global-conversation-search', () => this.renderCodingSearchDialog(), () => this.closeNavigationSurface())}
-                {this.guard('checkpoint-diff', () => this.renderCheckpointDiffSheet())}
-                {this.guard('wallet-topup', () => this.renderWalletTopupSheet())}
-                {this.guard('feedback', () => this.renderFeedbackDialog())}
-                {this.renderGoalDrawer()}
-                {this.renderGoalCloseConfirmation()}
-                {this.guard('relay-switch', () => this.renderRelaySwitchConfirmation())}
-                {this.renderRestoreConfirmationDialog()}
-                {this.pendingDurableRetry && <NextMuxDurableRetryDialog locale={this.desktopLocale}
-                    onCancel={() => this.settleDurableRetryConfirmation(false)} onConfirm={() => this.settleDurableRetryConfirmation(true)}
-                    onKeyDown={event => this.trapDialogFocus(event)} />}
-                {this.renderChatContextMenu()}
-                {this.activeSection === 'comic' && this.comicStartFrameEditor && this.guard('character-start-frame', () => {
-                    const editor = this.comicStartFrameEditor!, canvas = editor.session.doc;
-                    if (!canvas || !this.comicCanvasIsTracked(editor.session)) return undefined;
-                    const target = canvas.nodes.find(node => node.id === editor.nodeId);
-                    const journal = canvas.settings.startFramePreparations;
-                    const preparations = journal && typeof journal === 'object' && !Array.isArray(journal)
-                        ? Object.values(journal as Readonly<Record<string, { nodeId?: string; jobId?: string; result?: unknown }>>) : [];
-                    return <ComicStartFramePanel key={`${editor.session.canvasId}:${editor.nodeId}`} locale={this.desktopLocale} canvas={canvas}
-                        canRegenerate={target?.kind === 'videoGen' && target.payload.mode === 'imageToVideo' && preparations.some(item => item.nodeId === editor.nodeId && Boolean(item.result || item.jobId))}
-                        preferredAspectRatio={target?.kind === 'videoGen' ? String(target.payload.parameters.aspectRatio ?? this.comicProject()?.canvas.aspectRatio ?? '') : undefined}
-                        initial={comicStartFrameSettings(canvas, editor.nodeId)} families={this.canvasModelFamilies(editor.session, 'image')}
-                        defaultRoute={this.canvasDefaultChoice('image', editor.session)} capabilityOf={choice => this.canvasCapabilityOf(editor.session, choice)}
-                        library={() => this.platformService.listComicAssetLibrary()} mediaUrl={uri => this.comicMediaUrl(uri) || ''}
-                        onClose={() => { this.comicStartFrameEditor = undefined; this.update(); }}
-                        onSave={(settings, regenerate) => { const current = editor.session.doc; if (!current || !this.comicCanvasIsTracked(editor.session)) return;
-                            this.changeComicCanvasSession(editor.session, setComicStartFrameSettings(current, editor.nodeId, settings), true);
-                            this.comicStartFrameEditor = undefined; this.update();
-                            if (regenerate) void this.submitComicCanvasNode(editor.session, editor.nodeId, undefined, false, true); }}/>
-                }, () => { this.comicStartFrameEditor = undefined; this.update(); })}
-                {this.activeSection==='comic'&&this.guard('unified-asset-library',()=>this.renderUnifiedComicAssetLibrary(),()=>{this.comicUnifiedLibraryFilter=undefined;this.update();})}
-                {this.activeSection==='comic'&&this.guard('comic-cast',()=>this.renderComicCastLibrary(),()=>{this.comicCastLibraryOpen=false;this.update();})}
-                {this.activeSection==='comic'&&this.comicLibraryContextMenu&&<ComicChatMenu x={this.comicLibraryContextMenu.x} y={this.comicLibraryContextMenu.y}
-                    items={[{id:'save',label:comicAssetLibraryText(this.desktopLocale,'save'),icon:'library'}]}
-                    onPick={()=>{const menu=this.comicLibraryContextMenu;if(menu)void this.saveChatLibraryAsset(menu.key,menu.request);this.comicLibraryContextMenu=undefined;this.update();}}
-                    onClose={()=>{this.comicLibraryContextMenu=undefined;this.update();}}/>}
-                {this.projectMemoryPath && <ProjectMemoryPanel key={this.projectMemoryPath} workspaceRoot={this.projectMemoryPath} locale={this.desktopLocale} api={this.platformService}
-                    onClose={() => { this.projectMemoryPath = ''; this.update(); }}
-                    onOpenFile={relativePath => {
-                        const uri = URI.fromFilePath(this.projectMemoryPath).resolve(relativePath).toString();
-                        this.projectMemoryPath = ''; this.update(); void this.openContextFile(uri);
-                    }}
-                    onOpenDesign={async () => {
-                        const path = this.projectMemoryPath;
-                        const file = await this.platformService.ensureProjectDesign(path);
-                        if (this.projectMemoryPath !== path) return;
-                        this.projectMemoryPath = ''; this.update(); await this.openContextFile(URI.fromFilePath(file).toString());
-                    }} />}
-                {this.microphoneToast && <MyApisErrorToast
-                    locale={this.desktopLocale}
-                    error={[this.microphoneToast.title, this.microphoneToast.detail].filter(Boolean).join('\n')}
-                    toastKey={`mic-${this.microphoneToast.timestamp}`}
-                    onDismiss={() => {
-                        if (typeof window !== 'undefined' && this.microphoneToastTimer !== undefined) {
-                            window.clearTimeout(this.microphoneToastTimer);
-                            this.microphoneToastTimer = undefined;
-                        }
-                        this.microphoneToast = undefined;
-                        this.update();
-                    }} />}
-                {this.onboardingStep !== 'done' && !this.detachedConversationId && <NextMuxOnboarding step={this.onboardingStep} locale={this.onboardingLocale()} theme={this.themePreference} brand={this.renderBrandMark('nmx-onboarding-mark')}
-                    bridge={window.nextmuxDesktop as SystemPermissionsBridge | undefined} permissionsAvailable={this.onboardingPermissionsAvailable()}
-                    onPreviewTheme={theme => this.setDesktopTheme(theme)}
-                    onAppearanceDone={(locale, theme) => this.finishOnboardingAppearance(locale, theme)}
-                    onFinish={() => this.setOnboardingStep('done')} />}
-                {(this.activeSection !== 'coding' || this.codingPanel !== 'thread' || Boolean(this.activeVisualTab?.()) || Boolean(this.activeCouncilChildId)) && this.renderGlobalTransientToast?.()}
+                {this.keepAliveIsland ? this.keepAliveIsland('work-context', Boolean(workContextActive), () => this.renderWorkContext()) : this.guard('work-context', () => this.renderWorkContext(), undefined, 'section')}
+                {this.island ? this.island('modals', renderOverlayModals, 'overlay') : renderOverlayModals()}
                 {/* The model tooltip (a tag's 倍率 or 真实性, a depth, a context size or an evidence note) has one mount for the
                     whole window: every model picker, its hover card and the Council dialog show it from here. */}
-                {this.renderModelEvidenceTooltipPortal?.()}
+                {this.island ? this.island('popovers', () => this.renderModelEvidenceTooltipPortal?.(), 'overlay') : this.renderModelEvidenceTooltipPortal?.()}
         </>;
     }
 
@@ -50644,8 +51534,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
      * A part of the app that cannot take the rest down with it: a render error there shows a small card (close /
      * try again) instead of unmounting the whole widget and leaving a blank window. onDismiss closes what opened it.
      */
-    protected guard(name: string, render: () => React.ReactNode, onDismiss?: () => void, variant: 'overlay' | 'section' = 'overlay'): React.ReactNode {
-        return <PanelBoundary key={`guard:${name}`} name={name} locale={this.desktopLocale} variant={variant} render={render} {...(onDismiss ? { onDismiss } : {})} />;
+    protected guard(name: string, render: () => React.ReactNode, onDismiss?: () => void, variant: 'overlay' | 'section' = 'overlay', ...deps: readonly string[]): React.ReactNode {
+        const version = typeof this.getRegionVersion === 'function' ? this.getRegionVersion(name, ...deps) : undefined;
+        return <PanelBoundary key={`guard:${name}`} name={name} locale={this.desktopLocale} variant={variant} {...(version !== undefined ? { version } : {})} render={render} {...(onDismiss ? { onDismiss } : {})} />;
     }
 
     /** Closes a comic sheet whose render failed (the panel's own open flag). */
@@ -50722,8 +51613,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const sourceTabText = (tab: RelaySourceTab): string => relayText(this.desktopLocale,
             tab === 'merchant' ? 'merchantSources' : tab === 'favorite' ? 'favoriteSources' : 'myApiSources');
         const now = Date.now();
+        const dayBucket = Math.floor(now / 3_600_000);
+        const metricsCache = this.relayMetricsRenderCache ??= new WeakMap();
         const metricsFor = (option: RelayOption) => {
             if (option.kind === 'automatic') return [];
+            const hit = metricsCache.get(option);
+            if (hit && hit.locale === this.desktopLocale && hit.dayBucket === dayBucket) return hit.metrics;
             const authenticityFallback = Boolean(option.authenticityListed && option.authenticity !== undefined);
             const authenticityDefault = Boolean(!authenticityFallback && option.authenticity !== undefined
                 && (option.authenticityDefault || option.measurement?.authenticity?.scope === 'default_unverifiable'));
@@ -50738,7 +51633,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const latencyNote = option.latencyMs !== undefined && (latencyStale || latencyObservedAt !== undefined)
                 ? relayMeasurementNote(this.desktopLocale, 'latencyStale', latencyObservedAt)
                 : undefined;
-            return [
+            const computed = [
                 { kind: 'quality' as const, icon: 'star-full', value: option.quality, text: relayPercentText(this.desktopLocale, option.quality), fallback: false },
                 // A value the directory supplies for want of a current one carries a note saying so (relayMeasurementNote).
                 { kind: 'authenticity' as const, icon: 'verified', value: option.authenticity, text: relayPercentText(this.desktopLocale, option.authenticity),
@@ -50758,16 +51653,30 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 ? metric.kind === 'authenticity' ? relayText(this.desktopLocale, 'authenticityPending')
                     : relayMeasurementExplanation(this.desktopLocale, metric.kind === 'quality' ? option.measurement?.quality : option.measurement?.latency) : metric.text}${metric.note ? ` · ${metric.note}` : ''}`,
                 signal: relayMetricSignal(metric.kind, metric.value) }));
+            metricsCache.set(option, { locale: this.desktopLocale, dayBucket, metrics: computed });
+            return computed;
+        };
+        const updatePopoverRegion = (): void => {
+            if (this.updateRegion) this.updateRegion(['popovers', 'coding-popovers', 'comic-popovers', 'modals']);
+            else this.update();
         };
         // `seal`: the hint of a deposit-verified store's name, which leads with the gold seal (not a relay at capacity, which only says so).
         const showMetric = (key: string, text: string, anchor: HTMLElement, seal = false): void => {
             const option = relayOptions.find(item => item.key === key);
             const full = Boolean(option && this.relayOptionIsFull(option, capacityScope));
             if (full) text = relayText(this.desktopLocale, 'relayFull');
+            const measuredRect = typeof anchor.getBoundingClientRect === 'function' ? anchor.getBoundingClientRect() : undefined;
             if (this.relayMetricTooltip?.key === key && this.relayMetricTooltip?.text === text && this.relayMetricTooltip?.anchor === anchor) return;
-            this.relayMetricTooltip = { key, text, anchor, ...(seal && !full ? { seal: true } : {}) }; this.update();
+            this.relayMetricTooltip = {
+                key,
+                text,
+                anchor,
+                ...(measuredRect ? { rect: { left: measuredRect.left, bottom: measuredRect.bottom } } : {}),
+                ...(seal && !full ? { seal: true } : {})
+            };
+            updatePopoverRegion();
         };
-        const hideMetric = (): void => { if (this.relayMetricTooltip) { this.relayMetricTooltip = undefined; this.update(); } };
+        const hideMetric = (): void => { if (this.relayMetricTooltip) { this.relayMetricTooltip = undefined; updatePopoverRegion(); } };
         // A selectable relay row the pointer or focus rests on reads its first model page before the click lands.
         const preloadable = (option: RelayOption): boolean => option.kind === 'managed' && Boolean(option.merchantId) && !option.directoryOnly;
         // Every column shows its value, with four bars under it for the band the colour stands for (relayMetricSignal).
@@ -50789,70 +51698,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // A row's tip (its name, a dial, its heart or its "free" pill) lasts while the row is listed.
         const tooltipRowKey = this.relayMetricTooltip?.key.replace(/^(?:favorite|free):/, '');
         const tooltip = this.relayMetricTooltip && (this.relayMetricTooltip.key.startsWith('sort:') || this.relayMetricTooltip.key.startsWith('head:') || relayOptions.some(option => option.key === tooltipRowKey)) ? this.relayMetricTooltip : undefined;
-        const tooltipRect = tooltip?.anchor.getBoundingClientRect();
+        const tooltipRect = tooltip?.rect ?? tooltip?.anchor.getBoundingClientRect();
         const tooltipWidth = Math.min(tooltip?.key.startsWith('head:') || tooltip?.key.startsWith('sort:') || tooltip?.text === relayText(this.desktopLocale, 'relayFull') ? 260 : 204, window.innerWidth - 16);
         // Every language has its own explanations (nextmux-relay-locale.ts); quality is the smoothed approval rating.
         const relayColumnExplanation = (column: 'merchant' | 'quality' | 'authenticity' | 'latency' | 'price' | 'apiName' | 'favorite'): string => relayText(this.desktopLocale,
             column === 'merchant' ? 'columnMerchant' : column === 'quality' ? 'columnQuality' : column === 'authenticity' ? 'columnAuthenticity'
                 : column === 'latency' ? 'columnLatency' : column === 'price' ? 'columnPrice' : column === 'apiName' ? 'columnApiName' : 'columnFavorite');
-        // While the portal tooltip explains a head, a dial or a row, a focused sort pill keeps its own tip hidden.
-        return <section className='nmx-relay-popover' data-metric-tooltip={tooltip ? 'open' : undefined}>
-            <RelayCapacityRefresh poller={this.relayCapacityPoller}
-                merchantIds={relayOptions.filter(option => option.kind === 'managed' && option.merchantId).map(option => option.merchantId!)}
-                // The chosen merchant's models are on screen beside this list (the council dialog) or right after it.
-                pinnedMerchantIds={activeRelayKey.startsWith('managed:') ? [activeRelayKey.slice('managed:'.length)] : []}
-                scope={capacityScope}
-                onSnapshot={snapshot => { this.relayCapacitySnapshot = snapshot; if (this.relayMetricTooltip?.text === relayText(this.desktopLocale, 'relayFull')) this.relayMetricTooltip = undefined; this.update(); }} />
-            <header><div><strong>{relayText(this.desktopLocale, 'relayTitle')}</strong><small>{relayText(this.desktopLocale, 'relaySubtitle')}</small></div></header>
-            <div className='nmx-relay-source-tabs' role='tablist' aria-label={relayText(this.desktopLocale, 'sourceTabs')}>
-                {sourceTabs.map(tab => <button key={tab} id={`nmx-relay-source-${tab}`} data-relay-source-tab={tab}
-                    role='tab' aria-selected={this.relaySourceTab === tab} aria-controls='nmx-relay-source-panel'
-                    title={sourceTabText(tab)}
-                    tabIndex={this.relaySourceTab === tab ? 0 : -1} onClick={() => this.setRelaySourceTab(tab)}
-                    onKeyDown={event => {
-                        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-                        event.preventDefault();
-                        const current = sourceTabs.indexOf(tab);
-                        const direction = this.desktopLocale === 'ar' ? -1 : 1;
-                        const next = event.key === 'Home' ? sourceTabs[0] : event.key === 'End' ? sourceTabs.at(-1)!
-                            : sourceTabs[(current + (event.key === 'ArrowRight' ? direction : -direction) + sourceTabs.length) % sourceTabs.length];
-                        this.setRelaySourceTab(next);
-                        event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-relay-source-tab="${next}"]`)?.focus();
-                    }}>{sourceTabText(tab)}</button>)}
-            </div>
-            <label className='nmx-relay-source-search'><i className='codicon codicon-search' aria-hidden='true'></i>
-                <ImeInput type='search' maxLength={160} value={this.relaySourceQuery} aria-label={relayText(this.desktopLocale, 'searchSources')}
-                    placeholder={relayText(this.desktopLocale, 'searchSources')}
-                    onChange={event => this.setRelaySourceQuery(event.currentTarget.value)} />
-            </label>
-            {this.relaySourceTab === 'merchant' && <div className='nmx-relay-sort' role='group' aria-label={relayText(this.desktopLocale, 'relaySort')}>
-                {([['quality', 'quality', 'star-full'], ['authenticity', 'authenticity', 'verified'], ['latency', 'latency', 'clock'], ['price', 'price', 'symbol-number']] as const).map(([mode, key, icon]) => {
-                    const sortLabel = mode === 'price' ? offeringPriceText(this.desktopLocale, 'averageMultiplier') : relayText(this.desktopLocale, key);
-                    const sortExplanation = relayColumnExplanation(mode);
-                    return <button key={mode} data-relay-sort={mode} data-tooltip={sortExplanation} aria-label={sortLabel} aria-pressed={this.relaySortMode === mode} className={this.relaySortMode === mode ? 'is-active' : ''}
-                        onPointerEnter={hideMetric} onFocus={hideMetric}
-                        onClick={() => this.setRelaySortMode(mode)}><i className={'codicon codicon-' + icon} aria-hidden='true'></i><span>{sortLabel}</span></button>;
-                })}
-            </div>}
-            {this.relaySourceTab !== 'my-api' && !this.platformSession?.linked && <p className='nmx-relay-sign-in-note' role='note' title={relayText(this.desktopLocale, 'signInNotice')}>
-                <i className='codicon codicon-account' aria-hidden='true'></i><span>{relayText(this.desktopLocale, 'signInNotice')}</span></p>}
-            <div className={`nmx-relay-options is-${this.relaySourceTab}`} id='nmx-relay-source-panel' role='tabpanel' aria-labelledby={`nmx-relay-source-${this.relaySourceTab}`}
-                onScroll={event => this.handlePublicMerchantScroll(event)}>{directoryLoading && <div className='nmx-relay-loading-center' role='status'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i><span>{relayText(this.desktopLocale, 'directoryLoading')}</span></div>}{savedOfficialRelayUnavailable && <div className='nmx-route-empty is-warning'><span>{relayText(this.desktopLocale, 'savedRelayUnavailable')}</span></div>}
-            {/* Column titles only over rows: an empty list shows its message alone, not five orphaned titles above it. */}
-            {(this.relaySourceTab === 'merchant' || this.relaySourceTab === 'favorite') && relayOptions.length > 0 && <div className='nmx-relay-grid-head' aria-hidden='true'>
-                {([
-                    [this.desktopLocale === 'zh-CN' ? '商家信息' : this.desktopLocale === 'zh-TW' ? '商家資訊' : relayText(this.desktopLocale, 'merchantSources'), relayColumnExplanation('merchant')],
-                    [relayText(this.desktopLocale, 'quality'), relayColumnExplanation('quality')],
-                    [relayText(this.desktopLocale, 'authenticity'), relayColumnExplanation('authenticity')],
-                    [relayText(this.desktopLocale, 'latency'), relayColumnExplanation('latency')],
-                    [offeringPriceText(this.desktopLocale, 'averageMultiplier'), relayColumnExplanation('price')]
-                ] as const).map(([headLabel, headTooltip], index) => <span key={index} onPointerEnter={event => showMetric(`head:${index}`, headTooltip, event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(headLabel)}</span>)}
-                <span onPointerEnter={event => showMetric('head:favorite', relayColumnExplanation('favorite'), event.currentTarget)} onPointerLeave={hideMetric}><FavoriteHeartIcon /></span>
-            </div>}{this.relaySourceTab === 'my-api' && relayOptions.length > 0 && <div className='nmx-relay-grid-head is-own' aria-hidden='true'>
-                <span onPointerEnter={event => showMetric('head:own-api', relayColumnExplanation('apiName'), event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(relayText(this.desktopLocale, 'apiName'))}</span>
-                <span onPointerEnter={event => showMetric('head:own-authenticity', relayColumnExplanation('authenticity'), event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(relayText(this.desktopLocale, 'authenticity'))}</span>
-                <span onPointerEnter={event => showMetric('head:own-latency', relayColumnExplanation('latency'), event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(relayText(this.desktopLocale, 'latency'))}</span>
-            </div>}{relayOptions.map(option => {
+        const relayThreshold = typeof DEFAULT_VIRTUAL_LIST_THRESHOLD === 'number' ? DEFAULT_VIRTUAL_LIST_THRESHOLD : 30;
+        const renderRelayOptionRow = (option: RelayOption): React.ReactNode => {
                 const optionFull = this.relayOptionIsFull(option, capacityScope);
                 const free = showsFree(option);
                 // The public merchant number tells same-named stores apart; the store intro follows it.
@@ -50899,7 +51752,75 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     onPointerLeave={hideMetric}
                     onClick={() => this.toggleFavoriteMerchant(option)}><FavoriteHeartIcon active={this.favoriteMerchantLabels.has(option.merchantId)} /></button>}
             </div>;
-            })}{relayOptions.length === 0 && !(this.relaySourceTab !== 'my-api' && (!directoryPage || this.publicMerchantPageLoading || this.publicMerchantPageError)) && <div className='nmx-route-empty' role='status'><span>{relayText(this.desktopLocale, this.relaySourceQuery.trim() ? 'noMatchingSources' : this.relaySourceTab === 'favorite' ? 'noFavorites' : this.relaySourceTab === 'my-api' ? 'noMyApis' : 'noRelay')}</span></div>}</div>
+        };
+        // While the portal tooltip explains a head, a dial or a row, a focused sort pill keeps its own tip hidden.
+        return <section className='nmx-relay-popover' data-metric-tooltip={tooltip ? 'open' : undefined}>
+            <RelayCapacityRefresh poller={this.relayCapacityPoller}
+                merchantIds={relayOptions.filter(option => option.kind === 'managed' && option.merchantId).map(option => option.merchantId!)}
+                // The chosen merchant's models are on screen beside this list (the council dialog) or right after it.
+                pinnedMerchantIds={activeRelayKey.startsWith('managed:') ? [activeRelayKey.slice('managed:'.length)] : []}
+                scope={capacityScope}
+                onSnapshot={snapshot => { this.relayCapacitySnapshot = snapshot; if (this.relayMetricTooltip?.text === relayText(this.desktopLocale, 'relayFull')) this.relayMetricTooltip = undefined; updatePopoverRegion(); }} />
+            <header><div><strong>{relayText(this.desktopLocale, 'relayTitle')}</strong><small>{relayText(this.desktopLocale, 'relaySubtitle')}</small></div></header>
+            <div className='nmx-relay-source-tabs' role='tablist' aria-label={relayText(this.desktopLocale, 'sourceTabs')}>
+                {sourceTabs.map(tab => <button key={tab} id={`nmx-relay-source-${tab}`} data-relay-source-tab={tab}
+                    role='tab' aria-selected={this.relaySourceTab === tab} aria-controls='nmx-relay-source-panel'
+                    title={sourceTabText(tab)}
+                    tabIndex={this.relaySourceTab === tab ? 0 : -1} onClick={() => this.setRelaySourceTab(tab)}
+                    onKeyDown={event => {
+                        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                        event.preventDefault();
+                        const current = sourceTabs.indexOf(tab);
+                        const direction = this.desktopLocale === 'ar' ? -1 : 1;
+                        const next = event.key === 'Home' ? sourceTabs[0] : event.key === 'End' ? sourceTabs.at(-1)!
+                            : sourceTabs[(current + (event.key === 'ArrowRight' ? direction : -direction) + sourceTabs.length) % sourceTabs.length];
+                        this.setRelaySourceTab(next);
+                        event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(`[data-relay-source-tab="${next}"]`)?.focus();
+                    }}>{sourceTabText(tab)}</button>)}
+            </div>
+            <label className='nmx-relay-source-search'><i className='codicon codicon-search' aria-hidden='true'></i>
+                <ImeInput type='search' maxLength={160} commitDelayMs={100} value={this.relaySourceQuery} aria-label={relayText(this.desktopLocale, 'searchSources')}
+                    placeholder={relayText(this.desktopLocale, 'searchSources')}
+                    onChange={event => this.setRelaySourceQuery(event.currentTarget.value)} />
+            </label>
+            {this.relaySourceTab === 'merchant' && <div className='nmx-relay-sort' role='group' aria-label={relayText(this.desktopLocale, 'relaySort')}>
+                {([['quality', 'quality', 'star-full'], ['authenticity', 'authenticity', 'verified'], ['latency', 'latency', 'clock'], ['price', 'price', 'symbol-number']] as const).map(([mode, key, icon]) => {
+                    const sortLabel = mode === 'price' ? offeringPriceText(this.desktopLocale, 'averageMultiplier') : relayText(this.desktopLocale, key);
+                    const sortExplanation = relayColumnExplanation(mode);
+                    return <button key={mode} data-relay-sort={mode} data-tooltip={sortExplanation} aria-label={sortLabel} aria-pressed={this.relaySortMode === mode} className={this.relaySortMode === mode ? 'is-active' : ''}
+                        onPointerEnter={hideMetric} onFocus={hideMetric}
+                        onClick={() => this.setRelaySortMode(mode)}><i className={'codicon codicon-' + icon} aria-hidden='true'></i><span>{sortLabel}</span></button>;
+                })}
+            </div>}
+            {this.relaySourceTab !== 'my-api' && !this.platformSession?.linked && <p className='nmx-relay-sign-in-note' role='note' title={relayText(this.desktopLocale, 'signInNotice')}>
+                <i className='codicon codicon-account' aria-hidden='true'></i><span>{relayText(this.desktopLocale, 'signInNotice')}</span></p>}
+            <div className={`nmx-relay-options is-${this.relaySourceTab}`} id='nmx-relay-source-panel' role='tabpanel' aria-labelledby={`nmx-relay-source-${this.relaySourceTab}`}
+                ref={el => { this.relayOptionsScrollEl = el; }}
+                onScroll={event => this.handlePublicMerchantScroll(event)}>{directoryLoading && <div className='nmx-relay-loading-center' role='status'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i><span>{relayText(this.desktopLocale, 'directoryLoading')}</span></div>}{savedOfficialRelayUnavailable && <div className='nmx-route-empty is-warning'><span>{relayText(this.desktopLocale, 'savedRelayUnavailable')}</span></div>}
+            {/* Column titles only over rows: an empty list shows its message alone, not five orphaned titles above it. */}
+            {(this.relaySourceTab === 'merchant' || this.relaySourceTab === 'favorite') && relayOptions.length > 0 && <div className='nmx-relay-grid-head' aria-hidden='true'>
+                {([
+                    [this.desktopLocale === 'zh-CN' ? '商家信息' : this.desktopLocale === 'zh-TW' ? '商家資訊' : relayText(this.desktopLocale, 'merchantSources'), relayColumnExplanation('merchant')],
+                    [relayText(this.desktopLocale, 'quality'), relayColumnExplanation('quality')],
+                    [relayText(this.desktopLocale, 'authenticity'), relayColumnExplanation('authenticity')],
+                    [relayText(this.desktopLocale, 'latency'), relayColumnExplanation('latency')],
+                    [offeringPriceText(this.desktopLocale, 'averageMultiplier'), relayColumnExplanation('price')]
+                ] as const).map(([headLabel, headTooltip], index) => <span key={index} onPointerEnter={event => showMetric(`head:${index}`, headTooltip, event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(headLabel)}</span>)}
+                <span onPointerEnter={event => showMetric('head:favorite', relayColumnExplanation('favorite'), event.currentTarget)} onPointerLeave={hideMetric}><FavoriteHeartIcon /></span>
+            </div>}{this.relaySourceTab === 'my-api' && relayOptions.length > 0 && <div className='nmx-relay-grid-head is-own' aria-hidden='true'>
+                <span onPointerEnter={event => showMetric('head:own-api', relayColumnExplanation('apiName'), event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(relayText(this.desktopLocale, 'apiName'))}</span>
+                <span onPointerEnter={event => showMetric('head:own-authenticity', relayColumnExplanation('authenticity'), event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(relayText(this.desktopLocale, 'authenticity'))}</span>
+                <span onPointerEnter={event => showMetric('head:own-latency', relayColumnExplanation('latency'), event.currentTarget)} onPointerLeave={hideMetric}>{relayColumnTitle(relayText(this.desktopLocale, 'latency'))}</span>
+            </div>}{typeof VirtualList === 'function' && relayOptions.length > relayThreshold ? (
+                <VirtualList
+                    items={relayOptions}
+                    threshold={relayThreshold}
+                    fixedItemHeight={32}
+                    customScrollParent={this.relayOptionsScrollEl}
+                    itemKey={option => option.key}
+                    renderItem={option => renderRelayOptionRow(option)}
+                />
+            ) : relayOptions.map(renderRelayOptionRow)}{relayOptions.length === 0 && !(this.relaySourceTab !== 'my-api' && (!directoryPage || this.publicMerchantPageLoading || this.publicMerchantPageError)) && <div className='nmx-route-empty' role='status'><span>{relayText(this.desktopLocale, this.relaySourceQuery.trim() ? 'noMatchingSources' : this.relaySourceTab === 'favorite' ? 'noFavorites' : this.relaySourceTab === 'my-api' ? 'noMyApis' : 'noRelay')}</span></div>}</div>
             {this.relaySourceTab !== 'my-api' && <footer className='nmx-relay-directory-page'>
                     {this.publicMerchantPageError ? <><span role='status'>{relayText(this.desktopLocale, 'directoryUnavailable')}</span><button onClick={() => void this.loadPublicMerchantPage()}>{this.tx('retry')}</button></>
                         : this.relaySourceTab === 'merchant' && this.publicMerchantPage?.nextCursor ? <button onClick={() => this.loadNextPublicMerchantPage()}>{modelUsageText(this.desktopLocale, 'loadMore')}<i className='codicon codicon-chevron-down' /></button> : undefined}
@@ -51265,7 +52186,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.activeSection === 'models') {
             return <aside id='nmx-context-panel' className='nmx-context-panel'>
                 <header><h1>{this.tx('modelCenter')}</h1><button aria-label={this.tx('search')} title={this.tx('search')} onClick={() => this.focusModelSearch()}><i className='codicon codicon-search'></i></button></header>
-                <label className='nmx-context-search'><span>{modelCenterText(this.desktopLocale, 'search')}</span><ImeInput value={this.modelSearchQuery} placeholder={modelCenterText(this.desktopLocale, 'search')} onChange={event => { this.modelSearchQuery = event.currentTarget.value; this.update(); }} />{this.modelSearchQuery && <button aria-label='清除搜索' title='清除搜索' onClick={() => { this.modelSearchQuery = ''; this.update(); }}><i className='codicon codicon-close'></i></button>}</label>
+                <label className='nmx-context-search'><span>{modelCenterText(this.desktopLocale, 'search')}</span><ImeInput value={this.modelSearchQuery} commitDelayMs={100} placeholder={modelCenterText(this.desktopLocale, 'search')} onChange={event => { this.modelSearchQuery = event.currentTarget.value; if (this.updateRegion) this.updateRegion(['sidebar', 'model-center', 'models']); else this.update(); }} />{this.modelSearchQuery && <button aria-label={localizeDesktopSurface(this.desktopLocale, '清除搜索')} title={localizeDesktopSurface(this.desktopLocale, '清除搜索')} onClick={() => { this.modelSearchQuery = ''; if (this.updateRegion) this.updateRegion(['sidebar', 'model-center', 'models']); else this.update(); }}><i className='codicon codicon-close'></i></button>}</label>
                 <nav className='nmx-context-nav nmx-model-context-nav'>
                     <p>{this.tx('browse')}</p>
                     <button data-model-center-view='all' className={this.modelCenterView === 'all' ? 'is-active' : ''} onClick={() => this.selectModelCenterView('all')} title={this.tx('allModels')}><span className='nmx-context-nav-label'>{this.tx('allModels')}</span><span className='nmx-context-nav-count'>{this.modelCenterMerchantCount ?? '—'}</span></button>
@@ -51526,8 +52447,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     <button type='button' className={`nmx-context-simple-row nmx-comic-new-chat ${ui.surface === 'chat' && !this.activeComicChat() && !ui.target ? 'is-active' : ''}`}
                         onClick={() => this.newComicChat()}><i className='codicon codicon-edit' aria-hidden='true'></i><span>{t('newChat')}</span></button>
                     {ui.folders.length + recent.length > 8 && <label className='nmx-comic-library-search'><i className='codicon codicon-search' aria-hidden='true'></i>
-                        <ImeInput type='search' value={this.comicLibraryQuery} placeholder={localizeDesktopSurface(this.desktopLocale, '搜索对话')} aria-label={localizeDesktopSurface(this.desktopLocale, '搜索对话')}
-                            onChange={event => { this.comicLibraryQuery = event.currentTarget.value.slice(0, 120); this.update(); }} /></label>}
+                        <ImeInput type='search' commitDelayMs={100} value={this.comicLibraryQuery} placeholder={localizeDesktopSurface(this.desktopLocale, '搜索对话')} aria-label={localizeDesktopSurface(this.desktopLocale, '搜索对话')}
+                            onChange={event => { this.comicLibraryQuery = event.currentTarget.value.slice(0, 120); if (this.updateRegion) this.updateRegion('sidebar'); else this.update(); }} /></label>}
                     {(!query || folderTrees.length > 0) && <p className='nmx-projects-heading'>{this.tx('projects')}{this.comicProjectDragActive && <span>{t('dropFolder')}</span>}
                         {ui.folders.length > 0 && !this.comicProjectDragActive && <button type='button' className='nmx-projects-add' aria-label={t('addFolder')} title={t('addFolder')}
                             onClick={() => void this.chooseComicChatFolder()}><i className='codicon codicon-new-folder' aria-hidden='true'></i></button>}</p>}
@@ -51628,7 +52549,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const visibleCommunitySkills = matchingCommunitySkills.slice(0, this.communitySkillVisibleLimit);
         return <section className='nmx-settings-panel nmx-skills-settings'>
             <div className='nmx-community-skills-toolbar'>
-                <label><i className='codicon codicon-search'></i><ImeInput value={this.communitySkillQuery} placeholder={communitySkillListText(this.desktopLocale, 'search')} onChange={event => { this.communitySkillQuery = event.currentTarget.value.slice(0, 200); this.communitySkillVisibleLimit = 120; this.update(); }} />{this.communitySkillQuery && <button aria-label='清除搜索' onClick={() => { this.communitySkillQuery = ''; this.communitySkillVisibleLimit = 120; this.update(); }}><i className='codicon codicon-close'></i></button>}</label>
+                <label><i className='codicon codicon-search'></i><ImeInput value={this.communitySkillQuery} commitDelayMs={100} placeholder={communitySkillListText(this.desktopLocale, 'search')} onChange={event => { this.communitySkillQuery = event.currentTarget.value.slice(0, 200); this.communitySkillVisibleLimit = 120; if (this.updateRegion) this.updateRegion(['coding', 'settings']); else this.update(); }} />{this.communitySkillQuery && <button aria-label='清除搜索' onClick={() => { this.communitySkillQuery = ''; this.communitySkillVisibleLimit = 120; if (this.updateRegion) this.updateRegion(['coding', 'settings']); else this.update(); }}><i className='codicon codicon-close'></i></button>}</label>
                 <select aria-label='Skill 来源' value={this.communitySkillSource} onChange={event => { this.communitySkillSource = event.currentTarget.value; this.communitySkillVisibleLimit = 120; this.update(); }}><option value='all'>全部来源</option>{this.communitySkills.sources.map(source => <option value={source.id} key={source.id}>{source.name}</option>)}</select>
             </div>
             <div className='nmx-skill-install-link'><label><i className='codicon codicon-link-external'></i><ImeInput value={this.communitySkillUrl} maxLength={2048} spellCheck={false} placeholder='粘贴 GitHub Skill 链接（目录或 SKILL.md）' onChange={event => { this.communitySkillUrl = event.currentTarget.value; this.update(); }} /></label><button className='is-primary' disabled={!this.communitySkillUrl.trim() || Boolean(this.communitySkillActionId)} onClick={() => void this.installCommunitySkillFromUrl()}>{this.communitySkillActionId === 'url' ? '安装中…' : '从链接安装'}</button></div>
@@ -51904,6 +52825,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected renderModelCenter(): React.ReactNode {
+        if (this.activeSection !== undefined && this.activeSection !== 'models') return undefined;
         const query = this.modelSearchQuery.trim().toLocaleLowerCase();
         // The USD wallet, like the plugin market and the billing page; another currency only when there is none.
         const displayWallets = resolveDisplayWallets(this.platformSession.linked, this.platformSession.wallets);
@@ -51919,7 +52841,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const busy = this.officialConnectionStage !== 'idle';
         const activeMyApisError = showOfficial ? this.officialConnectionError : '';
         return <>
-            <header className='nmx-workspace-topbar nmx-model-center-topbar'>
+            <header className='nmx-workspace-topbar nmx-model-center-topbar' data-nmx-i18n='rendered'>
                 <div className='nmx-workspace-topbar-leading'><div className='nmx-model-center-heading'><span><strong>{this.tx('modelCenter')}</strong><small>{this.tx('modelCenterSubtitle')}</small></span></div></div>
                 <div className='nmx-model-center-topbar-actions'>
                     {/* A plain text link, as on the website's header: the page opens in the system browser. */}
@@ -51930,10 +52852,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     </span>
                     {this.renderAutomaticRelaySwitch(undefined, 'global')}
                     {wallet && <span className='nmx-wallet-chip'>{formatBalanceMicros(this.desktopLocale, wallet.currency, walletNetBalanceMicros(wallet))}</span>}
-                    <button className='nmx-primary-button' onClick={() => this.platformSession.linked ? this.openWalletTopup() : void this.startDeviceLink()}>{this.platformSession.linked ? this.tx('recharge') : '登录/注册'}</button>
+                    <button className='nmx-primary-button' onClick={() => this.platformSession.linked ? this.openWalletTopup() : void this.startDeviceLink()}>{this.platformSession.linked ? this.tx('recharge') : localizeDesktopSurface(this.desktopLocale, '登录/注册')}</button>
                 </div>
             </header>
-            <div className='nmx-workspace-scroll nmx-model-center'>
+            <div className='nmx-workspace-scroll nmx-model-center' data-nmx-i18n='rendered'>
                 <section className='nmx-page-title nmx-model-center-intro'>
                     <h2>{showOfficial ? this.tx('officialApi') : showUsage ? localizeDesktopSurface(this.desktopLocale, '使用记录') : showFavorites ? modelUsageText(this.desktopLocale, 'favorites') : this.modelCenterView === 'capability' ? this.modelCenterCapabilityLabel() : this.tx('allModels')}</h2>
                     {showOfficial && <button type='button' className='nmx-primary-button nmx-add-api-button' data-official-action='add-api' disabled={busy} onClick={() => this.openAddOfficialApi()}><i className='codicon codicon-add' aria-hidden='true' /><span>{myApisText(this.desktopLocale, 'add')}</span></button>}
@@ -51969,7 +52891,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             <button type='button' className='nmx-primary-button' data-official-action='add-api-empty' disabled={busy} onClick={() => this.openAddOfficialApi()}><i className='codicon codicon-add' aria-hidden='true' /><span>{myApisText(this.desktopLocale, 'add')}</span></button>
                         </div>
                         : visibleMyRows.length === 0
-                        ? <div className='nmx-filter-empty'>没有符合当前搜索条件的 API 连接。</div>
+                        ? <div className='nmx-filter-empty'>{localizeDesktopSurface(this.desktopLocale, '没有符合当前搜索条件的 API 连接。')}</div>
                         : <ul className='nmx-my-apis-list nmx-my-apis-page-list'>{visibleMyRows.map(row => {
                             const conn = this.officialModels.connections.find(item => item.id === row.id);
                             const prov = conn ? this.officialModels.providers.find(item => item.id === conn.providerId) : undefined;
@@ -54125,6 +55047,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.cancelAppPluginChatModelHoverClose();
         this.appPluginChatHoverCloseTimer = window.setTimeout(() => {
             this.appPluginChatHoverCloseTimer = undefined;
+            if (this.isDisposed) return;
             const hoveredRouteId = this.appPluginChatHoverRouteId;
             if (!hoveredRouteId) return;
             if (typeof document !== 'undefined') {
@@ -54138,7 +55061,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.appPluginChatHoverPlacement = undefined;
             this.releaseModelEvidenceTitle?.();
             this.modelEvidenceTooltip = undefined;
-            this.update();
+            if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']); else this.update();
         }, 240);
     }
 
@@ -54171,7 +55094,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         };
         if (this.appPluginChatHoverRouteId !== candidate.routeId) {
             this.appPluginChatHoverRouteId = candidate.routeId;
-            this.update();
+            if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']); else this.update();
         }
     }
 
@@ -54205,7 +55128,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const listRect = list.getBoundingClientRect();
         if (!menu || !rowRect || rowRect.bottom <= listRect.top || rowRect.top >= listRect.bottom) {
             this.closeAppPluginChatModelHoverImmediately();
-            this.update();
+            if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']); else this.update();
             return;
         }
         const edge = 8;
@@ -54599,7 +55522,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     poller={this.relayCapacityPoller}
                     merchantIds={[merchantId]}
                     scope='coding'
-                    onSnapshot={snapshot => { this.relayCapacitySnapshot = snapshot; this.update(); }}
+                    onSnapshot={snapshot => {
+                        this.relayCapacitySnapshot = snapshot;
+                        if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']); else this.update();
+                    }}
                 />}
                 <div className={`nmx-model-picker-surface nmx-shell nmx-theme-${this.resolvedDesktopTheme()}`}>
                     <section
@@ -54628,7 +55554,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                     aria-label={automaticOptimalText(this.desktopLocale)}
                                     onChange={event => {
                                         this.appPluginChatAutoRouting.set(tabKey, event.currentTarget.checked);
-                                        this.update();
+                                        if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']); else this.update();
                                     }}
                                 />
                                 <span className='nmx-checkbox-indicator' aria-hidden='true'></span>
@@ -54652,6 +55578,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             <i className='codicon codicon-search' aria-hidden='true'></i>
                             <ImeInput
                                 value={this.appPluginChatModelQuery}
+                                commitDelayMs={100}
                                 placeholder={modelPickerListText(this.desktopLocale, 'search')}
                                 aria-label={modelPickerListText(this.desktopLocale, 'search')}
                                 aria-controls={filtered.length > 0 ? 'nmx-plugin-chat-model-list' : undefined}
@@ -54659,68 +55586,59 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                     this.appPluginChatModelQuery = event.currentTarget.value;
                                     this.cancelModelHoverIntent?.();
                                     this.closeAppPluginChatModelHoverImmediately?.();
-                                    this.update();
+                                    if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']); else this.update();
                                 }}
                                 onKeyDown={event => this.handleAppPluginChatModelSearchKeyDown?.(event)}
                             />
                         </div>}
-                        {filtered.length > 0 ? (
-                            <div className='nmx-model-picker-list' id='nmx-plugin-chat-model-list' role='listbox' aria-label={localizeDesktopSurface(this.desktopLocale, '选择模型')}
-                                onScroll={event => {
-                                    this.noteModelListScroll?.();
-                                    this.followAppPluginChatModelHover?.(event.currentTarget);
-                                }}
-                                onKeyDown={event => this.handleAppPluginChatModelListKeyDown?.(event, (routeId, row) => {
-                                    const target = filtered.find(item => item.routeId === routeId);
-                                    if (target) this.openAppPluginChatModelHover(activeRelayRoutes.find(item => item.id === routeId), target, row, placement);
-                                })}>
-                                {filtered.map((candidate, index) => {
-                                    const selected = activeRoute?.id === candidate.routeId;
-                                    const candidateRoute = activeRelayRoutes.find(route => route.id === candidate.routeId);
-                                    const offering = candidateRoute?.kind === 'managed_gateway' ? candidateRoute.offering : undefined;
-                                    const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
-                                    const variantTag = candidate.variantTag;
-                                    const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
-                                    const fidelity = candidate.authenticity?.value ?? (offering ? measuredModelFidelity(offering.fidelity) : undefined);
-                                    const hoverOpen = this.appPluginChatHoverRouteId === candidate.routeId ? this.appPluginChatHoverPlacement : undefined;
-                                    const openHover = (anchor: HTMLElement): void => this.openAppPluginChatModelHover(candidateRoute, candidate, anchor, placement);
-                                    const onHover = (event: React.PointerEvent<HTMLElement>): void =>
-                                        this.intendModelHover
-                                            ? this.intendModelHover(candidate.routeId, this.appPluginChatHoverRouteId || '', event, openHover)
-                                            : openHover(event.currentTarget);
-                                    const escapedRouteId = candidate.routeId.replace(/["\\]/g, '\\$&');
-                                    return (
-                                        <div key={candidate.routeId} className={`nmx-model-option${selected ? ' is-selected' : ''}`} data-model-id={candidate.routeId}
-                                            onPointerEnter={onHover}
-                                            onPointerMove={onHover}
-                                            onFocus={event => openHover(event.currentTarget)}
-                                            onBlur={event => {
-                                                const nextFocus = event.relatedTarget as HTMLElement | null;
-                                                if (nextFocus && (event.currentTarget.contains(nextFocus)
-                                                    || nextFocus.closest?.(`.nmx-plugin-chat-model-hover-portal [data-model-id="${escapedRouteId}"]`))) {
-                                                    return;
-                                                }
-                                                this.scheduleAppPluginChatModelHoverClose();
-                                            }}
-                                            onPointerLeave={() => { this.cancelModelHoverIntent?.(candidate.routeId); this.scheduleAppPluginChatModelHoverClose(); }}>
-                                            <button
-                                                type='button'
-                                                role='option'
-                                                aria-selected={selected}
-                                                tabIndex={selected || (!anySelected && index === 0) ? 0 : -1}
-                                                aria-label={candidate.detail ? `${candidate.label} · ${candidate.detail}` : candidate.label}
-                                                onClick={() => this.selectAppPluginChatRoute(tabKey, candidate.routeId)}
-                                            >
-                                                <span>
-                                                    <strong data-nmx-literal>{candidate.label}</strong>
-                                                    {variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
-                                                        onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)}
-                                                        onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
-                                                    {(offering || fidelity !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}
-                                                </span>
-                                                {selected && <i className='codicon codicon-check' aria-hidden='true' />}
-                                            </button>
-                                            {hoverOpen && (() => {
+                        {filtered.length > 0 ? (() => {
+                            const renderPluginOption = (candidate: typeof filtered[number], index: number): React.ReactNode => {
+                                const selected = activeRoute?.id === candidate.routeId;
+                                const candidateRoute = activeRelayRoutes.find(route => route.id === candidate.routeId);
+                                const offering = candidateRoute?.kind === 'managed_gateway' ? candidateRoute.offering : undefined;
+                                const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
+                                const variantTag = candidate.variantTag;
+                                const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
+                                const fidelity = candidate.authenticity?.value ?? (offering ? measuredModelFidelity(offering.fidelity) : undefined);
+                                const hoverOpen = this.appPluginChatHoverRouteId === candidate.routeId ? this.appPluginChatHoverPlacement : undefined;
+                                const openHover = (anchor: HTMLElement): void => this.openAppPluginChatModelHover(candidateRoute, candidate, anchor, placement);
+                                const onHover = (event: React.PointerEvent<HTMLElement>): void =>
+                                    this.intendModelHover
+                                        ? this.intendModelHover(candidate.routeId, this.appPluginChatHoverRouteId || '', event, openHover)
+                                        : openHover(event.currentTarget);
+                                const escapedRouteId = candidate.routeId.replace(/["\\]/g, '\\$&');
+                                return (
+                                    <div key={candidate.routeId} className={`nmx-model-option${selected ? ' is-selected' : ''}`} data-model-id={candidate.routeId}
+                                        onPointerEnter={onHover}
+                                        onPointerMove={onHover}
+                                        onFocus={event => openHover(event.currentTarget)}
+                                        onBlur={event => {
+                                            const nextFocus = event.relatedTarget as HTMLElement | null;
+                                            if (nextFocus && (event.currentTarget.contains(nextFocus)
+                                                || nextFocus.closest?.(`.nmx-plugin-chat-model-hover-portal [data-model-id="${escapedRouteId}"]`))) {
+                                                return;
+                                            }
+                                            this.scheduleAppPluginChatModelHoverClose();
+                                        }}
+                                        onPointerLeave={() => { this.cancelModelHoverIntent?.(candidate.routeId); this.scheduleAppPluginChatModelHoverClose(); }}>
+                                        <button
+                                            type='button'
+                                            role='option'
+                                            aria-selected={selected}
+                                            tabIndex={selected || (!anySelected && index === 0) ? 0 : -1}
+                                            aria-label={candidate.detail ? `${candidate.label} · ${candidate.detail}` : candidate.label}
+                                            onClick={() => this.selectAppPluginChatRoute(tabKey, candidate.routeId)}
+                                        >
+                                            <span>
+                                                <strong data-nmx-literal>{candidate.label}</strong>
+                                                {variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
+                                                    onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)}
+                                                    onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
+                                                {(offering || fidelity !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}
+                                            </span>
+                                            {selected && <i className='codicon codicon-check' aria-hidden='true' />}
+                                        </button>
+                                        {hoverOpen && (() => {
                                                 const depth = reasoningDepthChoicesForDisplay(this.reasoningDepthChoicesForRoute(candidateRoute));
                                                 const activeDepth = this.activeReasoningDepthId(candidateRoute, depth);
                                                 const depthChecked = depth.options.some(item => item.id === activeDepth);
@@ -54842,7 +55760,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                                     style={{ '--nmx-depth-cols': Math.min(6, contextChoices.length) } as React.CSSProperties}>
                                                                     {contextChoices.map((tokens, contextIndex) => {
                                                                         const shortLabel = contextWindowTokenLabel(tokens);
-                                                                        const fullTokens = (() => { try { return tokens.toLocaleString(this.desktopLocale); } catch { return String(tokens); } })();
+                                                                        const fullTokens = (() => { try { return typeof getCachedNumberFormat === 'function' ? getCachedNumberFormat(this.desktopLocale).format(tokens) : tokens.toLocaleString(this.desktopLocale); } catch { return String(tokens); } })();
                                                                         const contextTip = `${contextBudgetText(this.desktopLocale, 'window')}: ${shortLabel} (${fullTokens} Tokens)`;
                                                                         return <button key={tokens} type='button' role='radio' aria-checked={activeContextTokens === tokens}
                                                                             tabIndex={activeContextTokens === tokens || (!contextChecked && contextIndex === 0) ? 0 : -1}
@@ -54879,9 +55797,42 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                             })()}
                                         </div>
                                     );
-                                })}
+                                };
+                        const threshold = typeof DEFAULT_VIRTUAL_LIST_THRESHOLD === 'number' ? DEFAULT_VIRTUAL_LIST_THRESHOLD : 30;
+                        const handlePluginScroll = (event: React.UIEvent<HTMLElement>): void => {
+                            this.noteModelListScroll?.();
+                            this.followAppPluginChatModelHover?.(event.currentTarget);
+                        };
+                        const handlePluginKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => this.handleAppPluginChatModelListKeyDown?.(event, (routeId, row) => {
+                            const target = filtered.find(item => item.routeId === routeId);
+                            if (target) this.openAppPluginChatModelHover(activeRelayRoutes.find(item => item.id === routeId), target, row, placement);
+                        });
+                        if (typeof VirtualList === 'function' && filtered.length > threshold) {
+                            return (
+                                <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }} onKeyDown={handlePluginKeyDown}>
+                                    <VirtualList
+                                        className='nmx-model-picker-list'
+                                        id='nmx-plugin-chat-model-list'
+                                        role='listbox'
+                                        aria-label={localizeDesktopSurface(this.desktopLocale, '选择模型')}
+                                        items={filtered}
+                                        threshold={threshold}
+                                        defaultItemHeight={32}
+                                        itemKey={item => item.routeId}
+                                        onScroll={handlePluginScroll}
+                                        renderItem={renderPluginOption}
+                                    />
+                                </div>
+                            );
+                        }
+                        return (
+                            <div className='nmx-model-picker-list' id='nmx-plugin-chat-model-list' role='listbox' aria-label={localizeDesktopSurface(this.desktopLocale, '选择模型')}
+                                onScroll={handlePluginScroll}
+                                onKeyDown={handlePluginKeyDown}>
+                                {filtered.map(renderPluginOption)}
                             </div>
-                        ) : (
+                        );
+                    })() : (
                             <div className='nmx-model-picker-list nmx-model-picker-empty-list'>
                                 {(relayLoading || officialLoading) ? (
                                     <div className='nmx-merchant-catalog-status is-centered' role='status'>
@@ -56364,7 +57315,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 || !opened.pid
                 || !opened.windowId
                 || opened.canView === false
-                || (/win/i.test(navigator.platform) && opened.canPark === false && opened.parkReason && opened.parkReason !== 'disabled')
+                || (/win/i.test(navigator.platform) && opened.canPark === false
+                    && (opened.parkReason === 'window_not_found' || opened.parkReason === 'window_invalid' || opened.parkReason === 'uac_or_system'))
             );
 
             if (windowUncontrollable) {
@@ -57136,7 +58088,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                     style={{ '--nmx-depth-cols': Math.min(6, contextChoices.length) } as React.CSSProperties}>
                                     {contextChoices.map(tokens => {
                                         const shortLabel = contextWindowTokenLabel(tokens);
-                                        const fullTokens = (() => { try { return tokens.toLocaleString(this.desktopLocale); } catch { return String(tokens); } })();
+                                        const fullTokens = (() => { try { return typeof getCachedNumberFormat === 'function' ? getCachedNumberFormat(this.desktopLocale).format(tokens) : tokens.toLocaleString(this.desktopLocale); } catch { return String(tokens); } })();
                                         const contextTip = `${contextBudgetText(this.desktopLocale, 'window')}: ${shortLabel} (${fullTokens} Tokens)`;
                                         return <button key={tokens} type='button' role='radio' aria-checked={activeContextTokens === tokens}
                                             data-context-window={tokens} className={activeContextTokens === tokens ? 'is-active' : ''} dir='ltr'
@@ -57269,7 +58221,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     <h2>{panelMeta[this.codingPanel].title}</h2>
                     <p>{panelMeta[this.codingPanel].body}</p>
                     <button onClick={() => this.codingPanel === 'sites' ? void this.commandService.executeCommand('task:run') : this.codingPanel === 'pull_requests' ? this.openCodeHostingServices() : this.codingPanel === 'scheduled' ? this.openScheduleDialog() : void this.requestNewCodingConversation(false)}>{panelMeta[this.codingPanel].action}</button>
-                </div> : activeCouncilChild ? <CouncilRoleConversationStage
+                </div> : (() => {
+                    const renderCodingThreadBody = (): React.ReactNode => activeCouncilChild ? <CouncilRoleConversationStage
                     locale={this.desktopLocale}
                     child={activeCouncilChild}
                     statusLabel={this.agentChildStatusLabel(activeCouncilChild.status)}
@@ -57563,7 +58516,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     <span className='nmx-empty-mark nmx-empty-brand-mark'>{this.renderBrandMark('nmx-empty-brand-svg')}</span>
                    <h2>{workspace ? this.projectQuestion(workspace.label) : '今天想做什么？'}</h2>
                     {privateWorkspaceLabel && <p className='nmx-empty-workspace-note'><i className='codicon codicon-info'></i>{privateWorkspaceLabel}</p>}
-                </div>}
+                </div>;
+                    return this.island ? this.island('coding-thread', renderCodingThreadBody, 'section') : renderCodingThreadBody();
+                })()}
                 {/* A window tab is its own surface for the AI, level with the conversation and its composer: no composer there. */}
                 {this.codingPanel === 'thread' && !visualTab && !activeCouncilChild && <div className='nmx-composer-dock'>
                     {this.computerPermissionWait && this.computerPermissionWait.conversationId === this.activeCodingSessionId
@@ -57617,168 +58572,186 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             </section>}
                         </article>; })}
                     </section>}
-                    {this.renderAttachmentPopoverPortal()}
-                    {this.renderSlashCommandDrawerPortal?.()}
-                    {this.appControlPickerOpen && <AppControlPickerPopover locale={this.desktopLocale} apps={this.appControlPickerApps}
-                        selectedIds={this.composerSelectedAppIds()} pendingIds={this.composerPendingAppIds()} loading={this.appControlPickerLoading}
-                        error={this.appControlPickerError} onRetry={() => void this.refreshAppControlPickerApps()}
-                        onToggleApp={app => void this.selectComposerApp(app)} onBrowse={() => void this.browseComposerApp()}
-                        onClose={() => { this.appControlPickerOpen = false; this.update(); requestAnimationFrame(() => this.composerTextareaRef.current?.focus()); }} />}
-                    {this.codingPopover === 'permission' && <section className='nmx-composer-popover nmx-permission-popover'>
-                        <header><strong>工具权限</strong><span>应用于当前对话</span></header>
-                        {agentRunning && <p className='nmx-permission-timing' role='status' data-nmx-literal>{permissionTiming}</p>}
-                        {(['read_only', 'workspace_write', 'full_access'] as const).map(mode => <button key={mode} className={this.permissionMode === mode ? 'is-selected' : ''} onClick={() => { this.completeNavigationSurface(); this.setPermissionMode(mode); }}><i className={`codicon codicon-${mode === 'read_only' ? 'eye' : mode === 'workspace_write' ? 'shield' : 'warning'}`}></i><span><strong>{this.permissionLabel(mode)}</strong><small>{mode === 'read_only' ? '读取项目，不修改文件' : mode === 'workspace_write' ? '可修改当前工作区' : '可运行进程并访问工作区外部'}</small></span>{this.permissionMode === mode && <i className='codicon codicon-check'></i>}</button>)}
-                    </section>}
-                    {this.renderRelayPickerPortal()}
-                    {this.codingPopover === 'routes' && !this.modelPickerRelayOpen && ReactDOM.createPortal(
-                        <div className='nmx-model-picker-portal nmx-desktop-widget' dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'} lang={this.desktopLocale}>
-                            {/* Live while the list is open: a model leaves when its API keys fill up and returns when one frees. */}
-                            {modelPickerRelayKey.startsWith('managed:') && this.relayCapacityPoller && <RelayCapacityRefresh poller={this.relayCapacityPoller}
-                                merchantIds={[modelPickerRelayKey.slice('managed:'.length)]} scope='coding'
-                                onSnapshot={snapshot => { this.relayCapacitySnapshot = snapshot; this.update(); }} />}
-                            <div className={`nmx-model-picker-surface nmx-shell nmx-theme-${this.resolvedDesktopTheme()}`}>
-                                <section className='nmx-composer-popover nmx-route-popover nmx-model-picker-popover nmx-model-only-popover' data-side={modelPickerPlacement.side}
+                    {(() => {
+                        const renderCodingPopovers = (): React.ReactNode => <>
+                            {this.renderAttachmentPopoverPortal()}
+                            {this.renderSlashCommandDrawerPortal?.()}
+                            {this.appControlPickerOpen && <AppControlPickerPopover locale={this.desktopLocale} apps={this.appControlPickerApps}
+                                selectedIds={this.composerSelectedAppIds()} pendingIds={this.composerPendingAppIds()} loading={this.appControlPickerLoading}
+                                error={this.appControlPickerError} onRetry={() => void this.refreshAppControlPickerApps()}
+                                onToggleApp={app => void this.selectComposerApp(app)} onBrowse={() => void this.browseComposerApp()}
+                                onClose={() => { this.appControlPickerOpen = false; if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']); else this.update(); requestAnimationFrame(() => this.composerTextareaRef.current?.focus()); }} />}
+                            {this.codingPopover === 'permission' && <section className='nmx-composer-popover nmx-permission-popover'>
+                                <header><strong>工具权限</strong><span>应用于当前对话</span></header>
+                                {agentRunning && <p className='nmx-permission-timing' role='status' data-nmx-literal>{permissionTiming}</p>}
+                                {(['read_only', 'workspace_write', 'full_access'] as const).map(mode => <button key={mode} className={this.permissionMode === mode ? 'is-selected' : ''} onClick={() => { this.completeNavigationSurface(); this.setPermissionMode(mode); }}><i className={`codicon codicon-${mode === 'read_only' ? 'eye' : mode === 'workspace_write' ? 'shield' : 'warning'}`}></i><span><strong>{this.permissionLabel(mode)}</strong><small>{mode === 'read_only' ? '读取项目，不修改文件' : mode === 'workspace_write' ? '可修改当前工作区' : '可运行进程并访问工作区外部'}</small></span>{this.permissionMode === mode && <i className='codicon codicon-check'></i>}</button>)}
+                            </section>}
+                            {this.renderRelayPickerPortal()}
+                            {this.codingPopover === 'routes' && !this.modelPickerRelayOpen && ReactDOM.createPortal(
+                                <div className='nmx-model-picker-portal nmx-desktop-widget' dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'} lang={this.desktopLocale}>
+                                    {/* Live while the list is open: a model leaves when its API keys fill up and returns when one frees. */}
+                                    {modelPickerRelayKey.startsWith('managed:') && this.relayCapacityPoller && <RelayCapacityRefresh poller={this.relayCapacityPoller}
+                                        merchantIds={[modelPickerRelayKey.slice('managed:'.length)]} scope='coding'
+                                        onSnapshot={snapshot => {
+                                            this.relayCapacitySnapshot = snapshot;
+                                            if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']); else this.update();
+                                        }} />}
+                                    <div className={`nmx-model-picker-surface nmx-shell nmx-theme-${this.resolvedDesktopTheme()}`}>
+                                        <section className='nmx-composer-popover nmx-route-popover nmx-model-picker-popover nmx-model-only-popover' data-side={modelPickerPlacement.side}
+                                            onMouseDown={event => { if (event.target === event.currentTarget) this.closeNavigationSurface(); }}
+                                            style={{
+                                                '--nmx-model-picker-max-height': `${modelPickerMaximumHeight}px`,
+                                                top: `${modelPickerPlacement.top}px`,
+                                                left: `${modelPickerPlacement.left}px`,
+                                                width: `${modelPickerPlacement.width}px`,
+                                                height: `${modelPickerHeight}px`,
+                                                maxHeight: `${modelPickerPlacement.maxHeight}px`
+                                            } as React.CSSProperties}>
+                                <header><strong>{localizeDesktopSurface(this.desktopLocale, '选择模型')}</strong>{agentRunning && <span className='nmx-next-run-label'>{localizeDesktopSurface(this.desktopLocale, '下一轮使用')}</span>}{modelPickerSwitchPanel && <label className='nmx-model-picker-auto-switch' data-help={modelPickerSwitchHint}>
+                                    <input type='checkbox' checked={this.automaticRouting} aria-label={automaticOptimalText(this.desktopLocale)} data-help={modelPickerSwitchHint} onChange={event => this.setAutomaticRouting(event.currentTarget.checked)} />
+                                    <span className='nmx-checkbox-indicator' aria-hidden='true'></span><span data-help={modelPickerSwitchHint}>{automaticOptimalText(this.desktopLocale)}</span>
+                                </label>}{composerRelay && <button disabled={officialPickerPending || this.merchantCatalogStatus === 'loading' || this.catalogLoading}
+                                    aria-label={localizeDesktopSurface(this.desktopLocale, '刷新')} title={localizeDesktopSurface(this.desktopLocale, '刷新')}
+                                    onClick={() => void (pickerConnection ? this.ensureOfficialConnectionModelsLoaded(pickerConnection, { userInitiated: true, force: true })
+                                        : composerRelay.kind === 'managed' ? this.loadSelectedMerchantCatalog(composerRelay.merchantId!, false, true) : this.loadCatalog())}><i className='codicon codicon-refresh'></i></button>}</header>
+                                {pickerSearchable && <div className='nmx-model-picker-search'><i className='codicon codicon-search' aria-hidden='true'></i>
+                                    <ImeInput value={this.modelPickerQuery || ''} commitDelayMs={100} placeholder={modelPickerListText(this.desktopLocale, 'search')} aria-label={modelPickerListText(this.desktopLocale, 'search')}
+                                        onChange={event => {
+                                            this.modelPickerQuery = event.currentTarget.value;
+                                            this.closeModelEffortPickerImmediately();
+                                            if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']); else this.update();
+                                        }} /></div>}
+                                {pickerRows.length > 0 ? <Virtuoso
+                                    className='nmx-model-picker-list'
+                                    data={pickerRows}
+                                    computeItemKey={(_index, model) => model.id}
+                                    defaultItemHeight={32}
+                                    endReached={() => this.loadMorePickerModels()}
+                                    rangeChanged={({ endIndex }) => { if (endIndex >= pickerRows.length - 4) this.loadMorePickerModels(); }}
+                                    onScroll={() => {
+                                        this.noteModelListScroll?.();
+                                        if (this.modelPickerEffortModelId) {
+                                            this.closeModelEffortPickerImmediately();
+                                            if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']); else this.update();
+                                        } else this.hideModelEvidenceTooltip?.();
+                                    }}
+                                    increaseViewportBy={{ top: 96, bottom: 128 }}
                                     onMouseDown={event => { if (event.target === event.currentTarget) this.closeNavigationSurface(); }}
-                                    style={{
-                                        '--nmx-model-picker-max-height': `${modelPickerMaximumHeight}px`,
-                                        top: `${modelPickerPlacement.top}px`,
-                                        left: `${modelPickerPlacement.left}px`,
-                                        width: `${modelPickerPlacement.width}px`,
-                                        height: `${modelPickerHeight}px`,
-                                        maxHeight: `${modelPickerPlacement.maxHeight}px`
-                                    } as React.CSSProperties}>
-                        <header><strong>{localizeDesktopSurface(this.desktopLocale, '选择模型')}</strong>{agentRunning && <span className='nmx-next-run-label'>{localizeDesktopSurface(this.desktopLocale, '下一轮使用')}</span>}{modelPickerSwitchPanel && <label className='nmx-model-picker-auto-switch' data-help={modelPickerSwitchHint}>
-                            <input type='checkbox' checked={this.automaticRouting} aria-label={automaticOptimalText(this.desktopLocale)} data-help={modelPickerSwitchHint} onChange={event => this.setAutomaticRouting(event.currentTarget.checked)} />
-                            <span className='nmx-checkbox-indicator' aria-hidden='true'></span><span data-help={modelPickerSwitchHint}>{automaticOptimalText(this.desktopLocale)}</span>
-                        </label>}{composerRelay && <button disabled={officialPickerPending || this.merchantCatalogStatus === 'loading' || this.catalogLoading}
-                            aria-label={localizeDesktopSurface(this.desktopLocale, '刷新')} title={localizeDesktopSurface(this.desktopLocale, '刷新')}
-                            onClick={() => void (pickerConnection ? this.ensureOfficialConnectionModelsLoaded(pickerConnection, { userInitiated: true, force: true })
-                                : composerRelay.kind === 'managed' ? this.loadSelectedMerchantCatalog(composerRelay.merchantId!, false, true) : this.loadCatalog())}><i className='codicon codicon-refresh'></i></button>}</header>
-                        {pickerSearchable && <div className='nmx-model-picker-search'><i className='codicon codicon-search' aria-hidden='true'></i>
-                            <ImeInput value={this.modelPickerQuery || ''} placeholder={modelPickerListText(this.desktopLocale, 'search')} aria-label={modelPickerListText(this.desktopLocale, 'search')}
-                                onChange={event => { this.modelPickerQuery = event.currentTarget.value; this.closeModelEffortPickerImmediately(); this.update(); }} /></div>}
-                        {pickerRows.length > 0 ? <Virtuoso
-                            className='nmx-model-picker-list'
-                            data={pickerRows}
-                            computeItemKey={(_index, model) => model.id}
-                            defaultItemHeight={32}
-                            endReached={() => this.loadMorePickerModels()}
-                            rangeChanged={({ endIndex }) => { if (endIndex >= pickerRows.length - 4) this.loadMorePickerModels(); }}
-                            onScroll={() => { this.noteModelListScroll?.(); if (this.modelPickerEffortModelId) { this.closeModelEffortPickerImmediately(); this.update(); } else this.hideModelEvidenceTooltip?.(); }}
-                            increaseViewportBy={{ top: 96, bottom: 128 }}
-                            onMouseDown={event => { if (event.target === event.currentTarget) this.closeNavigationSurface(); }}
-                            itemContent={(_index, model) => renderModelPickerOption(model, modelRouteById.has(model.variantOf ?? model.id))}
-                        /> : <div className='nmx-model-picker-list nmx-model-picker-empty-list'>
-                            {merchantCatalogPending && <div className='nmx-merchant-catalog-status is-centered' role='status'>
-                                {this.merchantCatalogStatus === 'loading' && <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />}
-                                <span>{relayText(this.desktopLocale, this.merchantCatalogStatus === 'loading' ? 'modelsLoading' : this.merchantCatalogError || this.merchantCatalogStatus === 'failed' ? 'modelsFailed' : this.merchantCatalogStatus === 'partial' ? 'modelsPartial' : 'modelsNotLoaded')}</span>
-                                {this.merchantCatalogStatus !== 'loading' && <button type='button' onClick={() => void this.loadSelectedMerchantCatalog(this.activeRelayKey.slice('managed:'.length), Boolean(this.selectedMerchantCatalog?.nextCursor))}>{this.tx('retry')}</button>}
-                            </div>}
-                            {officialPickerPending && <div className='nmx-merchant-catalog-status is-centered' role='status'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' /><span>{relayText(this.desktopLocale, 'modelsLoading')}</span></div>}
-                            {/* An own API whose list could not be read says so in place of the empty list, as the other drawers do. */}
-                            {officialFailureInPlace && pickerConnection && this.renderOfficialPickerFailedState?.(pickerConnection,
-                                this.officialPickerAuthFailures.has(pickerConnection.id), () => this.closeNavigationSurface())}
-                            {!officialPickerPending && !merchantCatalogPending && !officialFailureInPlace && (() => {
-                                // Every API key of the chosen merchant is busy: say so and offer another merchant, not an empty list.
-                                const pickerRelayFull = !pickerQuery && modelPickerRelayKey.startsWith('managed:')
-                                    && Boolean(this.relayMerchantIdIsFull?.(modelPickerRelayKey.slice('managed:'.length), 'coding'));
-                                return <div className='nmx-route-empty' role={pickerRelayFull ? 'status' : undefined}><span>{pickerQuery ? modelPickerListText(this.desktopLocale, 'noMatch')
-                                    : pickerRelayFull ? relayText(this.desktopLocale, 'relayFull') : relayText(this.desktopLocale, this.activeRelayKey ? 'noSourceModels' : 'chooseSourceFirst')}</span>
-                                    {pickerRelayFull ? <button onClick={() => this.toggleComposerRelayPicker()}>{relayText(this.desktopLocale, 'selectRelay')}</button>
-                                        : modelOptions.length > 0 && <button onClick={() => { this.completeNavigationSurface(); this.openSettingsPanel('models'); }}>{modelVisibilityCopy(this.desktopLocale)[0]}</button>}</div>;
-                            })()}
-                        </div>}
-                        {(officialPickerPending && pickerRows.length > 0 || officialPickerFailed && !officialPickerPending && !officialFailureInPlace) && <div className='nmx-merchant-catalog-status' role='status'>
-                            {officialPickerPending && <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />}
-                            <span>{officialPickerPending ? relayText(this.desktopLocale, 'modelsLoading')
-                                : pickerConnection && this.officialPickerAuthFailures?.has(pickerConnection.id) ? agentOutcomeText(this.desktopLocale, 'api_key_rejected')
-                                    : pickerRows.length > 0 ? relayText(this.desktopLocale, 'modelsUnavailable') : relayText(this.desktopLocale, 'modelsFailed')}</span>
-                            {!officialPickerPending && pickerConnection && this.officialPickerAuthFailures?.has(pickerConnection.id)
-                                ? <button type='button' onClick={() => { this.closeNavigationSurface(); this.selectModelCenterView('official'); }}>{relayText(this.desktopLocale, 'openModelCenter')}</button>
-                                : !officialPickerPending && pickerConnection && <button type='button' onClick={() => void this.ensureOfficialConnectionModelsLoaded(pickerConnection, { userInitiated: true, force: true })}>{this.tx('retry')}</button>}
-                        </div>}
-                        {merchantCatalogPending && modelOptions.length > 0 && (this.merchantCatalogStatus === 'loading' || this.merchantCatalogError) && <div className='nmx-merchant-catalog-status' role='status'>
-                            {this.merchantCatalogStatus === 'loading' && <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />}
-                            <span>{relayText(this.desktopLocale, this.merchantCatalogStatus === 'loading' ? 'modelsLoading' : this.merchantCatalogError || this.merchantCatalogStatus === 'failed' ? 'modelsFailed' : this.merchantCatalogStatus === 'partial' ? 'modelsPartial' : 'modelsNotLoaded')}</span>
-                            {this.merchantCatalogStatus !== 'loading' && <button type='button' onClick={() => void this.loadSelectedMerchantCatalog(this.activeRelayKey.slice('managed:'.length), Boolean(this.selectedMerchantCatalog?.nextCursor))}>{this.tx('retry')}</button>}
-                        </div>}
-                        {/* "Enable more models" always opens Settings → Models; the "N more models hidden" hint beside it owns the inline list. */}
-                        <footer className='nmx-model-picker-settings-footer'><button type='button' className='nmx-model-picker-settings-link'
-                            onClick={() => {
-                                this.completeNavigationSurface();
-                                this.openSettingsPanel('models');
-                            }}>{modelPickerListText(this.desktopLocale, 'enableMoreModels')}</button>
-                            {(() => {
-                                const unenabledModels = pickerPartition.selectable.map(candidate => candidate.model)
-                                    .filter(model => model.available && !this.isModelVisible(model.model));
-                                const hiddenModels = pickerPartition.selectable.map(candidate => candidate.model)
-                                    .filter(model => model.available && (!this.isModelVisible(model.model) || Boolean(this.modelPickerHiddenPopoverTicked?.has(model.model))));
-                                const hiddenCount = Math.max(0, unenabledModels.length, pickerPartition.selectable.filter(candidate => candidate.model.available).length - visibleModelOptions.length);
-                                if (hiddenCount <= 0 && hiddenModels.length <= 0) return null;
-                                const isOpen = Boolean(this.modelPickerHiddenPopoverOpen);
-                                const pageSize = 10;
-                                const visibleLimit = Math.max(pageSize, Number(this.modelPickerHiddenVisibleLimit) || pageSize);
-                                const shownHiddenModels = hiddenModels.slice(0, visibleLimit);
-                                const loadMoreHiddenModels = (): void => {
-                                    if (visibleLimit >= hiddenModels.length) return;
-                                    this.modelPickerHiddenVisibleLimit = Math.min(hiddenModels.length, visibleLimit + pageSize);
-                                    this.update();
-                                };
-                                // Checking a hidden model enables it in Settings → Models and moves it into the main model list above immediately while keeping the checkbox visible until the drawer closes.
-                                const showHiddenModel = (model: string, show: boolean): void => {
-                                    const anonymous = /^unlisted\//i.test(model.trim());
-                                    if (!this.modelPickerHiddenPopoverTicked) this.modelPickerHiddenPopoverTicked = new Set();
-                                    this.modelPickerHiddenPopoverTicked.add(model);
-                                    if (anonymous) this.setAnonymousModelsEnabled(show);
-                                    else this.setVisibleModels([model], 'language', show);
-                                    this.update();
-                                };
-                                return <div className={`nmx-model-picker-hidden-hint${isOpen ? ' is-open' : ''}`}
-                                    data-hidden-model-count={hiddenCount}>
-                                    <button type='button' className='nmx-model-picker-hidden-hint-trigger'
-                                        aria-expanded={isOpen}
-                                        onClick={event => {
-                                            event.stopPropagation();
-                                            this.modelPickerHiddenPopoverOpen = !this.modelPickerHiddenPopoverOpen;
-                                            this.modelPickerHiddenVisibleLimit = pageSize;
-                                            this.update();
-                                        }}>
-                                        <span className='nmx-model-picker-hidden-hint-text'>{modelPickerListText(this.desktopLocale, 'hiddenModels', hiddenCount)}</span>
-                                        <i className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} aria-hidden='true' />
-                                    </button>
-                                    {isOpen && hiddenModels.length > 0 && <div className='nmx-model-picker-hidden-popover' role='group'
-                                        aria-label={modelPickerListText(this.desktopLocale, 'hiddenModels', hiddenCount)}
-                                        onClick={event => event.stopPropagation()}>
-                                        <ul className='nmx-model-picker-hidden-popover-list'
-                                            data-visible-limit={shownHiddenModels.length}
-                                            data-total-hidden={hiddenModels.length}
-                                            onScroll={event => {
-                                                const el = event.currentTarget;
-                                                if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - 24) loadMoreHiddenModels();
-                                            }}
-                                            onWheel={event => {
-                                                if (event.deltaY <= 0) return;
-                                                const el = event.currentTarget;
-                                                if (!el || el.scrollHeight <= el.clientHeight || el.scrollTop + el.clientHeight >= el.scrollHeight - 24) loadMoreHiddenModels();
-                                            }}>
-                                            {shownHiddenModels.map(item => <li key={item.id}>
-                                                <label title={item.label || item.model}>
-                                                    <span>{item.label || item.model}</span>
-                                                    <input type='checkbox' checked={this.isModelVisible(item.model)}
-                                                        onChange={event => showHiddenModel(item.model, event.currentTarget.checked)} />
-                                                </label>
-                                            </li>)}
-                                        </ul>
+                                    itemContent={(_index, model) => renderModelPickerOption(model, modelRouteById.has(model.variantOf ?? model.id))}
+                                /> : <div className='nmx-model-picker-list nmx-model-picker-empty-list'>
+                                    {merchantCatalogPending && <div className='nmx-merchant-catalog-status is-centered' role='status'>
+                                        {this.merchantCatalogStatus === 'loading' && <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />}
+                                        <span>{relayText(this.desktopLocale, this.merchantCatalogStatus === 'loading' ? 'modelsLoading' : this.merchantCatalogError || this.merchantCatalogStatus === 'failed' ? 'modelsFailed' : this.merchantCatalogStatus === 'partial' ? 'modelsPartial' : 'modelsNotLoaded')}</span>
+                                        {this.merchantCatalogStatus !== 'loading' && <button type='button' onClick={() => void this.loadSelectedMerchantCatalog(this.activeRelayKey.slice('managed:'.length), Boolean(this.selectedMerchantCatalog?.nextCursor))}>{this.tx('retry')}</button>}
                                     </div>}
-                                </div>;
-                            })()}
-                        </footer>
-                                </section>
-                                <SurfaceTooltips scope='.nmx-model-picker-auto-switch, .nmx-model-picker-settings-footer' />
-                            </div>
-                        </div>,
-                        document.body
-                    )}
+                                    {officialPickerPending && <div className='nmx-merchant-catalog-status is-centered' role='status'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' /><span>{relayText(this.desktopLocale, 'modelsLoading')}</span></div>}
+                                    {/* An own API whose list could not be read says so in place of the empty list, as the other drawers do. */}
+                                    {officialFailureInPlace && pickerConnection && this.renderOfficialPickerFailedState?.(pickerConnection,
+                                        this.officialPickerAuthFailures.has(pickerConnection.id), () => this.closeNavigationSurface())}
+                                    {!officialPickerPending && !merchantCatalogPending && !officialFailureInPlace && (() => {
+                                        // Every API key of the chosen merchant is busy: say so and offer another merchant, not an empty list.
+                                        const pickerRelayFull = !pickerQuery && modelPickerRelayKey.startsWith('managed:')
+                                            && Boolean(this.relayMerchantIdIsFull?.(modelPickerRelayKey.slice('managed:'.length), 'coding'));
+                                        return <div className='nmx-route-empty' role={pickerRelayFull ? 'status' : undefined}><span>{pickerQuery ? modelPickerListText(this.desktopLocale, 'noMatch')
+                                            : pickerRelayFull ? relayText(this.desktopLocale, 'relayFull') : relayText(this.desktopLocale, this.activeRelayKey ? 'noSourceModels' : 'chooseSourceFirst')}</span>
+                                            {pickerRelayFull ? <button onClick={() => this.toggleComposerRelayPicker()}>{relayText(this.desktopLocale, 'selectRelay')}</button>
+                                                : modelOptions.length > 0 && <button onClick={() => { this.completeNavigationSurface(); this.openSettingsPanel('models'); }}>{modelVisibilityCopy(this.desktopLocale)[0]}</button>}</div>;
+                                    })()}
+                                </div>}
+                                {(officialPickerPending && pickerRows.length > 0 || officialPickerFailed && !officialPickerPending && !officialFailureInPlace) && <div className='nmx-merchant-catalog-status' role='status'>
+                                    {officialPickerPending && <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />}
+                                    <span>{officialPickerPending ? relayText(this.desktopLocale, 'modelsLoading')
+                                        : pickerConnection && this.officialPickerAuthFailures?.has(pickerConnection.id) ? agentOutcomeText(this.desktopLocale, 'api_key_rejected')
+                                            : pickerRows.length > 0 ? relayText(this.desktopLocale, 'modelsUnavailable') : relayText(this.desktopLocale, 'modelsFailed')}</span>
+                                    {!officialPickerPending && pickerConnection && this.officialPickerAuthFailures?.has(pickerConnection.id)
+                                        ? <button type='button' onClick={() => { this.closeNavigationSurface(); this.selectModelCenterView('official'); }}>{relayText(this.desktopLocale, 'openModelCenter')}</button>
+                                        : !officialPickerPending && pickerConnection && <button type='button' onClick={() => void this.ensureOfficialConnectionModelsLoaded(pickerConnection, { userInitiated: true, force: true })}>{this.tx('retry')}</button>}
+                                </div>}
+                                {merchantCatalogPending && modelOptions.length > 0 && (this.merchantCatalogStatus === 'loading' || this.merchantCatalogError) && <div className='nmx-merchant-catalog-status' role='status'>
+                                    {this.merchantCatalogStatus === 'loading' && <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true' />}
+                                    <span>{relayText(this.desktopLocale, this.merchantCatalogStatus === 'loading' ? 'modelsLoading' : this.merchantCatalogError || this.merchantCatalogStatus === 'failed' ? 'modelsFailed' : this.merchantCatalogStatus === 'partial' ? 'modelsPartial' : 'modelsNotLoaded')}</span>
+                                    {this.merchantCatalogStatus !== 'loading' && <button type='button' onClick={() => void this.loadSelectedMerchantCatalog(this.activeRelayKey.slice('managed:'.length), Boolean(this.selectedMerchantCatalog?.nextCursor))}>{this.tx('retry')}</button>}
+                                </div>}
+                                {/* "Enable more models" always opens Settings → Models; the "N more models hidden" hint beside it owns the inline list. */}
+                                <footer className='nmx-model-picker-settings-footer'><button type='button' className='nmx-model-picker-settings-link'
+                                    onClick={() => {
+                                        this.completeNavigationSurface();
+                                        this.openSettingsPanel('models');
+                                    }}>{modelPickerListText(this.desktopLocale, 'enableMoreModels')}</button>
+                                    {(() => {
+                                        const unenabledModels = pickerPartition.selectable.map(candidate => candidate.model)
+                                            .filter(model => model.available && !this.isModelVisible(model.model));
+                                        const hiddenModels = pickerPartition.selectable.map(candidate => candidate.model)
+                                            .filter(model => model.available && (!this.isModelVisible(model.model) || Boolean(this.modelPickerHiddenPopoverTicked?.has(model.model))));
+                                        const hiddenCount = Math.max(0, unenabledModels.length, pickerPartition.selectable.filter(candidate => candidate.model.available).length - visibleModelOptions.length);
+                                        if (hiddenCount <= 0 && hiddenModels.length <= 0) return null;
+                                        const isOpen = Boolean(this.modelPickerHiddenPopoverOpen);
+                                        const pageSize = 10;
+                                        const visibleLimit = Math.max(pageSize, Number(this.modelPickerHiddenVisibleLimit) || pageSize);
+                                        const shownHiddenModels = hiddenModels.slice(0, visibleLimit);
+                                        const loadMoreHiddenModels = (): void => {
+                                            if (visibleLimit >= hiddenModels.length) return;
+                                            this.modelPickerHiddenVisibleLimit = Math.min(hiddenModels.length, visibleLimit + pageSize);
+                                            if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']); else this.update();
+                                        };
+                                        // Checking a hidden model enables it in Settings → Models and moves it into the main model list above immediately while keeping the checkbox visible until the drawer closes.
+                                        const showHiddenModel = (model: string, show: boolean): void => {
+                                            const anonymous = /^unlisted\//i.test(model.trim());
+                                            if (!this.modelPickerHiddenPopoverTicked) this.modelPickerHiddenPopoverTicked = new Set();
+                                            this.modelPickerHiddenPopoverTicked.add(model);
+                                            if (anonymous) this.setAnonymousModelsEnabled(show);
+                                            else this.setVisibleModels([model], 'language', show);
+                                            if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']); else this.update();
+                                        };
+                                        return <div className={`nmx-model-picker-hidden-hint${isOpen ? ' is-open' : ''}`}
+                                            data-hidden-model-count={hiddenCount}>
+                                            <button type='button' className='nmx-model-picker-hidden-hint-trigger'
+                                                aria-expanded={isOpen}
+                                                onClick={event => {
+                                                    event.stopPropagation();
+                                                    this.modelPickerHiddenPopoverOpen = !this.modelPickerHiddenPopoverOpen;
+                                                    this.modelPickerHiddenVisibleLimit = pageSize;
+                                                    if (this.updateRegion) this.updateRegion(['coding-popovers', 'popovers']); else this.update();
+                                                }}>
+                                                <span className='nmx-model-picker-hidden-hint-text'>{modelPickerListText(this.desktopLocale, 'hiddenModels', hiddenCount)}</span>
+                                                <i className={`codicon codicon-chevron-${isOpen ? 'up' : 'down'}`} aria-hidden='true' />
+                                            </button>
+                                            {isOpen && hiddenModels.length > 0 && <div className='nmx-model-picker-hidden-popover' role='group'
+                                                aria-label={modelPickerListText(this.desktopLocale, 'hiddenModels', hiddenCount)}
+                                                onClick={event => event.stopPropagation()}>
+                                                <ul className='nmx-model-picker-hidden-popover-list'
+                                                    data-visible-limit={shownHiddenModels.length}
+                                                    data-total-hidden={hiddenModels.length}
+                                                    onScroll={event => {
+                                                        const el = event.currentTarget;
+                                                        if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - 24) loadMoreHiddenModels();
+                                                    }}
+                                                    onWheel={event => {
+                                                        if (event.deltaY <= 0) return;
+                                                        const el = event.currentTarget;
+                                                        if (!el || el.scrollHeight <= el.clientHeight || el.scrollTop + el.clientHeight >= el.scrollHeight - 24) loadMoreHiddenModels();
+                                                    }}>
+                                                    {shownHiddenModels.map(item => <li key={item.id}>
+                                                        <label title={item.label || item.model}>
+                                                            <span>{item.label || item.model}</span>
+                                                            <input type='checkbox' checked={this.isModelVisible(item.model)}
+                                                                onChange={event => showHiddenModel(item.model, event.currentTarget.checked)} />
+                                                        </label>
+                                                    </li>)}
+                                                </ul>
+                                            </div>}
+                                        </div>;
+                                    })()}
+                                </footer>
+                                        </section>
+                                        <SurfaceTooltips scope='.nmx-model-picker-auto-switch, .nmx-model-picker-settings-footer' />
+                                    </div>
+                                </div>,
+                                document.body
+                            )}
+                        </>;
+                        return this.island ? this.island('coding-popovers', renderCodingPopovers, 'overlay', undefined, 'popovers') : renderCodingPopovers();
+                    })()}
                     {(showDraftWorkspace || this.attachments.length > 0 || this.pastedTextReferences.length > 0 || this.hasUnresolvedDraftAttachments(this.activeCodingSessionId)) && <div className='nmx-composer-assets'>
                         {showDraftWorkspace && (workspace ? <span className='nmx-composer-project-chip' title={workspace.path}><i className='codicon codicon-folder'></i><b>{workspace.label}</b><button aria-label={workbenchText(this.desktopLocale, 'removeFolder')} title={workbenchText(this.desktopLocale, 'removeFolder')} disabled={Boolean(this.draftWorkspaceBindingOperation)} onClick={() => void this.removeDraftWorkspace()}><i className='codicon codicon-close'></i></button></span> : <button className='nmx-composer-project-select' disabled={Boolean(this.draftWorkspaceBindingOperation)} onClick={() => void this.chooseDraftWorkspace()}><i className='codicon codicon-folder-opened'></i><span>{workbenchText(this.desktopLocale, 'selectFolder')}</span></button>)}
                         {this.attachments.length > 0 && <div className='nmx-attachment-chips' data-nmx-gallery-root='composer'>{this.attachments.map(item => {
@@ -58030,65 +59003,77 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     {this.renderComposerTelemetryBar?.(codingSession)}
                 </div></div>}
             </div>
-            {this.renderTerminalDrawer()}
-            {lightbox.isOpen && <div className={`nmx-attachment-lightbox nmx-image-lightbox${viewerGallery.nav ? ' has-gallery' : ''}`} role='dialog' aria-modal='true' aria-label={lightbox.image.name || lightbox.image.alt || ''} onMouseDown={() => this.closeAttachmentLightbox('backdrop')}>
-                <section onMouseDown={event => event.stopPropagation()} onKeyDown={event => this.trapDialogFocus(event)}>
-                    <header><span className='nmx-lightbox-title'><strong title={this.attachmentLightboxPath || lightbox.image.name}>{lightbox.image.name}</strong>{this.attachmentLightboxPath && <small title={this.attachmentLightboxPath} data-nmx-literal>{this.attachmentLightboxPath}</small>}</span>{viewerGallery.counter}<button className='nmx-image-lightbox-close' autoFocus aria-label={imageLightboxText(this.desktopLocale, 'close')} onClick={() => this.closeAttachmentLightbox('button')}><i className='codicon codicon-close'></i></button></header>
-                    <div className={`nmx-attachment-lightbox-stage nmx-image-lightbox-stage${lightbox.zoomPercent > 100 ? ' is-zoomed' : ''}${this.attachmentLightboxPan ? ' is-panning' : ''}`} ref={this.bindAttachmentLightboxWheel} onWheel={event => this.onAttachmentLightboxWheel(event)}
-                        onPointerDown={event => { if (event.button !== 0 || this.attachmentLightbox.zoomPercent <= 100) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); this.attachmentLightboxPan = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }; event.currentTarget.classList.add('is-panning'); }}
-                        onPointerMove={event => this.panAttachmentLightbox(event)}
-                        onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); this.attachmentLightboxPan = undefined; event.currentTarget.classList.remove('is-panning'); this.update(); }}
-                        onLostPointerCapture={event => { this.attachmentLightboxPan = undefined; event.currentTarget.classList.remove('is-panning'); }}
-                        onDoubleClick={() => { this.attachmentLightboxPan = undefined; this.attachmentLightbox = updateImageLightbox(this.attachmentLightbox, { type: 'reset' }).state; const image = this.attachmentLightboxWheelSurface?.querySelector('img'); if (image) this.applyImagePreviewTransform(image, this.attachmentLightbox); this.update(); }}>
-                        <img className='nmx-image-lightbox-img' draggable={false} style={this.imagePreviewStyle(lightbox)} src={lightbox.image.src} alt={lightbox.image.alt || lightbox.image.name || ''} /></div>
-                    <footer className='nmx-image-lightbox-toolbar'>
-                        <button disabled={lightbox.zoomPercent <= 25} aria-label={imageLightboxText(this.desktopLocale, 'zoomOut')} onClick={() => this.zoomAttachmentLightbox('out')}><i className='codicon codicon-zoom-out'></i></button>
-                        <output className='nmx-image-lightbox-zoom'>{imageLightboxPercentage(lightbox)}</output>
-                        <button disabled={lightbox.zoomPercent >= 400} aria-label={imageLightboxText(this.desktopLocale, 'zoomIn')} onClick={() => this.zoomAttachmentLightbox('in')}><i className='codicon codicon-zoom-in'></i></button>
-                    </footer>
-                    {viewerGallery.nav}
-                </section>
-            </div>}
-            {this.mediaViewer && <div className={`nmx-attachment-lightbox nmx-media-viewer is-${this.mediaViewer.kind}${viewerGallery.nav ? ' has-gallery' : ''}`} role='dialog' aria-modal='true' aria-label={this.mediaViewer.name} onMouseDown={() => this.closeMediaViewer()} onKeyDown={event => {
-                if (event.key === 'Escape' && !event.currentTarget.ownerDocument.fullscreenElement) { event.preventDefault(); event.stopPropagation(); this.closeMediaViewer(); }
-                else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.ctrlKey && !event.altKey && !event.metaKey && !(event.target instanceof HTMLVideoElement || event.target instanceof HTMLAudioElement)) {
-                    if (this.stepMediaGallery(event.key === 'ArrowLeft' ? -1 : 1)) { event.preventDefault(); event.stopPropagation(); }
-                }
-            }}>
-                <section onMouseDown={event => event.stopPropagation()} onKeyDown={event => this.trapDialogFocus(event)}>
-                    <header><span className='nmx-lightbox-title'><strong title={this.mediaViewer.path || this.mediaViewer.name}>{this.mediaViewer.name}</strong>{this.mediaViewer.path && <small title={this.mediaViewer.path} data-nmx-literal>{this.mediaViewer.path}</small>}</span>{viewerGallery.counter}<span className='nmx-lightbox-actions'>{this.renderViewerRevealButton(this.mediaViewer.path)}<button autoFocus aria-label={imageLightboxText(this.desktopLocale, 'close')} onClick={() => this.closeMediaViewer()}><i className='codicon codicon-close'></i></button></span></header>
-                    <div className='nmx-attachment-lightbox-stage'>{this.mediaViewer.failed
-                        ? <div className='nmx-media-viewer-error' role='alert'><i className='codicon codicon-warning' aria-hidden='true'></i><span>{localizeDesktopSurface(this.desktopLocale, '媒体文件暂不可用')}</span></div>
-                        : this.mediaViewer.kind === 'video'
-                        ? <video key={this.mediaViewer.src} ref={this.bindMediaViewerElement} src={this.mediaViewer.src} poster={this.mediaViewer.poster} controls autoPlay playsInline preload='metadata' title={this.mediaViewer.path} onError={() => this.markMediaViewerFailed()}></video>
-                        : <audio key={this.mediaViewer.src} ref={this.bindMediaViewerElement} src={this.mediaViewer.src} controls autoPlay preload='metadata' title={this.mediaViewer.path} onError={() => this.markMediaViewerFailed()}></audio>}</div>
-                    {viewerGallery.nav}
-                </section>
-            </div>}
-            {this.pendingConversationLinkTarget && <div className='nmx-sheet-backdrop nmx-dialog-backdrop nmx-link-opening-backdrop' onMouseDown={() => this.cancelConversationLinkOpen()}>
-                <section className='nmx-thread-dialog nmx-link-opening-dialog' role='dialog' aria-modal='true' aria-labelledby='nmx-link-opening-title' aria-describedby='nmx-link-opening-description' onMouseDown={event => event.stopPropagation()} onKeyDown={event => {
-                    if (event.key === 'Escape') { event.preventDefault(); this.cancelConversationLinkOpen(); }
-                    else this.trapDialogFocus(event);
-                }}>
-                    <header><div><h2 id='nmx-link-opening-title'>{linkOpeningText(this.desktopLocale, 'dialogTitle')}</h2><p id='nmx-link-opening-description'>{linkOpeningText(this.desktopLocale, 'dialogBody')}</p></div><button aria-label={linkOpeningText(this.desktopLocale, 'cancel')} onClick={() => this.cancelConversationLinkOpen()}><i className='codicon codicon-close'></i></button></header>
-                    <code data-nmx-literal title={this.pendingConversationLinkTarget}>{this.pendingConversationLinkTarget}</code>
-                    <label className='nmx-link-opening-remember'><input type='checkbox' checked={this.rememberConversationLinkChoice} onChange={event => { this.rememberConversationLinkChoice = event.currentTarget.checked; this.update(); }} /><span>{linkOpeningText(this.desktopLocale, 'remember')}</span></label>
-                    <footer><button onClick={() => this.cancelConversationLinkOpen()}>{linkOpeningText(this.desktopLocale, 'cancel')}</button><button autoFocus onClick={() => this.confirmConversationLinkOpen('system-browser')}>{linkOpeningText(this.desktopLocale, 'systemBrowser')}</button><button className='is-primary' onClick={() => this.confirmConversationLinkOpen('builtin-browser')}>{linkOpeningText(this.desktopLocale, 'builtinBrowser')}</button></footer>
-                </section>
-            </div>}
-            {this.renderFullAccessConfirmation()}
-            {this.renderIncognitoModeConfirmation()}
-            {this.guard('plugin-dialogs', () => this.renderAppPluginDialogs())}
-            {this.codingSessionRunHistoryId && <RunHistoryPanel key={this.codingSessionRunHistoryId}
-                conversationId={this.codingSessionRunHistoryId}
-                title={this.codingSessions.find(session => session.id === this.codingSessionRunHistoryId)?.title || ''}
-                locale={this.desktopLocale} service={this.platformService}
-                close={() => { this.codingSessionRunHistoryId = ''; this.update(); }}
-                trapFocus={event => this.trapDialogFocus(event)}
-                renderEvents={(events, runId) => this.renderAgentActivity(events, false, true, `history:${runId}`)} />}
-            {this.renderCodingSessionDialogs()}
-            {this.renderScheduleDialog()}
-            {this.renderCouncilModals()}
+            {(this.terminalMountedOnce ||= Boolean(this.terminalDrawerOpen || this.terminalDrawerTransitioning || (this.terminalRecords?.length ?? 0) > 0)) && (() => {
+                const terminalActive = Boolean(this.terminalDrawerOpen || this.terminalDrawerTransitioning);
+                return <div className={terminalActive ? 'nmx-terminal-host-slot' : 'nmx-keepalive-host nmx-keepalive-hidden'}
+                    style={terminalActive ? { flex: '0 0 auto', width: '100%' } : undefined}
+                    aria-hidden={!terminalActive || undefined}>
+                    {this.keepAliveIsland ? this.keepAliveIsland('terminal', terminalActive, () => this.renderTerminalDrawer()) : this.renderTerminalDrawer()}
+                </div>;
+            })()}
+            {(() => {
+                const renderCodingModals = (): React.ReactNode => <>
+                    {lightbox.isOpen && <div className={`nmx-attachment-lightbox nmx-image-lightbox${viewerGallery.nav ? ' has-gallery' : ''}`} role='dialog' aria-modal='true' aria-label={lightbox.image.name || lightbox.image.alt || ''} onMouseDown={() => this.closeAttachmentLightbox('backdrop')}>
+                        <section onMouseDown={event => event.stopPropagation()} onKeyDown={event => this.trapDialogFocus(event)}>
+                            <header><span className='nmx-lightbox-title'><strong title={this.attachmentLightboxPath || lightbox.image.name}>{lightbox.image.name}</strong>{this.attachmentLightboxPath && <small title={this.attachmentLightboxPath} data-nmx-literal>{this.attachmentLightboxPath}</small>}</span>{viewerGallery.counter}<button className='nmx-image-lightbox-close' autoFocus aria-label={imageLightboxText(this.desktopLocale, 'close')} onClick={() => this.closeAttachmentLightbox('button')}><i className='codicon codicon-close'></i></button></header>
+                            <div className={`nmx-attachment-lightbox-stage nmx-image-lightbox-stage${lightbox.zoomPercent > 100 ? ' is-zoomed' : ''}${this.attachmentLightboxPan ? ' is-panning' : ''}`} ref={this.bindAttachmentLightboxWheel} onWheel={event => this.onAttachmentLightboxWheel(event)}
+                                onPointerDown={event => { if (event.button !== 0 || this.attachmentLightbox.zoomPercent <= 100) return; event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); this.attachmentLightboxPan = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }; event.currentTarget.classList.add('is-panning'); }}
+                                onPointerMove={event => this.panAttachmentLightbox(event)}
+                                onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); this.attachmentLightboxPan = undefined; event.currentTarget.classList.remove('is-panning'); this.update(); }}
+                                onLostPointerCapture={event => { this.attachmentLightboxPan = undefined; event.currentTarget.classList.remove('is-panning'); }}
+                                onDoubleClick={() => { this.attachmentLightboxPan = undefined; this.attachmentLightbox = updateImageLightbox(this.attachmentLightbox, { type: 'reset' }).state; const image = this.attachmentLightboxWheelSurface?.querySelector('img'); if (image) this.applyImagePreviewTransform(image, this.attachmentLightbox); this.update(); }}>
+                                <img className='nmx-image-lightbox-img' draggable={false} style={this.imagePreviewStyle(lightbox)} src={lightbox.image.src} alt={lightbox.image.alt || lightbox.image.name || ''} /></div>
+                            <footer className='nmx-image-lightbox-toolbar'>
+                                <button disabled={lightbox.zoomPercent <= 25} aria-label={imageLightboxText(this.desktopLocale, 'zoomOut')} onClick={() => this.zoomAttachmentLightbox('out')}><i className='codicon codicon-zoom-out'></i></button>
+                                <output className='nmx-image-lightbox-zoom'>{imageLightboxPercentage(lightbox)}</output>
+                                <button disabled={lightbox.zoomPercent >= 400} aria-label={imageLightboxText(this.desktopLocale, 'zoomIn')} onClick={() => this.zoomAttachmentLightbox('in')}><i className='codicon codicon-zoom-in'></i></button>
+                            </footer>
+                            {viewerGallery.nav}
+                        </section>
+                    </div>}
+                    {this.mediaViewer && <div className={`nmx-attachment-lightbox nmx-media-viewer is-${this.mediaViewer.kind}${viewerGallery.nav ? ' has-gallery' : ''}`} role='dialog' aria-modal='true' aria-label={this.mediaViewer.name} onMouseDown={() => this.closeMediaViewer()} onKeyDown={event => {
+                        if (event.key === 'Escape' && !event.currentTarget.ownerDocument.fullscreenElement) { event.preventDefault(); event.stopPropagation(); this.closeMediaViewer(); }
+                        else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.ctrlKey && !event.altKey && !event.metaKey && !(event.target instanceof HTMLVideoElement || event.target instanceof HTMLAudioElement)) {
+                            if (this.stepMediaGallery(event.key === 'ArrowLeft' ? -1 : 1)) { event.preventDefault(); event.stopPropagation(); }
+                        }
+                    }}>
+                        <section onMouseDown={event => event.stopPropagation()} onKeyDown={event => this.trapDialogFocus(event)}>
+                            <header><span className='nmx-lightbox-title'><strong title={this.mediaViewer.path || this.mediaViewer.name}>{this.mediaViewer.name}</strong>{this.mediaViewer.path && <small title={this.mediaViewer.path} data-nmx-literal>{this.mediaViewer.path}</small>}</span>{viewerGallery.counter}<span className='nmx-lightbox-actions'>{this.renderViewerRevealButton(this.mediaViewer.path)}<button autoFocus aria-label={imageLightboxText(this.desktopLocale, 'close')} onClick={() => this.closeMediaViewer()}><i className='codicon codicon-close'></i></button></span></header>
+                            <div className='nmx-attachment-lightbox-stage'>{this.mediaViewer.failed
+                                ? <div className='nmx-media-viewer-error' role='alert'><i className='codicon codicon-warning' aria-hidden='true'></i><span>{localizeDesktopSurface(this.desktopLocale, '媒体文件暂不可用')}</span></div>
+                                : this.mediaViewer.kind === 'video'
+                                ? <video key={this.mediaViewer.src} ref={this.bindMediaViewerElement} src={this.mediaViewer.src} poster={this.mediaViewer.poster} controls autoPlay playsInline preload='metadata' title={this.mediaViewer.path} onError={() => this.markMediaViewerFailed()}></video>
+                                : <audio key={this.mediaViewer.src} ref={this.bindMediaViewerElement} src={this.mediaViewer.src} controls autoPlay preload='metadata' title={this.mediaViewer.path} onError={() => this.markMediaViewerFailed()}></audio>}</div>
+                            {viewerGallery.nav}
+                        </section>
+                    </div>}
+                    {this.pendingConversationLinkTarget && <div className='nmx-sheet-backdrop nmx-dialog-backdrop nmx-link-opening-backdrop' onMouseDown={() => this.cancelConversationLinkOpen()}>
+                        <section className='nmx-thread-dialog nmx-link-opening-dialog' role='dialog' aria-modal='true' aria-labelledby='nmx-link-opening-title' aria-describedby='nmx-link-opening-description' onMouseDown={event => event.stopPropagation()} onKeyDown={event => {
+                            if (event.key === 'Escape') { event.preventDefault(); this.cancelConversationLinkOpen(); }
+                            else this.trapDialogFocus(event);
+                        }}>
+                            <header><div><h2 id='nmx-link-opening-title'>{linkOpeningText(this.desktopLocale, 'dialogTitle')}</h2><p id='nmx-link-opening-description'>{linkOpeningText(this.desktopLocale, 'dialogBody')}</p></div><button aria-label={linkOpeningText(this.desktopLocale, 'cancel')} onClick={() => this.cancelConversationLinkOpen()}><i className='codicon codicon-close'></i></button></header>
+                            <code data-nmx-literal title={this.pendingConversationLinkTarget}>{this.pendingConversationLinkTarget}</code>
+                            <label className='nmx-link-opening-remember'><input type='checkbox' checked={this.rememberConversationLinkChoice} onChange={event => { this.rememberConversationLinkChoice = event.currentTarget.checked; this.update(); }} /><span>{linkOpeningText(this.desktopLocale, 'remember')}</span></label>
+                            <footer><button onClick={() => this.cancelConversationLinkOpen()}>{linkOpeningText(this.desktopLocale, 'cancel')}</button><button autoFocus onClick={() => this.confirmConversationLinkOpen('system-browser')}>{linkOpeningText(this.desktopLocale, 'systemBrowser')}</button><button className='is-primary' onClick={() => this.confirmConversationLinkOpen('builtin-browser')}>{linkOpeningText(this.desktopLocale, 'builtinBrowser')}</button></footer>
+                        </section>
+                    </div>}
+                    {this.renderFullAccessConfirmation()}
+                    {this.renderIncognitoModeConfirmation()}
+                    {this.guard('plugin-dialogs', () => this.renderAppPluginDialogs())}
+                    {this.codingSessionRunHistoryId && <RunHistoryPanel key={this.codingSessionRunHistoryId}
+                        conversationId={this.codingSessionRunHistoryId}
+                        title={this.codingSessions.find(session => session.id === this.codingSessionRunHistoryId)?.title || ''}
+                        locale={this.desktopLocale} service={this.platformService}
+                        close={() => { this.codingSessionRunHistoryId = ''; this.update(); }}
+                        trapFocus={event => this.trapDialogFocus(event)}
+                        renderEvents={(events, runId) => this.renderAgentActivity(events, false, true, `history:${runId}`)} />}
+                    {this.renderCodingSessionDialogs()}
+                    {this.renderScheduleDialog()}
+                    {this.renderCouncilModals()}
+                </>;
+                return this.island ? this.island('coding-modals', renderCodingModals, 'overlay') : renderCodingModals();
+            })()}
         </>;
     }
 
@@ -58392,13 +59377,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected writeComicChatDrafts(force = false): void {
-        if (!force && this.comicChatDraftWriteTimer !== undefined) return;
         const now = Date.now();
+        if (!force && this.comicChatDraftWriteTimer !== undefined) return;
         if (!force && this.comicChatDraftWrittenSize > DRAFT_JOURNAL_SYNC_LIMIT && now - this.comicChatDraftWrittenAt < DRAFT_JOURNAL_THROTTLE_MS) {
+            const delay = Math.max(0, Math.min(DRAFT_JOURNAL_THROTTLE_MS, DRAFT_JOURNAL_THROTTLE_MS - (now - this.comicChatDraftWrittenAt)));
             this.comicChatDraftWriteTimer = window.setTimeout(() => {
                 this.comicChatDraftWriteTimer = undefined;
-                this.writeComicChatDrafts(true);
-            }, DRAFT_JOURNAL_THROTTLE_MS - (now - this.comicChatDraftWrittenAt));
+                if (!this.isDisposed) this.writeComicChatDrafts(true);
+            }, delay);
             return;
         }
         if (this.comicChatDraftWriteTimer !== undefined) window.clearTimeout(this.comicChatDraftWriteTimer);
@@ -58553,7 +59539,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected removeComicChatFolder(path: string): void {
         const ui = this.comicChatUi();
         const leaving = ui.target === path;
-        if (leaving) this.rememberComicChatDraft?.(true);
+        if (leaving) {
+            if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event === 'function') {
+                window.dispatchEvent(new Event('nmx:flush-pending-edits'));
+            }
+            this.rememberComicChatDraft?.(true);
+        }
         ui.folders = ui.folders.filter(item => item !== path);
         ui.expanded.delete(path);
         ui.lists.delete(path);
@@ -58582,7 +59573,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
     /** The four kinds' studio (简单模式). */
     protected openComicStudio(path: string, title: string): void {
         if (path && path !== this.activeComicWorkspaceRoot && this.comicStage !== 'idle') return;
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event === 'function') {
+            window.dispatchEvent(new Event('nmx:flush-pending-edits'));
+        }
         const ui = this.comicChatUi();
+        if (ui.surface === 'chat') this.rememberComicChatDraft?.(true);
         const reopeningDesk = this.comicDesk?.workspaceRoot === path && !this.comicDesk.visible
             && this.comicUsesDesk(this.comicProject());
         if (this.activeSection !== 'comic' || ui.surface !== 'studio' || ui.editor || path !== this.activeComicWorkspaceRoot || reopeningDesk) this.rememberNavigation();
@@ -58604,6 +59599,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const ui = this.comicChatUi();
         if (path && path !== this.activeComicWorkspaceRoot && this.comicStage !== 'idle') return;
         if (this.activeSection !== 'comic' || ui.surface !== 'chat' || ui.chatId || ui.target !== (path ?? '') || ui.editor) this.rememberNavigation();
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event === 'function') {
+            window.dispatchEvent(new Event('nmx:flush-pending-edits'));
+        }
         // The conversation being left keeps its unsent text and pictures; the new one shows its folder's own draft.
         this.rememberComicChatDraft?.(true);
         this.activeSection = 'comic';
@@ -58644,7 +59642,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (path !== this.activeComicWorkspaceRoot && this.comicStage !== 'idle') return;
         if (this.activeSection !== 'comic' || ui.surface !== 'chat' || ui.chatId !== chatId || ui.target !== path || ui.editor) this.rememberNavigation();
         const switching = ui.chatId !== chatId || ui.target !== path;
-        if (switching) this.rememberComicChatDraft?.(true);
+        if (switching) {
+            if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event === 'function') {
+                window.dispatchEvent(new Event('nmx:flush-pending-edits'));
+            }
+            this.rememberComicChatDraft?.(true);
+        }
         this.activeSection = 'comic';
         if (path !== this.activeComicWorkspaceRoot) {
             this.activateComicChatFolder(path);
@@ -58913,7 +59916,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const focusBeforeDismiss = restoreFocus ? document.activeElement : undefined;
         this.comicRelayPickerOpen = false;
         this.relayMetricTooltip = undefined;
-        this.update();
+        this.invalidatePopoverAnchorGeometry?.();
+        if (this.updateRegion) this.updateRegion(['comic-composer', 'comic-popovers', 'popovers']); else this.update();
         if (trigger) requestAnimationFrame(() => {
             const currentFocus = document.activeElement;
             if (!this.comicRelayPickerOpen && this.node.isConnected && trigger.isConnected && this.node.contains(trigger)
@@ -58929,10 +59933,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.closeComicModelHoverImmediately();
         this.comicRelayPickerOpen = true;
         this.relayMetricTooltip = undefined;
+        this.invalidatePopoverAnchorGeometry?.();
+        this.capturePopoverAnchorGeometry?.('.nmx-comic-chat-drawers .nmx-composer-relay-button');
         this.revalidatePublicMerchantPage?.();
         const directoryPage = this.relaySourceTab === 'favorite' ? this.favoriteMerchantPage : this.publicMerchantPage;
         if (this.relaySourceTab !== 'my-api' && (!directoryPage || this.publicMerchantPageError) && !this.publicMerchantPageLoading) void this.loadPublicMerchantPage();
-        this.update();
+        if (this.updateRegion) this.updateRegion(['comic-composer', 'comic-popovers', 'popovers']); else this.update();
     }
 
     protected selectComicChatRelay(key: string): void {
@@ -59003,8 +60009,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!this.comicModelHoverKey) return;
         this.comicModelHoverCloseTimer = window.setTimeout(() => {
             this.comicModelHoverCloseTimer = undefined;
+            if (this.isDisposed) return;
             this.closeComicModelHoverImmediately();
-            this.update();
+            if (this.updateRegion) this.updateRegion(['comic-popovers', 'popovers']); else this.update();
         }, 180);
     }
 
@@ -59034,7 +60041,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         this.comicModelHoverKey = key;
         this.comicModelHoverPlacement = nextPlacement;
-        this.update();
+        if (this.updateRegion) this.updateRegion(['comic-popovers', 'popovers']); else this.update();
     }
 
     protected fitComicModelHoverMenu(menu: HTMLElement, detailGeometry?: { readonly side: 'left' | 'right'; readonly left: number; readonly width: number }): void {
@@ -59062,8 +60069,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const focusBeforeDismiss = restoreFocus ? document.activeElement : undefined;
         this.comicModelPickerOpen = false;
         this.comicModelPickerQuery = '';
+        this.invalidatePopoverAnchorGeometry?.();
         this.closeComicModelHoverImmediately();
-        this.update();
+        if (this.updateRegion) this.updateRegion(['comic-composer', 'comic-popovers', 'popovers']); else this.update();
         if (trigger) requestAnimationFrame(() => {
             const currentFocus = document.activeElement;
             if (!this.comicModelPickerOpen && this.node.isConnected && trigger.isConnected && this.node.contains(trigger)
@@ -59080,6 +60088,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         this.comicModelPickerOpen = true;
         this.comicModelPickerQuery = '';
+        this.invalidatePopoverAnchorGeometry?.();
+        this.capturePopoverAnchorGeometry?.('.nmx-comic-chat-drawers .nmx-route-button');
         this.closeComicModelHoverImmediately();
         const ui = this.comicChatUi();
         if (!COMIC_CHAT_DRAWER_MODES.includes(ui.mode)) {
@@ -59093,7 +60103,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         } else if (relayKey.startsWith('official:')) {
             void this.ensureOfficialConnectionModelsLoaded?.(relayKey);
         }
-        this.update();
+        if (this.updateRegion) this.updateRegion(['comic-composer', 'comic-popovers', 'popovers']); else this.update();
     }
 
     protected renderComicModelPickerPortal(): React.ReactNode {
@@ -59139,7 +60149,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     poller={this.relayCapacityPoller}
                     merchantIds={[chatMerchantId]}
                     scope='comic'
-                    onSnapshot={snapshot => { this.relayCapacitySnapshot = snapshot; this.update(); }}
+                    onSnapshot={snapshot => {
+                        this.relayCapacitySnapshot = snapshot;
+                        if (this.updateRegion) this.updateRegion(['comic-popovers', 'popovers']); else this.update();
+                    }}
                 />}
                 <div className={`nmx-model-picker-surface nmx-shell nmx-theme-${this.resolvedDesktopTheme()}`}>
                     <section className='nmx-composer-popover nmx-route-popover nmx-model-picker-popover nmx-model-only-popover' data-side={placement.side}
@@ -59169,121 +60182,153 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             ))}
                         </div>
                         {allOptions.length > 5 && <div className='nmx-model-picker-search'><i className='codicon codicon-search' aria-hidden='true'></i>
-                            <ImeInput value={this.comicModelPickerQuery} placeholder={modelPickerListText(this.desktopLocale, 'search')} aria-label={modelPickerListText(this.desktopLocale, 'search')}
-                                onChange={event => { this.comicModelPickerQuery = event.currentTarget.value; this.closeComicModelHoverImmediately(); this.update(); }} /></div>}
-                        {filtered.length > 0 ? (
-                            <div className='nmx-model-picker-list' role='listbox' aria-label={this.comicChatT(activeTab)}
-                                onScroll={() => { this.noteModelListScroll?.(); if (this.comicModelHoverKey) { this.closeComicModelHoverImmediately(); this.update(); } else this.hideModelEvidenceTooltip?.(); }}>
-                                {filtered.map(item => {
-                                    const selected = item.key === selectedCandidate?.key;
-                                    const offering = item.offering;
-                                    const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
-                                    const variantTag = offering ? (ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering))) : '';
-                                    const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
-                                    const rawFidelity = offering?.fidelity;
-                                    const fidelity = measuredModelFidelity(rawFidelity);
-                                    const authenticityPending = Boolean(offering) && fidelity === undefined;
-                                    const authenticityDefault = Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
-                                    const authenticityHint = authenticityPending
-                                        ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint')
-                                        : authenticityDefault
-                                            ? modelPickerEvidenceText(this.desktopLocale, 'authenticityDefaultHint')
-                                            : undefined;
-                                    const hoverOpen = this.comicModelHoverKey === item.key;
-                                    const hoverPlacement = hoverOpen ? this.comicModelHoverPlacement : undefined;
-                                    const evidenceRows: { readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }[] = [
-                                        {
-                                            label: item.source.kind === 'official' ? relayText(this.desktopLocale, 'apiName')
-                                                : item.source.kind === 'local' ? relayText(this.desktopLocale, 'local') : relayText(this.desktopLocale, 'relayTitle'),
-                                            value: offering?.providerName || comicStepSourceLabel(this.desktopLocale, item.source)
-                                        }
-                                    ];
-                                    if (offering) {
+                            <ImeInput value={this.comicModelPickerQuery} commitDelayMs={100} placeholder={modelPickerListText(this.desktopLocale, 'search')} aria-label={modelPickerListText(this.desktopLocale, 'search')}
+                                onChange={event => {
+                                    this.comicModelPickerQuery = event.currentTarget.value;
+                                    this.closeComicModelHoverImmediately();
+                                    if (this.updateRegion) this.updateRegion(['comic-popovers', 'popovers']); else this.update();
+                                }} /></div>}
+                        {filtered.length > 0 ? (() => {
+                            const renderComicModelOption = (item: typeof filtered[number]): React.ReactNode => {
+                                const selected = item.key === selectedCandidate?.key;
+                                const offering = item.offering;
+                                const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
+                                const variantTag = offering ? (ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering))) : '';
+                                const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
+                                const rawFidelity = offering?.fidelity;
+                                const fidelity = measuredModelFidelity(rawFidelity);
+                                const authenticityPending = Boolean(offering) && fidelity === undefined;
+                                const authenticityDefault = Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
+                                const authenticityHint = authenticityPending
+                                    ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint')
+                                    : authenticityDefault
+                                        ? modelPickerEvidenceText(this.desktopLocale, 'authenticityDefaultHint')
+                                        : undefined;
+                                const hoverOpen = this.comicModelHoverKey === item.key;
+                                const hoverPlacement = hoverOpen ? this.comicModelHoverPlacement : undefined;
+                                const evidenceRows: { readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }[] = [
+                                    {
+                                        label: item.source.kind === 'official' ? relayText(this.desktopLocale, 'apiName')
+                                            : item.source.kind === 'local' ? relayText(this.desktopLocale, 'local') : relayText(this.desktopLocale, 'relayTitle'),
+                                        value: offering?.providerName || comicStepSourceLabel(this.desktopLocale, item.source)
+                                    }
+                                ];
+                                if (offering) {
+                                    evidenceRows.push({
+                                        label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'),
+                                        value: relayPercentText(this.desktopLocale, fidelity),
+                                        unmeasured: authenticityPending,
+                                        hint: authenticityHint
+                                    });
+                                }
+                                if (!offering) {
+                                    evidenceRows.push({
+                                        label: relayText(this.desktopLocale, 'price'),
+                                        value: item.source.kind === 'local' ? this.comicChatT('free') : this.comicChatT('providerBilled')
+                                    });
+                                }
+                                // A model's video and reference rules are read for its open card only, not for every row on each render.
+                                if (activeTab === 'video' && hoverPlacement) {
+                                    const aspects = this.comicChatAspectChoices(item);
+                                    if (aspects.length > 0) evidenceRows.push({ label: this.comicChatT('aspect'), value: aspects.join(' / ') });
+                                    const durations = this.comicChatSecondsChoices(item, ui.references.length);
+                                    if (durations.length > 0) evidenceRows.push({ label: canvasText(this.desktopLocale, 'duration'), value: durations.map(n => `${n}s`).join(' / ') });
+                                    if (videoModelGuide(item.model).nativeAudio) evidenceRows.push({ label: canvasText(this.desktopLocale, 'audio'), value: this.comicChatT('sound') });
+                                }
+                                if ((activeTab === 'image' || activeTab === 'video') && hoverPlacement) {
+                                    const refPolicy = this.comicChatReferencePolicy(activeTab, item);
+                                    if (refPolicy.limit > 0) {
                                         evidenceRows.push({
-                                            label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'),
-                                            value: relayPercentText(this.desktopLocale, fidelity),
-                                            unmeasured: authenticityPending,
-                                            hint: authenticityHint
+                                            label: refPolicy.firstFrame ? this.comicChatT('firstFrame') : this.comicChatT('reference'),
+                                            value: refPolicy.firstFrame ? this.comicChatT('count', { n: 1 }) : this.comicChatT('referencesLimit', { n: refPolicy.limit })
                                         });
                                     }
-                                    if (!offering) {
-                                        evidenceRows.push({
-                                            label: relayText(this.desktopLocale, 'price'),
-                                            value: item.source.kind === 'local' ? this.comicChatT('free') : this.comicChatT('providerBilled')
-                                        });
-                                    }
-                                    // A model's video and reference rules are read for its open card only, not for every row on each render.
-                                    if (activeTab === 'video' && hoverPlacement) {
-                                        const aspects = this.comicChatAspectChoices(item);
-                                        if (aspects.length > 0) evidenceRows.push({ label: this.comicChatT('aspect'), value: aspects.join(' / ') });
-                                        const durations = this.comicChatSecondsChoices(item, ui.references.length);
-                                        if (durations.length > 0) evidenceRows.push({ label: canvasText(this.desktopLocale, 'duration'), value: durations.map(n => `${n}s`).join(' / ') });
-                                        if (videoModelGuide(item.model).nativeAudio) evidenceRows.push({ label: canvasText(this.desktopLocale, 'audio'), value: this.comicChatT('sound') });
-                                    }
-                                    if ((activeTab === 'image' || activeTab === 'video') && hoverPlacement) {
-                                        const refPolicy = this.comicChatReferencePolicy(activeTab, item);
-                                        if (refPolicy.limit > 0) {
-                                            evidenceRows.push({
-                                                label: refPolicy.firstFrame ? this.comicChatT('firstFrame') : this.comicChatT('reference'),
-                                                value: refPolicy.firstFrame ? this.comicChatT('count', { n: 1 }) : this.comicChatT('referencesLimit', { n: refPolicy.limit })
-                                            });
-                                        }
-                                    }
-                                    const optionTitle = [item.label, ...evidenceRows.map(metric => `${metric.label}: ${metric.value}`)].filter(Boolean).join(' · ');
-                                    const hover = (event: React.PointerEvent<HTMLElement>): void => this.intendModelHover?.(item.key, this.comicModelHoverKey, event,
-                                        anchor => this.openComicModelHover(item.key, anchor, detailGeometry));
-                                    return <div className={`nmx-model-option ${selected ? 'is-selected' : ''}`} key={item.key} data-model-id={item.key}
-                                        onPointerEnter={hover}
-                                        onPointerMove={hover}
-                                        onFocus={event => this.openComicModelHover(item.key, event.currentTarget, detailGeometry)}
-                                        onBlur={() => this.scheduleComicModelHoverClose()}
-                                        onPointerLeave={() => { this.cancelModelHoverIntent?.(item.key); this.scheduleComicModelHoverClose(); }}>
-                                        <button type='button' role='option' aria-selected={selected} aria-label={optionTitle}
-                                            onClick={() => {
-                                                this.pickComicChatModel(activeTab, item.key);
-                                                if (ui.mode !== activeTab) this.setComicChatMode(activeTab);
-                                                this.dismissComicChatModelPicker(true);
-                                            }}>
-                                            <span><strong data-nmx-literal>{item.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
-                                                onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)} onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
-                                                {offering && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}</span>
-                                            {selected && <i className='codicon codicon-check'></i>}
-                                        </button>
-                                        {hoverOpen && hoverPlacement && ReactDOM.createPortal(
-                                            <div className={`nmx-model-effort-portal nmx-comic-model-effort-portal nmx-theme-${this.resolvedDesktopTheme()}`}
-                                                dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'} lang={this.desktopLocale}
+                                }
+                                const optionTitle = [item.label, ...evidenceRows.map(metric => `${metric.label}: ${metric.value}`)].filter(Boolean).join(' · ');
+                                const hover = (event: React.PointerEvent<HTMLElement>): void => this.intendModelHover?.(item.key, this.comicModelHoverKey, event,
+                                    anchor => this.openComicModelHover(item.key, anchor, detailGeometry));
+                                return <div className={`nmx-model-option ${selected ? 'is-selected' : ''}`} key={item.key} data-model-id={item.key}
+                                    onPointerEnter={hover}
+                                    onPointerMove={hover}
+                                    onFocus={event => this.openComicModelHover(item.key, event.currentTarget, detailGeometry)}
+                                    onBlur={() => this.scheduleComicModelHoverClose()}
+                                    onPointerLeave={() => { this.cancelModelHoverIntent?.(item.key); this.scheduleComicModelHoverClose(); }}>
+                                    <button type='button' role='option' aria-selected={selected} aria-label={optionTitle}
+                                        onClick={() => {
+                                            this.pickComicChatModel(activeTab, item.key);
+                                            if (ui.mode !== activeTab) this.setComicChatMode(activeTab);
+                                            this.dismissComicChatModelPicker(true);
+                                        }}>
+                                        <span><strong data-nmx-literal>{item.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
+                                            onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)} onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
+                                            {offering && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}</span>
+                                        {selected && <i className='codicon codicon-check'></i>}
+                                    </button>
+                                    {hoverOpen && hoverPlacement && ReactDOM.createPortal(
+                                        <div className={`nmx-model-effort-portal nmx-comic-model-effort-portal nmx-theme-${this.resolvedDesktopTheme()}`}
+                                            dir={this.desktopLocale === 'ar' ? 'rtl' : 'ltr'} lang={this.desktopLocale}
+                                            onPointerEnter={() => this.cancelComicModelHoverClose()}
+                                            onPointerLeave={() => this.scheduleComicModelHoverClose()}>
+                                            <section className={`nmx-model-effort-menu nmx-model-evidence-menu is-${hoverPlacement.side}`} data-model-id={item.key}
+                                                ref={element => { if (element) this.fitComicModelHoverMenu(element, detailGeometry); }}
+                                                data-compact={hoverPlacement.width !== undefined && hoverPlacement.width < 240 || undefined}
+                                                style={{
+                                                    top: `${hoverPlacement.top}px`, left: `${hoverPlacement.left}px`,
+                                                    width: hoverPlacement.width === undefined ? undefined : `${hoverPlacement.width}px`,
+                                                    maxHeight: `${hoverPlacement.maxHeight}px`
+                                                }}
+                                                aria-label={optionTitle}
+                                                onFocus={() => this.cancelComicModelHoverClose()}
+                                                onBlur={() => this.scheduleComicModelHoverClose()}
                                                 onPointerEnter={() => this.cancelComicModelHoverClose()}
                                                 onPointerLeave={() => this.scheduleComicModelHoverClose()}>
-                                                <section className={`nmx-model-effort-menu nmx-model-evidence-menu is-${hoverPlacement.side}`} data-model-id={item.key}
-                                                    ref={element => { if (element) this.fitComicModelHoverMenu(element, detailGeometry); }}
-                                                    data-compact={hoverPlacement.width !== undefined && hoverPlacement.width < 240 || undefined}
-                                                    style={{
-                                                        top: `${hoverPlacement.top}px`, left: `${hoverPlacement.left}px`,
-                                                        width: hoverPlacement.width === undefined ? undefined : `${hoverPlacement.width}px`,
-                                                        maxHeight: `${hoverPlacement.maxHeight}px`
-                                                    }}
-                                                    aria-label={optionTitle}
-                                                    onFocus={() => this.cancelComicModelHoverClose()}
-                                                    onBlur={() => this.scheduleComicModelHoverClose()}
-                                                    onPointerEnter={() => this.cancelComicModelHoverClose()}
-                                                    onPointerLeave={() => this.scheduleComicModelHoverClose()}>
-                                                    <header><strong data-nmx-literal>{item.label}</strong></header>
-                                                    <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}
-                                                        role={metric.hint ? 'group' : undefined} aria-label={metric.hint ? `${metric.label}: ${metric.value}. ${metric.hint}` : undefined}
-                                                        tabIndex={metric.hint ? 0 : undefined}
-                                                        onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
-                                                        onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
-                                                        onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
-                                                        onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-nmx-literal data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd></div>)}</dl>
-                                                    {offering && <OfferingPriceCard locale={this.desktopLocale} offering={offering} collapsible pullOutDrawer />}
-                                                </section>
-                                            </div>,
-                                            document.body
-                                        )}
-                                    </div>;
-                                })}
-                            </div>
-                        ) : (
+                                                <header><strong data-nmx-literal>{item.label}</strong></header>
+                                                <dl className='nmx-model-evidence'>{evidenceRows.map(metric => <div key={metric.label}
+                                                    role={metric.hint ? 'group' : undefined} aria-label={metric.hint ? `${metric.label}: ${metric.value}. ${metric.hint}` : undefined}
+                                                    tabIndex={metric.hint ? 0 : undefined}
+                                                    onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
+                                                    onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
+                                                    onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
+                                                    onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-nmx-literal data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd></div>)}</dl>
+                                                {offering && <OfferingPriceCard locale={this.desktopLocale} offering={offering} collapsible pullOutDrawer />}
+                                            </section>
+                                        </div>,
+                                        document.body
+                                    )}
+                                </div>;
+                            };
+                            const threshold = typeof DEFAULT_VIRTUAL_LIST_THRESHOLD === 'number' ? DEFAULT_VIRTUAL_LIST_THRESHOLD : 30;
+                            const handleComicModelScroll = (): void => {
+                                this.noteModelListScroll?.();
+                                if (this.comicModelHoverKey) {
+                                    this.closeComicModelHoverImmediately();
+                                    if (this.updateRegion) this.updateRegion(['comic-popovers', 'popovers']); else this.update();
+                                } else this.hideModelEvidenceTooltip?.();
+                            };
+                            if (typeof VirtualList === 'function' && filtered.length > threshold) {
+                                return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', flex: '1 1 auto', minHeight: 0 }}>
+                                        <VirtualList
+                                            className='nmx-model-picker-list'
+                                            role='listbox'
+                                            aria-label={this.comicChatT(activeTab)}
+                                            items={filtered}
+                                            threshold={threshold}
+                                            defaultItemHeight={32}
+                                            itemKey={item => item.key}
+                                            onScroll={handleComicModelScroll}
+                                            renderItem={item => renderComicModelOption(item)}
+                                        />
+                                    </div>
+                                );
+                            }
+                            return (
+                                <div className='nmx-model-picker-list' role='listbox' aria-label={this.comicChatT(activeTab)}
+                                    onScroll={handleComicModelScroll}>
+                                    {filtered.map(renderComicModelOption)}
+                                </div>
+                            );
+                        })() : (
                             <div className='nmx-model-picker-list nmx-model-picker-empty-list'>
                                 {(relayLoading || officialLoading) ? (
                                     <div className='nmx-merchant-catalog-status is-centered' role='status'>
@@ -59479,7 +60524,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.rememberComicChatDraft?.();
         // Typing stays in the field (IME-safe); only 发送's state and a voice-over's price follow each keystroke.
         // The composer counts its own rows (ComicChatComposer's lines state), so crossing four lines needs no render here.
-        if (had !== Boolean(ui.prompt.trim()) || ui.mode === 'speech') this.update();
+        if (had !== Boolean(ui.prompt.trim()) || ui.mode === 'speech') {
+            if (this.updateRegion) this.updateRegion('comic-composer'); else this.update();
+        }
     }
 
     protected setComicChatMode(mode: ComicChatMode): void {
@@ -61143,109 +62190,124 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const blocked = this.comicChatBlocked() || (!candidate && !ui.recommended && picker.relay ? t('noModelHere', { kind: t(mode) }) : '');
         const cast = this.comicCharacterLibrary.map(entry => ({ id: entry.bundleId, name: entry.name, ...(entry.thumbnailPath ? { url: URI.fromFilePath(entry.thumbnailPath).toString() } : {}) }));
         return <div className='nmx-comic-studio nmx-comic-chat' data-comic-studio>
-            <header className='nmx-studio-header nmx-comic-chat-header'>
-                <div className='nmx-studio-project'><span className='nmx-studio-project-icon'><i className='codicon codicon-comment-discussion'></i></span><div>
-                    <strong data-nmx-literal={chat ? true : undefined}>{chat?.title || t('newChat')}</strong>
-                    {folderLabel && (root ? <button type='button' className='nmx-comic-chat-folder-open' data-nmx-literal={!context.managed || undefined} title={root}
-                        onClick={() => { void this.platformService.openFolderInFileManager(root); }}><i className={`codicon codicon-${context.managed ? 'history' : 'folder'}`} aria-hidden='true'></i>{folderLabel}</button>
-                        : <small data-nmx-literal={!context.managed || undefined} title={root}><i className={`codicon codicon-${context.managed ? 'history' : 'folder'}`} aria-hidden='true'></i>{folderLabel}</small>)}
-                </div></div>
-                {/* 高级模式: materials and the edit only — no production steps (the four kinds keep theirs). */}
-                <div className='nmx-studio-header-actions'>
-                    <span className='nmx-comic-library-anchor'>
-                        <button type='button' data-nmx-library-button className={`nmx-studio-desk ${ui.materials && !picking ? 'is-active' : ''} ${libraryHint ? 'has-hint' : ''}`}
-                            aria-label={kept.length ? `${t('materials')} · ${t('libraryCount', { n: kept.length })}` : t('materials')}
-                            onClick={() => { ui.materials = ui.materials && !picking ? undefined : {}; if (ui.materials) void this.refreshComicAssetLibrary?.(); if (libraryHint) this.dismissComicLibraryHint(); this.update(); }}>
-                            <i className='codicon codicon-library' aria-hidden='true'></i><span>{t('materials')}</span>
-                            {kept.length > 0 && <small className='nmx-comic-library-badge' data-nmx-literal>{kept.length > 99 ? '99+' : kept.length}</small>}</button>
-                        {libraryHint && <div className='nmx-comic-library-hint' role='note'>
-                            <span className='nmx-comic-library-hint-icon' aria-hidden='true'><i className='codicon codicon-library'></i></span>
-                            <div><strong>{t('libraryHintTitle')}</strong><p>{t('libraryHint')}</p></div>
-                            <button type='button' onClick={() => this.dismissComicLibraryHint()}>{t('gotIt')}</button>
-                        </div>}
-                    </span>
-                    {project && <button type='button' className='nmx-studio-desk is-primary' onClick={() => this.openComicChatEditor()}><i className='codicon codicon-play-circle' aria-hidden='true'></i><span>{t('editor')}</span></button>}
-                </div>
-            </header>
-            <div className='nmx-comic-chat-body'>
-                {loading ? <div className='nmx-comic-chat-loading' role='status'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i></div>
-                    : <ComicChatThread locale={this.desktopLocale} turns={turns}
-                        onRenderMarkdown={this.decorateConversationContent}
-                        markdownTokenizer={conversationCodeTokenizer}
-                        onContentClick={this.handleComicChatContentClick}
-                        formatTurnTime={this.formatComicChatTurnTime}
-                        onReadAloud={this.handleComicChatReadAloud}
-                        readingTurnId={this.readingTurnId}
-                        readAloudPreparing={this.readAloudPreparing}
-                        readAloudLabel={this.handleComicChatReadAloudLabel}
-                        feedbackLabels={this.comicChatFeedbackLabels()}
-                        onFeedback={this.handleComicChatFeedback}
-                        feedbackSubmitting={Object.fromEntries(this.comicRelayFeedbackSubmitting)}
-                        feedbackByTurnId={{ ...Object.fromEntries(turns.filter(view => view.turn.feedback).map(view => [view.turn.id, view.turn.feedback])), ...this.comicFeedbackByTurnId } as Record<string, 'up' | 'down' | null | undefined>}
-                        onMenu={this.handleComicChatTurnMenu}
-                        onOpen={this.handleComicChatTurnOpen}
-                        onRetry={this.handleComicChatTurnRetry}
-                        onCancel={this.handleComicChatTurnCancel}
-                        onGenerate={this.handleComicChatTurnGenerate}
-                        onCopy={this.handleComicChatTurnCopy}
-                        onSignIn={this.handleComicChatSignIn}>
-                        {turns.length === 0 && <div className='nmx-comic-chat-welcome'>
-                            <span className='nmx-comic-chat-welcome-mark' aria-hidden='true'><i className='codicon codicon-sparkle'></i></span>
-                            <h2>{t('welcomeTitle')}</h2>
-                            <p>{t('welcomeLead')}</p>
-                            {!root && <p className='is-note'>{t('welcomeNew')}</p>}
-                            <ComicChatSkills locale={this.desktopLocale} disabled={ui.sending} onPick={skill => this.pickComicChatSkill(skill)} />
-                        </div>}
-                    </ComicChatThread>}
-                {ui.materials && <ComicMaterialsPanel locale={this.desktopLocale} items={picking ? scoped.filter(item => item.kind === 'image') : scoped}
-                    scope={scope} scopes={scopes} loading={scope === 'all' && ui.allMaterialsLoading || Boolean(root && !library)} emptyText={emptyText}
-                    {...(ui.materials.focus ? { focus: ui.materials.focus } : {})} {...(picking ? { pick: 'image' as const } : {})}
-                    onScope={next => { ui.materialScope = next; if (next === 'all') void this.loadComicAllMaterials(); this.update(); }}
-                    onPick={item => {
-                        ui.materials = undefined;
-                        this.addComicChatReferences([item.path ? { key: `file:${item.path}`, path: item.path, ...(item.url ? { url: item.url } : {}), name: item.title }
-                            : { key: `asset:${item.assetId}`, assetId: item.assetId, ...(item.url ? { url: item.url } : {}), name: item.title }], policy.limit);
-                        this.focusComicChatComposer();
-                    }}
-                    onOpen={item => { if (item.url) this.openComicViewerMedia(item.url, item.title, item.kind, item.path); else this.update(); }}
-                    onMenu={(item, event) => { ui.menu = { x: event.clientX, y: event.clientY, target: this.comicMaterialTarget(item), origin: event.currentTarget as HTMLElement }; this.update(); }}
-                    onClose={() => { ui.materials = undefined; this.update(); }} />}
-            </div>
-            <ComicChatComposer locale={this.desktopLocale} mode={mode} prompt={ui.prompt} params={params}
-                references={references.map(item => ({ key: item.key, name: item.name, ...(item.url ? { url: item.url } : {}) }))}
-                referenceLimit={policy.limit} firstFrame={policy.firstFrame}
-                aspects={mode === 'video' ? this.comicChatAspectChoices(candidate) : COMIC_CHAT_ASPECTS} secondsChoices={mode === 'video' ? this.comicChatSecondsChoices(candidate, references.length) : []}
-                soundChoice={mode === 'video' && Boolean(candidate && videoModelGuide(candidate.model).nativeAudio)} voices={this.comicChatVoices(candidate)}
-                picker={picker} {...(candidate ? { model: { key: candidate.key, label: candidate.label } } : {})}
-                {...(candidate ? { estimate: this.comicChatEstimate(mode, candidate, params, ui.prompt) } : {})}
-                running={agentRunning} sending={ui.sending} {...(blocked ? { blocked } : {})}
-                voiceActive={Boolean(this.nativeDictation?.active)} voicePhase={this.nativeDictationPhase} voiceActivity={this.nativeDictationActivity}
-                keyboardSubmitDisabled={this.systemDictationTarget !== 'unavailable'}
-                {...(root && !context.managed ? { folder: { label: folderLabel, path: root } } : {})} folderFixed={Boolean(chat)}
-                cast={cast} {...(ui.notice ? { notice: ui.notice } : {})} {...(ui.error ? { error: ui.error } : {})}
-                onMode={next => this.setComicChatMode(next)}
-                onPrompt={value => this.setComicChatPrompt(value)}
-                onParams={patch => { ui.params = { ...ui.params, [mode]: { ...(ui.params[mode] || {}), ...patch } }; this.update(); }}
-                onSend={() => void this.sendComicChat()}
-                onStop={() => { if (ui.agent) { ui.agent.cancel = true; if (ui.agent.runId) void this.platformService.cancelAgentRun(ui.agent.runId).catch(() => undefined); this.update(); } }}
-                onRecommended={on => this.setComicChatRecommended(on)}
-                relayOpen={this.comicRelayPickerOpen} onOpenRelay={() => this.openComicChatRelayPicker()}
-                modelOpen={this.comicModelPickerOpen} onOpenModel={() => this.openComicChatModelPicker()}
-                onSignIn={() => void this.startDeviceLink()}
-                onModel={(which, key) => this.pickComicChatModel(which, key)}
-                onModels={keys => { ui.recommended = false; ui.models = { ...ui.models, ...keys }; for (const mode of Object.keys(keys)) ui.modelsPinned.add(mode as ComicChatMode); this.reconcileComicChatParamsAndReferences?.(); this.persistComicChatUi(); this.update(); }}
-                onFiles={files => void this.addComicChatFiles(files)}
-                onPickMaterials={() => { ui.materials = { pick: true }; if (!project) void this.ensureComicChatFolder().then(() => this.update(), error => { ui.error = modelFailureText(this.desktopLocale, error); this.update(); }); this.update(); }}
-                onPickCast={id => this.pickComicChatCast(id)}
-                onOpenCast={() => this.openComicCastLibrary()}
-                onRemoveReference={key => { ui.references = ui.references.filter(item => item.key !== key); this.rememberComicChatDraft?.(); this.update(); }}
-                onOpenReference={reference => { if (reference.url) this.openComicViewerMedia(reference.url, reference.name, reference.kind === 'video' ? 'video' : 'image'); }}
-                onVoice={() => void this.openComicChatVoiceInput()}
-                onChooseFolder={() => void this.chooseComicChatDraftFolder()}
-                onClearFolder={() => { ui.target = ''; this.update(); }}
-                onSetUpModels={() => this.openComicModelSetup()} />
-            {this.renderComicRelayPickerPortal()}
-            {this.renderComicModelPickerPortal()}
+            {(() => {
+                const renderComicThread = (): React.ReactNode => <>
+                    <header className='nmx-studio-header nmx-comic-chat-header' data-nmx-i18n='rendered'>
+                        <div className='nmx-studio-project'><span className='nmx-studio-project-icon'><i className='codicon codicon-comment-discussion'></i></span><div>
+                            <strong data-nmx-literal={chat ? true : undefined}>{chat?.title || t('newChat')}</strong>
+                            {folderLabel && (root ? <button type='button' className='nmx-comic-chat-folder-open' data-nmx-literal={!context.managed || undefined} title={root}
+                                onClick={() => { void this.platformService.openFolderInFileManager(root); }}><i className={`codicon codicon-${context.managed ? 'history' : 'folder'}`} aria-hidden='true'></i>{folderLabel}</button>
+                                : <small data-nmx-literal={!context.managed || undefined} title={root}><i className={`codicon codicon-${context.managed ? 'history' : 'folder'}`} aria-hidden='true'></i>{folderLabel}</small>)}
+                        </div></div>
+                        {/* 高级模式: materials and the edit only — no production steps (the four kinds keep theirs). */}
+                        <div className='nmx-studio-header-actions'>
+                            <span className='nmx-comic-library-anchor'>
+                                <button type='button' data-nmx-library-button className={`nmx-studio-desk ${ui.materials && !picking ? 'is-active' : ''} ${libraryHint ? 'has-hint' : ''}`}
+                                    aria-label={kept.length ? `${t('materials')} · ${t('libraryCount', { n: kept.length })}` : t('materials')}
+                                    onClick={() => { ui.materials = ui.materials && !picking ? undefined : {}; if (ui.materials) void this.refreshComicAssetLibrary?.(); if (libraryHint) this.dismissComicLibraryHint(); this.update(); }}>
+                                    <i className='codicon codicon-library' aria-hidden='true'></i><span>{t('materials')}</span>
+                                    {kept.length > 0 && <small className='nmx-comic-library-badge' data-nmx-literal>{kept.length > 99 ? '99+' : kept.length}</small>}</button>
+                                {libraryHint && <div className='nmx-comic-library-hint' role='note'>
+                                    <span className='nmx-comic-library-hint-icon' aria-hidden='true'><i className='codicon codicon-library'></i></span>
+                                    <div><strong>{t('libraryHintTitle')}</strong><p>{t('libraryHint')}</p></div>
+                                    <button type='button' onClick={() => this.dismissComicLibraryHint()}>{t('gotIt')}</button>
+                                </div>}
+                            </span>
+                            {project && <button type='button' className='nmx-studio-desk is-primary' onClick={() => this.openComicChatEditor()}><i className='codicon codicon-play-circle' aria-hidden='true'></i><span>{t('editor')}</span></button>}
+                        </div>
+                    </header>
+                    <div className='nmx-comic-chat-body' data-nmx-i18n='rendered'>
+                        {loading ? <div className='nmx-comic-chat-loading' role='status'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i></div>
+                            : <ComicChatThread locale={this.desktopLocale} turns={turns}
+                                onRenderMarkdown={this.decorateConversationContent}
+                                markdownTokenizer={conversationCodeTokenizer}
+                                onContentClick={this.handleComicChatContentClick}
+                                formatTurnTime={this.formatComicChatTurnTime}
+                                onReadAloud={this.handleComicChatReadAloud}
+                                readingTurnId={this.readingTurnId}
+                                readAloudPreparing={this.readAloudPreparing}
+                                readAloudLabel={this.handleComicChatReadAloudLabel}
+                                feedbackLabels={this.comicChatFeedbackLabels()}
+                                onFeedback={this.handleComicChatFeedback}
+                                feedbackSubmitting={Object.fromEntries(this.comicRelayFeedbackSubmitting)}
+                                feedbackByTurnId={{ ...Object.fromEntries(turns.filter(view => view.turn.feedback).map(view => [view.turn.id, view.turn.feedback])), ...this.comicFeedbackByTurnId } as Record<string, 'up' | 'down' | null | undefined>}
+                                onMenu={this.handleComicChatTurnMenu}
+                                onOpen={this.handleComicChatTurnOpen}
+                                onRetry={this.handleComicChatTurnRetry}
+                                onCancel={this.handleComicChatTurnCancel}
+                                onGenerate={this.handleComicChatTurnGenerate}
+                                onCopy={this.handleComicChatTurnCopy}
+                                onSignIn={this.handleComicChatSignIn}>
+                                {turns.length === 0 && <div className='nmx-comic-chat-welcome'>
+                                    <span className='nmx-comic-chat-welcome-mark' aria-hidden='true'><i className='codicon codicon-sparkle'></i></span>
+                                    <h2>{t('welcomeTitle')}</h2>
+                                    <p>{t('welcomeLead')}</p>
+                                    {!root && <p className='is-note'>{t('welcomeNew')}</p>}
+                                    <ComicChatSkills locale={this.desktopLocale} disabled={ui.sending} onPick={skill => this.pickComicChatSkill(skill)} />
+                                </div>}
+                            </ComicChatThread>}
+                        {ui.materials && <ComicMaterialsPanel locale={this.desktopLocale} items={picking ? scoped.filter(item => item.kind === 'image') : scoped}
+                            scope={scope} scopes={scopes} loading={scope === 'all' && ui.allMaterialsLoading || Boolean(root && !library)} emptyText={emptyText}
+                            {...(ui.materials.focus ? { focus: ui.materials.focus } : {})} {...(picking ? { pick: 'image' as const } : {})}
+                            onScope={next => { ui.materialScope = next; if (next === 'all') void this.loadComicAllMaterials(); this.update(); }}
+                            onPick={item => {
+                                ui.materials = undefined;
+                                this.addComicChatReferences([item.path ? { key: `file:${item.path}`, path: item.path, ...(item.url ? { url: item.url } : {}), name: item.title }
+                                    : { key: `asset:${item.assetId}`, assetId: item.assetId, ...(item.url ? { url: item.url } : {}), name: item.title }], policy.limit);
+                                this.focusComicChatComposer();
+                            }}
+                            onOpen={item => { if (item.url) this.openComicViewerMedia(item.url, item.title, item.kind, item.path); else this.update(); }}
+                            onMenu={(item, event) => { ui.menu = { x: event.clientX, y: event.clientY, target: this.comicMaterialTarget(item), origin: event.currentTarget as HTMLElement }; this.update(); }}
+                            onClose={() => { ui.materials = undefined; this.update(); }} />}
+                    </div>
+                </>;
+                return this.island ? this.island('comic-thread', renderComicThread, 'section') : renderComicThread();
+            })()}
+            {(() => {
+                const renderComicComposer = (): React.ReactNode => <div style={{ display: 'contents' }} data-nmx-i18n='rendered'>
+                    <ComicChatComposer locale={this.desktopLocale} mode={mode} prompt={ui.prompt} params={params}
+                        references={references.map(item => ({ key: item.key, name: item.name, ...(item.url ? { url: item.url } : {}) }))}
+                        referenceLimit={policy.limit} firstFrame={policy.firstFrame}
+                        aspects={mode === 'video' ? this.comicChatAspectChoices(candidate) : COMIC_CHAT_ASPECTS} secondsChoices={mode === 'video' ? this.comicChatSecondsChoices(candidate, references.length) : []}
+                        soundChoice={mode === 'video' && Boolean(candidate && videoModelGuide(candidate.model).nativeAudio)} voices={this.comicChatVoices(candidate)}
+                        picker={picker} {...(candidate ? { model: { key: candidate.key, label: candidate.label } } : {})}
+                        {...(candidate ? { estimate: this.comicChatEstimate(mode, candidate, params, ui.prompt) } : {})}
+                        running={agentRunning} sending={ui.sending} {...(blocked ? { blocked } : {})}
+                        voiceActive={Boolean(this.nativeDictation?.active)} voicePhase={this.nativeDictationPhase} voiceActivity={this.nativeDictationActivity}
+                        keyboardSubmitDisabled={this.systemDictationTarget !== 'unavailable'}
+                        {...(root && !context.managed ? { folder: { label: folderLabel, path: root } } : {})} folderFixed={Boolean(chat)}
+                        cast={cast} {...(ui.notice ? { notice: ui.notice } : {})} {...(ui.error ? { error: ui.error } : {})}
+                        onMode={next => this.setComicChatMode(next)}
+                        onPrompt={value => this.setComicChatPrompt(value)}
+                        onParams={patch => { ui.params = { ...ui.params, [mode]: { ...(ui.params[mode] || {}), ...patch } }; this.update(); }}
+                        onSend={() => void this.sendComicChat()}
+                        onStop={() => { if (ui.agent) { ui.agent.cancel = true; if (ui.agent.runId) void this.platformService.cancelAgentRun(ui.agent.runId).catch(() => undefined); this.update(); } }}
+                        onRecommended={on => this.setComicChatRecommended(on)}
+                        relayOpen={this.comicRelayPickerOpen} onOpenRelay={() => this.openComicChatRelayPicker()}
+                        modelOpen={this.comicModelPickerOpen} onOpenModel={() => this.openComicChatModelPicker()}
+                        onSignIn={() => void this.startDeviceLink()}
+                        onModel={(which, key) => this.pickComicChatModel(which, key)}
+                        onModels={keys => { ui.recommended = false; ui.models = { ...ui.models, ...keys }; for (const mode of Object.keys(keys)) ui.modelsPinned.add(mode as ComicChatMode); this.reconcileComicChatParamsAndReferences?.(); this.persistComicChatUi(); this.update(); }}
+                        onFiles={files => void this.addComicChatFiles(files)}
+                        onPickMaterials={() => { ui.materials = { pick: true }; if (!project) void this.ensureComicChatFolder().then(() => this.update(), error => { ui.error = modelFailureText(this.desktopLocale, error); this.update(); }); this.update(); }}
+                        onPickCast={id => this.pickComicChatCast(id)}
+                        onOpenCast={() => this.openComicCastLibrary()}
+                        onRemoveReference={key => { ui.references = ui.references.filter(item => item.key !== key); this.rememberComicChatDraft?.(); this.update(); }}
+                        onOpenReference={reference => { if (reference.url) this.openComicViewerMedia(reference.url, reference.name, reference.kind === 'video' ? 'video' : 'image'); }}
+                        onVoice={() => void this.openComicChatVoiceInput()}
+                        onChooseFolder={() => void this.chooseComicChatDraftFolder()}
+                        onClearFolder={() => { ui.target = ''; this.update(); }}
+                        onSetUpModels={() => this.openComicModelSetup()} />
+                </div>;
+                return this.island ? this.island('comic-composer', renderComicComposer, 'section') : renderComicComposer();
+            })()}
+            {(() => {
+                const renderComicPopovers = (): React.ReactNode => <>
+                    {this.renderComicRelayPickerPortal()}
+                    {this.renderComicModelPickerPortal()}
+                </>;
+                return this.island ? this.island('comic-popovers', renderComicPopovers, 'overlay', undefined, 'popovers') : renderComicPopovers();
+            })()}
             {/* 新建 from the sidebar's kinds while a conversation is on screen (the new comic then opens in its own view). */}
             {this.guard('comic-create', () => this.renderComicCreateSheet(), () => this.dismissBrokenComicSurface())}
             {this.guard('comic-kind', () => this.renderComicKindSheet(), () => this.dismissBrokenComicSurface())}
@@ -65449,7 +66511,34 @@ export class NextMuxDesktopWidget extends ReactWidget {
         };
         const title = titles[this.settingsPanel];
         const settingRow = (name: string, description: React.ReactNode, action?: React.ReactNode) => <div className='nmx-setting-row'><span><strong>{name}</strong><small>{description}</small></span>{action}</div>;
-        const dateTime = (value: number | null | undefined) => value ? new Date(value).toLocaleString(this.desktopLocale) : '—';
+        const dateTime = (value: number | null | undefined) => {
+            if (!value) return '—';
+            try {
+                return typeof getCachedDateTimeFormat === 'function'
+                    ? getCachedDateTimeFormat(this.desktopLocale).format(new Date(value))
+                    : new Date(value).toLocaleString(this.desktopLocale);
+            } catch {
+                return new Date(value).toLocaleString(this.desktopLocale);
+            }
+        };
+        const formatNumber = (value: number): string => {
+            try {
+                return typeof getCachedNumberFormat === 'function'
+                    ? getCachedNumberFormat(this.desktopLocale).format(value)
+                    : value.toLocaleString(this.desktopLocale);
+            } catch {
+                return value.toLocaleString(this.desktopLocale);
+            }
+        };
+        const formatCurrencyMinor = (currency: string, minor: number): string => {
+            try {
+                return typeof getCachedNumberFormat === 'function'
+                    ? getCachedNumberFormat(this.desktopLocale, { style: 'currency', currency }).format(minor / 100)
+                    : new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency }).format(minor / 100);
+            } catch {
+                return `${(minor / 100).toFixed(2)} ${currency}`;
+            }
+        };
         const usageMetricName = (metric: string) => (({ input_token: '输入 Token', cached_input_token: '缓存读取', cache_write_token: '缓存写入', output_token: '输出 Token', request: '请求', image: '图片', image_output_token: '出图 Token', video_second: '视频秒数', audio_second: '音频秒数', audio_character: '音频字符' } as Record<string, string>)[metric] || metric);
         let content: React.ReactNode = null;
         if (this.settingsPanel === 'profile') {
@@ -65555,9 +66644,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     {this.accountOverviewError && <div className='nmx-settings-inline-error'>{this.accountOverviewError}<button onClick={() => void this.loadAccountOverview()}>重试</button></div>}
                     {this.billingTab === 'usage' && <>
                         <UsageAnalytics variant='summary' service={this.platformService} locale={this.desktopLocale} rangeDays={30} revision={this.accountOverview.refreshedAt} title={modelUsageText(this.desktopLocale, 'range30')} />
-                        <StickyHorizontalScroll targetSelector='.nmx-billing-table'><div className='nmx-billing-table'><header><span>模型与线路</span><span>{usageAnalyticsText(this.desktopLocale, 'tokens')}</span><span title={localizeDesktopSurface(this.desktopLocale, '费用')}>费用</span><span>时间</span></header>{this.accountOverview.usage.map(item => <article key={item.id}><span><strong title={item.modelName || item.canonicalModel}>{item.modelName || item.canonicalModel}</strong><small title={item.providerName || '平台线路'}>{item.providerName || '平台线路'} · {item.routeMode === 'automatic' ? '自动最优' : '固定线路'}{item.failoverCount > 0 ? ` · 切换 ${item.failoverCount} 次` : ''}</small><small title={item.referenceModel && item.referenceModel !== item.canonicalModel ? dynamicLabel(this.desktopLocale, 'referencePrice', { model: item.referenceModel }) : item.pricingMode === 'direct' ? '商家直接报价' : '官方参考价格'}>{item.referenceModel && item.referenceModel !== item.canonicalModel ? dynamicLabel(this.desktopLocale, 'referencePrice', { model: item.referenceModel }) : item.pricingMode === 'direct' ? '商家直接报价' : '官方参考价格'}</small></span><span><strong title={String(usageRecordTotalTokens(item) ?? '—')}>{usageRecordTotalTokens(item) ?? '—'}</strong><small title={`${item.inputTokens} 输入 · ${item.cachedInputTokens} 缓存读取`}>{item.inputTokens} 输入 · {item.cachedInputTokens} 缓存读取</small><small title={`${item.cacheWriteTokens} 缓存写入 · ${item.outputTokens} 输出`}>{item.cacheWriteTokens} 缓存写入 · {item.outputTokens} 输出</small></span><span title={this.formatMoneyMicros(item.currency, item.chargedMicros)}><strong title={this.formatMoneyMicros(item.currency, item.chargedMicros)}>{this.formatMoneyMicros(item.currency, item.chargedMicros)}</strong><small title={`结算倍率 ${(item.settlementMultiplierBps / 10_000).toFixed(2)}× · 服务费 ${(item.platformFeeBps / 100).toFixed(2)}%`}>结算倍率 {(item.settlementMultiplierBps / 10_000).toFixed(2)}× · 服务费 {(item.platformFeeBps / 100).toFixed(2)}%</small><small title={item.status === 'completed' ? '已结算' : item.status === 'failed' ? (item.chargedMicros > 0 ? '失败 · 已扣费' : '未扣费') : item.status}>{item.status === 'completed' ? '已结算' : item.status === 'failed' ? (item.chargedMicros > 0 ? '失败 · 已扣费' : '未扣费') : item.status}</small></span><span><strong>{dateTime(item.completedAt || item.startedAt)}</strong><small>{item.durationMs > 0 ? `${Math.max(1, Math.round(item.durationMs / 1000))} 秒` : '—'}</small><small>{item.meteringSource === 'provider_reported' ? '上游用量' : '平台估算'}</small></span>{item.metrics.length > 0 && <details className='nmx-usage-breakdown'><summary>计费明细</summary><div>{item.metrics.map(line => <span key={line.metric}><b>{usageMetricName(line.metric)}</b><em>{line.quantity.toLocaleString(this.desktopLocale)}</em><strong>{this.formatMoneyMicros(item.currency, line.customerAmountMicros)}</strong></span>)}</div></details>}</article>)}{!this.accountOverviewLoading && this.accountOverview.usage.length === 0 && <div className='nmx-billing-empty'>暂无使用记录</div>}</div></StickyHorizontalScroll>
+                        <StickyHorizontalScroll targetSelector='.nmx-billing-table'><div className='nmx-billing-table'><header><span>模型与线路</span><span>{usageAnalyticsText(this.desktopLocale, 'tokens')}</span><span title={localizeDesktopSurface(this.desktopLocale, '费用')}>费用</span><span>时间</span></header>{this.accountOverview.usage.map(item => <article key={item.id}><span><strong title={item.modelName || item.canonicalModel}>{item.modelName || item.canonicalModel}</strong><small title={item.providerName || '平台线路'}>{item.providerName || '平台线路'} · {item.routeMode === 'automatic' ? '自动最优' : '固定线路'}{item.failoverCount > 0 ? ` · 切换 ${item.failoverCount} 次` : ''}</small><small title={item.referenceModel && item.referenceModel !== item.canonicalModel ? dynamicLabel(this.desktopLocale, 'referencePrice', { model: item.referenceModel }) : item.pricingMode === 'direct' ? '商家直接报价' : '官方参考价格'}>{item.referenceModel && item.referenceModel !== item.canonicalModel ? dynamicLabel(this.desktopLocale, 'referencePrice', { model: item.referenceModel }) : item.pricingMode === 'direct' ? '商家直接报价' : '官方参考价格'}</small></span><span><strong title={String(usageRecordTotalTokens(item) ?? '—')}>{usageRecordTotalTokens(item) ?? '—'}</strong><small title={`${item.inputTokens} 输入 · ${item.cachedInputTokens} 缓存读取`}>{item.inputTokens} 输入 · {item.cachedInputTokens} 缓存读取</small><small title={`${item.cacheWriteTokens} 缓存写入 · ${item.outputTokens} 输出`}>{item.cacheWriteTokens} 缓存写入 · {item.outputTokens} 输出</small></span><span title={this.formatMoneyMicros(item.currency, item.chargedMicros)}><strong title={this.formatMoneyMicros(item.currency, item.chargedMicros)}>{this.formatMoneyMicros(item.currency, item.chargedMicros)}</strong><small title={`结算倍率 ${(item.settlementMultiplierBps / 10_000).toFixed(2)}× · 服务费 ${(item.platformFeeBps / 100).toFixed(2)}%`}>结算倍率 {(item.settlementMultiplierBps / 10_000).toFixed(2)}× · 服务费 {(item.platformFeeBps / 100).toFixed(2)}%</small><small title={item.status === 'completed' ? '已结算' : item.status === 'failed' ? (item.chargedMicros > 0 ? '失败 · 已扣费' : '未扣费') : item.status}>{item.status === 'completed' ? '已结算' : item.status === 'failed' ? (item.chargedMicros > 0 ? '失败 · 已扣费' : '未扣费') : item.status}</small></span><span><strong>{dateTime(item.completedAt || item.startedAt)}</strong><small>{item.durationMs > 0 ? `${Math.max(1, Math.round(item.durationMs / 1000))} 秒` : '—'}</small><small>{item.meteringSource === 'provider_reported' ? '上游用量' : '平台估算'}</small></span>{item.metrics.length > 0 && <details className='nmx-usage-breakdown'><summary>计费明细</summary><div>{item.metrics.map(line => <span key={line.metric}><b>{usageMetricName(line.metric)}</b><em>{formatNumber(line.quantity)}</em><strong>{this.formatMoneyMicros(item.currency, line.customerAmountMicros)}</strong></span>)}</div></details>}</article>)}{!this.accountOverviewLoading && this.accountOverview.usage.length === 0 && <div className='nmx-billing-empty'>暂无使用记录</div>}</div></StickyHorizontalScroll>
                     </>}
-                    {this.billingTab === 'topups' && <StickyHorizontalScroll targetSelector='.nmx-billing-table'><div className='nmx-billing-table'><header><span>实付金额</span><span>到账余额</span><span>状态</span><span>时间</span></header>{this.accountOverview.topups.map(item => <article key={item.id}><span><strong>{new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency: item.currency }).format(item.payableAmountMinor / 100)}</strong><small>{item.amountOffsetMinor ? dynamicLabel(this.desktopLocale, 'topupOffset', { amount: new Intl.NumberFormat(this.desktopLocale, { style: 'currency', currency: item.currency }).format(item.baseAmountMinor / 100), offset: (item.amountOffsetMinor / 100).toFixed(2) }) : item.currency}</small></span><span><strong>{this.formatMoneyMicros(item.creditCurrency, item.creditAmountMicros)}</strong>{item.status === 'payment_pending' || item.status === 'expired' ? <small>订单未支付</small> : undefined}</span><span><strong>{item.status === 'credited' ? '已到账' : item.status === 'payment_pending' ? '等待支付' : item.status === 'expired' ? '已过期' : item.status === 'refunded' ? '已退款' : item.status}</strong><small>{item.creditedAt ? '余额已更新' : '—'}</small></span><span><strong>{dateTime(item.createdAt)}</strong><small>{item.paidAt ? dynamicLabel(this.desktopLocale, 'paidAt', { time: dateTime(item.paidAt) }) : ''}</small></span></article>)}{!this.accountOverviewLoading && this.accountOverview.topups.length === 0 && <div className='nmx-billing-empty'>暂无充值记录</div>}</div></StickyHorizontalScroll>}
+                    {this.billingTab === 'topups' && <StickyHorizontalScroll targetSelector='.nmx-billing-table'><div className='nmx-billing-table'><header><span>实付金额</span><span>到账余额</span><span>状态</span><span>时间</span></header>{this.accountOverview.topups.map(item => <article key={item.id}><span><strong>{formatCurrencyMinor(item.currency, item.payableAmountMinor)}</strong><small>{item.amountOffsetMinor ? dynamicLabel(this.desktopLocale, 'topupOffset', { amount: formatCurrencyMinor(item.currency, item.baseAmountMinor), offset: (item.amountOffsetMinor / 100).toFixed(2) }) : item.currency}</small></span><span><strong>{this.formatMoneyMicros(item.creditCurrency, item.creditAmountMicros)}</strong>{item.status === 'payment_pending' || item.status === 'expired' ? <small>订单未支付</small> : undefined}</span><span><strong>{item.status === 'credited' ? '已到账' : item.status === 'payment_pending' ? '等待支付' : item.status === 'expired' ? '已过期' : item.status === 'refunded' ? '已退款' : item.status}</strong><small>{item.creditedAt ? '余额已更新' : '—'}</small></span><span><strong>{dateTime(item.createdAt)}</strong><small>{item.paidAt ? dynamicLabel(this.desktopLocale, 'paidAt', { time: dateTime(item.paidAt) }) : ''}</small></span></article>)}{!this.accountOverviewLoading && this.accountOverview.topups.length === 0 && <div className='nmx-billing-empty'>暂无充值记录</div>}</div></StickyHorizontalScroll>}
                     {this.billingTab === 'movements' && <StickyHorizontalScroll targetSelector='.nmx-billing-table'><div className='nmx-billing-table'><header><span>类型</span><span>可用余额</span><span>冻结金额</span><span>时间</span></header>{this.accountOverview.movements.map(item => <article key={item.id}><span><strong>{item.kind === 'topup' ? '充值到账' : item.kind === 'reserve' ? '用量预授权' : item.kind === 'capture' ? '实际消费' : item.kind === 'release' ? '释放冻结' : item.kind === 'refund' ? '退款' : '余额调整'}</strong><small title={item.referenceType}>{billingMovementReferenceLabel(this.desktopLocale, item.referenceType)}</small></span><span><strong>{item.availableDeltaMicros > 0 ? '+' : ''}{this.formatMoneyMicros(item.currency, item.availableDeltaMicros)}</strong><small>{item.currency}</small></span><span><strong>{item.reservedDeltaMicros > 0 ? '+' : ''}{this.formatMoneyMicros(item.currency, item.reservedDeltaMicros)}</strong><small>{item.spentDeltaMicros > 0 ? dynamicLabel(this.desktopLocale, 'spent', { amount: this.formatMoneyMicros(item.currency, item.spentDeltaMicros) }) : '—'}</small></span><span><strong>{dateTime(item.createdAt)}</strong><small>{item.referenceId.slice(0, 12)}</small></span></article>)}{!this.accountOverviewLoading && this.accountOverview.movements.length === 0 && <div className='nmx-billing-empty'>暂无余额变动</div>}</div></StickyHorizontalScroll>}
                 </>}
             </section>;
@@ -65696,9 +66785,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             content = <section className='nmx-settings-panel nmx-update-settings'>
                 <div className={`nmx-update-summary is-${state.phase}`}><span><i className={`codicon codicon-${state.phase === 'ready' ? 'cloud-download' : state.phase === 'current' ? 'pass-filled' : state.phase === 'error' ? 'warning' : 'sync'}`}></i><strong>{status}</strong><small>{description}</small></span><em>{state.currentVersion ? `v${state.currentVersion}` : 'NextMux'}</em></div>
                 {state.phase === 'downloading' && <div className='nmx-update-progress' role='progressbar' aria-label='更新下载进度' aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(state.progress)}><i style={{ width: `${state.progress}%` }}></i></div>}
-                {state.checkedAt > 0 && <div className='nmx-update-meta'><span>{text('checkedAt')}</span><strong>{new Date(state.checkedAt).toLocaleString(this.desktopLocale)}</strong></div>}
+                {state.checkedAt > 0 && <div className='nmx-update-meta'><span>{text('checkedAt')}</span><strong>{dateTime(state.checkedAt)}</strong></div>}
                 {(this.updateError || this.updateMessage) && <div className={`nmx-network-message ${this.updateError ? 'is-error' : ''}`}>{this.updateError || this.updateMessage}</div>}
-                <div className='nmx-settings-actions'><button disabled={this.updateBusy || state.phase === 'downloading' || state.reason === 'development' || state.restartRequired} onClick={() => void this.checkForDesktopUpdates()}>{state.phase === 'checking' ? text('checking') : text('check')}</button><button onClick={() => void this.openDesktopDownloadPage()}>{text('downloadPage')}</button>{state.phase === 'available' && <button className='is-primary' disabled={this.updateBusy} onClick={() => void this.downloadDesktopUpdate()}>{text('download')}</button>}{state.phase === 'ready' && <button className='is-primary' data-nmx-literal disabled={this.updateBusy} onClick={() => void this.installDesktopUpdate()}>{text('restartNow')}</button>}</div>
+                <div className='nmx-settings-actions'><button disabled={this.updateBusy || state.phase === 'downloading' || state.reason === 'development' || state.restartRequired} onClick={() => void this.checkForDesktopUpdates()}>{state.phase === 'checking' ? text('checking') : text('check')}</button><button onClick={() => void this.openDesktopDownloadPage()}>{text('downloadPage')}</button><button type='button' onClick={() => void this.copyDesktopUpdateDiagnostics?.()}>{(typeof UPDATE_DIAGNOSTICS_LABELS !== 'undefined' ? (UPDATE_DIAGNOSTICS_LABELS[this.desktopLocale] || UPDATE_DIAGNOSTICS_LABELS.en).copyButton : ({ 'zh-CN': '复制更新诊断', en: 'Copy update diagnostics' } as Record<string, string>)[this.desktopLocale] || 'Copy update diagnostics')}</button>{state.phase === 'available' && <button className='is-primary' disabled={this.updateBusy} onClick={() => void this.downloadDesktopUpdate()}>{text('download')}</button>}{state.phase === 'ready' && <button className='is-primary' data-nmx-literal disabled={this.updateBusy} onClick={() => void this.installDesktopUpdate()}>{text('restartNow')}</button>}</div>
             </section>;
         }
         return <>
@@ -66110,14 +67199,48 @@ export class NextMuxDesktopWidget extends ReactWidget {
         else if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(frame);
     }
 
+    protected lastModalChromeSignature = '';
+    protected modalChromeOverlayActive = false;
+    protected modalChromeNotifyFrame: number | undefined;
+
+    protected currentModalChromeSignature(): string {
+        const codingActive = this.activeSection === 'coding';
+        return [
+            this.activeSection,
+            Boolean(this.hasDismissibleSurface?.()),
+            codingActive && Boolean(this.attachmentLightbox?.isOpen),
+            codingActive && Boolean(this.mediaViewer),
+            codingActive && Boolean(this.pendingConversationLinkTarget),
+            Boolean(this.projectMemoryPath),
+            Boolean(this.feedbackDialogOpen),
+            Boolean(this.localDataModalKind),
+            Boolean(this.codingSessionRunHistoryId),
+            Boolean(this.comicProjectDelete),
+            Boolean(this.councilConfigModalOpen || this.councilCloseConfirmOpen),
+            Boolean(this.comicStartFrameEditor),
+            Boolean(this.comicUnifiedLibraryFilter),
+            Boolean(this.comicCastLibraryOpen),
+            Boolean(this.comicDesk?.visible),
+            Boolean(this.onboardingStep !== 'done'),
+            Boolean(this.detachedConversationId)
+        ].join('|');
+    }
+
+    protected releaseRegisteredModalChromeOverlay(): void {
+        if (!this.modalChromeOverlayActive) return;
+        this.modalChromeOverlayActive = false;
+        if (typeof registerModalChromeOverlay === 'function') registerModalChromeOverlay(false);
+    }
+
     /** Drops any pending frame-coalesced update and posts Lumino's update right away (rendered a task later, not a frame). */
-    protected updateNow(): void {
+    protected updateNow(fromScheduler = false): void {
         this.cancelScheduledRenderUpdate();
         if (this.isDisposed) return;
+        if (!fromScheduler) this.globalRenderEpoch = (this.globalRenderEpoch ?? 0) + 1;
         super.update();
     }
 
-    /** Coalesce multiple updates within the same animation frame while keeping non-browser/IME/disposed paths safe. */
+    /** Coalesce multiple updates within the same animation frame while keeping non-browser/disposed paths safe. */
     protected scheduleRenderUpdate(): void {
         if (this.isDisposed) {
             this.cancelScheduledRenderUpdate();
@@ -66129,20 +67252,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 ? window.requestAnimationFrame.bind(window)
                 : undefined;
         if (!scheduleFrame) {
-            this.updateNow();
+            this.updateNow(true);
             return;
         }
         const activeElement = typeof document !== 'undefined' ? document.activeElement : null;
         const activeImeInput = activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement
             ? activeElement
             : undefined;
-        if (this.composerComposing || (activeImeInput && typeof isImeFieldComposing === 'function' && isImeFieldComposing(activeImeInput))) {
-            this.updateNow();
-            return;
-        }
+        const isComposing = this.composerComposing || Boolean(activeImeInput && typeof isImeFieldComposing === 'function' && isImeFieldComposing(activeImeInput));
         const currentEvent = typeof window !== 'undefined' ? window.event : undefined;
-        if (currentEvent && IMMEDIATE_RENDER_EVENT_TYPES.has(currentEvent.type)) {
-            this.updateNow();
+        if (!isComposing && currentEvent && IMMEDIATE_RENDER_EVENT_TYPES.has(currentEvent.type)) {
+            this.updateNow(true);
             return;
         }
         if (this.renderUpdateFrame !== undefined) return;
@@ -66160,11 +67280,32 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     override update(): void {
+        if ((this.batchUpdateDepth ?? 0) > 0) {
+            this.batchPendingFullUpdate = true;
+            return;
+        }
+        this.globalRenderEpoch = (this.globalRenderEpoch ?? 0) + 1;
         this.scheduleRenderUpdate();
     }
 
     override dispose(): void {
         this.cancelScheduledRenderUpdate();
+        if (this.modalChromeNotifyFrame !== undefined) {
+            if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this.modalChromeNotifyFrame);
+            this.modalChromeNotifyFrame = undefined;
+        }
+        this.releaseRegisteredModalChromeOverlay?.();
+        this.syncWidgetBodyState?.(false);
+        this.flushComposerDraftsForExit?.();
+        this.cancelModelHoverIntent?.();
+        this.cancelModelEffortPickerClose?.();
+        this.cancelComicModelHoverClose?.();
+        this.cancelAppPluginChatModelHoverClose?.();
+        this.releaseModelEvidenceTitle?.();
+        if (this.titlebarResizeObserver) {
+            this.titlebarResizeObserver.disconnect();
+            this.titlebarResizeObserver = undefined;
+        }
         if (this.contextFilesChangeTimer !== undefined) {
             if (typeof window !== 'undefined') window.clearTimeout(this.contextFilesChangeTimer);
             this.contextFilesChangeTimer = undefined;
@@ -66200,11 +67341,35 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const workContextOwner = `${this.activeSection}|${this.codingPanel}|${this.activeCodingSessionId}`;
         const workContextLayout = `${workContextOwner}|${workContextInset}`;
         if (workContextLayout !== this.workContextLayoutKey) {
-            const sameView = this.workContextLayoutKey.startsWith(`${workContextOwner}|`);
+            const sameView = (this.workContextLayoutKey || '').startsWith(`${workContextOwner}|`);
             this.workContextLayoutKey = workContextLayout;
             if (sameView) this.lockThreadReadingAnchorForDrawerTransition?.();
         }
         super.onUpdateRequest(message);
+        this.attachTitlebarResizeObserver?.();
+        this.syncWidgetBodyState?.(!this.isHidden && !this.node?.classList?.contains('lm-mod-hidden'));
+        const codingOverlayActive = this.activeSection === 'coding'
+            && Boolean(this.attachmentLightbox?.isOpen || this.mediaViewer || this.pendingConversationLinkTarget);
+        const nextOverlayActive = codingOverlayActive || Boolean(this.projectMemoryPath);
+        if (nextOverlayActive !== Boolean(this.modalChromeOverlayActive)) {
+            this.modalChromeOverlayActive = nextOverlayActive;
+            if (typeof registerModalChromeOverlay === 'function') registerModalChromeOverlay(nextOverlayActive);
+        }
+        const nextModalSig = this.currentModalChromeSignature?.() ?? '';
+        if (nextModalSig !== (this.lastModalChromeSignature ?? '')) {
+            this.lastModalChromeSignature = nextModalSig;
+            if (typeof notifyModalChromeChanged === 'function') {
+                if (typeof requestAnimationFrame === 'function') {
+                    if (this.modalChromeNotifyFrame !== undefined && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this.modalChromeNotifyFrame);
+                    this.modalChromeNotifyFrame = requestAnimationFrame(() => {
+                        this.modalChromeNotifyFrame = undefined;
+                        if (!this.isDisposed) notifyModalChromeChanged();
+                    });
+                } else {
+                    notifyModalChromeChanged();
+                }
+            }
+        }
         if (this.activeSection === 'coding' && this.codingPanel === 'thread') {
             this.relativeTimeRenderAt = Date.now();
             this.relativeTimeRenderKey = `${this.activeCodingSessionId}|${this.desktopLocale}`;
@@ -66245,6 +67410,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected override onAfterAttach(message: Message): void {
         super.onAfterAttach(message);
+        this.syncWidgetBodyState?.(!this.isHidden && !this.node?.classList?.contains('lm-mod-hidden'));
+        this.attachTitlebarResizeObserver?.();
+        this.schedulePaneResizeUpdate?.();
         // Apply the saved close policy before the window view is first opened lazily.
         void window.nextmuxDesktop?.setComputerTabCloseBehavior?.(this.tabAppCloseBehavior()).catch(() => undefined);
         // The update card (updater.cjs) waits for the main workbench to be on screen. The bridge reports that itself once
@@ -66254,6 +67422,33 @@ export class NextMuxDesktopWidget extends ReactWidget {
             this.workbenchReadyNotified = true;
             (window.nextmuxDesktop as { notifyWorkbenchReady?: () => void } | undefined)?.notifyWorkbenchReady?.();
         }
+    }
+
+    protected override onBeforeDetach(message: Message): void {
+        this.flushComposerDraftsForExit?.();
+        this.releaseRegisteredModalChromeOverlay?.();
+        this.syncWidgetBodyState?.(false);
+        this.cancelModelHoverIntent?.();
+        this.cancelModelEffortPickerClose?.();
+        this.cancelComicModelHoverClose?.();
+        this.cancelAppPluginChatModelHoverClose?.();
+        super.onBeforeDetach(message);
+    }
+
+    protected override onAfterShow(message: Message): void {
+        super.onAfterShow(message);
+        this.syncWidgetBodyState?.(true);
+        this.attachTitlebarResizeObserver?.();
+        this.schedulePaneResizeUpdate?.();
+    }
+
+    protected override onAfterHide(message: Message): void {
+        super.onAfterHide(message);
+        this.syncWidgetBodyState?.(false);
+        this.cancelModelHoverIntent?.();
+        this.cancelModelEffortPickerClose?.();
+        this.cancelComicModelHoverClose?.();
+        this.cancelAppPluginChatModelHoverClose?.();
     }
 
     protected override onActivateRequest(message: Message): void {

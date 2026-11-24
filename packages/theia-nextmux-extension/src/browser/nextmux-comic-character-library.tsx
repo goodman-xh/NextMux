@@ -1,7 +1,9 @@
 import * as React from '@theia/core/shared/react';
 import URI from '@theia/core/lib/common/uri';
+import type { GridItemProps, GridListProps } from 'react-virtuoso';
 import type { DesktopComicCharacterLibraryEntry } from '../common/nextmux-platform-protocol';
 import { ImeInput, ImeTextarea } from './nextmux-ime-field';
+import { DEFAULT_VIRTUAL_LIST_THRESHOLD, VirtualGrid } from './nextmux-virtual-list';
 import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
 
 /**
@@ -43,6 +45,107 @@ export interface LibraryCharacterDraft {
     readonly imageName?: string;
 }
 
+interface CharacterEditDraft {
+    readonly bundleId: string;
+    readonly name: string;
+    readonly appearance: string;
+}
+
+const CastGridList = React.forwardRef<HTMLDivElement, GridListProps>(function CastGridList(props, ref) {
+    return <ul {...(props as React.HTMLAttributes<HTMLUListElement>)} ref={ref as React.Ref<HTMLUListElement>} />;
+});
+
+const CAST_GRID_ITEM_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', minWidth: 0, listStyle: 'none' };
+
+function CastGridItem(props: GridItemProps): React.ReactElement {
+    return <li {...(props as React.LiHTMLAttributes<HTMLLIElement>)} style={props.style ? { ...props.style, ...CAST_GRID_ITEM_STYLE } : CAST_GRID_ITEM_STYLE} />;
+}
+
+const CAST_VIRTUAL_COMPONENTS = { List: CastGridList, Item: CastGridItem } as const;
+const CAST_CARD_STRETCH_STYLE: React.CSSProperties = { flex: '1 1 auto' };
+
+const CharacterCard = React.memo(function CharacterCard(props: {
+    readonly locale: string;
+    readonly entry: DesktopComicCharacterLibraryEntry;
+    readonly locked: boolean;
+    readonly confirming: boolean;
+    readonly edit?: CharacterEditDraft;
+    readonly error?: string;
+    readonly hasDraft: boolean;
+    readonly wrapper: 'li' | 'div';
+    readonly onStartEdit: (entry: DesktopComicCharacterLibraryEntry) => void;
+    readonly onCancelEdit: () => void;
+    readonly onChangeEditName: (bundleId: string, name: string) => void;
+    readonly onChangeEditAppearance: (bundleId: string, appearance: string) => void;
+    readonly onSave: (bundleId: string, patch: { readonly name: string; readonly appearance?: string }) => void;
+    readonly onDeleteClick: (bundleId: string, confirming: boolean) => void;
+    readonly onDeleteBlur: (confirming: boolean) => void;
+}): React.ReactElement {
+    const { locale, entry, locked, confirming, edit, error, hasDraft, wrapper } = props;
+    const t = (key: Key, values?: Record<string, string | number>): string => characterLibraryText(locale, key, values);
+    const picture = entry.thumbnailPath ? URI.fromFilePath(entry.thumbnailPath).toString() : '';
+    const nameRef = React.useRef<HTMLInputElement>(null);
+    const appearanceRef = React.useRef<HTMLTextAreaElement>(null);
+    const [hasLiveName, setHasLiveName] = React.useState(() => Boolean(edit?.name.trim()));
+    React.useEffect(() => {
+        setHasLiveName(Boolean(edit?.name.trim()));
+    }, [edit?.bundleId, edit?.name]);
+
+    const body = <>
+        <div className='nmx-cast-picture'>
+            {picture ? <img src={picture} alt='' loading='lazy' decoding='async' /> : <span data-nmx-literal>{Array.from(entry.name || '?')[0]}</span>}
+            <em className='nmx-cast-count'><i className={`codicon codicon-${entry.referenceCount ? 'file-media' : 'note'}`} aria-hidden='true'></i>
+                {entry.referenceCount ? t('pictures', { count: entry.referenceCount }) : t('noPicture')}</em>
+            {!edit && <div className='nmx-cast-tools'>
+                <button type='button' disabled={locked} aria-label={t('edit')} title={t('edit')}
+                    onClick={() => props.onStartEdit(entry)}><i className='codicon codicon-edit' aria-hidden='true'></i></button>
+                <button type='button' className={`is-danger${confirming ? ' is-confirm' : ''}`} disabled={locked}
+                    aria-label={confirming ? t('confirmRemove') : t('remove')} title={confirming ? t('confirmRemove') : t('remove')}
+                    onClick={() => props.onDeleteClick(entry.bundleId, confirming)}
+                    onBlur={() => props.onDeleteBlur(confirming)}>
+                    <i className='codicon codicon-trash' aria-hidden='true'></i>{confirming && <span>{t('confirmRemove')}</span>}</button>
+            </div>}
+        </div>
+        {edit ? <div className='nmx-cast-copy is-editing'>
+            <ImeInput ref={nameRef} commitDelayMs={100} aria-label={t('name')} maxLength={60} value={edit.name}
+                onInput={event => {
+                    const next = Boolean(event.currentTarget.value.trim());
+                    setHasLiveName(current => current === next ? current : next);
+                }}
+                onChange={event => props.onChangeEditName(entry.bundleId, event.currentTarget.value)} />
+            <ImeTextarea ref={appearanceRef} commitDelayMs={250} aria-label={t('appearance')} rows={4} maxLength={8000} value={edit.appearance}
+                onChange={event => props.onChangeEditAppearance(entry.bundleId, event.currentTarget.value)} />
+            <div className='nmx-cast-edit-actions'>
+                <button type='button' className='nmx-secondary-button' onClick={props.onCancelEdit}>{t('cancel')}</button>
+                <button type='button' className='nmx-primary-button' disabled={locked || !hasLiveName}
+                    onClick={() => {
+                        const live: CharacterEditDraft = {
+                            bundleId: edit.bundleId,
+                            name: nameRef.current?.value ?? edit.name,
+                            appearance: appearanceRef.current?.value ?? edit.appearance
+                        };
+                        props.onChangeEditName(entry.bundleId, live.name);
+                        props.onChangeEditAppearance(entry.bundleId, live.appearance);
+                        const submitEdit = (edit: CharacterEditDraft): void => {
+                            if (!edit.name.trim()) return;
+                            props.onSave(entry.bundleId, { name: edit.name.trim(), ...(edit.appearance.trim() !== (entry.appearance || '').trim() ? { appearance: edit.appearance.trim() } : {}) });
+                        };
+                        submitEdit(live);
+                    }}>{t('save')}</button>
+            </div>
+            {error && !hasDraft && <div className='nmx-agent-inline-error' role='alert'>{error}</div>}
+        </div> : <div className='nmx-cast-copy'>
+            <strong data-nmx-literal>{entry.name}{entry.identityVersion && <em data-nmx-literal>{entry.identityVersion}</em>}</strong>
+            <p data-nmx-literal title={entry.appearance || entry.description || undefined}>{entry.appearance || entry.description || '\u00a0'}</p>
+        </div>}
+    </>;
+
+    const className = `nmx-cast-card${edit ? ' is-editing' : ''}`;
+    return wrapper === 'div'
+        ? <div className={className} style={CAST_CARD_STRETCH_STYLE}>{body}</div>
+        : <li className={className}>{body}</li>;
+});
+
 export function ComicCharacterLibrarySheet(props: {
     readonly locale: string;
     readonly entries: readonly DesktopComicCharacterLibraryEntry[];
@@ -63,7 +166,7 @@ export function ComicCharacterLibrarySheet(props: {
 }): React.ReactElement {
     const t = (key: Key, values?: Record<string, string | number>) => characterLibraryText(props.locale, key, values);
     const [confirm, setConfirm] = React.useState('');
-    const [editing, setEditing] = React.useState<{ readonly bundleId: string; readonly name: string; readonly appearance: string }>();
+    const [editing, setEditing] = React.useState<CharacterEditDraft>();
     const [draft, setDraft] = React.useState<LibraryCharacterDraft | undefined>(() => props.seed
         ? { name: '', appearance: '', look: props.lookOptions[0]?.id || 'live', imagePath: props.seed.imagePath, imageName: props.seed.imageName } : undefined);
     const panel = React.useRef<HTMLElement>(null);
@@ -78,6 +181,41 @@ export function ComicCharacterLibrarySheet(props: {
     const startDraft = () => setDraft({ name: '', appearance: '', look: props.lookOptions[0]?.id || 'live' });
     // Closing the form never closes the library under it.
     const closeDraft = () => { if (!props.creating) { setDraft(undefined); panel.current?.focus(); } };
+
+    const callbacksRef = React.useRef({ onDelete: props.onDelete, onSave: props.onSave });
+    callbacksRef.current = { onDelete: props.onDelete, onSave: props.onSave };
+    const handleStartEdit = React.useCallback((entry: DesktopComicCharacterLibraryEntry): void => {
+        setEditing({ bundleId: entry.bundleId, name: entry.name, appearance: entry.appearance || '' });
+    }, []);
+    const handleCancelEdit = React.useCallback((): void => { setEditing(undefined); }, []);
+    const handleChangeEditName = React.useCallback((bundleId: string, name: string): void => {
+        setEditing(current => current?.bundleId === bundleId ? { ...current, name } : current);
+    }, []);
+    const handleChangeEditAppearance = React.useCallback((bundleId: string, appearance: string): void => {
+        setEditing(current => current?.bundleId === bundleId ? { ...current, appearance } : current);
+    }, []);
+    const handleSave = React.useCallback((bundleId: string, patch: { readonly name: string; readonly appearance?: string }): void => {
+        // The editor closes only once the change is saved; a failure keeps what was typed and says why.
+        const saved = callbacksRef.current.onSave(bundleId, patch);
+        void Promise.resolve(saved).then(ok => { if (ok !== false) setEditing(current => current?.bundleId === bundleId ? undefined : current); });
+    }, []);
+    const handleDeleteClick = React.useCallback((bundleId: string, confirming: boolean): void => {
+        if (confirming) { setConfirm(''); callbacksRef.current.onDelete(bundleId); } else setConfirm(bundleId);
+    }, []);
+    const handleDeleteBlur = React.useCallback((confirming: boolean): void => {
+        if (confirming) setConfirm('');
+    }, []);
+
+    const virtualize = props.entries.length > DEFAULT_VIRTUAL_LIST_THRESHOLD;
+    const renderEntry = (entry: DesktopComicCharacterLibraryEntry, wrapper: 'li' | 'div'): React.ReactElement => {
+        const edit = editing?.bundleId === entry.bundleId ? editing : undefined;
+        return <CharacterCard key={entry.bundleId} locale={props.locale} entry={entry} locked={locked}
+            confirming={confirm === entry.bundleId} edit={edit} error={edit ? props.error : undefined}
+            hasDraft={Boolean(draft)} wrapper={wrapper} onStartEdit={handleStartEdit} onCancelEdit={handleCancelEdit}
+            onChangeEditName={handleChangeEditName} onChangeEditAppearance={handleChangeEditAppearance}
+            onSave={handleSave} onDeleteClick={handleDeleteClick} onDeleteBlur={handleDeleteBlur} />;
+    };
+
     return <div className='nmx-sheet-backdrop nmx-dialog-backdrop nmx-cast-backdrop' onMouseDown={() => { if (!locked && !draft) props.onClose(); }}>
         <section ref={panel} tabIndex={-1} className='nmx-cast-library' role='dialog' aria-modal='true' aria-labelledby='nmx-cast-title'
             onMouseDown={event => event.stopPropagation()}
@@ -97,52 +235,27 @@ export function ComicCharacterLibrarySheet(props: {
                 <button type='button' className='nmx-cast-close' data-nmx-layer-close aria-label={t('close')} title={t('close')} disabled={locked}
                     onClick={props.onClose}><i className='codicon codicon-close' aria-hidden='true'></i></button>
             </header>
-            <div className='nmx-cast-body'>
-                {props.entries.length === 0 ? <div className='nmx-cast-empty'>
+            {props.entries.length === 0 ? <div className='nmx-cast-body'>
+                <div className='nmx-cast-empty'>
                     <span className='nmx-cast-empty-mark' aria-hidden='true'><i className='codicon codicon-person-add'></i></span>
                     <strong>{t('empty')}</strong><span className='nmx-cast-empty-hint'>{t('emptyHint')}</span>
                     <button type='button' className='nmx-cast-new' disabled={locked} onClick={startDraft}><i className='codicon codicon-add' aria-hidden='true'></i>{t('create')}</button>
-                </div> : <ul className='nmx-cast-grid'>
-                    {props.entries.map(entry => {
-                        const picture = entry.thumbnailPath ? URI.fromFilePath(entry.thumbnailPath).toString() : '';
-                        const edit = editing?.bundleId === entry.bundleId ? editing : undefined;
-                        const confirming = confirm === entry.bundleId;
-                        return <li key={entry.bundleId} className={`nmx-cast-card${edit ? ' is-editing' : ''}`}>
-                            <div className='nmx-cast-picture'>
-                                {picture ? <img src={picture} alt='' loading='lazy' /> : <span data-nmx-literal>{Array.from(entry.name || '?')[0]}</span>}
-                                <em className='nmx-cast-count'><i className={`codicon codicon-${entry.referenceCount ? 'file-media' : 'note'}`} aria-hidden='true'></i>
-                                    {entry.referenceCount ? t('pictures', { count: entry.referenceCount }) : t('noPicture')}</em>
-                                {!edit && <div className='nmx-cast-tools'>
-                                    <button type='button' disabled={locked} aria-label={t('edit')} title={t('edit')}
-                                        onClick={() => setEditing({ bundleId: entry.bundleId, name: entry.name, appearance: entry.appearance || '' })}><i className='codicon codicon-edit' aria-hidden='true'></i></button>
-                                    <button type='button' className={`is-danger${confirming ? ' is-confirm' : ''}`} disabled={locked}
-                                        aria-label={confirming ? t('confirmRemove') : t('remove')} title={confirming ? t('confirmRemove') : t('remove')}
-                                        onClick={() => { if (confirming) { setConfirm(''); props.onDelete(entry.bundleId); } else setConfirm(entry.bundleId); }}
-                                        onBlur={() => { if (confirming) setConfirm(''); }}>
-                                        <i className='codicon codicon-trash' aria-hidden='true'></i>{confirming && <span>{t('confirmRemove')}</span>}</button>
-                                </div>}
-                            </div>
-                            {edit ? <div className='nmx-cast-copy is-editing'>
-                                <ImeInput aria-label={t('name')} maxLength={60} value={edit.name} onChange={event => setEditing({ ...edit, name: event.currentTarget.value })} />
-                                <ImeTextarea aria-label={t('appearance')} rows={4} maxLength={8000} value={edit.appearance} onChange={event => setEditing({ ...edit, appearance: event.currentTarget.value })} />
-                                <div className='nmx-cast-edit-actions'>
-                                    <button type='button' className='nmx-secondary-button' onClick={() => setEditing(undefined)}>{t('cancel')}</button>
-                                    <button type='button' className='nmx-primary-button' disabled={locked || !edit.name.trim()}
-                                        onClick={() => {
-                                            // The editor closes only once the change is saved; a failure keeps what was typed and says why.
-                                            const saved = props.onSave(entry.bundleId, { name: edit.name.trim(), ...(edit.appearance.trim() !== (entry.appearance || '').trim() ? { appearance: edit.appearance.trim() } : {}) });
-                                            void Promise.resolve(saved).then(ok => { if (ok !== false) setEditing(current => current?.bundleId === entry.bundleId ? undefined : current); });
-                                        }}>{t('save')}</button>
-                                </div>
-                                {props.error && !draft && <div className='nmx-agent-inline-error' role='alert'>{props.error}</div>}
-                            </div> : <div className='nmx-cast-copy'>
-                                <strong data-nmx-literal>{entry.name}{entry.identityVersion && <em data-nmx-literal>{entry.identityVersion}</em>}</strong>
-                                <p data-nmx-literal title={entry.appearance || entry.description || undefined}>{entry.appearance || entry.description || '\u00a0'}</p>
-                            </div>}
-                        </li>;
-                    })}
-                </ul>}
-            </div>
+                </div>
+            </div> : virtualize ? <VirtualGrid<DesktopComicCharacterLibraryEntry>
+                items={props.entries}
+                itemKey={entry => entry.bundleId}
+                className='nmx-cast-body'
+                style={{ flex: '1 1 auto', minHeight: 0 }}
+                listClassName='nmx-cast-grid'
+                listStyle={{ overflowY: 'visible' }}
+                components={CAST_VIRTUAL_COMPONENTS}
+                initialItemCount={Math.min(props.entries.length, 16)}
+                renderItem={entry => renderEntry(entry, 'div')}
+            /> : <div className='nmx-cast-body'>
+                <ul className='nmx-cast-grid'>
+                    {props.entries.map(entry => renderEntry(entry, 'li'))}
+                </ul>
+            </div>}
             <footer><i className='codicon codicon-lightbulb' aria-hidden='true'></i><span className='nmx-cast-tip'>{t('how')}</span></footer>
             {draft && <CharacterCreateDialog t={t} draft={draft} setDraft={setDraft} lookOptions={props.lookOptions} creating={props.creating} locked={locked}
                 {...(props.imageModel ? { imageModel: props.imageModel } : {})} {...(props.error ? { error: props.error } : {})}
@@ -167,16 +280,35 @@ function CharacterCreateDialog(props: {
 }): React.ReactElement {
     const { t, draft, setDraft } = props;
     const nameField = React.useRef<HTMLInputElement>(null);
+    const appearanceField = React.useRef<HTMLTextAreaElement>(null);
+    const [hasLiveName, setHasLiveName] = React.useState(() => Boolean(draft.name.trim()));
+    const [hasLiveAppearance, setHasLiveAppearance] = React.useState(() => Boolean(draft.appearance.trim()));
     React.useEffect(() => { nameField.current?.focus(); }, []);
+    React.useEffect(() => {
+        setHasLiveName(Boolean(draft.name.trim()));
+        setHasLiveAppearance(Boolean(draft.appearance.trim()));
+    }, [draft.name, draft.appearance]);
     // A name, and either a picture of one's own or a description the image model can draw.
-    const ready = Boolean(draft.name.trim() && (draft.imagePath || (draft.appearance.trim() && props.imageModel)));
+    const ready = Boolean(hasLiveName && (draft.imagePath || (hasLiveAppearance && props.imageModel)));
     const preview = draft.imagePath ? URI.fromFilePath(draft.imagePath).toString() : '';
     const pick = () => void props.onPickImage().then(picked => {
         if (picked) setDraft(current => current && { ...current, imagePath: picked.path, imageName: picked.name });
     });
     return <div className='nmx-cast-create-layer' onMouseDown={event => { event.stopPropagation(); if (event.target === event.currentTarget) props.onClose(); }}>
         <form className='nmx-cast-create' role='dialog' aria-modal='true' aria-labelledby='nmx-cast-create-title'
-            onSubmit={event => { event.preventDefault(); if (ready && !props.locked) props.onCreate(draft); }}>
+            onSubmit={event => {
+                event.preventDefault();
+                const liveDraft: LibraryCharacterDraft = {
+                    ...draft,
+                    name: nameField.current?.value ?? draft.name,
+                    appearance: appearanceField.current?.value ?? draft.appearance
+                };
+                const submitReady = Boolean(liveDraft.name.trim() && (liveDraft.imagePath || (liveDraft.appearance.trim() && props.imageModel)));
+                if (submitReady && !props.locked) {
+                    setDraft(liveDraft);
+                    props.onCreate(liveDraft);
+                }
+            }}>
             <header>
                 <div><h3 id='nmx-cast-create-title'>{t('create')}</h3><p>{t('createLead')}</p></div>
                 <button type='button' className='nmx-cast-close' data-nmx-layer-close aria-label={t('cancel')} title={t('cancel')} disabled={props.creating}
@@ -185,7 +317,7 @@ function CharacterCreateDialog(props: {
             <div className='nmx-cast-create-body'>
                 <div className='nmx-cast-create-side'>
                 <div className={`nmx-cast-create-preview${preview ? ' has-picture' : ''}${props.creating ? ' is-creating' : ''}`}>
-                    {preview ? <img src={preview} alt='' /> : <span className='nmx-cast-silhouette' aria-hidden='true'><i className='codicon codicon-person'></i></span>}
+                    {preview ? <img src={preview} alt='' decoding='async' /> : <span className='nmx-cast-silhouette' aria-hidden='true'><i className='codicon codicon-person'></i></span>}
                     {props.creating ? <span className='nmx-cast-create-status'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>{t('creating')}</span>
                         : !preview && <span className='nmx-cast-create-status'>{t('previewEmpty')}</span>}
                     {preview ? <button type='button' className='nmx-cast-upload-remove' aria-label={t('removeUpload')} title={t('removeUpload')} disabled={props.creating}
@@ -197,7 +329,11 @@ function CharacterCreateDialog(props: {
                     {draft.imageName ? <><i className='codicon codicon-file-media' aria-hidden='true'></i><span>{draft.imageName}</span></> : t('uploadHint')}</span>
                 </div>
                 <div className='nmx-cast-create-fields'>
-                    <label><span>{t('name')}</span><ImeInput ref={nameField} maxLength={60} value={draft.name} disabled={props.creating}
+                    <label><span>{t('name')}</span><ImeInput ref={nameField} commitDelayMs={100} maxLength={60} value={draft.name} disabled={props.creating}
+                        onInput={event => {
+                            const next = Boolean(event.currentTarget.value.trim());
+                            setHasLiveName(current => current === next ? current : next);
+                        }}
                         onChange={event => setDraft({ ...draft, name: event.currentTarget.value })} /></label>
                     <div className='nmx-cast-looks' role='radiogroup' aria-label={t('look')}>
                         <span>{t('look')}</span>
@@ -205,7 +341,11 @@ function CharacterCreateDialog(props: {
                             className={draft.look === option.id ? 'is-selected' : ''} disabled={props.creating}
                             onClick={() => setDraft({ ...draft, look: option.id })}>{option.label}</button>)}</div>
                     </div>
-                    <label><span>{t('appearance')}</span><ImeTextarea rows={5} maxLength={2000} value={draft.appearance} placeholder={t('appearanceHint')} disabled={props.creating}
+                    <label><span>{t('appearance')}</span><ImeTextarea ref={appearanceField} commitDelayMs={250} rows={5} maxLength={2000} value={draft.appearance} placeholder={t('appearanceHint')} disabled={props.creating}
+                        onInput={event => {
+                            const next = Boolean(event.currentTarget.value.trim());
+                            setHasLiveAppearance(current => current === next ? current : next);
+                        }}
                         onChange={event => setDraft({ ...draft, appearance: event.currentTarget.value })} /></label>
                 </div>
             </div>

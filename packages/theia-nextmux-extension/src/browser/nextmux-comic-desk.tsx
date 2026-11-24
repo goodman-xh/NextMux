@@ -1,6 +1,8 @@
 import * as React from '@theia/core/shared/react';
 import type { DesktopComicCharacterLibraryEntry } from '../common/nextmux-platform-protocol';
-import { ImeTextarea } from './nextmux-ime-field';
+import { ImeTextarea, isImeFieldComposing } from './nextmux-ime-field';
+import { getCachedNumberFormat } from './nextmux-intl-cache';
+import { registerPendingCanvasEditFlush, flushPendingCanvasEdits } from './nextmux-comic-canvas-culling';
 import { comicChatText } from './nextmux-comic-chat-text';
 import { comicShotFieldText } from './nextmux-comic-studio-text';
 import type { NextMuxDesktopLocale } from './nextmux-locale';
@@ -510,20 +512,20 @@ export function ComicDesk(props: ComicDeskProps): React.ReactElement {
         <section className={`nmx-desk is-${props.step}`}>
             {!editing && <header className='nmx-desk-header'>
                 <div className='nmx-desk-title'>{!canvasOnly && <span>{t('title')}</span>}<strong data-nmx-literal>{props.projectTitle}</strong></div>
-                {!canvasOnly && <ol className='nmx-desk-steps'>{steps.map((step, index) => {
-                    const reachable = props.reachable.has(step);
-                    return <li key={step} className={index < at ? 'is-done' : index === at ? 'is-current' : ''}>
-                        <button disabled={!reachable || index === at} onClick={() => props.onStep(step)}>
-                            <span>{index < at ? '✓' : index + 1}</span>{t(step)}</button></li>;
-                })}</ol>}
+                    {!canvasOnly && <ol className='nmx-desk-steps'>{steps.map((step, index) => {
+                        const reachable = props.reachable.has(step);
+                        return <li key={step} className={index < at ? 'is-done' : index === at ? 'is-current' : ''}>
+                            <button disabled={!reachable || index === at} onClick={() => { flushPendingCanvasEdits(); props.onStep(step); }}>
+                                <span>{index < at ? '✓' : index + 1}</span>{t(step)}</button></li>;
+                    })}</ol>}
                 <div className='nmx-desk-actions'>
                     {(props.step === 'shoot' || props.step === 'canvas') && props.shooting && <span className='nmx-desk-progress' data-nmx-literal>{t('progress', { done, total: clips.length })}</span>}
                     {(props.step === 'shoot' || props.step === 'canvas') && props.shooting && (props.paused
                         ? <button className='nmx-primary-button' onClick={props.onResume}><i className='codicon codicon-debug-start'></i>{t('resume')}</button>
                         : <button onClick={props.onPause}><i className='codicon codicon-debug-pause'></i>{t('pause')}</button>)}
-                    {canvasOnly && <button type='button' className='nmx-desk-enter-editor' disabled={props.toEditorDisabled} onClick={props.onToEditor}>
+                    {canvasOnly && <button type='button' className='nmx-desk-enter-editor' disabled={props.toEditorDisabled} onClick={() => { flushPendingCanvasEdits(); props.onToEditor?.(); }}>
                         <i className='codicon codicon-edit' aria-hidden='true' />{props.toEditorLabel || t('toEditor')}</button>}
-                    <button className='nmx-desk-close' onClick={props.onMinimize} title={t('minimize')} aria-label={t('minimize')}>×</button>
+                    <button className='nmx-desk-close' onClick={() => { flushPendingCanvasEdits(); props.onMinimize(); }} title={t('minimize')} aria-label={t('minimize')}>×</button>
                 </div>
             </header>}
             {props.countdown && !props.stopped && <div className='nmx-desk-countdown' role='status'>
@@ -562,10 +564,10 @@ export function ComicDesk(props: ComicDeskProps): React.ReactElement {
                 {props.step === 'scripts' && !props.scriptsFooter && <>
                     <button disabled={props.adapting} onClick={props.onRegenerateScripts}>{t('regenerate')}</button>
                     <span className='nmx-desk-footer-note'>{props.adapting ? t('adapting') : ''}</span>
-                    <button className='nmx-primary-button' disabled={props.adapting || !props.episodes.length || props.episodes.some(item => !item.script.trim())} onClick={props.onScriptsNext}>{t('toCast')}</button>
+                    <button className='nmx-primary-button' disabled={props.adapting || !props.episodes.length || props.episodes.some(item => !item.script.trim())} onClick={() => { flushPendingCanvasEdits(); props.onScriptsNext(); }}>{t('toCast')}</button>
                 </>}
                 {props.step === 'cast' && <>
-                    <button onClick={() => props.onStep('scripts')}>{t('back')}</button>
+                    <button onClick={() => { flushPendingCanvasEdits(); props.onStep('scripts'); }}>{t('back')}</button>
                     <span className='nmx-desk-footer-note'>
                         {props.splitting ? <span className='nmx-desk-wait' title={t('splitHint')}>
                             <span><i className='codicon codicon-loading codicon-modifier-spin'></i>{t('splitting')}
@@ -576,16 +578,16 @@ export function ComicDesk(props: ComicDeskProps): React.ReactElement {
                             : props.splitError ? <>{t('splitFailed', { error: props.splitError })} <button className='nmx-link-button' onClick={props.onRetrySplit}>{t('retry')}</button></>
                                 : props.plan ? t('plan', { clips: props.plan.clips, seconds: props.plan.seconds, model: props.plan.model }) : ''}
                     </span>
-                    <button className='nmx-primary-button' disabled={!props.canShoot} onClick={props.onShoot}>{t('toShoot')}</button>
+                    <button className='nmx-primary-button' disabled={!props.canShoot} onClick={() => { flushPendingCanvasEdits(); props.onShoot(); }}>{t('toShoot')}</button>
                 </>}
                 {props.step === 'shoot' && <>
-                    <button onClick={() => props.onStep('cast')}>{t('back')}</button>
+                    <button onClick={() => { flushPendingCanvasEdits(); props.onStep('cast'); }}>{t('back')}</button>
                     {/* A split that failed after “Start filming” shows here too, with its retry (audit A12-004). */}
                     <span className='nmx-desk-footer-note'>{props.splitError && !props.splitting ? <>{t('splitFailed', { error: props.splitError })} <button className='nmx-link-button' onClick={props.onRetrySplit}>{t('retry')}</button></>
                         : props.splitting && !props.shooting ? <span className='nmx-desk-wait' title={t('splitHint')}><span><i className='codicon codicon-loading codicon-modifier-spin'></i>{t('splitting')}</span></span>
                         : failed > 0 ? <>{t('failedClips', { n: failed })} <button className='nmx-link-button' onClick={props.onRetryFailed}>{t('retryFailed')}</button></>
                         : props.plan ? t('plan', { clips: props.plan.clips, seconds: props.plan.seconds, model: props.plan.model }) : ''}</span>
-                    <button className='nmx-primary-button' disabled={!done} onClick={() => props.onStep('edit')}>{t('toEditor')}</button>
+                    <button className='nmx-primary-button' disabled={!done} onClick={() => { flushPendingCanvasEdits(); props.onStep('edit'); }}>{t('toEditor')}</button>
                 </>}
             </footer>}
         </section>
@@ -695,6 +697,8 @@ const DeskCastCard = React.memo(function DeskCastCard(props: {
     </article>;
 });
 
+const CAROUSEL_WINDOW_RADIUS = 2;
+
 const DeskLookCard = React.memo(function DeskLookCard(props: {
     readonly card: DeskCard;
     readonly index: number;
@@ -706,7 +710,7 @@ const DeskLookCard = React.memo(function DeskLookCard(props: {
     readonly t: (key: Key, values?: Record<string, string | number>) => string;
     readonly onFocusCard: (index: number) => void;
     readonly onDraftChange: (cardId: string, next: string) => void;
-    readonly onCommit: (card: DeskCard) => void;
+    readonly onCommit: (card: DeskCard, valueOverride?: string) => void;
     readonly onStopRewrite?: () => void;
     readonly onRewriteLook?: (cardId: string) => void;
     readonly onStopDraw?: () => void;
@@ -717,6 +721,21 @@ const DeskLookCard = React.memo(function DeskLookCard(props: {
     const { card, index, isFocus, t } = props;
     const drawing = card.state === 'drawing';
     const value = props.draft ?? card.look;
+    const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+    const latestRef = React.useRef({ card, value, onDraftChange: props.onDraftChange, onCommit: props.onCommit });
+    latestRef.current = { card, value, onDraftChange: props.onDraftChange, onCommit: props.onCommit };
+    const [hasLiveLook, setHasLiveLook] = React.useState(() => Boolean(value.trim()));
+    React.useEffect(() => {
+        setHasLiveLook(Boolean(value.trim()));
+    }, [value]);
+    React.useEffect(() => registerPendingCanvasEditFlush(() => {
+        const element = textareaRef.current;
+        if (!element || isImeFieldComposing(element)) return;
+        const { card: currentCard, onDraftChange, onCommit } = latestRef.current;
+        const live = element.value;
+        onDraftChange(currentCard.id, live);
+        onCommit(currentCard, live);
+    }), []);
     return <article className={`nmx-desk-look ${isFocus ? 'is-focus' : ''} is-${card.state}`}
         onFocusCapture={() => { if (!isFocus) props.onFocusCard(index); }} onClick={() => { if (!isFocus) props.onFocusCard(index); }}>
         <header>
@@ -726,9 +745,13 @@ const DeskLookCard = React.memo(function DeskLookCard(props: {
             <small className={`nmx-desk-look-state is-${card.state}`}>{drawing ? t('drawing') : card.state === 'failed' ? t('failed') : card.picture ? t('done') : t('waiting')}</small>
         </header>
         {card.role && <p className='nmx-desk-look-role' data-nmx-literal>{card.role}</p>}
-        <ImeTextarea value={value} rows={6} placeholder={t('lookPlaceholder')} readOnly={card.rewriting || drawing} aria-label={`${t('looksTitle')} · ${card.name}`}
+        <ImeTextarea ref={textareaRef} commitDelayMs={250} value={value} rows={6} placeholder={t('lookPlaceholder')} readOnly={card.rewriting || drawing} aria-label={`${t('looksTitle')} · ${card.name}`}
+            onInput={event => {
+                const nextHas = Boolean(event.currentTarget.value.trim());
+                setHasLiveLook(prev => prev === nextHas ? prev : nextHas);
+            }}
             onChange={event => props.onDraftChange(card.id, event.currentTarget.value)}
-            onBlur={() => props.onCommit(card)} />
+            onBlur={event => props.onCommit(card, event.currentTarget.value)} />
         {card.outdated && !drawing && <small className='nmx-desk-look-note'>{t('lookChanged')}</small>}
         {card.error && <small className='nmx-desk-clip-error' data-nmx-literal>{card.error}</small>}
         <footer>
@@ -738,8 +761,8 @@ const DeskLookCard = React.memo(function DeskLookCard(props: {
                     <i className='codicon codicon-sparkle' aria-hidden='true'></i>{t('rewriteLook')}</button>}
             {drawing
                 ? <button type='button' onClick={props.onStopDraw}><i className='codicon codicon-debug-stop' aria-hidden='true'></i>{t('stopAll')}</button>
-                : <button type='button' className={!card.picture || card.outdated ? 'nmx-primary-button' : ''} disabled={props.noImageModel || card.rewriting || !value.trim()}
-                    onClick={() => { props.onCommit(card); props.onRedraw(card.id); }}><i className='codicon codicon-person' aria-hidden='true'></i>{card.picture ? t('redraw') : t('drawOne')}</button>}
+                : <button type='button' className={!card.picture || card.outdated ? 'nmx-primary-button' : ''} disabled={props.noImageModel || card.rewriting || !hasLiveLook}
+                    onClick={() => { props.onCommit(card, textareaRef.current?.value); props.onRedraw(card.id); }}><i className='codicon codicon-person' aria-hidden='true'></i>{card.picture ? t('redraw') : t('drawOne')}</button>}
             <select aria-label={t('library')} value='' disabled={drawing || !props.library.length}
                 onChange={event => { const bundleId = event.currentTarget.value; if (bundleId) props.onBind(card.id, bundleId); }}>
                 <option value=''>{props.library.length ? t('library') : t('libraryEmpty')}</option>
@@ -758,16 +781,22 @@ const DeskClipCard = React.memo(function DeskClipCard(props: {
     readonly secondsText: string;
     readonly outdatedText: string;
     readonly onFocusClip: (index: number) => void;
+    readonly onFullscreenChange?: (shotId: string, full: boolean) => void;
 }): React.ReactElement {
     const { item, index, focus } = props;
-    return <article className={`nmx-desk-card is-clip is-${item.state} ${item.video && item.state === 'done' ? 'is-flipped' : ''} ${index === focus ? 'is-focus' : ''}`}
-        style={carouselStyle(index, focus)} onClick={() => { if (index !== focus) props.onFocusClip(index); }}>
+    const [hovering, setHovering] = React.useState(false);
+    const active = index === focus;
+    return <article className={`nmx-desk-card is-clip is-${item.state} ${item.video && item.state === 'done' ? 'is-flipped' : ''} ${active ? 'is-focus' : ''}`}
+        style={carouselStyle(index, focus)}
+        onMouseEnter={() => setHovering(true)}
+        onMouseLeave={() => setHovering(false)}
+        onClick={() => { if (!active) props.onFocusClip(index); }}>
         <div className='nmx-desk-card-inner'>
             <div className='nmx-desk-card-back'>
                 <i className={`codicon ${item.state === 'video' || item.state === 'picture' ? 'codicon-loading codicon-modifier-spin' : item.state === 'failed' ? 'codicon-warning' : 'codicon-device-camera-video'}`}></i>
                 <strong data-nmx-literal>{String(index + 1).padStart(2, '0')} · {item.title}</strong><small>{props.stateText} · {props.secondsText}</small></div>
             <div className='nmx-desk-card-front'>
-                {item.video && <ClipPlayer src={item.video} cues={item.cues} active={index === focus} />}
+                {item.video && <ClipPlayer shotId={item.shotId} src={item.video} poster={item.poster} cues={item.cues} active={active} hovering={hovering} onFullscreenChange={props.onFullscreenChange} />}
                 {item.outdated && <em className='nmx-desk-card-flag'>{props.outdatedText}</em>}
             </div>
         </div>
@@ -787,11 +816,50 @@ const DeskFilmstripItem = React.memo(function DeskFilmstripItem(props: {
         className={`is-${item.state} ${isFocus ? 'is-focus' : ''} ${item.outdated ? 'is-outdated' : ''}`}
         title={props.titleText} onClick={() => props.onFocusClip(index)}>
         {item.poster ? <img src={item.poster} alt='' loading='lazy' decoding='async' draggable={false} />
-            : item.video ? <video src={`${item.video}#t=0.5`} muted preload='metadata' playsInline tabIndex={-1} aria-hidden='true' />
+            : item.video ? <video src={`${item.video}#t=0.5`} muted preload='none' playsInline tabIndex={-1} aria-hidden='true' />
             : <i className={`codicon ${item.state === 'video' || item.state === 'picture' ? 'codicon-loading codicon-modifier-spin' : item.state === 'failed' ? 'codicon-warning' : 'codicon-device-camera-video'}`} aria-hidden='true'></i>}
         <span data-nmx-literal>{String(index + 1).padStart(2, '0')}</span>
         <em data-nmx-literal>{props.secondsText}</em>
     </button>;
+});
+
+const DeskReviewEpisodeBox = React.memo(function DeskReviewEpisodeBox(props: {
+    readonly episode: DeskEpisode;
+    readonly locale: string;
+    readonly rewriting: boolean;
+    readonly busyEpisode: boolean;
+    readonly adapting: boolean;
+    readonly t: (key: Key, values?: Record<string, string | number>) => string;
+    readonly onScriptChange: (number: number, script: string) => void;
+    readonly onScriptCommit?: (number: number) => void;
+    readonly onStopRewrite?: () => void;
+    readonly onRewriteEpisode?: (number: number) => void;
+}): React.ReactElement {
+    const { episode, locale, rewriting, busyEpisode, adapting, t } = props;
+    const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+    const latestRef = React.useRef(props);
+    latestRef.current = props;
+    React.useEffect(() => registerPendingCanvasEditFlush(() => {
+        const element = textareaRef.current;
+        if (!element || isImeFieldComposing(element)) return;
+        const cur = latestRef.current;
+        if (element.value !== cur.episode.script) cur.onScriptChange(cur.episode.number, element.value);
+        cur.onScriptCommit?.(cur.episode.number);
+    }), []);
+    const formattedChars = getCachedNumberFormat(locale).format(episode.script.trim().length);
+    return <article className={`nmx-desk-episode-box ${rewriting ? 'is-busy' : ''}`}>
+        <header><strong>{t('episode', { n: episode.number })}</strong><span data-nmx-literal>{episode.title}</span>
+            <small data-nmx-literal>{t('episodeChars', { n: formattedChars })}</small></header>
+        <ImeTextarea ref={textareaRef} commitDelayMs={250} value={episode.script} rows={10} readOnly={rewriting || adapting} aria-label={`${t('episode', { n: episode.number })} · ${episode.title}`}
+            onChange={event => props.onScriptChange(episode.number, event.currentTarget.value)} onBlur={() => props.onScriptCommit?.(episode.number)} />
+        <footer>
+            {rewriting
+                ? <button type='button' onClick={props.onStopRewrite}><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>{t('stopAll')}</button>
+                : <button type='button' disabled={busyEpisode || adapting} onClick={() => { flushPendingCanvasEdits(); props.onRewriteEpisode?.(episode.number); }}>
+                    <i className='codicon codicon-refresh' aria-hidden='true'></i>{t('rewriteEpisode')}</button>}
+            {episode.splitting && <small><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>{t('splitting')}</small>}
+        </footer>
+    </article>;
 });
 
 /**
@@ -811,14 +879,19 @@ function CastReview(props: Inner): React.ReactElement {
     draftsRef.current = drafts;
     const onLookCommitRef = React.useRef(props.onLookCommit);
     onLookCommitRef.current = props.onLookCommit;
-    const commit = React.useCallback((card: DeskCard): void => {
-        const draft = draftsRef.current[card.id];
+    const commit = React.useCallback((card: DeskCard, valueOverride?: string): void => {
+        const draft = valueOverride !== undefined ? valueOverride : draftsRef.current[card.id];
         if (draft === undefined) return;
-        setDrafts(current => { const next = { ...current }; delete next[card.id]; return next; });
+        setDrafts(current => {
+            if (!(card.id in current)) return current;
+            const next = { ...current };
+            delete next[card.id];
+            return next;
+        });
         if (draft.trim() !== card.look.trim()) onLookCommitRef.current?.(card.id, draft.trim());
     }, []);
     const onDraftChange = React.useCallback((cardId: string, next: string): void => {
-        setDrafts(current => ({ ...current, [cardId]: next }));
+        setDrafts(current => current[cardId] === next ? current : { ...current, [cardId]: next });
     }, []);
     const busyEpisode = props.rewritingEpisode !== undefined;
     const anyRewriting = Boolean(props.cards.some(item => item.rewriting));
@@ -828,13 +901,15 @@ function CastReview(props: Inner): React.ReactElement {
             {props.portraitsRunning
                 ? <button type='button' onClick={props.onStopDraw}><i className='codicon codicon-debug-stop' aria-hidden='true'></i>{t('stopAll')}</button>
                 : <button type='button' className='nmx-primary-button' disabled={props.noImageModel || !props.cards.length}
-                    onClick={() => { for (const card of props.cards) commit(card); props.onDrawAll?.(); }}><i className='codicon codicon-sparkle' aria-hidden='true'></i>{t('drawAll')}</button>}
+                    onClick={() => { flushPendingCanvasEdits(); for (const card of props.cards) commit(card); props.onDrawAll?.(); }}><i className='codicon codicon-sparkle' aria-hidden='true'></i>{t('drawAll')}</button>}
         </div>
         {!props.cards.length ? <div className='nmx-desk-empty is-inline'><span>{t('noCharacters')}</span></div>
                 : <div className='nmx-desk-carousel is-cards is-review'>
-                    {props.cards.map((item, index) => <DeskCastCard key={item.id} item={item} index={index} focus={focus} showOutdated
-                        stateLabel={t(item.state === 'drawing' ? 'drawing' : item.state === 'failed' ? 'failed' : 'waiting')}
-                        zoomLabel={props.t('zoom')} outdatedLabel={t('outdated')} onFocusCard={props.onFocusCard} onZoom={props.onZoom} />)}
+                    {props.cards.map((item, index) => Math.abs(index - focus) <= CAROUSEL_WINDOW_RADIUS
+                        ? <DeskCastCard key={item.id} item={item} index={index} focus={focus} showOutdated
+                            stateLabel={t(item.state === 'drawing' ? 'drawing' : item.state === 'failed' ? 'failed' : 'waiting')}
+                            zoomLabel={props.t('zoom')} outdatedLabel={t('outdated')} onFocusCard={props.onFocusCard} onZoom={props.onZoom} />
+                        : <article key={item.id} className='nmx-desk-card is-placeholder' aria-hidden='true' style={carouselStyle(index, focus)} />)}
                     <Arrows index={focus} count={props.cards.length} onFocus={props.onFocusCard} previous={t('previous')} next={t('next')} />
                 </div>}
         {props.cards.length > 0 && <section className='nmx-desk-row is-looks' aria-label={t('looksTitle')}>
@@ -850,22 +925,10 @@ function CastReview(props: Inner): React.ReactElement {
         {props.episodes.length > 0 && <section className='nmx-desk-row is-episodes' aria-label={t('episodesTitle')}>
             <header><strong>{t('episodesTitle')}</strong></header>
             <div className='nmx-desk-strip'>
-                {props.episodes.map(episode => {
-                    const rewriting = props.rewritingEpisode === episode.number;
-                    return <article key={episode.number} className={`nmx-desk-episode-box ${rewriting ? 'is-busy' : ''}`}>
-                        <header><strong>{t('episode', { n: episode.number })}</strong><span data-nmx-literal>{episode.title}</span>
-                            <small data-nmx-literal>{t('episodeChars', { n: episode.script.trim().length.toLocaleString() })}</small></header>
-                        <ImeTextarea value={episode.script} rows={10} readOnly={rewriting || props.adapting} aria-label={`${t('episode', { n: episode.number })} · ${episode.title}`}
-                            onChange={event => props.onScriptChange(episode.number, event.currentTarget.value)} onBlur={() => props.onScriptCommit?.(episode.number)} />
-                        <footer>
-                            {rewriting
-                                ? <button type='button' onClick={props.onStopRewrite}><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>{t('stopAll')}</button>
-                                : <button type='button' disabled={busyEpisode || props.adapting} onClick={() => props.onRewriteEpisode?.(episode.number)}>
-                                    <i className='codicon codicon-refresh' aria-hidden='true'></i>{t('rewriteEpisode')}</button>}
-                            {episode.splitting && <small><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>{t('splitting')}</small>}
-                        </footer>
-                    </article>;
-                })}
+                {props.episodes.map(episode => <DeskReviewEpisodeBox key={episode.number} episode={episode} locale={props.locale}
+                    rewriting={props.rewritingEpisode === episode.number} busyEpisode={busyEpisode} adapting={props.adapting}
+                    t={t} onScriptChange={props.onScriptChange} onScriptCommit={props.onScriptCommit}
+                    onStopRewrite={props.onStopRewrite} onRewriteEpisode={props.onRewriteEpisode} />)}
             </div>
         </section>}
     </div>;
@@ -877,38 +940,62 @@ interface Zoomed { readonly src: string; readonly caption: string }
 type Inner = ComicDeskProps & { readonly t: (key: Key, values?: Record<string, string | number>) => string; readonly onZoom: (item: Zoomed) => void };
 
 /**
- * A filmed clip. The focused card plays it with the player's own controls, and its lines are the player's own
- * subtitle track — at the bottom, small, and still there in full screen. The element stays the same while the
- * cards move on, so a clip watched full screen keeps playing when a newer clip finishes and takes the focus.
+ * A filmed clip. Renders the lightweight poster image by default and promotes `<video>` only when focused,
+ * hovered, explicitly played by the user, or viewed in full screen so offscreen clips do not preload.
  */
-function ClipPlayer(props: { readonly src: string; readonly cues?: readonly DeskCue[]; readonly active: boolean }): React.ReactElement {
+function ClipPlayer(props: {
+    readonly shotId: string;
+    readonly src: string;
+    readonly poster?: string;
+    readonly cues?: readonly DeskCue[];
+    readonly active: boolean;
+    readonly hovering: boolean;
+    readonly onFullscreenChange?: (shotId: string, full: boolean) => void;
+}): React.ReactElement {
     const video = React.useRef<HTMLVideoElement>(null);
     const [full, setFull] = React.useState(false);
+    const [userStarted, setUserStarted] = React.useState(false);
     const playing = props.active || full;
+    const mountVideo = playing || props.hovering || userStarted || !props.poster;
+    const onFullscreenRef = React.useRef(props.onFullscreenChange);
+    onFullscreenRef.current = props.onFullscreenChange;
     React.useEffect(() => {
+        if (!mountVideo) return;
         const element = video.current;
         if (!element) return;
-        const change = () => setFull(document.fullscreenElement === element);
+        const change = () => {
+            const isFull = document.fullscreenElement === element;
+            setFull(isFull);
+            onFullscreenRef.current?.(props.shotId, isFull);
+        };
         element.addEventListener('fullscreenchange', change);
         return () => element.removeEventListener('fullscreenchange', change);
-    }, []);
+    }, [mountVideo, props.shotId]);
     React.useEffect(() => {
+        if (!mountVideo) return;
         const element = video.current;
         if (!element) return;
         if (playing) { element.muted = false; void element.play().catch(() => undefined); }
         else { element.pause(); element.muted = true; if (element.readyState >= 1) element.currentTime = Math.min(0.5, element.duration || 0.5); }
-    }, [playing]);
+    }, [playing, mountVideo]);
     const cues = JSON.stringify(props.cues || []);
     React.useEffect(() => {
+        if (!mountVideo) return;
         const element = video.current;
         if (!element || !props.cues?.length || typeof VTTCue === 'undefined') return;
         const track = element.addTextTrack('subtitles', 'subtitles', document.documentElement.lang || 'zh');
         for (const cue of props.cues) track.addCue(new VTTCue(cue.start, Math.max(cue.end, cue.start + 0.5), cue.text));
         track.mode = 'showing';
         return () => { for (const cue of Array.from(track.cues || [])) track.removeCue(cue); track.mode = 'disabled'; };
-    }, [props.src, cues]);
-    return <video ref={video} src={props.src} controls={playing} controlsList='nodownload noplaybackrate noremoteplayback' disablePictureInPicture
-        loop playsInline preload='metadata' muted={!playing} autoPlay={playing}
+    }, [props.src, cues, mountVideo]);
+    if (!mountVideo && props.poster) {
+        return <img src={props.poster} alt='' loading='lazy' decoding='async' draggable={false}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+            onClick={() => setUserStarted(true)} />;
+    }
+    return <video ref={video} src={props.src} poster={props.poster} controls={playing} controlsList='nodownload noplaybackrate noremoteplayback' disablePictureInPicture
+        loop playsInline preload={playing ? 'auto' : 'none'} muted={!playing} autoPlay={playing}
+        onPlay={() => setUserStarted(true)}
         onLoadedMetadata={event => { if (!playing) event.currentTarget.currentTime = Math.min(0.5, event.currentTarget.duration || 0.5); }} />;
 }
 
@@ -924,7 +1011,7 @@ function Lightbox(props: { readonly item: Zoomed; readonly close: string; readon
     return <div ref={panel} tabIndex={-1} className='nmx-lightbox' role='dialog' aria-modal='true' aria-label={props.item.caption} onClick={props.onClose}
         onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); props.onClose(); } }}>
         <figure onClick={event => event.stopPropagation()}>
-            <img src={props.item.src} alt={props.item.caption} />
+            <img src={props.item.src} alt={props.item.caption} decoding='async' />
             <figcaption data-nmx-literal>{props.item.caption}</figcaption>
         </figure>
         <button type='button' className='nmx-lightbox-close' aria-label={props.close} onClick={props.onClose}>×</button>
@@ -940,7 +1027,7 @@ function Arrows(props: { readonly index: number; readonly count: number; readonl
     </>;
 }
 
-/** 剧本 and 拍摄: the episodes side by side, the focused one in the middle. */
+/** 剧本 and 拍摄: the episodes side by side, the focused one in the middle (windowed within |i - focus| <= 2). */
 function EpisodeCarousel(props: Inner): React.ReactElement {
     const { t } = props;
     if (!props.episodes.length) {
@@ -948,17 +1035,20 @@ function EpisodeCarousel(props: Inner): React.ReactElement {
             {props.adaptProgress && <small data-nmx-literal>{props.adaptProgress}</small>}</> : null}</div>;
     }
     const focus = Math.min(props.focusEpisode, props.episodes.length - 1);
+    const numberFmt = getCachedNumberFormat(props.locale);
     return <div className='nmx-desk-carousel is-episodes' onKeyDown={event => {
         if (event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLInputElement) return;
         if (event.key === 'ArrowLeft' && focus > 0) props.onFocusEpisode(focus - 1);
         if (event.key === 'ArrowRight' && focus < props.episodes.length - 1) props.onFocusEpisode(focus + 1);
     }}>
-        {props.episodes.map((episode, index) => <article key={episode.number} className={`nmx-desk-episode ${index === focus ? 'is-focus' : ''}`} style={carouselStyle(index, focus)}
-            onClick={() => { if (index !== focus) props.onFocusEpisode(index); }}>
-            <header><strong>{t('episode', { n: episode.number })}</strong><span data-nmx-literal>{episode.title}</span>
-                <small data-nmx-literal>{t('chars', { n: episode.script.trim().length.toLocaleString() })}</small></header>
-            <EpisodeScript {...props} episode={episode} focused={index === focus} />
-        </article>)}
+        {props.episodes.map((episode, index) => Math.abs(index - focus) <= CAROUSEL_WINDOW_RADIUS
+            ? <article key={episode.number} className={`nmx-desk-episode ${index === focus ? 'is-focus' : ''}`} style={carouselStyle(index, focus)}
+                onClick={() => { if (index !== focus) props.onFocusEpisode(index); }}>
+                <header><strong>{t('episode', { n: episode.number })}</strong><span data-nmx-literal>{episode.title}</span>
+                    <small data-nmx-literal>{t('chars', { n: numberFmt.format(episode.script.trim().length) })}</small></header>
+                <EpisodeScript {...props} episode={episode} focused={index === focus} />
+            </article>
+            : <article key={episode.number} className='nmx-desk-episode is-placeholder' aria-hidden='true' style={carouselStyle(index, focus)} />)}
         <Arrows index={focus} count={props.episodes.length} onFocus={props.onFocusEpisode} previous={t('previous')} next={t('next')} />
     </div>;
 }
@@ -966,13 +1056,22 @@ function EpisodeCarousel(props: Inner): React.ReactElement {
 /** The episode's script (剧本 step): typed into freely; the widget keeps the draft until “next”. */
 function EpisodeScript(props: Inner & { readonly episode: DeskEpisode; readonly focused: boolean }): React.ReactElement {
     const { episode } = props;
+    const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+    const latestRef = React.useRef(props);
+    latestRef.current = props;
+    React.useEffect(() => registerPendingCanvasEditFlush(() => {
+        const element = textareaRef.current;
+        if (!element || isImeFieldComposing(element)) return;
+        const cur = latestRef.current;
+        if (element.value !== cur.episode.script) cur.onScriptChange(cur.episode.number, element.value);
+    }), []);
     return <div className='nmx-desk-script'>
-        <ImeTextarea value={episode.script} readOnly={!props.focused || props.adapting} rows={14}
+        <ImeTextarea ref={textareaRef} commitDelayMs={250} value={episode.script} readOnly={!props.focused || props.adapting} rows={14}
             onChange={event => props.onScriptChange(episode.number, event.currentTarget.value)} />
     </div>;
 }
 
-/** 选角: character cards that flip over when their portrait arrives. */
+/** 选角: character cards that flip over when their portrait arrives (windowed within |i - focus| <= 2). */
 function CastCarousel(props: Inner): React.ReactElement {
     const { t } = props;
     if (props.noImageModel) return <div className='nmx-desk-empty'><span>{t('noImageModel')}</span></div>;
@@ -982,9 +1081,11 @@ function CastCarousel(props: Inner): React.ReactElement {
     return <div className='nmx-desk-cast'>
         <p className='nmx-desk-lead'>{t('castLead')}</p>
         <div className='nmx-desk-carousel is-cards'>
-            {props.cards.map((item, index) => <DeskCastCard key={item.id} item={item} index={index} focus={focus}
-                stateLabel={t(item.state === 'drawing' ? 'drawing' : item.state === 'failed' ? 'failed' : 'waiting')}
-                zoomLabel={props.t('zoom')} outdatedLabel={t('outdated')} onFocusCard={props.onFocusCard} onZoom={props.onZoom} />)}
+            {props.cards.map((item, index) => Math.abs(index - focus) <= CAROUSEL_WINDOW_RADIUS
+                ? <DeskCastCard key={item.id} item={item} index={index} focus={focus}
+                    stateLabel={t(item.state === 'drawing' ? 'drawing' : item.state === 'failed' ? 'failed' : 'waiting')}
+                    zoomLabel={props.t('zoom')} outdatedLabel={t('outdated')} onFocusCard={props.onFocusCard} onZoom={props.onZoom} />
+                : <article key={item.id} className='nmx-desk-card is-placeholder' aria-hidden='true' style={carouselStyle(index, focus)} />)}
             <Arrows index={focus} count={props.cards.length} onFocus={props.onFocusCard} previous={t('previous')} next={t('next')} />
         </div>
         <div className='nmx-desk-card-detail'>
@@ -1016,21 +1117,45 @@ export function clipOwnPrompt(prompt: string): string {
 }
 
 /**
- * 拍摄: the focused episode's clips as cards (the same card as casting: a card back until the clip is
- * filmed, then it flips and plays), and one text box below — this clip's description or the episode's
- * script — with the matching action.
+ * 拍摄: the focused episode's clips as cards (windowed within |i - focus| <= 2 or full screen), and one text box below.
  */
 function ShootStage(props: Inner): React.ReactElement {
     const { t } = props;
     const [tab, setTab] = React.useState<'clip' | 'episode'>('clip');
     const [drafts, setDrafts] = React.useState<Record<string, string>>({});
     const [scriptChanged, setScriptChanged] = React.useState<Record<number, boolean>>({});
-    if (!props.episodes.length) return <div className='nmx-desk-empty'><span>{t('noClips')}</span></div>;
-    const focusEpisode = Math.min(props.focusEpisode, props.episodes.length - 1);
+    const [fullscreenShots, setFullscreenShots] = React.useState<ReadonlySet<string>>(() => new Set());
+    const clipTextareaRef = React.useRef<HTMLTextAreaElement>(null);
+    const scriptTextareaRef = React.useRef<HTMLTextAreaElement>(null);
+    const handleFullscreenChange = React.useCallback((shotId: string, full: boolean): void => {
+        setFullscreenShots(prev => {
+            if (full === prev.has(shotId)) return prev;
+            const next = new Set(prev);
+            if (full) next.add(shotId);
+            else next.delete(shotId);
+            return next;
+        });
+    }, []);
+    const focusEpisode = props.episodes.length ? Math.min(props.focusEpisode, props.episodes.length - 1) : 0;
     const episode = props.episodes[focusEpisode];
-    const clips = episode.clips;
+    const clips = episode?.clips ?? [];
     const focus = Math.min(props.focusClip, Math.max(0, clips.length - 1));
     const clip = clips[focus];
+    const flushShootRef = React.useRef<() => void>(() => undefined);
+    flushShootRef.current = () => {
+        if (tab === 'clip' && clip && clipTextareaRef.current && !isImeFieldComposing(clipTextareaRef.current)) {
+            const live = clipTextareaRef.current.value;
+            setDrafts(current => current[clip.shotId] === live ? current : { ...current, [clip.shotId]: live });
+        } else if (tab === 'episode' && episode && scriptTextareaRef.current && !isImeFieldComposing(scriptTextareaRef.current)) {
+            const live = scriptTextareaRef.current.value;
+            if (live !== episode.script) {
+                props.onScriptChange(episode.number, live);
+                setScriptChanged(current => current[episode.number] ? current : { ...current, [episode.number]: true });
+            }
+        }
+    };
+    React.useEffect(() => registerPendingCanvasEditFlush(() => flushShootRef.current()), []);
+    if (!episode) return <div className='nmx-desk-empty'><span>{t('noClips')}</span></div>;
     const stateLabel = (state: DeskClip['state']): string => t(state === 'failed' ? 'failed' : state === 'done' ? 'done' : state === 'picture' ? 'picture' : state === 'video' ? 'video' : state === 'queued' ? 'queued' : 'waiting');
     const draft = clip ? drafts[clip.shotId] ?? clipOwnPrompt(clip.prompt) : '';
     const busy = clip && (clip.state === 'queued' || clip.state === 'picture' || clip.state === 'video');
@@ -1043,9 +1168,11 @@ function ShootStage(props: Inner): React.ReactElement {
         </div>
         {!clips.length ? <div className='nmx-desk-empty'><span>{episode.splitting ? t('splitting') : t('noClips')}</span></div>
             : <div className='nmx-desk-carousel is-clips'>
-                {clips.map((item, index) => <DeskClipCard key={item.shotId} item={item} index={index} focus={focus}
-                    stateText={stateLabel(item.state)} secondsText={t('seconds', { n: item.seconds })} outdatedText={t('outdated')}
-                    onFocusClip={props.onFocusClip} />)}
+                {clips.map((item, index) => Math.abs(index - focus) <= CAROUSEL_WINDOW_RADIUS || fullscreenShots.has(item.shotId)
+                    ? <DeskClipCard key={item.shotId} item={item} index={index} focus={focus}
+                        stateText={stateLabel(item.state)} secondsText={t('seconds', { n: item.seconds })} outdatedText={t('outdated')}
+                        onFocusClip={props.onFocusClip} onFullscreenChange={handleFullscreenChange} />
+                    : <article key={item.shotId} className='nmx-desk-card is-clip is-placeholder' aria-hidden='true' style={carouselStyle(index, focus)} />)}
                 <Arrows index={focus} count={clips.length} onFocus={props.onFocusClip} previous={t('previous')} next={t('next')} />
             </div>}
         {clips.length > 0 && <div className='nmx-desk-filmstrip' role='tablist' aria-label={t('clips', { n: clips.length })}>
@@ -1060,17 +1187,32 @@ function ShootStage(props: Inner): React.ReactElement {
                 <button role='tab' aria-selected={tab === 'episode'} className={tab === 'episode' ? 'is-current' : ''} onClick={() => setTab('episode')}>{t('tabEpisode')}</button>
             </div>
             {tab === 'clip' && clip ? <>
-                <ImeTextarea rows={4} value={draft} onChange={event => { const value = event.currentTarget.value; setDrafts(current => ({ ...current, [clip.shotId]: value })); }} />
+                <ImeTextarea key={`clip-${clip.shotId}`} ref={clipTextareaRef} commitDelayMs={250} rows={4} value={draft}
+                    onChange={event => { const value = event.currentTarget.value; setDrafts(current => current[clip.shotId] === value ? current : { ...current, [clip.shotId]: value }); }} />
                 {clip.generatedPrompt && <details><summary>{comicShotFieldText(props.locale as NextMuxDesktopLocale, 'englishPrompt')}</summary>
                     <ImeTextarea rows={6} readOnly value={clip.generatedPrompt} aria-label={comicShotFieldText(props.locale as NextMuxDesktopLocale, 'englishPrompt')} data-nmx-literal />
                 </details>}
                 {clip.error && <small className='nmx-desk-clip-error' data-nmx-literal>{clip.error}</small>}
-                <button className='nmx-primary-button' disabled={Boolean(busy)} onClick={() => props.onRegenerateClip(clip.shotId, draft)}>
+                <button className='nmx-primary-button' disabled={Boolean(busy)} onClick={() => {
+                    const latest = clipTextareaRef.current?.value ?? draft;
+                    if (latest !== draft) setDrafts(current => ({ ...current, [clip.shotId]: latest }));
+                    props.onRegenerateClip(clip.shotId, latest);
+                }}>
                     <i className='codicon codicon-refresh'></i>{busy ? t('filming') : t('regenerateClip')}</button>
             </> : <>
-                <ImeTextarea rows={5} value={episode.script} readOnly={props.adapting}
-                    onChange={event => { props.onScriptChange(episode.number, event.currentTarget.value); setScriptChanged(current => ({ ...current, [episode.number]: true })); }} />
-                <button className='nmx-primary-button' disabled={!scriptChanged[episode.number]} onClick={() => { setScriptChanged(current => ({ ...current, [episode.number]: false })); props.onReshootEpisode(episode.number); }}>
+                <ImeTextarea key={`ep-${episode.number}`} ref={scriptTextareaRef} commitDelayMs={250} rows={5} value={episode.script} readOnly={props.adapting}
+                    onInput={event => {
+                        const changed = event.currentTarget.value !== episode.script;
+                        if (changed && !scriptChanged[episode.number]) setScriptChanged(current => ({ ...current, [episode.number]: true }));
+                    }}
+                    onChange={event => { props.onScriptChange(episode.number, event.currentTarget.value); setScriptChanged(current => current[episode.number] ? current : { ...current, [episode.number]: true }); }} />
+                <button className='nmx-primary-button' disabled={!scriptChanged[episode.number]} onClick={() => {
+                    if (scriptTextareaRef.current && !isImeFieldComposing(scriptTextareaRef.current) && scriptTextareaRef.current.value !== episode.script) {
+                        props.onScriptChange(episode.number, scriptTextareaRef.current.value);
+                    }
+                    setScriptChanged(current => ({ ...current, [episode.number]: false }));
+                    props.onReshootEpisode(episode.number);
+                }}>
                     <i className='codicon codicon-refresh'></i>{t('applyScript')}</button>
             </>}
         </div>

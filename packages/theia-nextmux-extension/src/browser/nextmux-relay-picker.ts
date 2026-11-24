@@ -1,6 +1,7 @@
 import type { NextMuxDesktopLocale } from './nextmux-locale';
 import type { PublicMerchantMeasurement } from '../common/nextmux-public-merchants';
 import type { ComicStepCapability } from './nextmux-comic-step-models';
+import { getCachedDateTimeFormat, getCachedNumberFormat } from './nextmux-intl-cache';
 
 export type RelaySourceTab = 'merchant' | 'favorite' | 'my-api';
 export type RelayMetricKind = 'quality' | 'authenticity' | 'availability' | 'latency' | 'price';
@@ -90,7 +91,7 @@ export function relayMeasurementNote(locale: NextMuxDesktopLocale, kind: 'latenc
     if (kind === 'latencyFromApi') return notes[3];
     if (kind === 'authenticityDefault') return notes[4];
     if (typeof observedAt !== 'number' || !Number.isFinite(observedAt) || observedAt <= 0) return notes[0];
-    const time = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(observedAt);
+    const time = getCachedDateTimeFormat(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(observedAt);
     return notes[1].replace('{time}', time);
 }
 
@@ -111,7 +112,7 @@ export function relayMetricSignal(kind: RelayMetricKind, value: number | undefin
 /** A 0–100 measurement as a percentage with at most one decimal: two likes in three votes read 66.7%, not 66.66666666666667%. */
 export function relayPercentText(locale: NextMuxDesktopLocale, value: number | undefined): string {
     return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100
-        ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 }).format(value / 100) : '—';
+        ? getCachedNumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 }).format(value / 100) : '—';
 }
 
 /** A multiplier with its "×", "free" when 0×, or nothing when there is none, so a missing value never reads "—×". */
@@ -128,7 +129,7 @@ export function relayMultiplierTag(locale: NextMuxDesktopLocale, value: number |
 export function relayMultiplierText(locale: NextMuxDesktopLocale, value: number | undefined | null): string {
     if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) return '—';
     if (value === 0) return 'free';
-    const format = (multiplier: number): string => new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(multiplier);
+    const format = (multiplier: number): string => getCachedNumberFormat(locale, { maximumFractionDigits: 2 }).format(multiplier);
     return value < 50 ? `<${format(0.01)}` : format(value / 10_000);
 }
 
@@ -179,7 +180,7 @@ export function comicRelayFreeScope(capability: ComicStepCapability, surface: 's
 export function relayLatencyText(locale: NextMuxDesktopLocale, value: number | undefined): string {
     if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '—';
     const milliseconds = Math.round(value);
-    const format = (number: number, digits: number): string => new Intl.NumberFormat(locale, { maximumFractionDigits: digits, useGrouping: false }).format(number);
+    const format = (number: number, digits: number): string => getCachedNumberFormat(locale, { maximumFractionDigits: digits, useGrouping: false }).format(number);
     return milliseconds < 1_000 ? `${format(milliseconds, 0)} ms`
         : `${format(milliseconds / 1_000, milliseconds < 10_000 ? 2 : milliseconds < 100_000 ? 1 : 0)} s`;
 }

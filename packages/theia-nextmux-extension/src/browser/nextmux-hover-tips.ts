@@ -9,9 +9,10 @@ const TARGETS = '.nmx-workspace-controls button, .nmx-titlebar-actions button, .
 const DELAY_MS = 320;
 /**
  * Content that changes all the time (the conversation while it scrolls or streams, the sidebar, the drawer, the
- * composer, terminals, editors) holds none of the title bar labels measured below.
+ * composer, terminals, editors, comic canvas/studio, model center directory/drawers) holds none of the title bar labels measured below.
  */
-const UNRELATED_CONTENT = '.nmx-task-view, .nmx-thread-timeline, .nmx-context-nav, .nmx-work-context, .nmx-composer, .nmx-comic-chat-thread, .xterm, .monaco-editor';
+const UNRELATED_CONTENT = '.nmx-task-view, .nmx-thread-timeline, .nmx-context-nav, .nmx-work-context, .nmx-composer, .nmx-comic-chat-thread, .xterm, .monaco-editor, .nmx-comic-studio, .nmx-board, .nmx-mc-directory, .nmx-mc-drawer, .nmx-relay-popover, .nmx-own-models-drawer';
+const TITLEBAR_HOST_SELECTORS = ['.nmx-titlebar', '.nmx-titlebar-primary-nav', '.nmx-titlebar-context'] as const;
 
 export function installHoverTips(root: HTMLElement): () => void {
     const doc = root.ownerDocument;
@@ -91,8 +92,8 @@ export function installHoverTips(root: HTMLElement): () => void {
         for (const label of current) { if (!labels.has(label)) { labels.add(label); resize?.observe(label); } updateOverflow(label); }
     };
     // Measuring reads layout. Done straight from the observer it forced a synchronous reflow inside the frames of a
-    // wheel scroll (the virtual list mounts and unmounts turns as it goes); now at most once per frame, and only for
-    // changes outside content that never holds these labels.
+    // wheel scroll; now at most once per frame, and observing only the title bar (plus direct shell/root children
+    // to detect titlebar mount/unmount) so workspace content (#nmx-workspace, Comic, Model Center, thread) never wakes it.
     let refreshFrame = 0;
     const scheduleRefresh = (): void => {
         if (refreshFrame) return;
@@ -101,6 +102,8 @@ export function installHoverTips(root: HTMLElement): () => void {
             refreshLabels();
         });
     };
+    const observedTitlebars = new WeakSet<Node>();
+    const observedContainers = new WeakSet<Node>();
     const changes = new MutationObserver(records => {
         for (const record of records) {
             const element = record.target instanceof Element ? record.target : record.target.parentElement;
@@ -110,7 +113,48 @@ export function installHoverTips(root: HTMLElement): () => void {
             }
         }
     });
-    changes.observe(root, { childList: true, subtree: true, characterData: true });
+    let observingRootFallback = false;
+    const attachTitlebarObservers = (): void => {
+        let attachedTitlebar = false;
+        for (const selector of TITLEBAR_HOST_SELECTORS) {
+            const el = root.querySelector?.(selector);
+            if (el) {
+                attachedTitlebar = true;
+                if (observingRootFallback) {
+                    observingRootFallback = false;
+                    changes.disconnect();
+                }
+                if (!observedTitlebars.has(el)) {
+                    observedTitlebars.add(el);
+                    changes.observe(el, { childList: true, subtree: true, characterData: true });
+                }
+            }
+        }
+        if (attachedTitlebar) {
+            for (const selector of TITLEBAR_HOST_SELECTORS) {
+                const el = root.querySelector?.(selector);
+                if (el && !observedTitlebars.has(el)) {
+                    observedTitlebars.add(el);
+                    changes.observe(el, { childList: true, subtree: true, characterData: true });
+                }
+            }
+        } else if (!observingRootFallback) {
+            observingRootFallback = true;
+            changes.observe(root, { childList: true, subtree: true, characterData: true });
+        }
+        const shell = root.querySelector?.('.nmx-shell');
+        if (shell && !observedContainers.has(shell)) {
+            observedContainers.add(shell);
+            containerObserver.observe(shell, { childList: true, subtree: false });
+        }
+    };
+    const containerObserver = new MutationObserver(() => {
+        attachTitlebarObservers();
+        scheduleRefresh();
+    });
+    observedContainers.add(root);
+    containerObserver.observe(root, { childList: true, subtree: false });
+    attachTitlebarObservers();
     refreshLabels();
     // Scrolling anywhere hides a label; with none showing or pending, a scroll does no work at all.
     const onScroll = (): void => {
@@ -127,7 +171,7 @@ export function installHoverTips(root: HTMLElement): () => void {
         hide();
         if (refreshFrame) view.cancelAnimationFrame(refreshFrame);
         refreshFrame = 0;
-        resize?.disconnect(); changes.disconnect();
+        resize?.disconnect(); changes.disconnect(); containerObserver.disconnect();
         for (const label of labels) label.removeAttribute('data-nmx-nav-overflow');
         root.removeEventListener('focusin', focus);
         root.removeEventListener('focusout', hide);

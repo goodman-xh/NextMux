@@ -1131,11 +1131,21 @@ const officialModelSurfaceTemplates: Readonly<Record<NextMuxDesktopLocale, Reado
 
 const generatedSources = Object.keys(generated.en || {}).sort((left, right) => right.length - left.length);
 const manualSources = Object.keys(manual.en).sort((left, right) => right.length - left.length);
+const zhCnCompositeSources = Object.keys(manual['zh-CN'])
+    .filter(source => !/[\u3400-\u9fff]/u.test(source) && manual['zh-CN'][source] !== source)
+    .sort((left, right) => right.length - left.length);
+const zhCnCompositePattern = zhCnCompositeSources.length
+    ? new RegExp(zhCnCompositeSources.map(source => source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g')
+    : undefined;
 const localizationCache = new Map<NextMuxDesktopLocale, Map<string, string>>();
-const MAX_LOCALIZATION_CACHE_ENTRIES = 4_096;
+const MAX_LOCALIZATION_CACHE_ENTRIES = 16_384;
 
 function cacheLocalizedSurface(cache: Map<string, string>, value: string, localized: string): string {
-    if (cache.size >= MAX_LOCALIZATION_CACHE_ENTRIES) cache.delete(cache.keys().next().value as string);
+    if (cache.has(value)) cache.delete(value);
+    else if (cache.size >= MAX_LOCALIZATION_CACHE_ENTRIES) {
+        const oldest = cache.keys().next().value;
+        if (oldest !== undefined) cache.delete(oldest);
+    }
     cache.set(value, localized);
     return localized;
 }
@@ -1200,16 +1210,41 @@ function localizeDynamicSurface(locale: NextMuxDesktopLocale, value: string): st
 }
 
 export function localizeDesktopSurface(locale: NextMuxDesktopLocale, value: string): string {
-    const reviewedMedia = reviewedMediaSurfaceText(locale, value);
-    if (reviewedMedia !== undefined) return reviewedMedia;
-    if (value === 'ElevenLabs 音频') return mediaAuditText(locale, 'elevenLabsAudio');
     let localeCache = localizationCache.get(locale);
     if (!localeCache) {
         localeCache = new Map<string, string>();
         localizationCache.set(locale, localeCache);
     }
     const cached = localeCache.get(value);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+        localeCache.delete(value);
+        localeCache.set(value, cached);
+        return cached;
+    }
+    if (locale === 'zh-CN') {
+        const corrected = correctedSurfaceLabels['zh-CN']?.[value];
+        if (corrected) return cacheLocalizedSurface(localeCache, value, corrected);
+        const coding = codingSurfaceText('zh-CN', value);
+        if (coding) return cacheLocalizedSurface(localeCache, value, coding);
+        const shell = shellSurfaceText('zh-CN', value);
+        if (shell) return cacheLocalizedSurface(localeCache, value, shell);
+        const modelsSettings = modelsSettingsSurfaceText('zh-CN', value);
+        if (modelsSettings) return cacheLocalizedSurface(localeCache, value, modelsSettings);
+        const manualExact = manual['zh-CN']?.[value];
+        if (manualExact) return cacheLocalizedSurface(localeCache, value, manualExact);
+        if (value.trim() === 'Voice ID') {
+            const reviewedMedia = reviewedMediaSurfaceText('zh-CN', value);
+            if (reviewedMedia !== undefined) return cacheLocalizedSurface(localeCache, value, reviewedMedia);
+        }
+        if (!/[\u3400-\u9fff]/u.test(value) && zhCnCompositePattern) {
+            const localized = value.replace(zhCnCompositePattern, match => manual['zh-CN'][match] || match);
+            return cacheLocalizedSurface(localeCache, value, localized);
+        }
+        return cacheLocalizedSurface(localeCache, value, value);
+    }
+    const reviewedMedia = reviewedMediaSurfaceText(locale, value);
+    if (reviewedMedia !== undefined) return cacheLocalizedSurface(localeCache, value, reviewedMedia);
+    if (value === 'ElevenLabs 音频') return cacheLocalizedSurface(localeCache, value, mediaAuditText(locale, 'elevenLabsAudio'));
     const corrected = correctedSurfaceLabels[locale]?.[value];
     if (corrected) return cacheLocalizedSurface(localeCache, value, corrected);
     const coding = codingSurfaceText(locale, value);

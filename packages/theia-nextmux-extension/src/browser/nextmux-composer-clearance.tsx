@@ -19,7 +19,8 @@ export function observeComposerClearance(anchor: HTMLElement, gap = 28): () => v
     let frame = 0;
     let previous = -1;
     let disposed = false;
-    const thread = (): HTMLElement | null => shell.querySelector<HTMLElement>('.nmx-task-view');
+    const stage = anchor.closest<HTMLElement>('.nmx-coding-stage') ?? shell.querySelector<HTMLElement>('.nmx-coding-stage');
+    const thread = (): HTMLElement | null => (stage ?? shell).querySelector<HTMLElement>('.nmx-task-view');
     const measure = (): void => {
         frame = 0;
         if (disposed || !anchor.isConnected) return;
@@ -50,13 +51,16 @@ export function observeComposerClearance(anchor: HTMLElement, gap = 28): () => v
     observer.observe(composer);
     const scroller = thread();
     if (scroller) observer.observe(scroller);
-    // The transcript is remounted per conversation; re-attach when it changes.
+    let observed = scroller;
+    // The transcript is remounted per conversation; observe only `.nmx-coding-stage` (or composer's parent if absent)
+    // so unrelated views (Comic, Model Center, sidebar, drawers) never wake this observer.
     const mutations = new MutationObserver(() => {
+        if (observed?.isConnected) return;
         const current = thread();
         if (current && current !== observed) { observed = current; observer.observe(current); schedule(); }
     });
-    let observed = scroller;
-    mutations.observe(shell, { childList: true, subtree: true });
+    const observationTarget = stage ?? composer.parentElement ?? shell;
+    mutations.observe(observationTarget, { childList: true, subtree: Boolean(stage) });
     schedule();
     return () => {
         disposed = true;

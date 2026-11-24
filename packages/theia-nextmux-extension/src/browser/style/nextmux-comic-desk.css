@@ -63,7 +63,12 @@
 .nmx-desk-carousel { position: relative; height: 100%; min-height: 320px; transform-style: preserve-3d; outline: none; }
 .nmx-desk-carousel > article {
     position: absolute; top: 18px; bottom: 44px; left: 50%; transition: transform 420ms cubic-bezier(.2,.8,.2,1), opacity 320ms ease;
-    transform-origin: center center; will-change: transform;
+    transform-origin: center center;
+}
+/* A layer per card only while the carousel is in use (the pointer over it or its arrows, or the focus in it): the cards
+   then slide without a first raster, and an idle, scrolled-away or hidden desk keeps no GPU layer for every card. */
+@media (prefers-reduced-motion: no-preference) {
+    .nmx-desk-carousel:is(:hover, :focus-within) > article { will-change: transform; }
 }
 .nmx-desk-arrow {
     position: absolute; top: 50%; z-index: 20; width: 38px; height: 38px; margin-top: -19px; border-radius: 50%;
@@ -619,9 +624,13 @@
 .nmx-shell .nmx-desk-editor { gap: 10px; margin: 0 18px 14px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--nmx-text) 3%, var(--nmx-panel)); }
 .nmx-shell .nmx-desk-editor textarea { padding: 10px 12px; border-radius: 10px; font-size: 13.5px; line-height: 1.7; }
 .nmx-shell .nmx-desk-editor > .nmx-primary-button { height: 34px; min-height: 34px; }
+/* No motion: every shimmer stops. Each selector repeats its shimmer rule's own, so it is at least as specific (the
+   shorter forms here lost to the :not() chains above and left the shimmers running). */
 @media (prefers-reduced-motion: reduce) {
     .nmx-desk-filmstrip > button:is(.is-video, .is-picture)::before,
+    .nmx-desk-filmstrip > button:is(.is-video, .is-picture):not(.is-done):not(.is-failed):not(.is-outdated)::before,
     .nmx-desk-card.is-clip.is-video .nmx-desk-card-back::after,
     .nmx-desk-card.is-clip.is-picture .nmx-desk-card-back::after,
-    .nmx-desk-card.is-drawing .nmx-desk-card-back::after { animation: none; }
+    .nmx-desk-card.is-clip:is(.is-video, .is-picture):not(.is-done):not(.is-failed) .nmx-desk-card-back::after,
+    .nmx-desk-card.is-drawing .nmx-desk-card-back::after { animation: none; will-change: auto; }
 }

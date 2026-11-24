@@ -40,6 +40,8 @@ interface Props {
     /** Closes whatever opened the broken part (its open flag), so it does not break again at once. */
     readonly onDismiss?: () => void;
     readonly render: () => React.ReactNode;
+    /** Optional caller-managed version key; when provided, skips re-renders unless version/locale/variant/name/error changes. */
+    readonly version?: string | number;
 }
 
 export class PanelBoundary extends React.Component<Props, { error?: Error }> {
@@ -47,6 +49,15 @@ export class PanelBoundary extends React.Component<Props, { error?: Error }> {
 
     static getDerivedStateFromError(error: Error): { error: Error } {
         return { error };
+    }
+
+    override shouldComponentUpdate(nextProps: Readonly<Props>, nextState: Readonly<{ error?: Error }>): boolean {
+        if (nextState.error !== this.state.error) return true;
+        if (nextProps.version === undefined && this.props.version === undefined) return true;
+        return nextProps.version !== this.props.version
+            || nextProps.locale !== this.props.locale
+            || nextProps.variant !== this.props.variant
+            || nextProps.name !== this.props.name;
     }
 
     override componentDidCatch(error: Error, info: React.ErrorInfo): void {

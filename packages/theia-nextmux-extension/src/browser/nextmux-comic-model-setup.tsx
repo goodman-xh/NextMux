@@ -16,6 +16,8 @@ import {
 } from './nextmux-comic-step-models';
 import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
 import { DepositVerifiedHint, depositVerifiedHintText, type DepositVerifiedHintAnchor, type DepositVerifiedStore } from './nextmux-deposit-verified';
+import { DEFAULT_VIRTUAL_LIST_THRESHOLD, VirtualList } from './nextmux-virtual-list';
+import type { VirtuosoHandle } from 'react-virtuoso';
 
 /**
  * “AI 模型”: one small panel where the whole comic workflow gets its models — a relay for every
@@ -360,6 +362,111 @@ export function comicCandidateTaxonomyFacts(candidate: Pick<ComicStepCandidate, 
         output: candidate.withSound ? base.output : base.output.filter(value => value.toLowerCase() !== 'audio') };
 }
 
+function comicSetupSourceName(locale: NextMuxDesktopLocale, source: Pick<ComicStepSource, 'kind' | 'label'>): string {
+    return source.kind === 'automatic' ? comicStepText(locale, 'automatic') : source.kind === 'local' ? comicStepText(locale, 'local') : source.label;
+}
+
+const EMPTY_STEP_LABELS: Partial<Record<ComicStepCapability, string>> = {};
+
+const ComicSetupSourceIcon = React.memo(function ComicSetupSourceIcon(props: { readonly kind: ComicStepSource['kind'] }): React.ReactElement {
+    return <span className='nmx-comic-setup-source-icon' aria-hidden='true'><i className={`codicon codicon-${SOURCE_ICONS[props.kind]}`}></i></span>;
+});
+
+const ComicSetupSourceCopy = React.memo(function ComicSetupSourceCopy(props: {
+    readonly locale: NextMuxDesktopLocale;
+    readonly source: ComicSetupSource;
+    readonly stepLabels?: Partial<Record<ComicStepCapability, string>>;
+    readonly storeProfile?: Omit<DepositVerifiedStore, 'name'>;
+    readonly offering?: ComicStepCandidate['offering'];
+}): React.ReactElement {
+    const source = props.source;
+    const sourceName = (item: Pick<ComicStepSource, 'kind' | 'label'>): string => comicSetupSourceName(props.locale, item);
+    const label = (capability: ComicStepCapability): string => props.stepLabels?.[capability] || comicStepName(props.locale, capability);
+    // The name stays the copy's own child (its ellipsis and colour rules are written for that), so the hint of a
+    // deposit-verified store hangs on the name itself: seal and name, public number, introduction, the deposit line.
+    const name = (anchor?: DepositVerifiedHintAnchor): React.ReactElement => <strong data-nmx-literal={source.kind === 'managed' || source.kind === 'official' || undefined}
+        className={source.depositVerified ? 'is-deposit-verified' : undefined} {...anchor}>{sourceName(source)}</strong>;
+    const profile = props.storeProfile;
+    const offering = !profile ? props.offering : undefined;
+    return <span className='nmx-comic-setup-source-copy'>
+        {source.depositVerified ? <DepositVerifiedHint locale={props.locale}
+            text={depositVerifiedHintText(props.locale, { ...(profile?.publicCode ? { publicCode: profile.publicCode } : {}), storeTagline: profile ? profile.storeTagline : offering?.storeTagline, storeDescription: profile ? profile.storeDescription : offering?.storeDescription, name: sourceName(source) })}>{name}</DepositVerifiedHint> : name()}
+        <span className='nmx-comic-setup-caps'>
+            {source.steps.map(capability => <em key={capability}>{label(capability)}</em>)}
+            {source.listed.map(capability => <em key={capability} className='is-listed'>{label(capability)}</em>)}
+        </span>
+    </span>;
+});
+
+const ComicSetupSourceRow = React.memo(function ComicSetupSourceRow(props: {
+    readonly locale: NextMuxDesktopLocale;
+    readonly source: ComicSetupSource;
+    readonly selected: boolean;
+    readonly loading: boolean;
+    readonly stepLabels?: Partial<Record<ComicStepCapability, string>>;
+    readonly storeProfile?: Omit<DepositVerifiedStore, 'name'>;
+    readonly offering?: ComicStepCandidate['offering'];
+    readonly onChoose: (key: string) => void;
+}): React.ReactElement {
+    const { source, selected, loading, onChoose } = props;
+    return <button type='button' role='option' aria-selected={selected} className={`nmx-comic-setup-source ${selected ? 'is-selected' : ''}`}
+        onClick={() => onChoose(source.key)}>
+        <ComicSetupSourceIcon kind={source.kind} />
+        <ComicSetupSourceCopy locale={props.locale} source={source} stepLabels={props.stepLabels}
+            storeProfile={props.storeProfile} offering={props.offering} />
+        {loading ? <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>
+            : selected && <i className='codicon codicon-check nmx-comic-setup-source-check' aria-hidden='true'></i>}
+    </button>;
+});
+
+interface ComicSetupModelServesInfo {
+    readonly serves: Partial<Record<ComicStepCapability, string>>;
+    readonly others: readonly ComicStepCapability[];
+    readonly allSet: boolean;
+}
+
+const ComicSetupModelRow = React.memo(function ComicSetupModelRow(props: {
+    readonly locale: NextMuxDesktopLocale;
+    readonly themeClass: string;
+    readonly capability: ComicStepCapability;
+    readonly candidate: ComicStepCandidate;
+    readonly recommended: boolean;
+    readonly isChosen: boolean;
+    readonly servesInfo: ComicSetupModelServesInfo;
+    readonly stepLabels?: Partial<Record<ComicStepCapability, string>>;
+    readonly onStepSelect: (capability: ComicStepCapability, candidateKey: string) => void;
+    readonly onStepSelectMany: (choices: Partial<Record<ComicStepCapability, string>>) => void;
+}): React.ReactElement {
+    const { locale, themeClass, capability, candidate, recommended, isChosen, servesInfo, stepLabels, onStepSelect, onStepSelectMany } = props;
+    const label = (cap: ComicStepCapability): string => stepLabels?.[cap] || comicStepName(locale, cap);
+    const { serves, others, allSet } = servesInfo;
+    // A relay model shows how it is priced (multiplier, or the relay's own price); the hover card has every rate.
+    const priceTag = candidate.offering ? (bps => bps === null ? offeringPriceText(locale, 'ownTag') : relayMultiplierTag(locale, bps))(offeringMultiplierBps(candidate.offering)) : '';
+    const fidelity = candidate.offering ? measuredModelFidelity(candidate.offering.fidelity) : undefined;
+    // "With audio" is a shared badge below; a silent video still says so in words (picture only).
+    const detail = [candidate.withSound === false ? comicStepText(locale, 'silent') : '', priceTag, candidate.note].filter(Boolean).join(' · ');
+    const optionTitle = [candidate.label, detail, candidate.offering ? `${modelPickerEvidenceText(locale, 'authenticity')}: ${relayPercentText(locale, fidelity)}` : ''].filter(Boolean).join(' · ');
+    return <div className={`nmx-comic-setup-model ${isChosen ? 'is-selected' : ''}`}>
+        <OfferingPriceHover locale={locale} offering={candidate.offering} themeClass={themeClass}>
+            <button type='button' role='option' aria-selected={isChosen} aria-label={optionTitle} onClick={() => onStepSelect(capability, candidate.key)}>
+                <span className='nmx-comic-setup-radio' aria-hidden='true'>{isChosen && <i className='codicon codicon-check'></i>}</span>
+                <span className='nmx-comic-setup-option-copy'>
+                    <span className='nmx-comic-setup-option-head'>
+                        <strong data-nmx-literal>{candidate.label}{recommended && <em className='nmx-comic-setup-badge'>{comicModelPanelText(locale, 'recommended')}</em>}</strong>
+                        {candidate.offering && <ModelAuthenticityTag locale={locale} value={fidelity} />}
+                    </span>
+                    {detail && <small data-nmx-literal>{detail}</small>}
+                    <ModelTaxonomyTags locale={locale} model={comicCandidateTaxonomyFacts(candidate, capability)} />
+                    {others.length > 0 && <span className='nmx-comic-setup-caps'>{(Object.keys(serves) as ComicStepCapability[]).map(cap =>
+                        <em key={cap} className={cap === capability ? 'is-here' : ''}>{label(cap)}</em>)}</span>}
+                </span>
+            </button>
+        </OfferingPriceHover>
+        {others.length > 0 && <button type='button' className='nmx-comic-setup-all' disabled={isChosen && allSet}
+            title={comicModelPanelText(locale, 'useForAllHint', { list: [capability, ...others].map(label).join('、') })} onClick={() => onStepSelectMany(serves)}>{comicModelPanelText(locale, 'useForAll')}</button>}
+    </div>;
+});
+
 /**
  * The panel works like the comic conversation's model picker: first where the models come from (a relay or an own
  * API), then a model for each function from that source. A function the source cannot do says so and shows what
@@ -369,7 +476,8 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
     const t = (key: SetupKey, values?: Readonly<Record<string, string | number>>): string => comicModelSetupText(props.locale, key, values);
     const p = (key: PanelKey, values?: Readonly<Record<string, string | number>>): string => comicModelPanelText(props.locale, key, values);
     const panel = React.useRef<HTMLElement>(null);
-    const sourceList = React.useRef<HTMLDivElement>(null);
+    const sourceList = React.useRef<HTMLDivElement | null>(null);
+    const sourceVirtuoso = React.useRef<VirtuosoHandle>(null);
     const [phase, setPhase] = React.useState<'enter' | 'open' | 'leave'>('enter');
     const [place, setPlace] = React.useState<{ top: number; side: number; maxHeight: number }>();
     const [active, setActive] = React.useState<ComicStepCapability>(props.focus || props.steps[0]?.capability || 'text');
@@ -462,48 +570,66 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
     const pending = props.pendingRelays || {};
     const relaySources = React.useMemo(() => comicSetupSources(props.steps, 'relay', pending, props.depositVerified), [props.steps, pending, props.depositVerified]);
     const ownSources = React.useMemo(() => comicSetupSources(props.steps, 'own', undefined, undefined, props.pendingOwnSources), [props.steps, props.pendingOwnSources]);
+    const sourceOfferings = React.useMemo(() => {
+        const offerings = new Map<string, ComicStepCandidate['offering']>();
+        for (const item of props.steps) {
+            for (const candidate of item.candidates) {
+                if (candidate.offering && !offerings.has(candidate.source.key)) offerings.set(candidate.source.key, candidate.offering);
+            }
+        }
+        return offerings;
+    }, [props.steps]);
+    const stableStepLabels = props.stepLabels ?? EMPTY_STEP_LABELS;
     const sources = tab === 'relay' ? relaySources : ownSources;
     const needle = query.trim().toLocaleLowerCase();
     const shown = needle ? sources.filter(source => sourceName(source).toLocaleLowerCase().includes(needle)) : sources;
     const chosenSource = [...relaySources, ...ownSources].find(source => source.key === chosen);
     const loadingChosen = Boolean(chosen) && (props.loadingRelayKey === chosen || Boolean(props.officialSourceLoading));
-    function sourceName(source: Pick<ComicStepSource, 'kind' | 'label'>): string {
-        return source.kind === 'automatic' ? comicStepText(props.locale, 'automatic') : source.kind === 'local' ? comicStepText(props.locale, 'local') : source.label;
-    }
+    const sourceName = (source: Pick<ComicStepSource, 'kind' | 'label'>): string => comicSetupSourceName(props.locale, source);
     // The chosen source scrolls into view when the list opens.
     React.useEffect(() => {
-        if (picking) sourceList.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
-    }, [tab, picking]);
-    const choose = (key: string): void => { props.onSourceSelect(key); setPicking(false); setQuery(''); };
+        if (!picking) return;
+        const selectedIndex = shown.findIndex(source => source.key === chosen);
+        if (selectedIndex >= 0 && shown.length > DEFAULT_VIRTUAL_LIST_THRESHOLD) {
+            sourceVirtuoso.current?.scrollToIndex({ index: selectedIndex, align: 'center' });
+        }
+        sourceList.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+    }, [tab, picking, chosen, shown]);
+    const choose = React.useCallback((key: string): void => { props.onSourceSelect(key); setPicking(false); setQuery(''); }, [props.onSourceSelect]);
     const openSources = (): void => {
         setPicking(true);
         requestAnimationFrame(() => sourceList.current?.querySelector<HTMLElement>('[aria-selected="true"], button')?.focus({ preventScroll: false }));
     };
-    const sourceIcon = (source: ComicSetupSource): React.ReactNode => <span className='nmx-comic-setup-source-icon' aria-hidden='true'><i className={`codicon codicon-${SOURCE_ICONS[source.kind]}`}></i></span>;
-    const sourceCopy = (source: ComicSetupSource): React.ReactNode => {
-        // The name stays the copy's own child (its ellipsis and colour rules are written for that), so the hint of a
-        // deposit-verified store hangs on the name itself: seal and name, public number, introduction, the deposit line.
-        const name = (anchor?: DepositVerifiedHintAnchor): React.ReactElement => <strong data-nmx-literal={source.kind === 'managed' || source.kind === 'official' || undefined}
-            className={source.depositVerified ? 'is-deposit-verified' : undefined} {...anchor}>{sourceName(source)}</strong>;
-        const profile = props.storeProfiles?.get(source.key);
-        const offering = !profile ? props.steps.flatMap(item => item.candidates).find(candidate => candidate.source.key === source.key && candidate.offering)?.offering : undefined;
-        return <span className='nmx-comic-setup-source-copy'>
-            {source.depositVerified ? <DepositVerifiedHint locale={props.locale}
-                text={depositVerifiedHintText(props.locale, { ...(profile?.publicCode ? { publicCode: profile.publicCode } : {}), storeTagline: profile ? profile.storeTagline : offering?.storeTagline, storeDescription: profile ? profile.storeDescription : offering?.storeDescription, name: sourceName(source) })}>{name}</DepositVerifiedHint> : name()}
-            <span className='nmx-comic-setup-caps'>
-                {source.steps.map(capability => <em key={capability}>{label(capability)}</em>)}
-                {source.listed.map(capability => <em key={capability} className='is-listed'>{label(capability)}</em>)}
-            </span>
-        </span>;
-    };
 
+    const stepHere = React.useMemo(() => {
+        if (!step) return [] as readonly ComicStepCandidate[];
+        return step.candidates.filter(candidate => candidate.source.key === chosen).sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label));
+    }, [step, chosen]);
+    const stepServesByKey = React.useMemo(() => {
+        const result = new Map<string, ComicSetupModelServesInfo>();
+        if (!step) return result;
+        for (const candidate of stepHere) {
+            const serves: Partial<Record<ComicStepCapability, string>> = Object.fromEntries(props.steps.flatMap(item => {
+                const match = item.candidates.find(other => other.source.key === chosen && other.model.toLowerCase() === candidate.model.toLowerCase());
+                return match ? [[item.capability, match.key]] : [];
+            }));
+            const others = (Object.keys(serves) as ComicStepCapability[]).filter(capability => capability !== step.capability);
+            const allSet = others.every(capability => props.steps.find(item => item.capability === capability)?.resolution.candidate?.key === serves[capability]);
+            result.set(candidate.key, { serves, others, allSet });
+        }
+        return result;
+    }, [step, stepHere, chosen, props.steps]);
+
+    const virtualizeSources = shown.length > DEFAULT_VIRTUAL_LIST_THRESHOLD;
     const renderSources = (): React.ReactNode => <section className='nmx-comic-setup-block' aria-labelledby={`${id}-source`}>
         <header className='nmx-comic-setup-block-head'>
             <span className='nmx-comic-setup-num' aria-hidden='true'>1</span>
             <div><strong id={`${id}-source`}>{p('sourceTitle')}</strong><small>{p('sourceHint')}</small></div>
         </header>
         {!picking && chosenSource ? <div className='nmx-comic-setup-source is-selected is-summary'>
-            {sourceIcon(chosenSource)}{sourceCopy(chosenSource)}
+            <ComicSetupSourceIcon kind={chosenSource.kind} />
+            <ComicSetupSourceCopy locale={props.locale} source={chosenSource} stepLabels={stableStepLabels}
+                storeProfile={props.storeProfiles?.get(chosenSource.key)} offering={sourceOfferings.get(chosenSource.key)} />
             {loadingChosen && <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>}
             <button type='button' className='nmx-comic-setup-change' onClick={openSources}>{p('change')}</button>
         </div> : <>
@@ -514,23 +640,36 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
                 <em data-nmx-literal>{value === 'relay' ? relaySources.length : ownSources.length}</em></button>)}
         </div>
         {sources.length > 6 && <label className='nmx-comic-setup-search'><i className='codicon codicon-search' aria-hidden='true'></i>
-            <ImeInput value={query} maxLength={80} placeholder={p('search')} aria-label={p('search')} onChange={event => setQuery(event.currentTarget.value)} /></label>}
-        <div ref={sourceList} className='nmx-comic-setup-sources' role='listbox' aria-label={p(tab === 'relay' ? 'relays' : 'ownApis')}>
-            {shown.map(source => {
-                const selected = source.key === chosen;
-                const loading = props.loadingRelayKey === source.key || (selected && Boolean(props.officialSourceLoading));
-                return <button key={source.key} type='button' role='option' aria-selected={selected} className={`nmx-comic-setup-source ${selected ? 'is-selected' : ''}`}
-                    onClick={() => choose(source.key)}>
-                    {sourceIcon(source)}{sourceCopy(source)}
-                    {loading ? <i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>
-                        : selected && <i className='codicon codicon-check nmx-comic-setup-source-check' aria-hidden='true'></i>}
-                </button>;
-            })}
-            {!shown.length && <div className='nmx-comic-setup-empty is-compact'>
-                <span>{props.busy ? comicStepText(props.locale, 'loading') : needle ? comicStepText(props.locale, 'noMatch') : p(tab === 'own' ? 'ownNone' : 'relayNone')}</span>
-                {tab === 'own' && !props.busy && !needle && <button type='button' className='nmx-secondary-button' onClick={props.onAddApi}><i className='codicon codicon-add' aria-hidden='true'></i>{comicStepText(props.locale, 'addApi')}</button>}
-            </div>}
-        </div>
+            <ImeInput commitDelayMs={100} value={query} maxLength={80} placeholder={p('search')} aria-label={p('search')} onChange={event => setQuery(event.currentTarget.value)} /></label>}
+        {!shown.length ? (
+            <div ref={sourceList} className='nmx-comic-setup-sources' role='listbox' aria-label={p(tab === 'relay' ? 'relays' : 'ownApis')}>
+                <div className='nmx-comic-setup-empty is-compact'>
+                    <span>{props.busy ? comicStepText(props.locale, 'loading') : needle ? comicStepText(props.locale, 'noMatch') : p(tab === 'own' ? 'ownNone' : 'relayNone')}</span>
+                    {tab === 'own' && !props.busy && !needle && <button type='button' className='nmx-secondary-button' onClick={props.onAddApi}><i className='codicon codicon-add' aria-hidden='true'></i>{comicStepText(props.locale, 'addApi')}</button>}
+                </div>
+            </div>
+        ) : (
+            <VirtualList<ComicSetupSource>
+                items={shown}
+                itemKey={source => source.key}
+                className='nmx-comic-setup-sources'
+                role='listbox'
+                aria-label={p(tab === 'relay' ? 'relays' : 'ownApis')}
+                scrollerRef={el => { sourceList.current = el as HTMLDivElement | null; }}
+                virtuosoRef={virtualizeSources ? sourceVirtuoso : undefined}
+                style={virtualizeSources ? { display: 'block', height: 214 } : undefined}
+                listStyle={virtualizeSources ? { display: 'flex', flexDirection: 'column', gap: 4 } : undefined}
+                defaultItemHeight={52}
+                initialItemCount={virtualizeSources ? Math.min(shown.length, 10) : undefined}
+                renderItem={source => {
+                    const selected = source.key === chosen;
+                    const loading = props.loadingRelayKey === source.key || (selected && Boolean(props.officialSourceLoading));
+                    return <ComicSetupSourceRow key={source.key} locale={props.locale} source={source} selected={selected} loading={loading}
+                        stepLabels={stableStepLabels} storeProfile={props.storeProfiles?.get(source.key)}
+                        offering={sourceOfferings.get(source.key)} onChoose={choose} />;
+                }}
+            />
+        )}
         </>}
     </section>;
 
@@ -538,13 +677,8 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
         const selected = current.resolution.candidate;
         const covered = coveredBy(current);
         const elsewhere = Boolean(selected && !covered && chosen && selected.source.key !== chosen);
-        const here = current.candidates.filter(candidate => candidate.source.key === chosen).sort((left, right) => left.rank - right.rank || left.label.localeCompare(right.label));
+        const here = stepHere;
         const sourceLabel = chosenSource ? sourceName(chosenSource) : '';
-        // The same model at this source for every function it serves: function → its key there.
-        const also = (candidate: ComicStepCandidate): Partial<Record<ComicStepCapability, string>> => Object.fromEntries(props.steps.flatMap(item => {
-            const match = item.candidates.find(other => other.source.key === chosen && other.model.toLowerCase() === candidate.model.toLowerCase());
-            return match ? [[item.capability, match.key]] : [];
-        }));
         const officialActive = Boolean(chosen && chosen.startsWith('official:'));
         const empty = (): React.ReactNode => {
             if (!chosen) return <p className='nmx-comic-setup-hint'>{p('noSource')}</p>;
@@ -572,6 +706,7 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
                 </div>
             </div>;
         };
+        const virtualizeModels = here.length > DEFAULT_VIRTUAL_LIST_THRESHOLD;
         return <div className='nmx-comic-setup-models' role='tabpanel' id={`${id}-pane`} aria-labelledby={`${id}-step-${current.capability}`}>
             {covered && <p className='nmx-comic-setup-covered'><i className='codicon codicon-check' aria-hidden='true'></i>{p('covered', { model: props.soundVideoModel! })}</p>}
             {elsewhere && here.length > 0 && <p className='nmx-comic-setup-covered is-elsewhere' data-nmx-literal><i className='codicon codicon-check' aria-hidden='true'></i>{p('usingOther', { model: selected!.label, source: comicStepSourceLabel(props.locale, selected!.source) })}</p>}
@@ -593,39 +728,22 @@ export function ComicModelSetup(props: ComicModelSetupProps): React.ReactElement
                     )}
                 </div>
             )}
-            {here.length ? <div className='nmx-comic-setup-list' role='listbox' aria-label={label(current.capability)}>
-                {here.map((candidate, index) => {
-                    const isChosen = !covered && selected?.key === candidate.key;
-                    const serves = also(candidate);
-                    const others = (Object.keys(serves) as ComicStepCapability[]).filter(capability => capability !== current.capability);
-                    const allSet = others.every(capability => props.steps.find(item => item.capability === capability)?.resolution.candidate?.key === serves[capability]);
-                    // A relay model shows how it is priced (multiplier, or the relay's own price); the hover card has every rate.
-                    const priceTag = candidate.offering ? (bps => bps === null ? offeringPriceText(props.locale, 'ownTag') : relayMultiplierTag(props.locale, bps))(offeringMultiplierBps(candidate.offering)) : '';
-                    const fidelity = candidate.offering ? measuredModelFidelity(candidate.offering.fidelity) : undefined;
-                    // "With audio" is a shared badge below; a silent video still says so in words (picture only).
-                    const detail = [candidate.withSound === false ? comicStepText(props.locale, 'silent') : '', priceTag, candidate.note].filter(Boolean).join(' · ');
-                    const optionTitle = [candidate.label, detail, candidate.offering ? `${modelPickerEvidenceText(props.locale, 'authenticity')}: ${relayPercentText(props.locale, fidelity)}` : ''].filter(Boolean).join(' · ');
-                    return <div key={candidate.key} className={`nmx-comic-setup-model ${isChosen ? 'is-selected' : ''}`}>
-                        <OfferingPriceHover locale={props.locale} offering={candidate.offering} themeClass={props.themeClass}>
-                            <button type='button' role='option' aria-selected={isChosen} aria-label={optionTitle} onClick={() => props.onStepSelect(current.capability, candidate.key)}>
-                                <span className='nmx-comic-setup-radio' aria-hidden='true'>{isChosen && <i className='codicon codicon-check'></i>}</span>
-                                <span className='nmx-comic-setup-option-copy'>
-                                    <span className='nmx-comic-setup-option-head'>
-                                        <strong data-nmx-literal>{candidate.label}{index === 0 && <em className='nmx-comic-setup-badge'>{p('recommended')}</em>}</strong>
-                                        {candidate.offering && <ModelAuthenticityTag locale={props.locale} value={fidelity} />}
-                                    </span>
-                                    {detail && <small data-nmx-literal>{detail}</small>}
-                                    <ModelTaxonomyTags locale={props.locale} model={comicCandidateTaxonomyFacts(candidate, current.capability)} />
-                                    {others.length > 0 && <span className='nmx-comic-setup-caps'>{(Object.keys(serves) as ComicStepCapability[]).map(capability =>
-                                        <em key={capability} className={capability === current.capability ? 'is-here' : ''}>{label(capability)}</em>)}</span>}
-                                </span>
-                            </button>
-                        </OfferingPriceHover>
-                        {others.length > 0 && <button type='button' className='nmx-comic-setup-all' disabled={isChosen && allSet}
-                            title={p('useForAllHint', { list: [current.capability, ...others].map(label).join('、') })} onClick={() => props.onStepSelectMany(serves)}>{p('useForAll')}</button>}
-                    </div>;
-                })}
-            </div> : empty()}
+            {here.length ? <VirtualList<ComicStepCandidate>
+                items={here}
+                itemKey={candidate => candidate.key}
+                className='nmx-comic-setup-list'
+                role='listbox'
+                aria-label={label(current.capability)}
+                style={virtualizeModels ? { display: 'block', height: 'min(420px, 48vh)' } : undefined}
+                listStyle={virtualizeModels ? { display: 'flex', flexDirection: 'column', gap: 10 } : undefined}
+                defaultItemHeight={68}
+                initialItemCount={virtualizeModels ? Math.min(here.length, 12) : undefined}
+                renderItem={(candidate, index) => <ComicSetupModelRow key={candidate.key} locale={props.locale} themeClass={props.themeClass}
+                    capability={current.capability} candidate={candidate} recommended={index === 0}
+                    isChosen={!covered && selected?.key === candidate.key}
+                    servesInfo={stepServesByKey.get(candidate.key) ?? { serves: {}, others: [], allSet: true }}
+                    stepLabels={stableStepLabels} onStepSelect={props.onStepSelect} onStepSelectMany={props.onStepSelectMany} />}
+            /> : empty()}
         </div>;
     };
 

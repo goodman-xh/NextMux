@@ -1,6 +1,7 @@
-/* Global history is a nonmodal body portal; node history receives copied canvas tokens. */
+/* Global history is a nonmodal body portal; node history receives copied canvas tokens. The light theme reaches the portal
+   through body.nmx-theme-light-active (the widget) or body.theia-light (Theia, switched with it). */
 body > .nmx-canvas-history { --nmx-bg:#0f0f0f; --nmx-panel:#18181b; --nmx-panel-2:#202023; --nmx-text:#fbfbfc; --nmx-muted:#a1a1aa; --nmx-border:#343439; --nmx-border-strong:#55555f; --nmx-accent:#ddd; --nmx-danger:#ef8989; color-scheme:dark; }
-body:has(.nmx-shell.nmx-theme-light) > .nmx-canvas-history { --nmx-bg:#f5f6f8; --nmx-panel:#fff; --nmx-panel-2:#eceff3; --nmx-text:#252a34; --nmx-muted:#596273; --nmx-border:#d3d7df; --nmx-border-strong:#939dab; --nmx-accent:#333; --nmx-danger:#b42332; color-scheme:light; }
+body:is(.nmx-theme-light-active, .theia-light) > .nmx-canvas-history { --nmx-bg:#f5f6f8; --nmx-panel:#fff; --nmx-panel-2:#eceff3; --nmx-text:#252a34; --nmx-muted:#596273; --nmx-border:#d3d7df; --nmx-border-strong:#939dab; --nmx-accent:#333; --nmx-danger:#b42332; color-scheme:light; }
 /* Public WorkflowCanvas-PebPzvv_.css geometry: node stage/100px strip/340px inspector;
    global 760px floating grid and separate 380px detail panel, 12px gap. */
 .nmx-canvas-history-backdrop{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,.75);box-sizing:border-box}

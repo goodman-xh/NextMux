@@ -885,3 +885,12 @@ dialog.nmx-board-modal-layer::backdrop { background:transparent; }
 .nmx-board-reference-picker > .nmx-board-reference-row { position:absolute; left:0; top:calc(100% + 8px); z-index:40; min-width:220px; flex-direction:column; align-items:stretch; padding:10px; border:1px solid var(--nmx-border); border-radius:12px; color:var(--nmx-text); background:var(--nmx-panel); box-shadow:var(--cv-shadow-2); }
 .nmx-board-reference-thumb img, .nmx-board-reference-thumb video { width:100%; height:100%; object-fit:cover; border-radius:inherit; pointer-events:none; }
 .nmx-board-reference-thumb button { position:absolute; top:-5px; right:-5px; width:16px; height:16px; border:0; border-radius:50%; padding:0; background:var(--nmx-panel-2); color:var(--nmx-text); cursor:pointer; }
+
+/* Canvas culling (tldraw's rule): a card far outside the view keeps its frame, handles and size (node.size sizes the
+   frame, and the body fills it), so wires and anchors stay put; only the body skips rendering. The canvas never culls
+   the selected card, the one holding the focus, an open tool or a playing clip; the second rule keeps the first two
+   drawn whatever the culling says. A culled busy card's spinner (a custom-property animation, run on the main thread
+   every frame) waits until the card is back in view. */
+.nmx-board-node.is-culled .nmx-board-node-body { content-visibility: hidden; }
+.nmx-board-node.is-culled:is(.is-selected, :focus-within) .nmx-board-node-body { content-visibility: visible; }
+.nmx-board-node.is-culled.is-busy::after { animation-play-state: paused; }

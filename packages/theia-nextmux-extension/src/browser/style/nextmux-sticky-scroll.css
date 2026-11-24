@@ -15,7 +15,10 @@
     pointer-events: none;
 }
 
-.nmx-shell:has(:is([aria-modal='true'], [class*='-backdrop'])) > .nmx-sticky-hscroll-layer {
+/* .has-modal: set by nextmux-modal-chrome.ts on every shell holding a visible aria-modal="true" element or *-backdrop
+   overlay (dialogs, sheets, drawers, lightboxes), and on all of them while a window-wide modal is up. A class, not
+   :has([class*='-backdrop']): that selector made any class change anywhere in the shell re-check the whole shell. */
+.nmx-shell.has-modal > .nmx-sticky-hscroll-layer {
     display: none;
 }
 

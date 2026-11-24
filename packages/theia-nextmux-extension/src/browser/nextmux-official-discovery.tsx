@@ -14,6 +14,8 @@ import { groupModelsByName, sameModelId } from '../common/nextmux-model-name';
 export { isDiscoveredInvocationAllowed } from '../common/nextmux-official-invocation';
 import { contextWindowTokenLabel } from '../common/nextmux-context-budget';
 import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
+import { ImeInput } from './nextmux-ime-field';
+import { DEFAULT_VIRTUAL_LIST_THRESHOLD, VirtualList, type VirtualListContainerProps, type VirtualListItemContainerProps } from './nextmux-virtual-list';
 
 type Connection = Pick<OfficialModelConnection, 'providerId' | 'model' | 'discoveredModels'>;
 
@@ -218,6 +220,31 @@ export function ownModelListModels(connection: Pick<OfficialModelConnection, 'mo
     return groupModelsByName([...models.values()].filter(model => !needle || `${model.id} ${model.label}`.toLowerCase().includes(needle)), model => model.id);
 }
 
+type DiscoveredModelEntry = OfficialModelConnection['discoveredModels'][number];
+
+const OwnModelUl = React.forwardRef<HTMLDivElement, VirtualListContainerProps>(function OwnModelUl(props, ref) {
+    return <ul {...(props as unknown as React.HTMLAttributes<HTMLUListElement>)} ref={ref as React.Ref<HTMLUListElement>} />;
+});
+
+const OwnModelLi = function OwnModelLi({ item: _item, ...rest }: VirtualListItemContainerProps<DiscoveredModelEntry>): React.ReactElement {
+    return <li {...(rest as unknown as React.LiHTMLAttributes<HTMLLIElement>)} />;
+};
+
+const OWN_MODEL_LIST_COMPONENTS = { List: OwnModelUl, Item: OwnModelLi };
+
+const OwnModelListRow = React.memo(function OwnModelListRow({
+    locale, model, catalog
+}: {
+    readonly locale: NextMuxDesktopLocale;
+    readonly model: DiscoveredModelEntry;
+    readonly catalog?: CatalogModel;
+}): React.ReactElement {
+    return <>
+        <div className='nmx-own-model-name'>{model.label && model.label !== model.id ? <><bdi dir='auto'>{model.label}</bdi><code dir='ltr' data-nmx-literal>{model.id}</code></> : <code dir='ltr' data-nmx-literal>{model.id}</code>}</div>
+        <OwnModelFactsLine locale={locale} model={model} catalog={catalog} />
+    </>;
+});
+
 /**
  * The model list of one own API. It renders again only when its API, the directory or the language changes, never on
  * the window's other renders (each keystroke, each streamed token): an API can list hundreds of models, and every row
@@ -225,6 +252,12 @@ export function ownModelListModels(connection: Pick<OfficialModelConnection, 'mo
  */
 export const OwnModelList = React.memo(function OwnModelList({ locale, connection, catalog, loading }: { readonly locale: NextMuxDesktopLocale; readonly connection: Pick<OfficialModelConnection, 'id' | 'model' | 'discoveredModels'>; readonly catalog?: readonly CatalogModel[]; readonly loading?: boolean }): React.ReactElement {
     const [query, setQuery] = React.useState('');
+    const sectionRef = React.useRef<HTMLElement>(null);
+    const [drawerScroller, setDrawerScroller] = React.useState<HTMLElement>();
+    React.useEffect(() => {
+        const next = sectionRef.current?.closest?.<HTMLElement>('.nmx-own-models-drawer-body') ?? undefined;
+        setDrawerScroller(prev => prev === next ? prev : next);
+    }, []);
     const needle = query.trim().toLowerCase();
     const models = React.useMemo(() => ownModelListModels(connection), [connection.model, connection.discoveredModels]);
     const visible = React.useMemo(() => needle ? ownModelListModels(connection, needle) : models, [connection.model, connection.discoveredModels, models, needle]);
@@ -239,18 +272,35 @@ export const OwnModelList = React.memo(function OwnModelList({ locale, connectio
         }
         return byKind;
     }, [visible, matches]);
-    return <section className='nmx-own-model-list' dir={locale === 'ar' ? 'rtl' : undefined} aria-label={ownModelListText(locale, 'button')}>
-        <header><input type='search' value={query} placeholder={ownModelListText(locale, 'search')} aria-label={ownModelListText(locale, 'search')} onChange={event => setQuery(event.currentTarget.value)} />
+    const modelKey = React.useCallback((model: DiscoveredModelEntry): string => model.id, []);
+    return <section ref={sectionRef} className='nmx-own-model-list' dir={locale === 'ar' ? 'rtl' : undefined} aria-label={ownModelListText(locale, 'button')}>
+        <header><ImeInput type='search' commitDelayMs={100} value={query} placeholder={ownModelListText(locale, 'search')} aria-label={ownModelListText(locale, 'search')} onChange={event => setQuery(event.currentTarget.value)} />
             <small>{ownModelListText(locale, 'note')}</small></header>
         {!models.length ? loading
             // The list is being read (the drawer starts it for an API saved untested): say so, not "nothing read yet".
             ? <p className='nmx-own-model-list-loading' role='status' aria-live='polite'><i className='codicon codicon-sync codicon-modifier-spin' aria-hidden='true' /><span>{ownModelListText(locale, 'loading')}</span></p>
             : <p>{ownModelListText(locale, 'empty')}</p> : !groups.size ? <p>{ownModelListText(locale, 'none')}</p>
-            : OWN_MODEL_KINDS.filter(kind => groups.has(kind)).map(kind => <details key={kind} open={true} data-kind={kind}>
-                <summary><span>{kind === 'moderation' || kind === 'other' ? ownModelListText(locale, kind) : modelCategoryLabel(locale, kind === 'llm' ? 'language' : kind)}</span><b>{groups.get(kind)!.length}</b></summary>
-                <ul>{groups.get(kind)!.map(model => <li key={model.id}><div className='nmx-own-model-name'>{model.label && model.label !== model.id ? <><bdi dir='auto'>{model.label}</bdi><code dir='ltr' data-nmx-literal>{model.id}</code></> : <code dir='ltr' data-nmx-literal>{model.id}</code>}</div>
-                    <OwnModelFactsLine locale={locale} model={model} catalog={matches.get(model.id)} /></li>)}</ul>
-            </details>)}
+            : OWN_MODEL_KINDS.filter(kind => groups.has(kind)).map(kind => {
+                const groupModels = groups.get(kind)!;
+                const shouldVirtualize = groupModels.length > DEFAULT_VIRTUAL_LIST_THRESHOLD;
+                return <details key={kind} open={true} data-kind={kind}>
+                    <summary><span>{kind === 'moderation' || kind === 'other' ? ownModelListText(locale, kind) : modelCategoryLabel(locale, kind === 'llm' ? 'language' : kind)}</span><b>{groupModels.length}</b></summary>
+                    {shouldVirtualize ? (
+                        <VirtualList<DiscoveredModelEntry>
+                            items={groupModels}
+                            itemKey={modelKey}
+                            customScrollParent={drawerScroller}
+                            style={!drawerScroller ? { height: 240 } : undefined}
+                            initialItemCount={Math.min(groupModels.length, 15)}
+                            defaultItemHeight={42}
+                            components={OWN_MODEL_LIST_COMPONENTS}
+                            renderItem={model => <OwnModelListRow locale={locale} model={model} catalog={matches.get(model.id)} />}
+                        />
+                    ) : (
+                        <ul>{groupModels.map(model => <li key={model.id}><OwnModelListRow locale={locale} model={model} catalog={matches.get(model.id)} /></li>)}</ul>
+                    )}
+                </details>;
+            })}
     </section>;
 });
 

@@ -13,7 +13,7 @@
  * Subtrees that hold user, model or file content: messages, pasted text, code and editors. Neither their text nor
  * their attributes are translated, so a model name such as "fable5.1" or a pasted snippet stays exactly as written.
  */
-export const SURFACE_CONTENT_SELECTOR = '[data-nmx-literal], .monaco-editor, .xterm, .nmx-terminal-host, pre, code, .nmx-user-markdown, .nmx-assistant-markdown, .nmx-message-pasted-chip';
+export const SURFACE_CONTENT_SELECTOR = '[data-nmx-literal], [data-nmx-i18n="rendered"], .monaco-editor, .xterm, .nmx-terminal-host, pre, code, .nmx-user-markdown, .nmx-assistant-markdown, .nmx-message-pasted-chip';
 
 /** Fields hold what the user typed: their text is never translated, while their placeholder, title and label are chrome. */
 export const SURFACE_FIELD_SELECTOR = 'textarea, input, [contenteditable="true"]';

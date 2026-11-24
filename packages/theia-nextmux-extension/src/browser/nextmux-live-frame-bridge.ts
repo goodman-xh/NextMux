@@ -127,27 +127,48 @@ function thumbnail(source: CanvasImageSource, width: number, height: number): Th
             thumbContext = canvas.getContext('2d', { willReadFrequently: true });
         }
         if (!thumbContext) return undefined;
+        thumbContext.clearRect?.(0, 0, THUMB_W, THUMB_H);
         thumbContext.drawImage(source, width * THUMB_INSET, height * THUMB_INSET, width * (1 - 2 * THUMB_INSET), height * (1 - 2 * THUMB_INSET), 0, 0, THUMB_W, THUMB_H);
         const pixels = thumbContext.getImageData(0, 0, THUMB_W, THUMB_H).data;
         const grey = new Float32Array(THUMB_W * THUMB_H);
-        for (let index = 0; index < grey.length; index++) grey[index] = pixels[index * 4] * 0.299 + pixels[index * 4 + 1] * 0.587 + pixels[index * 4 + 2] * 0.114;
+        for (let index = 0; index < grey.length; index++) {
+            const alpha = pixels[index * 4 + 3] ?? 255;
+            grey[index] = alpha < 8
+                ? -1
+                : pixels[index * 4] * 0.299 + pixels[index * 4 + 1] * 0.587 + pixels[index * 4 + 2] * 0.114;
+        }
         return grey;
     } catch { return undefined; }
 }
 const difference = (a: Thumb | undefined, b: Thumb | undefined): number => {
     if (!a || !b || a.length !== b.length) return Infinity;
     let sum = 0;
-    for (let index = 0; index < a.length; index++) sum += Math.abs(a[index] - b[index]);
+    for (let index = 0; index < a.length; index++) sum += Math.abs(Math.max(0, a[index]) - Math.max(0, b[index]));
     return sum / a.length;
 };
 const peakDifference = (a: Thumb | undefined, b: Thumb | undefined): number => {
     if (!a || !b || a.length !== b.length) return Infinity;
     let peak = 0;
-    for (let index = 0; index < a.length; index++) peak = Math.max(peak, Math.abs(a[index] - b[index]));
+    for (let index = 0; index < a.length; index++) peak = Math.max(peak, Math.abs(Math.max(0, a[index]) - Math.max(0, b[index])));
     return peak;
 };
-// A capture that failed can come back black: it never replaces a picture. (An unreadable thumbnail is not black.)
-const blank = (thumb: Thumb | undefined): boolean => Boolean(thumb) && thumb!.every(value => value <= 4);
+// A capture that failed can come back transparent, pure black, or pure white: it never replaces a picture. (An unreadable thumbnail is not blank.)
+const blank = (thumb: Thumb | undefined): boolean => {
+    if (!thumb || !thumb.length) return false;
+    let allBlackOrTransparent = true;
+    let allWhite = true;
+    for (let index = 0; index < thumb.length; index++) {
+        const value = thumb[index];
+        if (value >= 0) {
+            if (value > 4) allBlackOrTransparent = false;
+            if (value < 252) allWhite = false;
+        } else {
+            allWhite = false;
+        }
+        if (!allBlackOrTransparent && !allWhite) return false;
+    }
+    return allBlackOrTransparent || allWhite;
+};
 
 /** The same snapshot again (the window did not change): compared without decoding it. */
 function samePicture(shot: LiveBridgeSnapshot, last: { bytes?: Uint8Array; data?: string } | undefined): boolean {

@@ -163,14 +163,18 @@
 @media (prefers-reduced-motion: reduce) {
     .nmx-mc-drawer-backdrop, .nmx-mc-drawer-backdrop > .nmx-mc-drawer { animation: none !important; }
 }
-.nmx-mc-model-list[aria-busy='true']:not(:has(.nmx-mc-model)) { display: flex; align-items: center; justify-content: center; }
+/* Loading with no model row yet: the status (spinner and "Loading…") in the middle of the list. The list sets
+   .is-empty-busy while it waits with nothing to show; until it does, that status (then the list's first child) fills the
+   list, less the 1px end-of-list sentinel after it. No :has(): adding a row never re-checks the whole list. */
+.nmx-mc-model-list.is-empty-busy { display: flex; align-items: center; justify-content: center; }
+.nmx-mc-model-list[aria-busy='true'] > .nmx-mc-directory-status:first-child { min-height: calc(100% - 1px); }
 .nmx-mc-drawer > header { padding: 20px; display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
 .nmx-mc-drawer > header > div { min-width: 0; }
 .nmx-mc-drawer h3 { margin: 0 0 6px; font-size: 17px; font-weight: 550; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .nmx-mc-drawer > header code { display: block; color: var(--mc-muted); font-size: 11px; }
 /* The merchant's own store profile: a fixed two-line box under the shop name
- * in the list, the full text in the drawer. */
-.nmx-mc-identity > .nmx-mc-hint:has(> .nmx-mc-tagline) { display: flex; max-width: 100%; }
+ * in the list, the full text in the drawer. Its hint is a full-width flex box like every hint directly in the identity
+ * column (.nmx-mc-identity > .nmx-mc-hint, .nmx-mc-identity > span), with no :has() to find it. */
 .nmx-mc-tagline {
     margin: 2px 0 0;
     min-height: calc(2 * 1.45em);
@@ -209,6 +213,24 @@
 .nmx-shell .nmx-mc-model-categories button[aria-pressed='true'] { background: color-mix(in srgb, var(--mc-accent) 14%, transparent); color: var(--mc-accent); }
 .nmx-mc-model-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; flex: 1; padding: 0 20px; }
 .nmx-mc-model-list > [data-model-center-model-sentinel] { height: 1px; width: 1px; flex: 0 0 1px; pointer-events: none; }
+/* In a list that scrolls, a row's focus ring is drawn inside the row: the scroller's edge clips anything drawn outside
+   it (the first row's top edge, a row cut by the bottom). Rows that take the focus never get content-visibility. */
+.nmx-mc-directory .nmx-mc-model-list .nmx-mc-model-row:focus-visible,
+.nmx-mc-directory [data-virtuoso-scroller] :is(button, .nmx-mc-hint[tabindex]):focus-visible { outline-offset: -2px; }
+/* react-virtuoso: the list's class lands on its scroller, focusable (tabindex 0) for keyboard scrolling with an inline
+   outline: none; it gets the directory's ring, inside its edge. Its viewport is absolutely placed at 100% of the
+   scroller, so the list's inline padding moves to the item list (on the scroller it pushed rows past the right edge).
+   Item spacing is padding on each item: Virtuoso measures items without their margins. */
+.nmx-mc-directory [data-virtuoso-scroller]:focus-visible { outline: 2px solid var(--mc-accent) !important; outline-offset: -2px; }
+.nmx-mc-model-list[data-virtuoso-scroller] { padding: 0; }
+.nmx-mc-model-list[data-virtuoso-scroller] :is([data-testid='virtuoso-item-list'], [data-testid='virtuoso-top-item-list']) { padding-inline: 20px; }
+.nmx-mc-merchants[data-virtuoso-scroller] { display: block; }
+.nmx-mc-merchants[data-virtuoso-scroller] [data-testid='virtuoso-item-list'] > [data-index]:not(:last-child) { padding-block-end: 8px; }
+/* VirtuosoGrid wraps each card in .virtuoso-grid-item: in the grid layout the wrapper takes the card's place (three
+   subgrid rows: identity, metrics, actions, lined up across a row) and the card fills it. */
+.nmx-mc-merchants > .virtuoso-grid-item { min-width: 0; }
+.nmx-mc-merchants--grid > .virtuoso-grid-item { display: grid; grid-row: span 3; grid-template-rows: subgrid; grid-template-columns: minmax(0, 1fr); }
+.nmx-mc-merchants--grid > .virtuoso-grid-item > .nmx-mc-merchant { grid-row: 1 / -1; grid-column: 1; height: 100%; box-sizing: border-box; display: grid; grid-template-rows: subgrid; grid-template-columns: minmax(0, 1fr); row-gap: 12px; align-items: stretch; }
 .nmx-mc-model { border-bottom: 1px solid var(--mc-line); }
 .nmx-mc-model > .nmx-mc-hint { width: 100%; }
 .nmx-mc-model-price-head, .nmx-shell .nmx-mc-directory .nmx-mc-model-row { display: grid; grid-template-columns: minmax(0, 1.15fr) repeat(2, minmax(0, 1fr)); gap: 10px; text-align: start; }

@@ -12,6 +12,7 @@ import { AfterLocaleAndKey, totalCopy } from './nextmux-copy-fallback';
 import { mediaTierInputRates, mediaTierLabel, normalizeOfferingMediaTiers, type OfferingMediaTierQuality } from '../common/nextmux-media-price-tiers';
 import { offeringIsOwnPriced, offeringMultiplierBps } from '../common/nextmux-media-cost-estimator';
 import { naturalPanelHeight } from './nextmux-floating-panel';
+import { getCachedNumberFormat } from './nextmux-intl-cache';
 
 type Unit = 'mtok' | 'image' | 'second' | 'mchar' | 'request';
 type Metric = 'input' | 'output' | 'cacheRead' | 'cacheWrite' | 'imageOutput' | 'image' | 'video' | 'videoInputImage' | 'speech' | 'audio' | 'request';
@@ -62,7 +63,7 @@ const unitText = (locale: NextMuxDesktopLocale, unit: Unit): string =>
 
 /** US$ with at least two decimals and up to six (per-token-rates are often below a cent). */
 export function formatPriceMicros(locale: NextMuxDesktopLocale, micros: number, currency = 'USD'): string {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency, currencyDisplay: 'narrowSymbol', minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(micros / 1_000_000)
+    return getCachedNumberFormat(locale, { style: 'currency', currency, currencyDisplay: 'narrowSymbol', minimumFractionDigits: 2, maximumFractionDigits: 6 }).format(micros / 1_000_000)
         .replace(/^\$/, 'US$');
 }
 
@@ -73,7 +74,7 @@ export { offeringIsOwnPriced, offeringMultiplierBps };
 
 /** The card's multiplier, as in the relay drawer: at most two decimals (display only; billing keeps every basis point). */
 function offeringMultiplierText(locale: NextMuxDesktopLocale, bps: number): string {
-    const format = (multiplier: number): string => new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(multiplier);
+    const format = (multiplier: number): string => getCachedNumberFormat(locale, { maximumFractionDigits: 2 }).format(multiplier);
     return bps > 0 && bps < 50 ? `<${format(0.01)}` : format(bps / 10_000);
 }
 

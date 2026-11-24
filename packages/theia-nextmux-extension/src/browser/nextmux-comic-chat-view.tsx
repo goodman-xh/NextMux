@@ -1,11 +1,26 @@
 import * as React from '@theia/core/shared/react';
 import { createPortal } from '@theia/core/shared/react-dom';
+import type { GridItemProps, VirtuosoGridHandle, VirtuosoHandle } from 'react-virtuoso';
 import type { NextMuxDesktopLocale } from './nextmux-locale';
 import { localizeDesktopSurface } from './nextmux-surface-locale';
 import { relayText } from './nextmux-relay-locale';
 import { publicMerchantDepositText } from '../common/nextmux-public-merchants';
 import { DepositVerifiedHint, depositVerifiedHintText, type DepositVerifiedHintAnchor } from './nextmux-deposit-verified';
 import { ImeTextarea } from './nextmux-ime-field';
+import { registerPendingCanvasEditFlush } from './nextmux-comic-canvas-culling';
+import type * as VirtualListModule from './nextmux-virtual-list';
+import type { VirtualListContainerProps, VirtualScrollerContainerProps } from './nextmux-virtual-list';
+
+const VIRTUAL_LIST_THRESHOLD = 30;
+declare function require(id: string): unknown;
+let cachedVirtualListModule: typeof VirtualListModule | undefined;
+function getVirtualListModule(): typeof VirtualListModule {
+    if (!cachedVirtualListModule) {
+        // Defer loading react-virtuoso until a list exceeds 30 items so lightweight Node/mock-DOM tests never trip react-virtuoso's top-level `document.documentElement.style` probe.
+        cachedVirtualListModule = require('./nextmux-virtual-list') as typeof VirtualListModule;
+    }
+    return cachedVirtualListModule;
+}
 import { ConversationMarkdown, type CodeTokenizer } from './nextmux-conversation-markdown';
 import { fillVideoCardStill, videoCardText } from './nextmux-video-card';
 import { StreamText } from './nextmux-conversation-stream';
@@ -182,7 +197,7 @@ export const ComicChatMediaTile = React.memo(function ComicChatMediaTile(props: 
     }
     return <div className='nmx-comic-chat-media is-audio is-done' onContextMenu={menu}>
         <i className={`codicon codicon-${media.kind === 'music' ? 'music' : 'mic'}`} aria-hidden='true'></i>
-        <audio src={media.url} controls preload='metadata' />
+        <audio src={media.url} controls preload='none' />
     </div>;
 });
 
@@ -272,6 +287,19 @@ export function followComicChatHeight(element: { scrollTop: number; readonly scr
     else if (element.scrollTop >= 1) element.scrollTop += delta;
 }
 
+const ComicChatContentClickContext = React.createContext<((event: React.MouseEvent<HTMLElement>) => void) | undefined>(undefined);
+
+const ComicChatThreadColumn = React.forwardRef<HTMLDivElement, VirtualListContainerProps>(function ComicChatThreadColumn(props, ref) {
+    return <div {...props} ref={ref} data-nmx-gallery-root='' />;
+});
+
+const ComicChatVirtuosoScroller = React.forwardRef<HTMLDivElement, VirtualScrollerContainerProps>(function ComicChatVirtuosoScroller(props, ref) {
+    const onContentClick = React.useContext(ComicChatContentClickContext);
+    return <div {...props} ref={ref} onClick={onContentClick} />;
+});
+
+const THREAD_VIRTUAL_COMPONENTS = { Scroller: ComicChatVirtuosoScroller, List: ComicChatThreadColumn } as const;
+
 export function ComicChatThread(props: {
     readonly locale: NextMuxDesktopLocale;
     readonly turns: readonly ComicChatTurnView[];
@@ -298,7 +326,24 @@ export function ComicChatThread(props: {
     readonly feedbackSubmitting?: Readonly<Record<string, 'up' | 'down'>>;
     readonly children?: React.ReactNode;
 }): React.ReactElement {
-    const scroller = React.useRef<HTMLDivElement>(null);
+    const scroller = React.useRef<HTMLDivElement | null>(null);
+    const [scrollerEl, setScrollerEl] = React.useState<HTMLDivElement | null>(null);
+    const bindScroller = React.useCallback((node: HTMLElement | null): void => {
+        if (node instanceof HTMLDivElement) {
+            scroller.current = node;
+        }
+    }, []);
+    const bindPlainScroller = React.useCallback((node: HTMLDivElement | null): void => {
+        scroller.current = node;
+        setScrollerEl(current => current === node ? current : node);
+    }, []);
+    const virtuoso = React.useRef<VirtuosoHandle>(null);
+    const virtualize = props.turns.length > VIRTUAL_LIST_THRESHOLD;
+    React.useLayoutEffect(() => {
+        if (!virtualize) return;
+        const div = scroller.current;
+        if (div) setScrollerEl(current => current === div ? current : div);
+    }, [virtualize]);
     const last = props.turns[props.turns.length - 1];
     const reading = React.useRef<{ anchor?: ComicChatReadingAnchor; width: number; height: number; heldUntil: number; frame: number }>({ width: 0, height: 0, heldUntil: 0, frame: 0 });
     // Away from the end: the coding thread's round button brings the reader back, with a dot while something new arrived.
@@ -306,6 +351,7 @@ export function ComicChatThread(props: {
     const [unseen, setUnseen] = React.useState(false);
     const awayRef = React.useRef(false);
     const noteAway = React.useCallback((element: HTMLElement): void => {
+        if (element.clientHeight <= 0) return;
         const next = element.scrollHeight - element.scrollTop - element.clientHeight > 96;
         if (!next) setUnseen(false);
         if (next === awayRef.current) return;
@@ -315,23 +361,49 @@ export function ComicChatThread(props: {
     // A turn just sent always comes into view; the answer growing under it follows only a reader near the bottom.
     const shownTurns = React.useRef(props.turns.length);
     const shownTail = React.useRef<string | undefined>(undefined);
+    const wasVirtualized = React.useRef(virtualize);
+    const pendingStick = React.useRef(false);
     React.useEffect(() => {
         const element = scroller.current;
+        const firstRender = shownTail.current === undefined;
+        const enteredVirtual = virtualize && !wasVirtualized.current;
+        wasVirtualized.current = virtualize;
         const added = props.turns.length > shownTurns.current;
-        const sameTail = shownTail.current !== undefined && shownTail.current === last?.turn.id;
+        const sameTail = !firstRender && shownTail.current === last?.turn.id;
         shownTurns.current = props.turns.length;
         shownTail.current = last?.turn.id;
-        if (!element) return;
-        if (added || element.scrollHeight - element.scrollTop - element.clientHeight < 360) {
-            element.scrollTop = element.scrollHeight;
+        if (!element) {
+            if (firstRender || enteredVirtual || added) pendingStick.current = true;
+            return;
+        }
+        const firstStick = (firstRender && virtualize) || enteredVirtual || pendingStick.current;
+        let stickFrame = 0;
+        if (added || firstStick || element.scrollHeight - element.scrollTop - element.clientHeight < 360) {
+            if (virtualize && props.turns.length > 0) {
+                pendingStick.current = true;
+                const targetIndex = props.turns.length - 1;
+                stickFrame = requestAnimationFrame(() => {
+                    stickFrame = 0;
+                    pendingStick.current = false;
+                    virtuoso.current?.scrollToIndex({ index: targetIndex, align: 'end', behavior: 'auto' });
+                    if (scroller.current) noteAway(scroller.current);
+                });
+            } else {
+                pendingStick.current = false;
+                element.scrollTop = element.scrollHeight;
+            }
             reading.current.anchor = { edge: 'bottom' };
-        } else setUnseen(sameTail);
+        } else {
+            pendingStick.current = false;
+            setUnseen(sameTail);
+        }
         noteAway(element);
-    }, [props.turns.length, last?.turn.reply, last?.media.length, last?.proposals.length, last?.running]);
+        return () => { if (stickFrame) cancelAnimationFrame(stickFrame); };
+    }, [props.turns.length, last?.turn.id, last?.turn.reply, last?.media.length, last?.proposals.length, last?.running, virtualize, scrollerEl, noteAway]);
     // A drawer opening, closing or resizing beside the thread changes its width and reflows every turn. The place read
     // last stays under the reading line: the one from before the drawer moved, or the one the reader scrolled to while it was open.
     React.useEffect(() => {
-        const element = scroller.current;
+        const element = scrollerEl;
         if (!element || typeof ResizeObserver === 'undefined') return;
         const state = reading.current;
         const capture = (): void => {
@@ -375,7 +447,7 @@ export function ComicChatThread(props: {
             cancelAnimationFrame(state.frame);
             state.frame = 0;
         };
-    }, []);
+    }, [scrollerEl, noteAway]);
     const tile = React.useCallback((media: ComicChatMediaView) => <ComicChatMediaTile key={media.key} locale={props.locale} media={media} onMenu={props.onMenu} onOpen={props.onOpen}
         onRetry={props.onRetry} onCancel={props.onCancel} onSignIn={props.onSignIn} />, [props.locale, props.onMenu, props.onOpen, props.onRetry, props.onCancel, props.onSignIn]);
     const toBottom = (): void => {
@@ -384,24 +456,44 @@ export function ComicChatThread(props: {
         reading.current.anchor = { edge: 'bottom' };
         setUnseen(false);
         const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (virtualize && props.turns.length > 0) {
+            virtuoso.current?.scrollToIndex({ index: props.turns.length - 1, align: 'end', behavior: still ? 'auto' : 'smooth' });
+        }
         element.scrollTo({ top: element.scrollHeight, behavior: still ? 'auto' : 'smooth' });
     };
+    const renderTurn = (view: ComicChatTurnView): React.ReactElement => <ComicChatTurnCard key={view.turn.id} view={view} locale={props.locale}
+        markdownTokenizer={props.markdownTokenizer} formatTurnTime={props.formatTurnTime}
+        onCopy={props.onCopy} onRenderMarkdown={props.onRenderMarkdown} onOpen={props.onOpen}
+        onGenerate={props.onGenerate} onMenu={props.onMenu} onRetry={props.onRetry} onCancel={props.onCancel} onSignIn={props.onSignIn}
+        feedback={props.feedbackByTurnId?.[view.turn.id]} feedbackSubmitting={props.feedbackSubmitting?.[view.turn.id]}
+        feedbackLabels={props.feedbackLabels} onFeedback={props.onFeedback}
+        onReadAloud={props.onReadAloud} reading={props.readingTurnId === view.turn.id}
+        readAloudPreparing={props.readingTurnId === view.turn.id && Boolean(props.readAloudPreparing)}
+        readAloudLabel={props.readAloudLabel?.(view.turn.id)} tile={tile} />;
     const bottomLabel = localizeDesktopSurface(props.locale, unseen ? '有新消息，回到底部' : '回到底部');
-    return <><div className='nmx-comic-chat-thread' ref={scroller} onClick={props.onContentClick}>
+    const VirtualList = virtualize ? getVirtualListModule().VirtualList : undefined;
+    return <>{VirtualList ? <ComicChatContentClickContext.Provider value={props.onContentClick}>
+        <VirtualList<ComicChatTurnView>
+            items={props.turns}
+            itemKey={view => view.turn.id}
+            virtuosoRef={virtuoso}
+            scrollerRef={bindScroller}
+            className='nmx-comic-chat-thread'
+            listClassName='nmx-comic-chat-column'
+            style={{ flex: '1 1 auto', minWidth: 0 }}
+            initialItemCount={Math.min(props.turns.length, 10)}
+            header={props.children}
+            components={THREAD_VIRTUAL_COMPONENTS}
+            rangeChanged={() => { if (scroller.current) noteAway(scroller.current); }}
+            renderItem={renderTurn}
+        />
+    </ComicChatContentClickContext.Provider> : <div className='nmx-comic-chat-thread' ref={bindPlainScroller} onClick={props.onContentClick}>
         {/* The viewer's gallery: results, a request's references and the pictures in the text, in thread order. */}
         <div className='nmx-comic-chat-column' data-nmx-gallery-root=''>
             {props.children}
-            {props.turns.map(view => <ComicChatTurnCard key={view.turn.id} view={view} locale={props.locale}
-                markdownTokenizer={props.markdownTokenizer} formatTurnTime={props.formatTurnTime}
-                onCopy={props.onCopy} onRenderMarkdown={props.onRenderMarkdown} onOpen={props.onOpen}
-                onGenerate={props.onGenerate} onMenu={props.onMenu} onRetry={props.onRetry} onCancel={props.onCancel} onSignIn={props.onSignIn}
-                feedback={props.feedbackByTurnId?.[view.turn.id]} feedbackSubmitting={props.feedbackSubmitting?.[view.turn.id]}
-                feedbackLabels={props.feedbackLabels} onFeedback={props.onFeedback}
-                onReadAloud={props.onReadAloud} reading={props.readingTurnId === view.turn.id}
-                readAloudPreparing={props.readingTurnId === view.turn.id && Boolean(props.readAloudPreparing)}
-                readAloudLabel={props.readAloudLabel?.(view.turn.id)} tile={tile} />)}
+            {props.turns.map(renderTurn)}
         </div>
-    </div>
+    </div>}
     {away && props.turns.length > 0 && <button type='button' className={`nmx-thread-to-bottom nmx-comic-chat-scroll-bottom${unseen ? ' has-unseen' : ''}`}
         aria-label={bottomLabel} title={bottomLabel} onClick={toBottom}>
         <i className='codicon codicon-chevron-down' aria-hidden='true'></i>{unseen ? <span aria-hidden='true'></span> : undefined}</button>}
@@ -803,6 +895,53 @@ function ComicChatReferencePreview(props: { readonly locale: NextMuxDesktopLocal
     </div>;
 }
 
+const CAST_PICK_ITEM_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', minWidth: 0 };
+
+function ComicChatCastGridItem(props: GridItemProps): React.ReactElement {
+    return <div {...props} style={props.style ? { ...props.style, ...CAST_PICK_ITEM_STYLE } : CAST_PICK_ITEM_STYLE} />;
+}
+
+const CAST_PICK_VIRTUAL_COMPONENTS = { Item: ComicChatCastGridItem } as const;
+const CAST_PICK_BUTTON_STRETCH_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 4, flex: '1 1 auto', minWidth: 0, margin: 0, padding: 0, border: 0, color: 'var(--nmx-text)', background: 'transparent', cursor: 'pointer' };
+
+const ComicChatCastButton = React.memo(function ComicChatCastButton(props: {
+    readonly item: ComicChatCastPick;
+    readonly disabled: boolean;
+    readonly stretch?: boolean;
+    readonly onPick: (id: string) => void;
+}): React.ReactElement {
+    const { item, disabled, stretch, onPick } = props;
+    return <button type='button' role='menuitem' title={item.name} disabled={disabled}
+        style={stretch ? CAST_PICK_BUTTON_STRETCH_STYLE : undefined}
+        onClick={() => onPick(item.id)}>
+        {item.url ? <img src={item.url} alt='' loading='lazy' decoding='async' draggable={false} /> : <i className='codicon codicon-person' aria-hidden='true'></i>}
+        <span data-nmx-literal>{item.name}</span>
+    </button>;
+});
+
+const ComicChatModelOptionRow = React.memo(function ComicChatModelOptionRow(props: {
+    readonly locale: NextMuxDesktopLocale;
+    readonly currentMode: ComicChatMode;
+    readonly option: ComicChatModelOption;
+    readonly selected: boolean;
+    readonly allSet: boolean;
+    readonly others: readonly ComicChatMode[];
+    readonly onModel: (mode: ComicChatMode, key: string) => void;
+    readonly onModels: (keys: Partial<Record<ComicChatMode, string>>) => void;
+}): React.ReactElement {
+    const { locale, currentMode, option, selected, allSet, others, onModel, onModels } = props;
+    const modeLabel = (mode: ComicChatMode): string => comicChatText(locale, mode);
+    return <div className={`nmx-comic-chat-model ${selected ? 'is-active' : ''}`}>
+        <button type='button' role='option' aria-selected={selected} onClick={() => onModel(currentMode, option.key)}>
+            <span data-nmx-literal>{option.label}</span>
+            <span className='nmx-comic-chat-caps'>{(Object.keys(option.also) as ComicChatMode[]).map(mode => <em key={mode} className={mode === currentMode ? 'is-here' : ''}>{modeLabel(mode)}</em>)}</span>
+            {option.note && <small data-nmx-literal>{option.note}</small>}
+            {selected && <i className='codicon codicon-check' aria-hidden='true'></i>}</button>
+        {others.length > 0 && <button type='button' className='nmx-comic-chat-model-all' disabled={selected && allSet}
+            title={comicChatText(locale, 'useForAllHint', { list: [currentMode, ...others].map(modeLabel).join('、') })} onClick={() => onModels(option.also)}>{comicChatText(locale, 'useForAll')}</button>}
+    </div>;
+});
+
 export function ComicChatComposer(props: ComicChatComposerProps): React.ReactElement {
     const t = (key: ComicChatTextKey, values?: Readonly<Record<string, string | number>>): string => comicChatText(props.locale, key, values);
     const [popover, setPopover] = React.useState<'add' | 'cast' | 'models'>();
@@ -817,8 +956,21 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
     const [pasteNotice, setPasteNotice] = React.useState('');
     const [preview, setPreview] = React.useState<ComicChatReferenceView>();
     // The box grows with its text as it is typed. The widget re-renders the dock only when a keystroke changes what it
-    // shows (setComicChatPrompt), so the line count is kept here and catches up whenever the widget hands in a new prompt.
+    // shows (setComicChatPrompt), so the line count and empty/non-empty readiness stay instantaneous locally.
     const [lines, setLines] = React.useState(() => promptLines(props.prompt));
+    const [hasDraftText, setHasDraftText] = React.useState(() => Boolean(props.prompt.trim()));
+    const promptRef = React.useRef(props.prompt);
+    promptRef.current = props.prompt;
+    const onPromptRef = React.useRef(props.onPrompt);
+    onPromptRef.current = props.onPrompt;
+    const flushComposerPrompt = React.useCallback((): void => {
+        const value = textarea.current?.value;
+        if (value !== undefined && value !== promptRef.current) {
+            promptRef.current = value;
+            onPromptRef.current(value);
+        }
+    }, []);
+    React.useEffect(() => registerPendingCanvasEditFlush(flushComposerPrompt), [flushComposerPrompt]);
     const castPanel = React.useRef<HTMLDivElement>(null);
     const outerTextareaRef = props.textareaRef;
     const bindTextarea = React.useCallback((node: HTMLTextAreaElement | null): void => {
@@ -836,7 +988,7 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
         if (!layer) return;
         layer.parentElement?.classList.toggle('has-markdown-links', references.length > 0);
         if (!references.length) {
-            layer.replaceChildren();
+            if (layer.childNodes.length) layer.replaceChildren();
             return;
         }
         const parts: Node[] = [];
@@ -854,12 +1006,18 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
         layer.replaceChildren(...parts);
         layer.scrollTop = textarea.current?.scrollTop ?? 0;
     }, []);
-    React.useEffect(() => { paintPastes(textarea.current?.value ?? props.prompt); }, [props.prompt, paintPastes]);
-    React.useEffect(() => { setLines(promptLines(textarea.current?.value ?? props.prompt)); }, [props.prompt]);
+    React.useEffect(() => {
+        const currentValue = textarea.current?.value ?? props.prompt;
+        paintPastes(currentValue);
+        const nextLines = promptLines(currentValue);
+        setLines(current => current === nextLines ? current : nextLines);
+        const nextHasText = Boolean(currentValue.trim());
+        setHasDraftText(current => current === nextHasText ? current : nextHasText);
+    }, [props.prompt, paintPastes]);
     // The library opens on its first choice (or its way back), so the keyboard carries on from the menu item that opened it.
     React.useEffect(() => {
         const panel = popover === 'cast' ? castPanel.current : null;
-        (panel?.querySelector<HTMLButtonElement>('.nmx-comic-chat-cast-grid > button:not(:disabled)') ?? panel?.querySelector<HTMLButtonElement>('header > button'))?.focus();
+        (panel?.querySelector<HTMLButtonElement>('.nmx-comic-chat-cast-grid button:not(:disabled)') ?? panel?.querySelector<HTMLButtonElement>('header > button'))?.focus();
     }, [popover]);
     // A reference removed while it is open closes its viewer.
     React.useEffect(() => { if (preview && !props.references.some(reference => reference.key === preview.key)) setPreview(undefined); }, [preview, props.references]);
@@ -879,7 +1037,7 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
     }, [popover]);
     // The model panel opens on the mode being written in.
     React.useEffect(() => { if (popover !== 'models') setTab(props.mode); }, [props.mode, popover]);
-    const canSend = Boolean(props.prompt.trim()) && !props.blocked && !props.sending && Boolean(props.model);
+    const canSend = hasDraftText && !props.blocked && !props.sending && Boolean(props.model);
     const pastes = pasteIds.map(id => comicPasteStore().get(id)?.reference).filter((reference): reference is PastedTextReference => Boolean(reference));
     const foldPaste = (element: HTMLTextAreaElement, text: string): void => {
         const present = pastedTextReferencesInDocument(element.value, comicPasteReferences());
@@ -920,7 +1078,11 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                 setPasteNotice(pastedTextExpansionCopy(props.locale).tooLong);
                 return;
             }
+            promptRef.current = whole;
             props.onPrompt(whole);
+        } else if (value !== props.prompt) {
+            promptRef.current = value;
+            props.onPrompt(value);
         }
         props.onSend();
     };
@@ -938,6 +1100,10 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
             <i className='codicon codicon-chevron-down' aria-hidden='true'></i></label>;
     const relayIcon = (kind: string | undefined): string => kind === 'official' ? 'verified-filled' : kind === 'automatic' ? 'sparkle' : kind === 'local' ? 'vm' : 'server-environment';
     const isModelOpen = props.onOpenModel ? Boolean(props.modelOpen) : popover === 'models';
+    const pickCast = React.useCallback((id: string): void => {
+        setPopover(undefined);
+        props.onPickCast(id);
+    }, [props.onPickCast]);
     // The references' picture and clip chips are the viewer's gallery when one is opened from here.
     return <div className='nmx-comic-chat-dock' data-nmx-gallery-root=''>
         <div className={`nmx-composer-wrap is-rows-${lines > 4 ? 'many' : 'few'}`} ref={box}>
@@ -1005,13 +1171,25 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                 </div>}
                 <div className={`nmx-composer-input${pasteIds.length ? ' has-markdown-links' : ''}`}>
                     <div ref={overlay} className='nmx-composer-markdown-overlay' aria-hidden='true' data-nmx-literal></div>
-                    <ImeTextarea ref={bindTextarea} value={props.prompt} rows={rows} maxLength={props.mode === 'speech' ? 8_000 : COMIC_CHAT_LIMITS.prompt}
+                    <ImeTextarea ref={bindTextarea} commitDelayMs={250} value={props.prompt} rows={rows} maxLength={props.mode === 'speech' ? 8_000 : COMIC_CHAT_LIMITS.prompt}
                         placeholder={localizeDesktopSurface(props.locale, '发送消息或描述任务')}
+                        onInput={event => {
+                            const value = event.currentTarget.value;
+                            paintPastes(value);
+                            const nextLines = promptLines(value);
+                            setLines(current => current === nextLines ? current : nextLines);
+                            const nextHasText = Boolean(value.trim());
+                            setHasDraftText(current => current === nextHasText ? current : nextHasText);
+                            if (pasteNotice) setPasteNotice('');
+                        }}
                         onChange={event => {
                             const value = event.currentTarget.value;
                             props.onPrompt(value);
                             paintPastes(value);
-                            setLines(promptLines(value));
+                            const nextLines = promptLines(value);
+                            setLines(current => current === nextLines ? current : nextLines);
+                            const nextHasText = Boolean(value.trim());
+                            setHasDraftText(current => current === nextHasText ? current : nextHasText);
                             if (pasteNotice) setPasteNotice('');
                         }}
                         onScroll={event => { if (overlay.current) overlay.current.scrollTop = event.currentTarget.scrollTop; }}
@@ -1066,10 +1244,22 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                                 {props.cast.length > 0 && <button type='button' className='is-end' aria-label={t('openCast')} title={t('openCast')}
                                     onClick={() => { setPopover(undefined); props.onOpenCast(); }}><i className='codicon codicon-link-external' aria-hidden='true'></i></button>}
                             </header>
-                            {props.cast.length ? <div className='nmx-comic-chat-cast-grid'>{props.cast.map(item => <button key={item.id} type='button' role='menuitem' title={item.name}
-                                disabled={props.referenceLimit < 1} onClick={() => { setPopover(undefined); props.onPickCast(item.id); }}>
+                            {props.cast.length ? (props.cast.length > VIRTUAL_LIST_THRESHOLD ? (() => {
+                                const { VirtualGrid } = getVirtualListModule();
+                                return <VirtualGrid<ComicChatCastPick>
+                                    items={props.cast}
+                                    itemKey={item => item.id}
+                                    style={{ height: 224 }}
+                                    listClassName='nmx-comic-chat-cast-grid'
+                                    listStyle={{ overflowY: 'visible' }}
+                                    components={CAST_PICK_VIRTUAL_COMPONENTS}
+                                    initialItemCount={Math.min(props.cast.length, 15)}
+                                    renderItem={item => <ComicChatCastButton item={item} disabled={props.referenceLimit < 1} stretch onPick={pickCast} />}
+                                />;
+                            })() : <div className='nmx-comic-chat-cast-grid'>{props.cast.map(item => <button type='button' role='menuitem' key={item.id} title={item.name} disabled={props.referenceLimit < 1}
+                                onClick={() => pickCast(item.id)}>
                                 {item.url ? <img src={item.url} alt='' loading='lazy' decoding='async' draggable={false} /> : <i className='codicon codicon-person' aria-hidden='true'></i>}
-                                <span data-nmx-literal>{item.name}</span></button>)}</div>
+                                <span data-nmx-literal>{item.name}</span></button>)}</div>)
                                 : <p className='nmx-comic-chat-cast-empty'>{t('castEmpty')} <button type='button' className='nmx-link-button' onClick={() => { setPopover(undefined); props.onOpenCast(); }}>{t('openCast')}</button></p>}
                             {props.referenceLimit < 1 && props.cast.length > 0 && <small>{t('noReferencesHere')}</small>}
                         </div>}
@@ -1105,22 +1295,37 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
                                     <i className={`codicon codicon-${COMIC_CHAT_MODE_ICONS[item.mode]}`} aria-hidden='true'></i><strong>{modeLabel(item.mode)}</strong>
                                     <small data-nmx-literal={Boolean(item.selected) || undefined}>{item.selected?.label || t('noModelFor')}</small></button>)}
                             </div>
-                            {current.options.length ? <div className='nmx-comic-chat-model-list' role='listbox' aria-label={modeLabel(current.mode)}>
+                            {current.options.length ? (current.options.length > VIRTUAL_LIST_THRESHOLD ? (() => {
+                                const { VirtualList } = getVirtualListModule();
+                                return <VirtualList<ComicChatModelOption>
+                                    items={current.options}
+                                    itemKey={option => option.key}
+                                    className='nmx-comic-chat-model-list'
+                                    role='listbox'
+                                    aria-label={modeLabel(current.mode)}
+                                    style={{ display: 'block', height: 248 }}
+                                    listStyle={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+                                    defaultItemHeight={48}
+                                    initialItemCount={Math.min(current.options.length, 10)}
+                                    renderItem={option => {
+                                        const selected = option.key === current.selected?.key;
+                                        const others = (Object.keys(option.also) as ComicChatMode[]).filter(mode => mode !== current.mode);
+                                        const allSet = others.every(mode => picker.tabs.find(item => item.mode === mode)?.selected?.key === option.also[mode]);
+                                        return <ComicChatModelOptionRow key={option.key} locale={props.locale} currentMode={current.mode}
+                                            option={option} selected={selected} allSet={allSet} others={others}
+                                            onModel={props.onModel} onModels={props.onModels} />;
+                                    }}
+                                />;
+                            })() : <div className='nmx-comic-chat-model-list' role='listbox' aria-label={modeLabel(current.mode)}>
                                 {current.options.map(option => {
                                     const selected = option.key === current.selected?.key;
                                     const others = (Object.keys(option.also) as ComicChatMode[]).filter(mode => mode !== current.mode);
                                     const allSet = others.every(mode => picker.tabs.find(item => item.mode === mode)?.selected?.key === option.also[mode]);
-                                    return <div key={option.key} className={`nmx-comic-chat-model ${selected ? 'is-active' : ''}`}>
-                                        <button type='button' role='option' aria-selected={selected} onClick={() => props.onModel(current.mode, option.key)}>
-                                            <span data-nmx-literal>{option.label}</span>
-                                            <span className='nmx-comic-chat-caps'>{(Object.keys(option.also) as ComicChatMode[]).map(mode => <em key={mode} className={mode === current.mode ? 'is-here' : ''}>{modeLabel(mode)}</em>)}</span>
-                                            {option.note && <small data-nmx-literal>{option.note}</small>}
-                                            {selected && <i className='codicon codicon-check' aria-hidden='true'></i>}</button>
-                                        {others.length > 0 && <button type='button' className='nmx-comic-chat-model-all' disabled={selected && allSet}
-                                            title={t('useForAllHint', { list: [current.mode, ...others].map(modeLabel).join('、') })} onClick={() => props.onModels(option.also)}>{t('useForAll')}</button>}
-                                    </div>;
+                                    return <ComicChatModelOptionRow key={option.key} locale={props.locale} currentMode={current.mode}
+                                        option={option} selected={selected} allSet={allSet} others={others}
+                                        onModel={props.onModel} onModels={props.onModels} />;
                                 })}
-                            </div> : <p className='nmx-comic-chat-model-empty'>{t('noModelHere', { kind: modeLabel(current.mode) })}
+                            </div>) : <p className='nmx-comic-chat-model-empty'>{t('noModelHere', { kind: modeLabel(current.mode) })}
                                 <button type='button' className='nmx-link-button' onClick={() => { setPopover(undefined); props.onSetUpModels(); }}>{t('setUpModels')}</button></p>}
                         </div>}
                     </span>
@@ -1178,6 +1383,15 @@ export type ComicMaterialScope = 'chat' | 'project' | 'all';
 /** The drawer's thumbnail column for each 素材库 size; the drawer is narrower than the 素材库 window. */
 const COMIC_MATERIAL_SIZES: Readonly<Record<ComicLibrarySize, string>> = { small: '84px', medium: '104px', large: '136px' };
 
+const MATERIALS_ITEM_STYLE: React.CSSProperties = { display: 'flex', flexDirection: 'column', minWidth: 0 };
+
+function ComicMaterialsGridItem(props: GridItemProps): React.ReactElement {
+    return <div {...props} style={props.style ? { ...props.style, ...MATERIALS_ITEM_STYLE } : MATERIALS_ITEM_STYLE} />;
+}
+
+const MATERIALS_VIRTUAL_COMPONENTS = { Item: ComicMaterialsGridItem } as const;
+const MATERIAL_CARD_STRETCH_STYLE: React.CSSProperties = { flex: '1 1 auto' };
+
 /**
  * 素材库: the pictures, clips and sounds the user kept (right-click → 加入素材库), most recently kept first — of this
  * conversation, of the whole folder, or of every folder and project. In “pick” mode a click chooses a reference picture.
@@ -1203,13 +1417,26 @@ export function ComicMaterialsPanel(props: {
     const [kind, setKind] = React.useState<'all' | 'image' | 'character' | 'video' | 'audio'>('all');
     const [librarySize, setLibrarySize] = useComicLibrarySize();
     const panel = React.useRef<HTMLElement>(null);
+    const materialsVirtuoso = React.useRef<VirtuosoGridHandle>(null);
+    const matchesKind = (item: ComicMaterialView, filter: 'all' | 'image' | 'character' | 'video' | 'audio'): boolean => {
+        if (filter === 'all') return true;
+        if (filter === 'character') return item.category === 'character';
+        if (filter === 'image') return item.kind === 'image' && item.category !== 'character';
+        return item.kind === filter;
+    };
+    const shown = React.useMemo(() => props.items.filter(item => matchesKind(item, kind)), [props.items, kind]);
     React.useEffect(() => {
         if (props.pick && (kind === 'video' || kind === 'audio')) setKind('all');
     }, [props.pick, kind]);
     React.useEffect(() => {
         panel.current?.focus();
-        if (props.focus) panel.current?.querySelector<HTMLElement>(`[data-asset-id="${CSS.escape(props.focus)}"]`)?.scrollIntoView({ block: 'center' });
-    }, [props.focus]);
+        if (!props.focus) return;
+        const focusIndex = shown.findIndex(item => item.assetId === props.focus);
+        if (focusIndex >= 0 && shown.length > VIRTUAL_LIST_THRESHOLD) {
+            materialsVirtuoso.current?.scrollToIndex({ index: focusIndex, align: 'center' });
+        }
+        panel.current?.querySelector<HTMLElement>(`[data-asset-id="${CSS.escape(props.focus)}"]`)?.scrollIntoView({ block: 'center' });
+    }, [props.focus, shown.length]); // eslint-disable-line react-hooks/exhaustive-deps
     React.useEffect(() => {
         const handleOutsidePress = (event: Event): void => {
             const raw = event.target as Node | null;
@@ -1234,13 +1461,6 @@ export function ComicMaterialsPanel(props: {
             window.removeEventListener('keydown', handleKeyDown);
         };
     }, [props.onClose]);
-    const matchesKind = (item: ComicMaterialView, filter: 'all' | 'image' | 'character' | 'video' | 'audio'): boolean => {
-        if (filter === 'all') return true;
-        if (filter === 'character') return item.category === 'character';
-        if (filter === 'image') return item.kind === 'image' && item.category !== 'character';
-        return item.kind === filter;
-    };
-    const shown = props.items.filter(item => matchesKind(item, kind));
     const kinds: readonly (readonly ['all' | 'image' | 'character' | 'video' | 'audio', ComicChatTextKey])[] = props.pick
         ? [['all', 'all'], ['image', 'images'], ['character', 'character']]
         : [['all', 'all'], ['image', 'images'], ['character', 'character'], ['video', 'videos'], ['audio', 'audio']];
@@ -1256,6 +1476,8 @@ export function ComicMaterialsPanel(props: {
         event.preventDefault();
         materialsRef.current.onMenu(item, event);
     }, []);
+    const virtualizeMaterials = shown.length > VIRTUAL_LIST_THRESHOLD;
+    const MaterialVirtualGrid = virtualizeMaterials ? getVirtualListModule().VirtualGrid : undefined;
     return <aside ref={panel} tabIndex={-1} className={`nmx-comic-materials ${props.pick ? 'is-picking' : ''}`} aria-label={t('materials')} data-nmx-gallery-root=''
         style={{ '--nmx-library-card-min': COMIC_MATERIAL_SIZES[librarySize] } as React.CSSProperties}
         onKeyDown={event => { if (event.key === 'Escape') { if (document.querySelector('.nmx-comic-chat-viewer, .nmx-attachment-lightbox, .nmx-comic-chat-menu')) return; event.preventDefault(); props.onClose(); } }}>
@@ -1274,7 +1496,22 @@ export function ComicMaterialsPanel(props: {
         </div>
         {props.loading ? <p className='nmx-comic-materials-empty'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i> {t('loadingChats')}</p>
             : shown.length === 0 ? <p className='nmx-comic-materials-empty'>{props.items.length === 0 && props.emptyText || t('noMaterials')}</p>
-            : <div className='nmx-comic-materials-grid' role='list'>{shown.map(item => <ComicMaterialCard key={`${item.path || ''}${item.assetId}`}
+            : MaterialVirtualGrid ? <MaterialVirtualGrid<ComicMaterialView>
+                items={shown}
+                itemKey={item => `${item.path || ''}${item.assetId}`}
+                virtuosoRef={materialsVirtuoso}
+                className='nmx-comic-materials-scroller'
+                style={{ flex: '1 1 auto', minHeight: 0 }}
+                listClassName='nmx-comic-materials-grid'
+                listStyle={{ overflowY: 'visible' }}
+                role='list'
+                components={MATERIALS_VIRTUAL_COMPONENTS}
+                initialItemCount={Math.min(shown.length, 16)}
+                renderItem={item => <ComicMaterialCard key={`${item.path || ''}${item.assetId}`}
+                    item={item} locale={props.locale} pick={Boolean(props.pick)} focused={item.assetId === props.focus} stretch
+                    originLabel={item.project || t(item.origin === 'chat' ? 'fromChat' : item.origin === 'flow' ? 'fromFlow' : 'imported')}
+                    onSelect={handleSelectMaterial} onMenu={handleMenuMaterial} />}
+            /> : <div className='nmx-comic-materials-grid' role='list'>{shown.map(item => <ComicMaterialCard key={`${item.path || ''}${item.assetId}`}
                 item={item} locale={props.locale} pick={Boolean(props.pick)} focused={item.assetId === props.focus}
                 originLabel={item.project || t(item.origin === 'chat' ? 'fromChat' : item.origin === 'flow' ? 'fromFlow' : 'imported')}
                 onSelect={handleSelectMaterial} onMenu={handleMenuMaterial} />)}</div>}
@@ -1286,6 +1523,7 @@ const ComicMaterialCard = React.memo(function ComicMaterialCard(props: {
     readonly locale: NextMuxDesktopLocale;
     readonly pick: boolean;
     readonly focused: boolean;
+    readonly stretch?: boolean;
     readonly originLabel: string;
     readonly onSelect: (item: ComicMaterialView) => void;
     readonly onMenu: (item: ComicMaterialView, event: React.MouseEvent) => void;
@@ -1294,6 +1532,7 @@ const ComicMaterialCard = React.memo(function ComicMaterialCard(props: {
     return <button type='button' role='listitem' data-asset-id={item.assetId}
         data-nmx-gallery={!props.pick && item.url && item.kind !== 'audio' ? item.kind : undefined}
         className={`nmx-comic-material is-${item.kind} ${props.focused ? 'is-focus' : ''}`} title={item.prompt || item.title}
+        style={props.stretch ? MATERIAL_CARD_STRETCH_STYLE : undefined}
         onClick={() => props.onSelect(item)} onContextMenu={event => props.onMenu(item, event)}>
         <span className='nmx-comic-material-thumb' style={item.kind === 'audio' ? undefined : aspectStyle(item.aspect)}>
             {item.kind === 'image' && item.url ? <img src={item.url} alt='' loading='lazy' decoding='async' draggable={false} />

@@ -78,12 +78,14 @@
 .nmx-library-context-menu button { display:flex; align-items:center; width:100%; height:30px; padding:0 10px; border:0; border-radius:6px; background:transparent; color:var(--nmx-text); font:inherit; font-size:12.5px; text-align:left; cursor:pointer; }
 .nmx-library-context-menu button:hover:not(:disabled) { background:var(--nmx-panel-2); }
 .nmx-library-context-menu button.is-danger { color:#ef4444; }
+/* Menus and popovers portaled to <body> sit outside every themed container: the light theme reaches them through
+   body.nmx-theme-light-active (the widget) or body.theia-light (Theia, switched with it), not a document-wide :has(). */
 :is(.nmx-theme-light, .nmx-board-modal-layer.nmx-theme-light) .nmx-library-context-menu,
 .nmx-library-context-menu.nmx-theme-light,
-body:has(:is(.nmx-shell, .nmx-desktop-widget, .nmx-board-modal-layer).nmx-theme-light) > .nmx-library-context-menu { background:#ffffff; color:#18181b; border-color:#d3d7df; box-shadow:0 14px 36px rgb(15 23 42 / 18%); }
+body:is(.nmx-theme-light-active, .theia-light) > .nmx-library-context-menu { background:#ffffff; color:#18181b; border-color:#d3d7df; box-shadow:0 14px 36px rgb(15 23 42 / 18%); }
 :is(.nmx-theme-light, .nmx-board-modal-layer.nmx-theme-light) .nmx-library-context-menu button:not(.is-danger),
 .nmx-library-context-menu.nmx-theme-light button:not(.is-danger),
-body:has(:is(.nmx-shell, .nmx-desktop-widget, .nmx-board-modal-layer).nmx-theme-light) > .nmx-library-context-menu button:not(.is-danger) { color:#18181b; }
+body:is(.nmx-theme-light-active, .theia-light) > .nmx-library-context-menu button:not(.is-danger) { color:#18181b; }
 
 /* Asset Library Cinema Zoom Lightbox (isolated dark-cinema theme in both Dark & Light modes) */
 .nmx-library-lightbox { position:fixed; inset:0; z-index:1620; display:flex; flex-direction:column; padding:0; box-sizing:border-box; background:rgb(7 8 12 / 97%); color:#f4f4f6; color-scheme:dark; -webkit-app-region:no-drag; }
@@ -114,7 +116,7 @@ body:has(:is(.nmx-shell, .nmx-desktop-widget, .nmx-board-modal-layer).nmx-theme-
 .nmx-library-delete-popover { position:fixed; z-index:1580; width:256px; max-width:calc(100vw - 24px); padding:11px 13px; box-sizing:border-box; border-radius:11px; background:var(--nmx-panel, #1c1c21); color:var(--nmx-text, #f4f4f6); border:1px solid var(--nmx-border, #38383f); box-shadow:0 14px 36px rgb(0 0 0 / 46%); display:flex; flex-direction:column; gap:10px; -webkit-app-region:no-drag; animation:nmx-library-pop-in 120ms ease-out both; }
 :is(.nmx-theme-light, .nmx-board-modal-layer.nmx-theme-light) .nmx-library-delete-popover,
 .nmx-library-delete-popover.nmx-theme-light,
-body:has(:is(.nmx-shell, .nmx-desktop-widget, .nmx-board-modal-layer).nmx-theme-light) > .nmx-library-delete-popover { background:#ffffff; color:#18181b; border-color:#d3d7df; box-shadow:0 14px 36px rgb(15 23 42 / 18%); }
+body:is(.nmx-theme-light-active, .theia-light) > .nmx-library-delete-popover { background:#ffffff; color:#18181b; border-color:#d3d7df; box-shadow:0 14px 36px rgb(15 23 42 / 18%); }
 .nmx-library-delete-popover p { margin:0; font-size:12px; line-height:1.5; color:inherit; overflow-wrap:anywhere; }
 .nmx-library-delete-popover-actions { display:flex; align-items:center; justify-content:flex-end; gap:7px; }
 .nmx-library-delete-popover .nmx-library-delete-cancel,
@@ -123,10 +125,10 @@ body:has(:is(.nmx-shell, .nmx-desktop-widget, .nmx-board-modal-layer).nmx-theme-
 .nmx-library-delete-cancel:hover:not(:disabled) { border-color:var(--nmx-text, #f4f4f6); background:color-mix(in srgb, var(--nmx-text, #f4f4f6) 10%, var(--nmx-panel-2, #27272e)); }
 :is(.nmx-theme-light, .nmx-board-modal-layer.nmx-theme-light) .nmx-library-delete-popover .nmx-library-delete-cancel,
 .nmx-library-delete-popover.nmx-theme-light .nmx-library-delete-cancel,
-body:has(:is(.nmx-shell, .nmx-desktop-widget, .nmx-board-modal-layer).nmx-theme-light) > .nmx-library-delete-popover .nmx-library-delete-cancel { background:#f4f5f8; border-color:#cbd5e1; color:#18181b; }
+body:is(.nmx-theme-light-active, .theia-light) > .nmx-library-delete-popover .nmx-library-delete-cancel { background:#f4f5f8; border-color:#cbd5e1; color:#18181b; }
 :is(.nmx-theme-light, .nmx-board-modal-layer.nmx-theme-light) .nmx-library-delete-popover .nmx-library-delete-cancel:hover:not(:disabled),
 .nmx-library-delete-popover.nmx-theme-light .nmx-library-delete-cancel:hover:not(:disabled),
-body:has(:is(.nmx-shell, .nmx-desktop-widget, .nmx-board-modal-layer).nmx-theme-light) > .nmx-library-delete-popover .nmx-library-delete-cancel:hover:not(:disabled) { background:#e2e8f0 !important; border-color:#94a3b8; color:#18181b !important; }
+body:is(.nmx-theme-light-active, .theia-light) > .nmx-library-delete-popover .nmx-library-delete-cancel:hover:not(:disabled) { background:#e2e8f0 !important; border-color:#94a3b8; color:#18181b !important; }
 .nmx-library-delete-popover .nmx-library-delete-ok,
 .nmx-library-delete-ok { display:inline-flex; align-items:center; justify-content:center; min-height:28px; padding:4px 12px; border-radius:7px; border:1px solid #dc2626 !important; background:#dc2626 !important; background-color:#dc2626 !important; color:#ffffff !important; font:inherit; font-size:12px; font-weight:600; cursor:pointer; transition:background .14s ease, border-color .14s ease; }
 .nmx-library-delete-popover .nmx-library-delete-ok:hover:not(:disabled),

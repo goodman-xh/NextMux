@@ -4,6 +4,17 @@ import { comicAssetLibraryMatches, sortComicAssetLibrary, type ComicAssetCategor
 import { comicAssetLibraryText } from './nextmux-comic-asset-library-text';
 import { assetLibraryOperations, runAssetLibraryOperation } from './nextmux-comic-asset-library-operations';
 import { ImeInput } from './nextmux-ime-field';
+import { getCachedDateTimeFormat } from './nextmux-intl-cache';
+import type * as VirtualListModule from './nextmux-virtual-list';
+const VIRTUAL_LIST_THRESHOLD = 30;
+declare function require(id: string): unknown;
+let cachedAssetVirtualListModule: typeof VirtualListModule | undefined;
+function getAssetVirtualListModule(): typeof VirtualListModule {
+    if (!cachedAssetVirtualListModule) {
+        cachedAssetVirtualListModule = require('./nextmux-virtual-list') as typeof VirtualListModule;
+    }
+    return cachedAssetVirtualListModule;
+}
 import { createImageLightboxState, IMAGE_LIGHTBOX_ZOOM, imageLightboxPercentage, imageLightboxPointer, imageLightboxPosition, imageLightboxText, lightboxGalleryIndex, lightboxKeyAction, updateImageLightbox, type ImageLightboxState, type LightboxGalleryStep } from './nextmux-image-lightbox';
 import '../../src/browser/style/nextmux-comic-asset-library.css';
 
@@ -139,12 +150,29 @@ function LibraryLightboxImage(props:{readonly src:string;readonly alt:string;rea
     </>;
 }
 
-const libraryDateFormats=new Map<string,Intl.DateTimeFormat>();
-function getLibraryDateFormatter(locale:string):Intl.DateTimeFormat{
-    let cached=libraryDateFormats.get(locale);
-    if(!cached){cached=new Intl.DateTimeFormat(locale,{dateStyle:'short',timeStyle:'short'});libraryDateFormats.set(locale,cached);}
-    return cached;
-}
+const VIRTUALIZED_LIBRARY_CARD_STYLE: React.CSSProperties = {
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    flex: '1 1 auto',
+    minWidth: 0,
+    gap: 8,
+    padding: 10,
+    border: '1px solid var(--nmx-border)',
+    borderRadius: 12,
+    background: 'color-mix(in srgb, var(--nmx-panel-2) 45%, var(--nmx-panel))'
+};
+
+const VIRTUALIZED_LIBRARY_PINNED_STYLE: React.CSSProperties = {
+    ...VIRTUALIZED_LIBRARY_CARD_STYLE,
+    borderColor: 'color-mix(in srgb, #f59e0b 55%, var(--nmx-border))'
+};
+
+const LibraryGridItem = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(function LibraryGridItem(props, ref) {
+    return <div {...props} ref={ref} style={{ ...props.style, display: 'flex', flexDirection: 'column', minWidth: 0 }} />;
+});
+
+const LIBRARY_VIRTUAL_COMPONENTS = { Item: LibraryGridItem };
 
 const LibraryAssetCard=React.memo(function LibraryAssetCard(props:{
     readonly entry:ComicAssetLibraryEntry;
@@ -168,6 +196,7 @@ const LibraryAssetCard=React.memo(function LibraryAssetCard(props:{
     readonly reclassifyLabel:string;
     readonly pinLabel:string;
     readonly deleteLabel:string;
+    readonly virtualized?:boolean;
     readonly onContextMenuEntry:(entry:ComicAssetLibraryEntry,event:React.MouseEvent<HTMLElement>)=>void;
     readonly onOpenZoom:(entry:ComicAssetLibraryEntry,video?:HTMLVideoElement|null)=>void;
     readonly onUseEntry:(entry:ComicAssetLibraryEntry)=>void;
@@ -179,6 +208,7 @@ const LibraryAssetCard=React.memo(function LibraryAssetCard(props:{
     const isZoomableImage=entry.assetType==='image'&&Boolean(media);
     const isZoomableVideo=entry.assetType==='video'&&Boolean(media);
     return <article data-library-asset={entry.assetId} className={entry.pinnedAt?'is-pinned':''}
+        style={props.virtualized?(entry.pinnedAt?VIRTUALIZED_LIBRARY_PINNED_STYLE:VIRTUALIZED_LIBRARY_CARD_STYLE):undefined}
         onContextMenu={event=>props.onContextMenuEntry(entry,event)}>
         <div className={`nmx-library-preview${isZoomableImage?' is-zoomable-image':isZoomableVideo?' is-zoomable-video':''}`} onClick={isZoomableImage?()=>props.onOpenZoom(entry):undefined}>
             {isZoomableImage?<img src={media} alt='' loading='lazy' decoding='async'/>:isZoomableVideo?<video src={media} controls playsInline preload='metadata' controlsList='nofullscreen noremoteplayback' disablePictureInPicture onMouseMove={event=>{
@@ -190,7 +220,7 @@ const LibraryAssetCard=React.memo(function LibraryAssetCard(props:{
                 const rect=event.currentTarget.getBoundingClientRect();
                 if(!(event.detail>0&&event.clientY<rect.bottom-LIBRARY_VIDEO_CONTROL_STRIP))return;
                 event.preventDefault();event.stopPropagation();props.onOpenZoom(entry,event.currentTarget);
-            }}/>:entry.assetType==='audio'&&media?<audio src={media} controls preload='metadata'/>:<span>{props.fallbackText}</span>}
+            }}/>:entry.assetType==='audio'&&media?<audio src={media} controls preload='none'/>:<span>{props.fallbackText}</span>}
             {(isZoomableImage||isZoomableVideo)&&<button type='button' className='nmx-library-zoom-btn' title={props.zoomLabel} aria-label={props.zoomLabel} onClick={event=>{event.stopPropagation();const siblingVideo=isZoomableVideo?event.currentTarget.parentElement?.querySelector('video'):null;props.onOpenZoom(entry,siblingVideo);}}><i className='codicon codicon-screen-full' aria-hidden='true'/></button>}
             <span className={`nmx-library-type-badge is-${isChar?'character':entry.assetType}`}>{badgeLabel}</span>
         </div>
@@ -580,7 +610,30 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
     const onCardDelete=React.useCallback((entry:ComicAssetLibraryEntry,event:React.MouseEvent<HTMLElement>)=>{
         cardActionsRef.current.openDeletePopover(entry,event);
     },[]);
-    const dateFormatter=React.useMemo(()=>getLibraryDateFormatter(props.locale),[props.locale]);
+    const dateFormatter=React.useMemo(()=>getCachedDateTimeFormat(props.locale,{dateStyle:'short',timeStyle:'short'}),[props.locale]);
+    const renderEntryCard=(entry:ComicAssetLibraryEntry,virtualized=false):React.ReactElement=>{
+        const unavailable=Boolean(props.selectTypes&&!props.selectTypes.includes(entry.assetType));
+        const locked=cardLocks.current.has(entry.assetId);
+        const busy=locked||operations.busy===entry.assetId;
+        const useActive=operations.busy===entry.assetId;
+        const useBlocked=Boolean(operations.busy)||busy||unavailable;
+        const media=resolveMediaUrl(entry);
+        const isChar=isCharacterEntry(entry);
+        const badgeLabel=isChar?t('character'):t(entry.assetType==='audio'?'audioMedia':entry.assetType);
+        const fallbackText=entry.textContent?.slice(0,160)||t(entry.assetType==='text'?'text':entry.assetType);
+        return <LibraryAssetCard key={entry.assetId} entry={entry} media={media} isChar={isChar} badgeLabel={badgeLabel}
+            fallbackText={fallbackText} createdLabel={dateFormatter.format(new Date(entry.createdAt))}
+            unavailable={unavailable} busy={busy} useActive={useActive} useBlocked={useBlocked}
+            hasUse={Boolean(props.onUse)} useLabel={props.useLabel??t('use')} canReclassify={canReclassify(entry)}
+            hasPin={Boolean(props.onPin)} hasDelete={Boolean(props.onDelete)}
+            zoomLabel={t('zoomPreview')} notAllowedLabel={t('notAllowed')} loadingLabel={t('loading')}
+            reclassifyLabel={t(isChar?'moveToImage':'moveToCharacter')} pinLabel={t(entry.pinnedAt?'unpin':'pin')} deleteLabel={t('delete')}
+            virtualized={virtualized}
+            onContextMenuEntry={onCardContextMenu} onOpenZoom={onCardZoom} onUseEntry={onCardUse}
+            onReclassifyEntry={onCardReclassify} onPinEntry={onCardPin} onOpenDelete={onCardDelete} />;
+    };
+    const virtualizeVisible=!loading&&visible.length>VIRTUAL_LIST_THRESHOLD;
+    const AssetVirtualGrid = virtualizeVisible ? getAssetVirtualListModule().VirtualGrid : undefined;
     return <div className='nmx-board-tool-backdrop nmx-library-backdrop' onMouseDown={event=>{
         event.stopPropagation();
         if(dismissedOverlayOnDownRef.current){dismissedOverlayOnDownRef.current=false;return;}
@@ -617,7 +670,7 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
                 <div className='nmx-library-toolbar-controls'>
                     <div className='nmx-library-search-box'>
                         <i className='codicon codicon-search' aria-hidden='true'/>
-                        <input type='search' value={search} placeholder={t('searchPlaceholder')} aria-label={t('searchPlaceholder')} onChange={event=>{setSearch(event.currentTarget.value);setContextMenu(undefined);setPendingDelete(undefined);}}/>
+                        <ImeInput type='search' commitDelayMs={100} value={search} placeholder={t('searchPlaceholder')} aria-label={t('searchPlaceholder')} onChange={event=>{setSearch(event.currentTarget.value);setContextMenu(undefined);setPendingDelete(undefined);}}/>
                     </div>
                     <select aria-label={t('sort')} title={t('sort')} value={oldest?'oldest':'newest'} onChange={event=>{setOldest(event.currentTarget.value==='oldest');setContextMenu(undefined);setPendingDelete(undefined);}}>
                         <option value='newest'>{t('newest')}</option>
@@ -627,29 +680,27 @@ export function CanvasAssetLibraryDialog(props:CanvasAssetLibraryDialogProps):Re
                 </div>
             </div>
             {operations.busy&&<p className='nmx-library-progress' role='status'>{t('workingClose')}</p>}
-            <div ref={gridRef} className='nmx-board-asset-library-body nmx-library-grid' onScroll={()=>{if(contextMenu)setContextMenu(undefined);if(pendingDelete)setPendingDelete(undefined);}}>
-                {loading?<p role='status' className='nmx-library-empty-state'>{t('loading')}</p>:!visible.length?<p className='nmx-library-empty-state'>{t('empty')}</p>:visible.map(entry=>{
-                    const unavailable=Boolean(props.selectTypes&&!props.selectTypes.includes(entry.assetType));
-                    const locked=cardLocks.current.has(entry.assetId);
-                    const busy=locked||operations.busy===entry.assetId;
-                    const useActive=operations.busy===entry.assetId;
-                    const useBlocked=Boolean(operations.busy)||busy||unavailable;
-                    const media=resolveMediaUrl(entry);
-                    const isChar=isCharacterEntry(entry);
-                    const badgeLabel=isChar?t('character'):t(entry.assetType==='audio'?'audioMedia':entry.assetType);
-                    const fallbackText=entry.textContent?.slice(0,160)||t(entry.assetType==='text'?'text':entry.assetType);
-                    return <LibraryAssetCard key={entry.assetId} entry={entry} media={media} isChar={isChar} badgeLabel={badgeLabel}
-                        fallbackText={fallbackText} createdLabel={dateFormatter.format(new Date(entry.createdAt))}
-                        unavailable={unavailable} busy={busy} useActive={useActive} useBlocked={useBlocked}
-                        hasUse={Boolean(props.onUse)} useLabel={props.useLabel??t('use')} canReclassify={canReclassify(entry)}
-                        hasPin={Boolean(props.onPin)} hasDelete={Boolean(props.onDelete)}
-                        zoomLabel={t('zoomPreview')} notAllowedLabel={t('notAllowed')} loadingLabel={t('loading')}
-                        reclassifyLabel={t(isChar?'moveToImage':'moveToCharacter')} pinLabel={t(entry.pinnedAt?'unpin':'pin')} deleteLabel={t('delete')}
-                        onContextMenuEntry={onCardContextMenu} onOpenZoom={onCardZoom} onUseEntry={onCardUse}
-                        onReclassifyEntry={onCardReclassify} onPinEntry={onCardPin} onOpenDelete={onCardDelete} />;
-                })}
-                {error&&<p role='alert'>{error} <button type='button' title={t('retry')} onClick={()=>{if(failedUpload&&props.onUpload)void upload(true);else setReload(value=>value+1);}}>{t('retry')}</button></p>}
-            </div>
+            {AssetVirtualGrid?(
+                <AssetVirtualGrid<ComicAssetLibraryEntry>
+                    items={visible}
+                    itemKey={entry=>entry.assetId}
+                    className='nmx-board-asset-library-body'
+                    listClassName='nmx-board-asset-library-body nmx-library-grid'
+                    listStyle={{padding:0,overflow:'visible'}}
+                    style={{flex:'1 1 auto',minHeight:0}}
+                    initialItemCount={Math.min(visible.length,18)}
+                    components={LIBRARY_VIRTUAL_COMPONENTS}
+                    scrollerRef={el=>{gridRef.current=el as HTMLDivElement|null;}}
+                    onScroll={()=>{if(contextMenu)setContextMenu(undefined);if(pendingDelete)setPendingDelete(undefined);}}
+                    footer={error?<p role='alert'>{error} <button type='button' title={t('retry')} onClick={()=>{if(failedUpload&&props.onUpload)void upload(true);else setReload(value=>value+1);}}>{t('retry')}</button></p>:undefined}
+                    renderItem={entry=>renderEntryCard(entry,true)}
+                />
+            ):(
+                <div ref={gridRef} className='nmx-board-asset-library-body nmx-library-grid' onScroll={()=>{if(contextMenu)setContextMenu(undefined);if(pendingDelete)setPendingDelete(undefined);}}>
+                    {loading?<p role='status' className='nmx-library-empty-state'>{t('loading')}</p>:!visible.length?<p className='nmx-library-empty-state'>{t('empty')}</p>:visible.map(entry=>renderEntryCard(entry,false))}
+                    {error&&<p role='alert'>{error} <button type='button' title={t('retry')} onClick={()=>{if(failedUpload&&props.onUpload)void upload(true);else setReload(value=>value+1);}}>{t('retry')}</button></p>}
+                </div>
+            )}
             {contextMenu&&(()=>{
                 const entry=contextMenu.entry;
                 const isChar=isCharacterEntry(entry);

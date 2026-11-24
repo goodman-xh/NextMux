@@ -1,4 +1,5 @@
 import { relayApprovalRating } from '../common/nextmux-relay-evidence';
+import { getCachedNumberFormat } from './nextmux-intl-cache';
 
 export type RelayMarketplaceSort =
     | 'recommended'
@@ -254,9 +255,9 @@ function recommendationScore(row: Pick<
 
 function formatNumber(locale: string | undefined, value: number, options: Intl.NumberFormatOptions): string {
     try {
-        return new Intl.NumberFormat(locale, options).format(value);
+        return getCachedNumberFormat(locale, options).format(value);
     } catch {
-        return new Intl.NumberFormat('en-US', options).format(value);
+        return getCachedNumberFormat('en-US', options).format(value);
     }
 }
 

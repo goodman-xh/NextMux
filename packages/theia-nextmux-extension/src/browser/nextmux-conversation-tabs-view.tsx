@@ -6,6 +6,7 @@ import { ConversationWindowInputQueue } from './nextmux-window-input-queue';
 import { goalScheduleText } from './nextmux-goal-schedule-locale';
 import { SurfaceTooltips } from './nextmux-surface-tooltips';
 import { bridgeLiveVideo, liveBridgeShown, nudgeLiveVideoBridge } from './nextmux-live-frame-bridge';
+import { notifyModalChromeChanged } from './nextmux-modal-chrome';
 
 type TabsTextKey = 'strip' | 'conversation' | 'closeConversation' | 'closeTab' | 'connecting' | 'connected' | 'disconnected' | 'error'
     | 'desktopEmpty' | 'desktopHint' | 'remoteDesktop' | 'localDesktop' | 'virtualMachine';
@@ -157,7 +158,9 @@ export function ConversationTabStrip(props: ConversationTabStripProps): React.Re
 type WindowTextKey = 'live' | 'lastFrame' | 'onlyInTab' | 'alsoOnDesktop' | 'placement' | 'inTabHint' | 'switchToWindow' | 'moveFailed'
     | 'mouse' | 'mouseHint' | 'mouseOff' | 'inputBlocked' | 'sound' | 'soundHint' | 'soundFailed' | 'switchOn' | 'switchOff' | 'soundOff'
     | 'waiting' | 'alreadyOpen' | 'aiSoundOn' | 'aiSoundOff' | 'aiInputOn' | 'aiInputOff' | 'aiToTab' | 'aiToDesktop'
-    | 'parkForeground' | 'parkUwp' | 'parkMinimized' | 'parkMissing' | 'lockUnavailable'
+    | 'parkForeground' | 'parkUwp' | 'parkMinimized' | 'parkMissing' | 'parkElevated' | 'parkGpuBlank' | 'lockUnavailable'
+    | 'captureElevatedTitle' | 'captureElevatedBody' | 'captureElevatedBlockedBody' | 'captureBlankTitle' | 'captureBlankBody'
+    | 'elevateHelperAction' | 'elevatingHelper' | 'elevationDeniedNotice' | 'elevatedActiveNotice' | 'retryCaptureAction' | 'showOnDesktopAction'
     | 'reopenApp' | 'reopenRunningTitle' | 'reopenRunningBody' | 'reopenRunningConfirm' | 'reopenFailed'
     | 'windowOwned' | 'controlHint' | 'dismissNotice' | 'escStopped' | 'resumeControl'
     | 'terminateBubble' | 'terminateTitle' | 'terminateBody' | 'terminateConfirm' | 'terminateCancel' | 'terminateFailed'
@@ -169,7 +172,12 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         inTabHint: '窗口在后台运行，不占用你的桌面', switchToWindow: '切到此窗口', moveFailed: '窗口没能移动，请稍后再试',
         mouse: '键鼠', mouseHint: '打开后可以在标签内点击、滚动和打字；关闭时标签内仅由 AI 和插件操作，桌面上的窗口始终可以直接操作。', mouseOff: '键鼠已关闭：打开“键鼠”后才能在标签内操作这个窗口', inputBlocked: '「{app}」正由 AI 操作：在它的标签里打开“键鼠”后，你就可以在标签内操作。', sound: '声音', soundHint: '关闭时这个应用保持静音', soundFailed: '没能切换声音：需要“屏幕与系统录音”权限', switchOn: '已开', switchOff: '已关', soundOff: '已静音',
         alreadyOpen: '「{app}」已在这个标签中打开', aiSoundOn: 'AI 打开了声音', aiSoundOff: 'AI 关闭了声音', aiInputOn: 'AI 打开了键鼠', aiInputOff: 'AI 关闭了键鼠', aiToTab: 'AI 把窗口移回标签', aiToDesktop: 'AI 让窗口也显示在桌面',
-        waiting: '等待画面', parkForeground: 'Windows 上 AI 只能操作显示在桌面上的窗口，所以这个窗口会留在桌面', parkUwp: '这个应用不接受后台操作，窗口需要留在桌面', parkMinimized: '窗口已最小化：先还原它，AI 才能看到并操作', parkMissing: '找不到这个窗口，它可能已关闭', lockUnavailable: '桌面上的窗口始终可以直接操作',
+        waiting: '等待画面', parkForeground: 'Windows 上 AI 只能操作显示在桌面上的窗口，所以这个窗口会留在桌面', parkUwp: '这个应用不接受后台操作，窗口需要留在桌面', parkMinimized: '窗口已最小化：先还原它，AI 才能看到并操作', parkMissing: '找不到这个窗口，它可能已关闭',
+        parkElevated: '这个应用正以管理员权限运行：启用管理员权限操控后，才能把它收到后台标签里', parkGpuBlank: '这个应用使用了硬件加速渲染，移出屏幕后会变成黑屏或空白，因此需要留在桌面上显示',
+        lockUnavailable: '桌面上的窗口始终可以直接操作',
+        captureElevatedTitle: '「{app}」正以管理员权限运行', captureElevatedBody: '由于 Windows 安全隔离，普通权限下该窗口需保持在桌面前台可见才能显示画面，且无法从标签内直接点击或收进后台。', captureElevatedBlockedBody: '当前未能读取该管理员窗口的画面（可能被最小化或被其他窗口遮挡）。请把它前置到桌面，或启用管理员权限操控。',
+        captureBlankTitle: '当前未能获取到「{app}」的清晰画面', captureBlankBody: '部分硬件加速、自绘或最小化窗口在后台状态会停止输出画面。请将该窗口前置显示在桌面后再重试。',
+        elevateHelperAction: '启用管理员权限操控', elevatingHelper: '正在请求管理员权限…', elevationDeniedNotice: '未能启用管理员权限操控（已取消或权限受限）', elevatedActiveNotice: '已启用管理员权限操控', retryCaptureAction: '重试画面', showOnDesktopAction: '在桌面前置显示',
         reopenApp: "重新打开", reopenRunningTitle: "该应用已经在运行中，是否关闭重新打开？", reopenRunningBody: "关闭当前正在运行的「{app}」并重新打开到当前标签中。", reopenRunningConfirm: "关闭并重新打开", reopenFailed: "未能重新打开应用，请稍后再试",
         dismissNotice: "关闭通知", windowOwned: "该应用窗口已在另一段对话中打开，请先在原对话关闭标签。", controlHint: "按Esc可以退出插件控制(请先关闭键鼠)", escStopped: "已按 Esc 退出桌面控制：本轮 AI 不再操作电脑窗口，会改用其他方式继续。", resumeControl: "恢复控制",
         terminateBubble: '点我关闭进程', terminateTitle: '结束「{app}」进程？', terminateBody: '将关闭「{app}」窗口并结束其运行进程，未保存的内容可能会丢失。', terminateConfirm: '结束进程', terminateCancel: '取消', terminateFailed: '未能结束进程，请稍后再试',
@@ -179,7 +187,12 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         inTabHint: '視窗在背景執行，不佔用你的桌面', switchToWindow: '切到此視窗', moveFailed: '視窗無法移動，請稍後再試',
         mouse: '鍵鼠', mouseHint: '開啟後可以在分頁內點按、捲動和打字；關閉時分頁內僅由 AI 和外掛操作，桌面上的視窗始終可以直接操作。', mouseOff: '鍵鼠已關閉：開啟「鍵鼠」後才能在分頁內操作這個視窗', inputBlocked: '「{app}」正由 AI 操作：在它的分頁裡開啟「鍵鼠」後，你就能在分頁內操作。', sound: '聲音', soundHint: '關閉時這個 App 保持靜音', soundFailed: '無法切換聲音：需要「螢幕與系統錄音」權限', switchOn: '已開', switchOff: '已關', soundOff: '已靜音',
         alreadyOpen: '「{app}」已在這個分頁中開啟', aiSoundOn: 'AI 開啟了聲音', aiSoundOff: 'AI 關閉了聲音', aiInputOn: 'AI 開啟了鍵鼠', aiInputOff: 'AI 關閉了鍵鼠', aiToTab: 'AI 把視窗移回分頁', aiToDesktop: 'AI 讓視窗也顯示在桌面',
-        waiting: '等待畫面', parkForeground: 'Windows 上 AI 只能操作顯示在桌面上的視窗，所以這個視窗會留在桌面', parkUwp: '這個 App 不接受背景操作，視窗需要留在桌面', parkMinimized: '視窗已最小化：先還原它，AI 才能看到並操作', parkMissing: '找不到這個視窗，它可能已關閉', lockUnavailable: '桌面上的視窗始終可以直接操作',
+        waiting: '等待畫面', parkForeground: 'Windows 上 AI 只能操作顯示在桌面上的視窗，所以這個視窗會留在桌面', parkUwp: '這個 App 不接受背景操作，視窗需要留在桌面', parkMinimized: '視窗已最小化：先還原它，AI 才能看到並操作', parkMissing: '找不到這個視窗，它可能已關閉',
+        parkElevated: '這個 App 正以系統管理員權限執行：啟用管理員權限操控後，才能將它收到背景分頁', parkGpuBlank: '這個應用程式使用硬體加速繪製，移出螢幕後會變黑或空白，因此需要留在桌面上顯示',
+        lockUnavailable: '桌面上的視窗始終可以直接操作',
+        captureElevatedTitle: '「{app}」正以系統管理員權限執行', captureElevatedBody: '因 Windows 權限隔離，一般權限下此視窗需保持在桌面可見才能擷取畫面，也無法在分頁內直接點按或收進背景。', captureElevatedBlockedBody: '目前無法讀取這個管理員視窗的畫面（可能被最小化或被其他視窗遮蔽）。請將它帶回桌面前景，或啟用管理員權限操控。',
+        captureBlankTitle: '目前無法取得「{app}」的清晰畫面', captureBlankBody: '部分硬體加速、自繪或最小化視窗在背景狀態會停止繪製。請先將視窗帶到桌面前景再重試。',
+        elevateHelperAction: '啟用管理員權限操控', elevatingHelper: '正在要求管理員權限…', elevationDeniedNotice: '無法啟用管理員權限操控（已取消或權限受限）', elevatedActiveNotice: '已啟用管理員權限操控', retryCaptureAction: '重試畫面', showOnDesktopAction: '在桌面前景顯示',
         reopenApp: "重新開啟", reopenRunningTitle: "此 App 已在執行中，是否關閉並重新開啟？", reopenRunningBody: "關閉目前正在執行的「{app}」，並在目前分頁中重新開啟。", reopenRunningConfirm: "關閉並重新開啟", reopenFailed: "無法重新開啟 App，請稍後再試",
         dismissNotice: "關閉通知", windowOwned: "此應用程式視窗已在另一段對話中開啟，請先在原對話關閉分頁。", controlHint: "按Esc可以退出外掛控制(請先關閉鍵鼠)", escStopped: "已按 Esc 結束桌面控制：本輪 AI 不再操作電腦視窗，會改用其他方式繼續。", resumeControl: "恢復控制",
         terminateBubble: '點我關閉處理程序', terminateTitle: '結束「{app}」處理程序？', terminateBody: '將關閉「{app}」視窗並結束其執行中的處理程序，未儲存的內容可能會遺失。', terminateConfirm: '結束處理程序', terminateCancel: '取消', terminateFailed: '無法結束處理程序，請稍後再試',
@@ -189,7 +202,12 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         inTabHint: 'Runs in the background, off your desktop', switchToWindow: 'Switch to window', moveFailed: 'Couldn’t move the window. Try again.',
         mouse: 'Keyboard & mouse', mouseHint: 'Turn on to click, scroll and type inside this tab. When off, only the AI and plugins control the tab; windows on the desktop can always be used directly.', mouseOff: 'Keyboard & mouse is off. Turn it on to use this window inside the tab.', inputBlocked: '“{app}” is controlled by the AI. Turn on “Keyboard & mouse” in its tab to use it inside the tab.', sound: 'Sound', soundHint: 'When off, this app stays muted', soundFailed: 'Couldn’t change the sound. NextMux needs the Screen & System Audio Recording permission.', switchOn: 'On', switchOff: 'Off', soundOff: 'Muted',
         alreadyOpen: '“{app}” is already open in this tab', aiSoundOn: 'The AI turned the sound on', aiSoundOff: 'The AI muted the sound', aiInputOn: 'The AI turned keyboard & mouse on', aiInputOff: 'The AI turned keyboard & mouse off', aiToTab: 'The AI moved the window back into the tab', aiToDesktop: 'The AI also showed the window on the desktop',
-        waiting: 'Waiting for the picture', parkForeground: 'On Windows the AI can only work in windows shown on the desktop, so this window stays there', parkUwp: 'This app does not accept input in the background, so its window stays on the desktop', parkMinimized: 'The window is minimized: restore it so the AI can see and use it', parkMissing: 'This window can no longer be found; it may have closed', lockUnavailable: 'Windows on the desktop can always be used directly',
+        waiting: 'Waiting for the picture', parkForeground: 'On Windows the AI can only work in windows shown on the desktop, so this window stays there', parkUwp: 'This app does not accept input in the background, so its window stays on the desktop', parkMinimized: 'The window is minimized: restore it so the AI can see and use it', parkMissing: 'This window can no longer be found; it may have closed',
+        parkElevated: 'This app is running as administrator. Enable admin capture control first before hiding it into the tab.', parkGpuBlank: 'This hardware-accelerated window stops rendering when parked off-screen, so it stays visible on your desktop.',
+        lockUnavailable: 'Windows on the desktop can always be used directly',
+        captureElevatedTitle: '{app} is running as administrator', captureElevatedBody: 'Because of Windows security isolation (UIPI), keep this window uncovered on your desktop to view it, or enable admin capture control to interact inside the tab and hide it cleanly.', captureElevatedBlockedBody: 'The elevated window cannot be captured cleanly right now (it may be minimized or covered by another window). Bring it in front on your desktop or enable admin capture control.',
+        captureBlankTitle: 'Couldn’t capture a clear frame from {app}', captureBlankBody: 'Some GPU-rendered, custom-chrome, or minimized windows stop drawing in the background. Bring the window to the front on your desktop and retry.',
+        elevateHelperAction: 'Enable admin control', elevatingHelper: 'Requesting admin access…', elevationDeniedNotice: 'Couldn’t enable administrator control (cancelled or denied)', elevatedActiveNotice: 'Administrator control enabled', retryCaptureAction: 'Retry capture', showOnDesktopAction: 'Show in front on desktop',
         reopenApp: "Reopen", reopenRunningTitle: "This app is already running. Close and reopen it?", reopenRunningBody: "Close the running “{app}” and reopen it in this tab.", reopenRunningConfirm: "Close and reopen", reopenFailed: "Couldn’t reopen the app. Try again.",
         dismissNotice: "Dismiss notification", windowOwned: "This app window is open in another conversation. Close its tab there first.", controlHint: "Press Esc to exit plugin control (turn off input first)", escStopped: "You pressed Esc to end desktop control: for the rest of this turn the AI won’t operate windows and continues another way.", resumeControl: "Resume control",
         terminateBubble: 'Click to end process', terminateTitle: 'End “{app}” process?', terminateBody: 'This will close the “{app}” window and terminate its running process. Unsaved changes may be lost.', terminateConfirm: 'End process', terminateCancel: 'Cancel', terminateFailed: 'Couldn’t end the process. Try again.',
@@ -199,7 +217,12 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         inTabHint: 'バックグラウンドで動作し、デスクトップには表示されません', switchToWindow: 'このウィンドウへ切り替え', moveFailed: 'ウィンドウを移動できませんでした。もう一度お試しください。',
         mouse: 'キー・マウス', mouseHint: 'オンにすると、このタブ内でクリック・スクロール・入力ができます。オフの間はタブ内では AI とプラグインだけが操作し、デスクトップ上のウィンドウは常に直接操作できます。', mouseOff: 'キー・マウスはオフです。オンにするとこのタブ内でウィンドウを操作できます。', inputBlocked: '「{app}」は AI が操作中です。タブで「キー・マウス」をオンにするとタブ内で操作できます。', sound: 'サウンド', soundHint: 'オフの間、このアプリは消音されます', soundFailed: 'サウンドを切り替えられませんでした。「画面とシステムオーディオの録音」の許可が必要です。', switchOn: 'オン', switchOff: 'オフ', soundOff: '消音中',
         alreadyOpen: '「{app}」はこのタブで開いています', aiSoundOn: 'AI がサウンドをオンにしました', aiSoundOff: 'AI がサウンドを消音しました', aiInputOn: 'AI がキー・マウスをオンにしました', aiInputOff: 'AI がキー・マウスをオフにしました', aiToTab: 'AI がウィンドウをタブに戻しました', aiToDesktop: 'AI がウィンドウをデスクトップにも表示しました',
-        waiting: '画面を待っています', parkForeground: 'Windows では AI はデスクトップに表示されたウィンドウしか操作できないため、このウィンドウはデスクトップに残ります', parkUwp: 'このアプリはバックグラウンドでの操作を受け付けないため、ウィンドウはデスクトップに残ります', parkMinimized: 'ウィンドウが最小化されています。元に戻すと AI が表示・操作できます', parkMissing: 'このウィンドウが見つかりません。閉じられた可能性があります', lockUnavailable: 'デスクトップ上のウィンドウは常に直接操作できます',
+        waiting: '画面を待っています', parkForeground: 'Windows では AI はデスクトップに表示されたウィンドウしか操作できないため、このウィンドウはデスクトップに残ります', parkUwp: 'このアプリはバックグラウンドでの操作を受け付けないため、ウィンドウはデスクトップに残ります', parkMinimized: 'ウィンドウが最小化されています。元に戻すと AI が表示・操作できます', parkMissing: 'このウィンドウが見つかりません。閉じられた可能性があります',
+        parkElevated: 'このアプリは管理者権限で実行されています。タブへ格納する前に管理者権限での制御を有効にしてください', parkGpuBlank: 'このウィンドウはハードウェアアクセラレーション描画のため、画面外に隠すと黒画面・白画面になります。そのためデスクトップに表示したままにします',
+        lockUnavailable: 'デスクトップ上のウィンドウは常に直接操作できます',
+        captureElevatedTitle: '「{app}」は管理者権限で実行中です', captureElevatedBody: 'Windows の権限分離（UIPI）により、通常権限のままではデスクトップの前面に表示している間のみ画面を取得できます。タブ内の操作やバックグラウンド格納には管理者制御を有効にしてください。', captureElevatedBlockedBody: '現在、管理者ウィンドウの画面を取得できません（最小化または他のウィンドウに隠れている可能性があります）。デスクトップ前面に表示するか、管理者権限での制御を有効にしてください。',
+        captureBlankTitle: '「{app}」の鮮明な画面を取得できませんでした', captureBlankBody: '一部のハードウェア描画・カスタムフレーム・最小化ウィンドウはバックグラウンドで描画が止まります。デスクトップの前面に表示して再試行してください。',
+        elevateHelperAction: '管理者制御を有効にする', elevatingHelper: '管理者権限を要求中…', elevationDeniedNotice: '管理者制御を有効にできませんでした（キャンセルまたは拒否）', elevatedActiveNotice: '管理者制御が有効になりました', retryCaptureAction: '再取得', showOnDesktopAction: 'デスクトップ前面に表示',
         reopenApp: "再度開く", reopenRunningTitle: "このアプリは実行中です。閉じて開き直しますか？", reopenRunningBody: "実行中の「{app}」を閉じて、このタブで開き直します。", reopenRunningConfirm: "閉じて開き直す", reopenFailed: "アプリを開き直せませんでした。もう一度お試しください。",
         dismissNotice: "通知を閉じる", windowOwned: "このアプリのウィンドウは別の会話で開いています。先にそちらのタブを閉じてください。", controlHint: "Escでプラグイン制御を終了(先に操作をオフにしてください)", escStopped: "Esc でデスクトップ操作を終了しました。このターンの間、AI はウィンドウを操作せず別の方法で続けます。", resumeControl: "操作を再開",
         terminateBubble: 'クリックでプロセス終了', terminateTitle: '「{app}」のプロセスを終了しますか？', terminateBody: '「{app}」のウィンドウを閉じて実行中のプロセスを終了します。保存されていない内容は失われる可能性があります。', terminateConfirm: 'プロセスを終了', terminateCancel: 'キャンセル', terminateFailed: 'プロセスを終了できませんでした。もう一度お試しください。',
@@ -209,7 +232,12 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         inTabHint: '백그라운드에서 실행되며 데스크톱에 표시되지 않습니다', switchToWindow: '이 창으로 전환', moveFailed: '창을 옮기지 못했습니다. 다시 시도하세요.',
         mouse: '키보드·마우스', mouseHint: '켜면 이 탭 안에서 클릭·스크롤·입력할 수 있습니다. 꺼져 있으면 탭 안에서는 AI와 플러그인만 조작하며, 데스크톱에 있는 창은 언제나 직접 조작할 수 있습니다.', mouseOff: '키보드·마우스가 꺼져 있습니다. 켜야 탭 안에서 이 창을 조작할 수 있습니다.', inputBlocked: '“{app}”은(는) AI가 조작 중입니다. 탭에서 ‘키보드·마우스’를 켜면 탭 안에서 조작할 수 있습니다.', sound: '소리', soundHint: '꺼져 있으면 이 앱은 음소거됩니다', soundFailed: '소리를 전환하지 못했습니다. ‘화면 및 시스템 오디오 녹음’ 권한이 필요합니다.', switchOn: '켜짐', switchOff: '꺼짐', soundOff: '음소거',
         alreadyOpen: '“{app}”은(는) 이미 이 탭에 열려 있습니다', aiSoundOn: 'AI가 소리를 켰습니다', aiSoundOff: 'AI가 소리를 껐습니다', aiInputOn: 'AI가 키보드·마우스를 켰습니다', aiInputOff: 'AI가 키보드·마우스를 껐습니다', aiToTab: 'AI가 창을 탭으로 되돌렸습니다', aiToDesktop: 'AI가 창을 데스크톱에도 표시했습니다',
-        waiting: '화면을 기다리는 중', parkForeground: 'Windows에서는 AI가 데스크톱에 표시된 창만 조작할 수 있어 이 창은 데스크톱에 남습니다', parkUwp: '이 앱은 백그라운드 입력을 받지 않아 창이 데스크톱에 남아야 합니다', parkMinimized: '창이 최소화되었습니다. 복원해야 AI가 보고 조작할 수 있습니다', parkMissing: '이 창을 찾을 수 없습니다. 닫혔을 수 있습니다', lockUnavailable: '데스크톱에 있는 창은 언제나 직접 조작할 수 있습니다',
+        waiting: '화면을 기다리는 중', parkForeground: 'Windows에서는 AI가 데스크톱에 표시된 창만 조작할 수 있어 이 창은 데스크톱에 남습니다', parkUwp: '이 앱은 백그라운드 입력을 받지 않아 창이 데스크톱에 남아야 합니다', parkMinimized: '창이 최소화되었습니다. 복원해야 AI가 보고 조작할 수 있습니다', parkMissing: '이 창을 찾을 수 없습니다. 닫혔을 수 있습니다',
+        parkElevated: '이 앱이 관리자 권한으로 실행 중입니다. 탭으로 숨기려면 먼저 관리자 권한 제어를 켜세요', parkGpuBlank: '이 창은 하드웨어 가속으로 렌더링되어 화면 밖으로 숨기면 빈 화면이 되므로 데스크톱에 유지됩니다',
+        lockUnavailable: '데스크톱에 있는 창은 언제나 직접 조작할 수 있습니다',
+        captureElevatedTitle: '{app}이(가) 관리자 권한으로 실행 중입니다', captureElevatedBody: 'Windows 보안 격리(UIPI) 때문에 일반 권한에서는 창이 데스크톱 앞면에 보일 때만 화면을 읽을 수 있으며, 탭 내 클릭이나 배경 숨기기는 관리자 권한 제어가 필요합니다.', captureElevatedBlockedBody: '관리자 권한 창의 화면을 가져오지 못했습니다(최소화되었거나 다른 창에 가려졌을 수 있음). 데스크톱 맨 앞으로 가져오거나 관리자 권한 제어를 켜세요.',
+        captureBlankTitle: '{app}의 선명한 화면을 가져오지 못했습니다', captureBlankBody: '일부 GPU·커스텀 프레임·최소화된 창은 백그라운드에서 그리기를 멈춥니다. 창을 데스크톱 맨 앞으로 가져온 뒤 다시 시도하세요.',
+        elevateHelperAction: '관리자 제어 켜기', elevatingHelper: '관리자 권한 요청 중…', elevationDeniedNotice: '관리자 권한 제어를 켜지 못했습니다 (취소되었거나 거부됨)', elevatedActiveNotice: '관리자 권한 제어가 켜졌습니다', retryCaptureAction: '화면 다시 가져오기', showOnDesktopAction: '데스크톱 맨 앞에 표시',
         reopenApp: "다시 열기", reopenRunningTitle: "이 앱이 이미 실행 중입니다. 닫고 다시 열까요?", reopenRunningBody: "실행 중인 “{app}”을(를) 닫고 현재 탭에서 다시 엽니다.", reopenRunningConfirm: "닫고 다시 열기", reopenFailed: "앱을 다시 열지 못했습니다. 다시 시도하세요.",
         dismissNotice: "알림 닫기", windowOwned: "이 앱 창은 다른 대화에서 열려 있습니다. 먼저 해당 탭을 닫으세요.", controlHint: "Esc로 플러그인 제어 종료(먼저 입력을 꺼주세요)", escStopped: "Esc로 데스크톱 제어를 종료했습니다. 이번 턴 동안 AI는 창을 조작하지 않고 다른 방법으로 계속합니다.", resumeControl: "제어 재개",
         terminateBubble: '클릭하여 프로세스 종료', terminateTitle: '“{app}” 프로세스를 종료할까요?', terminateBody: '“{app}” 창을 닫고 실행 중인 프로세스를 종료합니다. 저장하지 않은 내용은 사라질 수 있습니다.', terminateConfirm: '프로세스 종료', terminateCancel: '취소', terminateFailed: '프로세스를 종료하지 못했습니다. 다시 시도하세요.',
@@ -219,7 +247,12 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         inTabHint: 'Se ejecuta en segundo plano, fuera de tu escritorio', switchToWindow: 'Ir a la ventana', moveFailed: 'No se pudo mover la ventana. Inténtalo de nuevo.',
         mouse: 'Teclado y ratón', mouseHint: 'Actívalo para hacer clic, desplazarte y escribir dentro de esta pestaña. Desactivado, solo la IA y los plugins controlan la pestaña; las ventanas en el escritorio siempre se pueden usar directamente.', mouseOff: 'Teclado y ratón está desactivado. Actívalo para usar esta ventana en la pestaña.', inputBlocked: 'La IA controla «{app}». Activa «Teclado y ratón» en su pestaña para usarla allí.', sound: 'Sonido', soundHint: 'Mientras está desactivado, esta app permanece en silencio', soundFailed: 'No se pudo cambiar el sonido. NextMux necesita el permiso de grabación de pantalla y audio del sistema.', switchOn: 'Sí', switchOff: 'No', soundOff: 'Silencio',
         alreadyOpen: '«{app}» ya está abierta en esta pestaña', aiSoundOn: 'La IA activó el sonido', aiSoundOff: 'La IA silenció el sonido', aiInputOn: 'La IA activó teclado y ratón', aiInputOff: 'La IA desactivó teclado y ratón', aiToTab: 'La IA devolvió la ventana a la pestaña', aiToDesktop: 'La IA mostró la ventana también en el escritorio',
-        waiting: 'Esperando la imagen', parkForeground: 'En Windows la IA solo puede usar ventanas visibles en el escritorio, así que esta ventana se queda allí', parkUwp: 'Esta app no acepta acciones en segundo plano, así que su ventana se queda en el escritorio', parkMinimized: 'La ventana está minimizada: restáurala para que la IA pueda verla y usarla', parkMissing: 'No se encuentra esta ventana; puede que se haya cerrado', lockUnavailable: 'Las ventanas en el escritorio siempre se pueden usar directamente',
+        waiting: 'Esperando la imagen', parkForeground: 'En Windows la IA solo puede usar ventanas visibles en el escritorio, así que esta ventana se queda allí', parkUwp: 'Esta app no acepta acciones en segundo plano, así que su ventana se queda en el escritorio', parkMinimized: 'La ventana está minimizada: restáurala para que la IA pueda verla y usarla', parkMissing: 'No se encuentra esta ventana; puede que se haya cerrado',
+        parkElevated: 'Esta app se ejecuta como administrador. Activa primero el control con permisos de administrador para ocultarla en la pestaña.', parkGpuBlank: 'Esta ventana con aceleración por hardware deja de dibujarse al ocultarse fuera de pantalla, por lo que permanece visible en el escritorio.',
+        lockUnavailable: 'Las ventanas en el escritorio siempre se pueden usar directamente',
+        captureElevatedTitle: '{app} se ejecuta como administrador', captureElevatedBody: 'Debido al aislamiento de seguridad de Windows (UIPI), mantén la ventana descubierta en tu escritorio para verla, o activa el control con permisos de administrador para interactuar y ocultarla en la pestaña.', captureElevatedBlockedBody: 'Ahora mismo no se puede capturar la ventana elevada (puede estar minimizada o cubierta por otra ventana). Tráela al frente en el escritorio o activa el control de administrador.',
+        captureBlankTitle: 'No se pudo capturar una imagen nítida de {app}', captureBlankBody: 'Algunas ventanas aceleradas por GPU, con marco personalizado o minimizadas dejan de dibujarse en segundo plano. Tráela al frente en el escritorio y reintenta.',
+        elevateHelperAction: 'Activar control de administrador', elevatingHelper: 'Solicitando acceso de administrador…', elevationDeniedNotice: 'No se pudo activar el control de administrador (cancelado o denegado)', elevatedActiveNotice: 'Control de administrador activado', retryCaptureAction: 'Reintentar captura', showOnDesktopAction: 'Mostrar al frente en el escritorio',
         reopenApp: "Volver a abrir", reopenRunningTitle: "Esta app ya está en ejecución. ¿Cerrarla y volver a abrirla?", reopenRunningBody: "Cierra «{app}» y vuelve a abrirla en esta pestaña.", reopenRunningConfirm: "Cerrar y volver a abrir", reopenFailed: "No se pudo volver a abrir la app. Inténtalo de nuevo.",
         dismissNotice: "Cerrar notificación", windowOwned: "Esta ventana está abierta en otra conversación. Cierra primero su pestaña.", controlHint: "Pulsa Esc para salir del control del plugin (desactiva antes teclado y ratón)", escStopped: "Pulsaste Esc para salir del control del escritorio: durante el resto de este turno la IA no manejará ventanas y seguirá de otra forma.", resumeControl: "Reanudar control",
         terminateBubble: 'Haz clic para cerrar el proceso', terminateTitle: '¿Finalizar el proceso de «{app}»?', terminateBody: 'Se cerrará la ventana de «{app}» y finalizará su proceso en ejecución. Los cambios no guardados podrían perderse.', terminateConfirm: 'Finalizar proceso', terminateCancel: 'Cancelar', terminateFailed: 'No se pudo finalizar el proceso. Inténtalo de nuevo.',
@@ -229,7 +262,12 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         inTabHint: 'S’exécute en arrière-plan, hors de votre bureau', switchToWindow: 'Aller à la fenêtre', moveFailed: 'Impossible de déplacer la fenêtre. Réessayez.',
         mouse: 'Clavier et souris', mouseHint: 'Activez-le pour cliquer, faire défiler et taper dans cet onglet. Désactivé, seuls l’IA et les plugins contrôlent l’onglet ; les fenêtres sur le bureau restent toujours utilisables directement.', mouseOff: 'Clavier et souris est désactivé. Activez-le pour utiliser cette fenêtre dans l’onglet.', inputBlocked: 'L’IA contrôle « {app} ». Activez « Clavier et souris » dans son onglet pour l’utiliser.', sound: 'Son', soundHint: 'Désactivé, cette app reste muette', soundFailed: 'Impossible de changer le son. NextMux a besoin de l’autorisation d’enregistrement de l’écran et de l’audio système.', switchOn: 'Oui', switchOff: 'Non', soundOff: 'Muet',
         alreadyOpen: '« {app} » est déjà ouverte dans cet onglet', aiSoundOn: 'L’IA a activé le son', aiSoundOff: 'L’IA a coupé le son', aiInputOn: 'L’IA a activé clavier et souris', aiInputOff: 'L’IA a désactivé clavier et souris', aiToTab: 'L’IA a remis la fenêtre dans l’onglet', aiToDesktop: 'L’IA a aussi affiché la fenêtre sur le bureau',
-        waiting: 'En attente de l’image', parkForeground: 'Sous Windows, l’IA ne peut utiliser que les fenêtres affichées sur le bureau : cette fenêtre y reste', parkUwp: 'Cette app n’accepte pas d’actions en arrière-plan : sa fenêtre reste sur le bureau', parkMinimized: 'La fenêtre est réduite : restaurez-la pour que l’IA puisse la voir et l’utiliser', parkMissing: 'Cette fenêtre est introuvable ; elle a peut-être été fermée', lockUnavailable: 'Les fenêtres sur le bureau restent toujours utilisables directement',
+        waiting: 'En attente de l’image', parkForeground: 'Sous Windows, l’IA ne peut utiliser que les fenêtres affichées sur le bureau : cette fenêtre y reste', parkUwp: 'Cette app n’accepte pas d’actions en arrière-plan : sa fenêtre reste sur le bureau', parkMinimized: 'La fenêtre est réduite : restaurez-la pour que l’IA puisse la voir et l’utiliser', parkMissing: 'Cette fenêtre est introuvable ; elle a peut-être été fermée',
+        parkElevated: 'Cette app s’exécute en mode administrateur. Activez d’abord le contrôle administrateur pour la masquer dans l’onglet.', parkGpuBlank: 'Cette fenêtre accélérée matériellement cesse de se dessiner hors écran : elle reste visible sur votre bureau.',
+        lockUnavailable: 'Les fenêtres sur le bureau restent toujours utilisables directement',
+        captureElevatedTitle: '{app} s’exécute en tant qu’administrateur', captureElevatedBody: 'En raison de l’isolation de sécurité Windows (UIPI), gardez la fenêtre visible et dégagée sur le bureau pour l’afficher, ou activez le contrôle administrateur pour interagir et la masquer.', captureElevatedBlockedBody: 'Impossible de capturer la fenêtre élevée pour le moment (elle est peut-être réduite ou recouverte). Affichez-la au premier plan ou activez le contrôle administrateur.',
+        captureBlankTitle: 'Impossible de capturer une image nette de {app}', captureBlankBody: 'Certaines fenêtres GPU, à chrome personnalisé ou réduites cessent de se dessiner en arrière-plan. Affichez la fenêtre au premier plan sur le bureau et réessayez.',
+        elevateHelperAction: 'Activer le contrôle administrateur', elevatingHelper: 'Demande de droits administrateur…', elevationDeniedNotice: 'Impossible d’activer le contrôle administrateur (annulé ou refusé)', elevatedActiveNotice: 'Contrôle administrateur activé', retryCaptureAction: 'Réessayer la capture', showOnDesktopAction: 'Afficher au premier plan',
         reopenApp: "Rouvrir", reopenRunningTitle: "Cette app est déjà en cours d’exécution. La fermer et la rouvrir ?", reopenRunningBody: "Fermez « {app} » et rouvrez-la dans cet onglet.", reopenRunningConfirm: "Fermer et rouvrir", reopenFailed: "Impossible de rouvrir l’app. Réessayez.",
         dismissNotice: "Fermer la notification", windowOwned: "Cette fenêtre est ouverte dans une autre conversation. Fermez d’abord son onglet.", controlHint: "Appuyez sur Échap pour quitter le contrôle du plugin (désactivez d’abord clavier/souris)", escStopped: "Vous avez appuyé sur Échap pour quitter le contrôle du bureau : pour le reste de ce tour, l’IA ne manipule plus les fenêtres et continue autrement.", resumeControl: "Reprendre le contrôle",
         terminateBubble: 'Cliquer pour arrêter le processus', terminateTitle: 'Arrêter le processus de « {app} » ?', terminateBody: 'La fenêtre de « {app} » sera fermée et son processus en cours sera arrêté. Les modifications non enregistrées peuvent être perdues.', terminateConfirm: 'Arrêter le processus', terminateCancel: 'Annuler', terminateFailed: 'Impossible d’arrêter le processus. Réessayez.',
@@ -239,7 +277,12 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         inTabHint: 'Läuft im Hintergrund, nicht auf Ihrem Desktop', switchToWindow: 'Zum Fenster wechseln', moveFailed: 'Das Fenster ließ sich nicht verschieben. Bitte erneut versuchen.',
         mouse: 'Tastatur & Maus', mouseHint: 'Einschalten, um in diesem Tab zu klicken, zu scrollen und zu tippen. Aus: Im Tab steuern nur die KI und Plugins; Fenster auf dem Desktop lassen sich immer direkt bedienen.', mouseOff: 'Tastatur & Maus ist aus. Schalten Sie es ein, um das Fenster im Tab zu bedienen.', inputBlocked: 'Die KI steuert „{app}“. Schalten Sie in seinem Tab „Tastatur & Maus“ ein, um es im Tab zu bedienen.', sound: 'Ton', soundHint: 'Aus: Diese App bleibt stumm', soundFailed: 'Der Ton ließ sich nicht umschalten. NextMux benötigt die Berechtigung für Bildschirm- und Systemaudioaufnahme.', switchOn: 'An', switchOff: 'Aus', soundOff: 'Stumm',
         alreadyOpen: '„{app}“ ist in diesem Tab bereits geöffnet', aiSoundOn: 'Die KI hat den Ton eingeschaltet', aiSoundOff: 'Die KI hat den Ton stummgeschaltet', aiInputOn: 'Die KI hat Tastatur & Maus eingeschaltet', aiInputOff: 'Die KI hat Tastatur & Maus ausgeschaltet', aiToTab: 'Die KI hat das Fenster zurück in den Tab gelegt', aiToDesktop: 'Die KI zeigt das Fenster auch auf dem Desktop',
-        waiting: 'Warte auf das Bild', parkForeground: 'Unter Windows kann die KI nur Fenster auf dem Desktop bedienen, daher bleibt dieses Fenster dort', parkUwp: 'Diese App nimmt keine Eingaben im Hintergrund an, daher bleibt ihr Fenster auf dem Desktop', parkMinimized: 'Das Fenster ist minimiert: Stellen Sie es wieder her, damit die KI es sehen und bedienen kann', parkMissing: 'Dieses Fenster wurde nicht gefunden; es wurde möglicherweise geschlossen', lockUnavailable: 'Fenster auf dem Desktop lassen sich immer direkt bedienen',
+        waiting: 'Warte auf das Bild', parkForeground: 'Unter Windows kann die KI nur Fenster auf dem Desktop bedienen, daher bleibt dieses Fenster dort', parkUwp: 'Diese App nimmt keine Eingaben im Hintergrund an, daher bleibt ihr Fenster auf dem Desktop', parkMinimized: 'Das Fenster ist minimiert: Stellen Sie es wieder her, damit die KI es sehen und bedienen kann', parkMissing: 'Dieses Fenster wurde nicht gefunden; es wurde möglicherweise geschlossen',
+        parkElevated: 'Diese App wird als Administrator ausgeführt. Aktivieren Sie zuerst die Administrator-Steuerung, um das Fenster in den Tab auszulagern.', parkGpuBlank: 'Dieses hardwarebeschleunigte Fenster zeichnet außerhalb des Bildschirms nicht weiter und bleibt daher auf dem Desktop sichtbar.',
+        lockUnavailable: 'Fenster auf dem Desktop lassen sich immer direkt bedienen',
+        captureElevatedTitle: '{app} läuft mit Administratorrechten', captureElevatedBody: 'Wegen der Windows-Sicherheitsisolation (UIPI) muss das Fenster sichtbar auf dem Desktop bleiben, oder Sie aktivieren die Administrator-Steuerung für Eingaben und Hintergrundmodus.', captureElevatedBlockedBody: 'Das erhöhte Fenster konnte gerade nicht erfasst werden (evtl. minimiert oder verdeckt). Holen Sie es auf dem Desktop in den Vordergrund oder aktivieren Sie die Administrator-Steuerung.',
+        captureBlankTitle: 'Kein klares Bild von {app} erhalten', captureBlankBody: 'Manche GPU-, Custom-Chrome- oder minimierte Fenster pausieren im Hintergrund. Holen Sie das Fenster auf dem Desktop nach vorn und versuchen Sie es erneut.',
+        elevateHelperAction: 'Admin-Steuerung aktivieren', elevatingHelper: 'Administratorrechte werden angefordert…', elevationDeniedNotice: 'Administrator-Steuerung konnte nicht aktiviert werden (abgebrochen oder verweigert)', elevatedActiveNotice: 'Administrator-Steuerung aktiviert', retryCaptureAction: 'Erneut erfassen', showOnDesktopAction: 'Auf Desktop nach vorn holen',
         reopenApp: "Erneut öffnen", reopenRunningTitle: "Diese App läuft bereits. Schließen und erneut öffnen?", reopenRunningBody: "Die laufende App „{app}“ schließen und in diesem Tab erneut öffnen.", reopenRunningConfirm: "Schließen und erneut öffnen", reopenFailed: "Die App ließ sich nicht erneut öffnen. Bitte erneut versuchen.",
         dismissNotice: "Hinweis schließen", windowOwned: "Dieses App-Fenster ist in einer anderen Unterhaltung geöffnet. Schließen Sie dort zuerst den Tab.", controlHint: "Esc beendet die Plugin-Steuerung (zuerst Eingabe ausschalten)", escStopped: "Mit Esc wurde die Desktopsteuerung beendet: Für den Rest dieses Zugs bedient die KI keine Fenster und macht anders weiter.", resumeControl: "Steuerung fortsetzen",
         terminateBubble: 'Klicken, um Prozess zu beenden', terminateTitle: 'Prozess von „{app}“ beenden?', terminateBody: 'Das Fenster von „{app}“ wird geschlossen und der laufende Prozess beendet. Ungespeicherte Inhalte können verloren gehen.', terminateConfirm: 'Prozess beenden', terminateCancel: 'Abbrechen', terminateFailed: 'Der Prozess konnte nicht beendet werden. Bitte erneut versuchen.',
@@ -249,7 +292,12 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         inTabHint: 'Roda em segundo plano, fora da sua área de trabalho', switchToWindow: 'Ir para a janela', moveFailed: 'Não foi possível mover a janela. Tente de novo.',
         mouse: 'Teclado e mouse', mouseHint: 'Ative para clicar, rolar e digitar nesta aba. Desativado, só a IA e os plugins controlam a aba; janelas na área de trabalho sempre podem ser usadas diretamente.', mouseOff: 'Teclado e mouse está desativado. Ative para usar esta janela na aba.', inputBlocked: 'A IA está controlando “{app}”. Ative “Teclado e mouse” na aba dele para usar na aba.', sound: 'Som', soundHint: 'Desativado, este app fica sem som', soundFailed: 'Não foi possível mudar o som. O NextMux precisa da permissão de gravação de tela e áudio do sistema.', switchOn: 'Ativo', switchOff: 'Inativo', soundOff: 'Mudo',
         alreadyOpen: '“{app}” já está aberto nesta aba', aiSoundOn: 'A IA ligou o som', aiSoundOff: 'A IA silenciou o som', aiInputOn: 'A IA ativou teclado e mouse', aiInputOff: 'A IA desativou teclado e mouse', aiToTab: 'A IA devolveu a janela à aba', aiToDesktop: 'A IA também mostrou a janela na área de trabalho',
-        waiting: 'Aguardando a imagem', parkForeground: 'No Windows a IA só consegue usar janelas visíveis na área de trabalho, então esta janela fica lá', parkUwp: 'Este app não aceita ações em segundo plano, então a janela fica na área de trabalho', parkMinimized: 'A janela está minimizada: restaure-a para que a IA possa vê-la e usá-la', parkMissing: 'Esta janela não foi encontrada; ela pode ter sido fechada', lockUnavailable: 'Janelas na área de trabalho sempre podem ser usadas diretamente',
+        waiting: 'Aguardando a imagem', parkForeground: 'No Windows a IA só consegue usar janelas visíveis na área de trabalho, então esta janela fica lá', parkUwp: 'Este app não aceita ações em segundo plano, então a janela fica na área de trabalho', parkMinimized: 'A janela está minimizada: restaure-a para que a IA possa vê-la e usá-la', parkMissing: 'Esta janela não foi encontrada; ela pode ter sido fechada',
+        parkElevated: 'Este app está rodando como administrador. Ative o controle como administrador antes de ocultá-lo na aba.', parkGpuBlank: 'Esta janela com aceleração por hardware para de desenhar fora da tela, então fica visível na área de trabalho.',
+        lockUnavailable: 'Janelas na área de trabalho sempre podem ser usadas diretamente',
+        captureElevatedTitle: '{app} está rodando como administrador', captureElevatedBody: 'Por conta do isolamento do Windows (UIPI), mantenha a janela visível e desobstruída na área de trabalho, ou ative o controle como administrador para interagir na aba e ocultá-la.', captureElevatedBlockedBody: 'Não foi possível capturar a janela elevada agora (ela pode estar minimizada ou coberta por outra janela). Traga-a para a frente na área de trabalho ou ative o controle como administrador.',
+        captureBlankTitle: 'Não foi possível capturar uma imagem nítida de {app}', captureBlankBody: 'Algumas janelas aceleradas por GPU, personalizadas ou minimizadas param de desenhar em segundo plano. Traga a janela para a frente e tente novamente.',
+        elevateHelperAction: 'Ativar controle admin', elevatingHelper: 'Solicitando permissão admin…', elevationDeniedNotice: 'Não foi possível ativar o controle admin (cancelado ou negado)', elevatedActiveNotice: 'Controle de administrador ativado', retryCaptureAction: 'Tentar captura novamente', showOnDesktopAction: 'Trazer para a frente',
         reopenApp: "Reabrir", reopenRunningTitle: "Este app já está em execução. Fechar e reabrir?", reopenRunningBody: "Feche “{app}” e abra-o novamente nesta aba.", reopenRunningConfirm: "Fechar e reabrir", reopenFailed: "Não foi possível reabrir o app. Tente novamente.",
         dismissNotice: "Fechar notificação", windowOwned: "Esta janela está aberta em outra conversa. Feche a aba lá primeiro.", controlHint: "Pressione Esc para sair do controle do plugin (desative antes teclado e mouse)", escStopped: "Você pressionou Esc para sair do controle da área de trabalho: no restante deste turno a IA não opera janelas e continua de outra forma.", resumeControl: "Retomar controle",
         terminateBubble: 'Clique para encerrar o processo', terminateTitle: 'Encerrar o processo de “{app}”?', terminateBody: 'A janela de “{app}” será fechada e o processo em execução será encerrado. Alterações não salvas podem ser perdidas.', terminateConfirm: 'Encerrar processo', terminateCancel: 'Cancelar', terminateFailed: 'Não foi possível encerrar o processo. Tente de novo.',
@@ -259,7 +307,12 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         inTabHint: 'Работает в фоне и не занимает рабочий стол', switchToWindow: 'Перейти к окну', moveFailed: 'Не удалось переместить окно. Попробуйте ещё раз.',
         mouse: 'Клавиатура и мышь', mouseHint: 'Включите, чтобы нажимать, прокручивать и печатать внутри этой вкладки. Когда выключено, во вкладке управляют только ИИ и плагины, а окном на рабочем столе всегда можно пользоваться напрямую.', mouseOff: 'Клавиатура и мышь выключены. Включите, чтобы управлять окном во вкладке.', inputBlocked: '«{app}» управляет ИИ. Включите «Клавиатура и мышь» в его вкладке, чтобы работать во вкладке.', sound: 'Звук', soundHint: 'Когда выключено, приложение без звука', soundFailed: 'Не удалось переключить звук. NextMux нужно разрешение на запись экрана и системного звука.', switchOn: 'Вкл', switchOff: 'Выкл', soundOff: 'Без звука',
         alreadyOpen: '«{app}» уже открыто в этой вкладке', aiSoundOn: 'ИИ включил звук', aiSoundOff: 'ИИ выключил звук', aiInputOn: 'ИИ включил клавиатуру и мышь', aiInputOff: 'ИИ выключил клавиатуру и мышь', aiToTab: 'ИИ вернул окно во вкладку', aiToDesktop: 'ИИ показал окно и на рабочем столе',
-        waiting: 'Ожидание изображения', parkForeground: 'В Windows ИИ может работать только с окнами на рабочем столе, поэтому это окно остаётся там', parkUwp: 'Это приложение не принимает ввод в фоне, поэтому окно остаётся на рабочем столе', parkMinimized: 'Окно свёрнуто: разверните его, чтобы ИИ мог его видеть и управлять им', parkMissing: 'Окно не найдено; возможно, оно закрыто', lockUnavailable: 'Окном на рабочем столе всегда можно пользоваться напрямую',
+        waiting: 'Ожидание изображения', parkForeground: 'В Windows ИИ может работать только с окнами на рабочем столе, поэтому это окно остаётся там', parkUwp: 'Это приложение не принимает ввод в фоне, поэтому окно остаётся на рабочем столе', parkMinimized: 'Окно свёрнуто: разверните его, чтобы ИИ мог его видеть и управлять им', parkMissing: 'Окно не найдено; возможно, оно закрыто',
+        parkElevated: 'Это приложение запущено от имени администратора. Сначала включите управление с правами администратора, чтобы скрыть окно во вкладку.', parkGpuBlank: 'Это окно с аппаратным ускорением перестаёт отрисовываться вне экрана, поэтому остаётся на рабочем столе.',
+        lockUnavailable: 'Окном на рабочем столе всегда можно пользоваться напрямую',
+        captureElevatedTitle: '«{app}» запущено от имени администратора', captureElevatedBody: 'Из-за изоляции Windows (UIPI) окно должно оставаться открытым поверх других на рабочем столе, либо включите режим администратора для ввода во вкладке и фонового скрытия.', captureElevatedBlockedBody: 'Не удалось захватить окно администратора (возможно, оно свёрнуто или перекрыто другим окном). Выведите его на передний план или включите права администратора.',
+        captureBlankTitle: 'Не удалось получить чёткое изображение «{app}»', captureBlankBody: 'Некоторые окна с GPU-отрисовкой, кастомной рамкой или свёрнутые окна перестают обновляться в фоне. Выведите окно на передний план и повторите.',
+        elevateHelperAction: 'Включить права администратора', elevatingHelper: 'Запрос прав администратора…', elevationDeniedNotice: 'Не удалось включить права администратора (отменено или отказано)', elevatedActiveNotice: 'Права администратора включены', retryCaptureAction: 'Повторить захват', showOnDesktopAction: 'Показать поверх окон',
         reopenApp: "Открыть снова", reopenRunningTitle: "Приложение уже запущено. Закрыть и открыть снова?", reopenRunningBody: "Закройте работающее приложение «{app}» и откройте его снова в этой вкладке.", reopenRunningConfirm: "Закрыть и открыть снова", reopenFailed: "Не удалось открыть приложение снова. Повторите попытку.",
         dismissNotice: "Закрыть уведомление", windowOwned: "Это окно открыто в другой беседе. Сначала закройте его вкладку там.", controlHint: "Нажмите Esc для выхода из управления плагином (сначала выключите ввод)", escStopped: "Вы нажали Esc и завершили управление рабочим столом: до конца этого хода ИИ не управляет окнами и продолжает другим способом.", resumeControl: "Возобновить управление",
         terminateBubble: 'Нажмите, чтобы завершить процесс', terminateTitle: 'Завершить процесс «{app}»?', terminateBody: 'Окно «{app}» будет закрыто, а его запущенный процесс завершён. Несохранённые данные могут быть потеряны.', terminateConfirm: 'Завершить процесс', terminateCancel: 'Отмена', terminateFailed: 'Не удалось завершить процесс. Попробуйте ещё раз.',
@@ -269,7 +322,12 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         inTabHint: 'تعمل في الخلفية بعيدًا عن سطح مكتبك', switchToWindow: 'الانتقال إلى النافذة', moveFailed: 'تعذّر نقل النافذة. حاول مرة أخرى.',
         mouse: 'لوحة المفاتيح والفأرة', mouseHint: 'فعّلها للنقر والتمرير والكتابة داخل علامة التبويب هذه. عند الإيقاف يتحكم الذكاء الاصطناعي والإضافات فقط داخل علامة التبويب، بينما يمكن دائمًا استخدام النافذة مباشرةً على سطح المكتب.', mouseOff: 'لوحة المفاتيح والفأرة متوقفة. فعّلها لاستخدام هذه النافذة داخل علامة التبويب.', inputBlocked: 'يتحكم الذكاء الاصطناعي في «{app}». فعّل «لوحة المفاتيح والفأرة» في علامة تبويبه لاستخدامه هناك.', sound: 'الصوت', soundHint: 'عند إيقافه يبقى هذا التطبيق صامتًا', soundFailed: 'تعذّر تبديل الصوت. يحتاج NextMux إلى إذن تسجيل الشاشة وصوت النظام.', switchOn: 'مفعّل', switchOff: 'متوقف', soundOff: 'مكتوم',
         alreadyOpen: '«{app}» مفتوح بالفعل في علامة التبويب هذه', aiSoundOn: 'شغّل الذكاء الاصطناعي الصوت', aiSoundOff: 'كتم الذكاء الاصطناعي الصوت', aiInputOn: 'فعّل الذكاء الاصطناعي لوحة المفاتيح والفأرة', aiInputOff: 'أوقف الذكاء الاصطناعي لوحة المفاتيح والفأرة', aiToTab: 'أعاد الذكاء الاصطناعي النافذة إلى علامة التبويب', aiToDesktop: 'أظهر الذكاء الاصطناعي النافذة على سطح المكتب أيضًا',
-        waiting: 'بانتظار الصورة', parkForeground: 'في Windows يمكن للذكاء الاصطناعي العمل فقط في النوافذ الظاهرة على سطح المكتب، لذا تبقى هذه النافذة هناك', parkUwp: 'لا يقبل هذا التطبيق الإدخال في الخلفية، لذا تبقى نافذته على سطح المكتب', parkMinimized: 'النافذة مصغّرة: استعدها ليتمكن الذكاء الاصطناعي من رؤيتها واستخدامها', parkMissing: 'تعذّر العثور على هذه النافذة؛ ربما أُغلقت', lockUnavailable: 'يمكن دائمًا استخدام النافذة مباشرةً على سطح المكتب',
+        waiting: 'بانتظار الصورة', parkForeground: 'في Windows يمكن للذكاء الاصطناعي العمل فقط في النوافذ الظاهرة على سطح المكتب، لذا تبقى هذه النافذة هناك', parkUwp: 'لا يقبل هذا التطبيق الإدخال في الخلفية، لذا تبقى نافذته على سطح المكتب', parkMinimized: 'النافذة مصغّرة: استعدها ليتمكن الذكاء الاصطناعي من رؤيتها واستخدامها', parkMissing: 'تعذّر العثور على هذه النافذة؛ ربما أُغلقت',
+        parkElevated: 'يعمل هذا التطبيق بصلاحيات المسؤول. فعّل تحكم المسؤول أولًا قبل إخفاء النافذة داخل علامة التبويب.', parkGpuBlank: 'تتوقف هذه النافذة ذات التسريع الرسومي عن الرسم خارج الشاشة، لذا تبقى ظاهرة على سطح المكتب.',
+        lockUnavailable: 'يمكن دائمًا استخدام النافذة مباشرةً على سطح المكتب',
+        captureElevatedTitle: 'يعمل {app} بصلاحيات المسؤول', captureElevatedBody: 'بسبب عزل الأمان في Windows (UIPI)، أبقِ النافذة ظاهرة دون تغطيتها على سطح المكتب لعرضها، أو فعّل تحكم المسؤول للتفاعل وإخفائها في الخلفية.', captureElevatedBlockedBody: 'تعذّر التقاط نافذة المسؤول حاليًا (قد تكون مصغّرة أو مغطاة بنافذة أخرى). أظهرها في المقدمة أو فعّل صلاحيات المسؤول.',
+        captureBlankTitle: 'تعذّر التقاط صورة واضحة من {app}', captureBlankBody: 'تتوقف بعض النوافذ الرسومية أو المصغّرة عن الرسم في الخلفية. أظهر النافذة في مقدمة سطح المكتب وأعد المحاولة.',
+        elevateHelperAction: 'تفعيل تحكم المسؤول', elevatingHelper: 'جارٍ طلب صلاحية المسؤول…', elevationDeniedNotice: 'تعذّر تفعيل تحكم المسؤول (تم الإلغاء أو الرفض)', elevatedActiveNotice: 'تم تفعيل تحكم المسؤول', retryCaptureAction: 'إعادة الالتقاط', showOnDesktopAction: 'إظهار في المقدمة',
         reopenApp: "إعادة الفتح", reopenRunningTitle: "هذا التطبيق يعمل بالفعل. هل تريد إغلاقه وإعادة فتحه؟", reopenRunningBody: "أغلق التطبيق «{app}» الجاري تشغيله وأعد فتحه في علامة التبويب الحالية.", reopenRunningConfirm: "إغلاق وإعادة فتح", reopenFailed: "تعذرت إعادة فتح التطبيق. حاول مجددًا.",
         dismissNotice: "إغلاق الإشعار", windowOwned: "نافذة هذا التطبيق مفتوحة في محادثة أخرى. أغلق علامة تبويبها هناك أولاً.", controlHint: "اضغط Esc للخروج من تحكم الإضافة (أوقف الإدخال أولاً)", escStopped: "ضغطت Esc لإنهاء التحكم في سطح المكتب: لبقية هذا الدور لن يشغّل الذكاء الاصطناعي النوافذ وسيتابع بطريقة أخرى.", resumeControl: "استئناف التحكم",
         terminateBubble: 'انقر لإنهاء العملية', terminateTitle: 'إنهاء عملية «{app}»؟', terminateBody: 'سيتم إغلاق نافذة «{app}» وإنهاء عمليتها قيد التشغيل. قد تُفقد التغييرات غير المحفوظة.', terminateConfirm: 'إنهاء العملية', terminateCancel: 'إلغاء', terminateFailed: 'تعذّر إنهاء العملية. حاول مرة أخرى.',
@@ -279,7 +337,12 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
         inTabHint: 'बैकग्राउंड में चलती है, आपके डेस्कटॉप पर नहीं', switchToWindow: 'विंडो पर जाएँ', moveFailed: 'विंडो को हटाया नहीं जा सका। फिर से कोशिश करें।',
         mouse: 'कीबोर्ड-माउस', mouseHint: 'चालू करने पर इस टैब के अंदर क्लिक, स्क्रॉल और टाइप कर सकते हैं। बंद रहने पर टैब के अंदर सिर्फ़ AI और प्लगइन चलाते हैं; डेस्कटॉप पर विंडो को हमेशा सीधे चलाया जा सकता है।', mouseOff: 'कीबोर्ड-माउस बंद है। टैब के अंदर इस विंडो को चलाने के लिए इसे चालू करें।', inputBlocked: '“{app}” को AI चला रहा है। टैब में चलाने के लिए उसके टैब में “कीबोर्ड-माउस” चालू करें।', sound: 'ध्वनि', soundHint: 'बंद रहने पर यह ऐप म्यूट रहता है', soundFailed: 'ध्वनि नहीं बदली जा सकी। NextMux को स्क्रीन और सिस्टम ऑडियो रिकॉर्डिंग की अनुमति चाहिए।', switchOn: 'चालू', switchOff: 'बंद', soundOff: 'म्यूट',
         alreadyOpen: '“{app}” इस टैब में पहले से खुला है', aiSoundOn: 'AI ने ध्वनि चालू की', aiSoundOff: 'AI ने ध्वनि म्यूट की', aiInputOn: 'AI ने कीबोर्ड-माउस चालू किया', aiInputOff: 'AI ने कीबोर्ड-माउस बंद किया', aiToTab: 'AI ने विंडो को टैब में वापस रखा', aiToDesktop: 'AI ने विंडो को डेस्कटॉप पर भी दिखाया',
-        waiting: 'तस्वीर का इंतज़ार', parkForeground: 'Windows पर AI सिर्फ़ डेस्कटॉप पर दिख रही विंडो चला सकता है, इसलिए यह विंडो वहीं रहती है', parkUwp: 'यह ऐप बैकग्राउंड में इनपुट नहीं लेता, इसलिए इसकी विंडो डेस्कटॉप पर रहती है', parkMinimized: 'विंडो छोटी (मिनिमाइज़) है: AI को दिखाने और चलाने के लिए इसे वापस खोलें', parkMissing: 'यह विंडो नहीं मिली; शायद बंद हो गई है', lockUnavailable: 'डेस्कटॉप पर विंडो को हमेशा सीधे चलाया जा सकता है',
+        waiting: 'तस्वीर का इंतज़ार', parkForeground: 'Windows पर AI सिर्फ़ डेस्कटॉप पर दिख रही विंडो चला सकता है, इसलिए यह विंडो वहीं रहती है', parkUwp: 'यह ऐप बैकग्राउंड में इनपुट नहीं लेता, इसलिए इसकी विंडो डेस्कटॉप पर रहती है', parkMinimized: 'विंडो छोटी (मिनिमाइज़) है: AI को दिखाने और चलाने के लिए इसे वापस खोलें', parkMissing: 'यह विंडो नहीं मिली; शायद बंद हो गई है',
+        parkElevated: 'यह ऐप व्यवस्थापक (एडमिन) के रूप में चल रहा है। इसे टैब में छिपाने से पहले एडमिन नियंत्रण सक्षम करें।', parkGpuBlank: 'यह हार्डवेयर-त्वरित विंडो स्क्रीन के बाहर जाने पर ड्रॉ करना बंद कर देती है, इसलिए डेस्कटॉप पर ही रहती है।',
+        lockUnavailable: 'डेस्कटॉप पर विंडो को हमेशा सीधे चलाया जा सकता है',
+        captureElevatedTitle: '{app} व्यवस्थापक अधिकारों के साथ चल रहा है', captureElevatedBody: 'Windows सुरक्षा अलगाव (UIPI) के कारण, इसे देखने के लिए विंडो को डेस्कटॉप पर बिना ढके रखें, या टैब में क्लिक करने और बैकग्राउंड में छिपाने के लिए एडमिन नियंत्रण सक्षम करें।', captureElevatedBlockedBody: 'यह एडमिन विंडो अभी स्पष्ट रूप से कैप्चर नहीं हो सकी (शायद मिनिमाइज़ या किसी दूसरी विंडो से ढकी है)। इसे डेस्कटॉप पर सबसे आगे लाएँ या एडमिन नियंत्रण सक्षम करें।',
+        captureBlankTitle: '{app} से स्पष्ट तस्वीर नहीं मिल सकी', captureBlankBody: 'कुछ GPU-आधारित, कस्टम-क्रोम या मिनिमाइज़ विंडो बैकग्राउंड में ड्रॉ करना बंद कर देती हैं। विंडो को डेस्कटॉप पर सबसे आगे लाकर फिर प्रयास करें।',
+        elevateHelperAction: 'एडमिन नियंत्रण सक्षम करें', elevatingHelper: 'एडमिन अनुमति माँगी जा रही है…', elevationDeniedNotice: 'एडमिन नियंत्रण सक्षम नहीं हो सका (रद्द या अस्वीकृत)', elevatedActiveNotice: 'एडमिन नियंत्रण सक्षम हो गया', retryCaptureAction: 'फिर से कैप्चर करें', showOnDesktopAction: 'डेस्कटॉप पर सबसे आगे दिखाएँ',
         reopenApp: "फिर से खोलें", reopenRunningTitle: "यह ऐप पहले से चल रहा है। क्या इसे बंद करके फिर से खोलें?", reopenRunningBody: "चल रहे “{app}” को बंद करके मौजूदा टैब में फिर से खोलें।", reopenRunningConfirm: "बंद करके फिर से खोलें", reopenFailed: "ऐप फिर से नहीं खुल सका। दोबारा कोशिश करें.",
         dismissNotice: "सूचना बंद करें", windowOwned: "यह ऐप विंडो दूसरी बातचीत में खुली है। पहले वहाँ उसका टैब बंद करें।", controlHint: "प्लगइन नियंत्रण से बाहर निकलने के लिए Esc दबाएँ (पहले कीबोर्ड-माउस बंद करें)", escStopped: "आपने डेस्कटॉप नियंत्रण समाप्त करने के लिए Esc दबाया: इस बारी के बाकी हिस्से में AI विंडो नहीं चलाएगा और दूसरे तरीके से जारी रखेगा।", resumeControl: "नियंत्रण फिर शुरू करें",
         terminateBubble: 'प्रोसेस बंद करने के लिए क्लिक करें', terminateTitle: '“{app}” प्रोसेस समाप्त करें?', terminateBody: 'यह “{app}” विंडो को बंद कर देगा और इसके चल रहे प्रोसेस को समाप्त कर देगा। बिना सहेजे गए बदलाव खो सकते हैं।', terminateConfirm: 'प्रोसेस समाप्त करें', terminateCancel: 'रद्द करें', terminateFailed: 'प्रोसेस समाप्त नहीं किया जा सका। फिर से कोशिश करें।',
@@ -289,7 +352,8 @@ const windowCatalog: Readonly<Record<NextMuxDesktopLocale, Readonly<Record<Windo
 
 /** A window's reason (apps/desktop computer-window-view on Windows) → its explanation. */
 const PARK_REASON_TEXT: Readonly<Record<string, WindowTextKey>> = {
-    foreground_input_required: 'parkForeground', background_input_unsupported: 'parkUwp', window_minimized: 'parkMinimized', window_not_found: 'parkMissing'
+    foreground_input_required: 'parkForeground', background_input_unsupported: 'parkUwp', window_minimized: 'parkMinimized', window_not_found: 'parkMissing',
+    elevated_requires_admin: 'parkElevated', parked_gpu_blank: 'parkGpuBlank'
 };
 
 function uncheckedConversationWindowText(locale: NextMuxDesktopLocale, key: WindowTextKey, values: Readonly<Record<string, string>> = {}): string {
@@ -312,6 +376,8 @@ export interface ComputerViewCapability {
     readonly ocr?: boolean;
     readonly ocrLanguages?: readonly string[];
     readonly parkReason?: string;
+    readonly selfElevated?: boolean;
+    readonly canElevate?: boolean;
     readonly preference: ConversationWindowPlacement;
 }
 
@@ -419,11 +485,14 @@ export interface ConversationWindowControls {
      * The switches as they are now, shared by the tab's header and the AI's tabs.set: when either changes one, the
      * other sees it (subscribe returns the unsubscribe function).
      */
-    readonly state?: { readonly placement?: ConversationWindowPlacement; readonly sound?: boolean; readonly userInput: boolean; readonly parkReason?: string;
+    readonly state?: { readonly placement?: ConversationWindowPlacement; readonly sound?: boolean; readonly userInput: boolean; readonly canPark?: boolean; readonly parkReason?: string;
+        readonly elevated?: boolean; readonly canElevate?: boolean; readonly selfElevated?: boolean; readonly captureError?: string;
         /** Windows: a Chromium-family window that stops drawing while hidden; parked windows follow desktop switches; the tab-behind experiment's place. */
         readonly selfThrottles?: boolean; readonly desktopFollow?: boolean; readonly tether?: 'behind' | 'corner' };
     /** False when this computer cannot keep the user's own input away from the window on the desktop (Windows without the input hook). */
     readonly canLock?: boolean;
+    /** Windows: request on-demand UAC elevation for the capture helper so elevated windows can be clicked and parked cleanly. */
+    readonly elevate?: () => Promise<{ readonly ok: boolean; readonly error?: string }>;
     readonly subscribe?: (listener: () => void) => () => void;
     /** Typing from the tab while the 键鼠 switch is on: text (IME output included), or one key with modifiers. */
     readonly keys?: (input: { readonly text?: string; readonly key?: string; readonly modifiers?: readonly string[] }) => Promise<boolean>;
@@ -492,23 +561,31 @@ function captureCornerRadius(video: HTMLVideoElement): number {
 const INTERIOR_GRID_FRACTIONS = [0.2, 0.35, 0.5, 0.65, 0.8] as const;
 
 /**
- * Checks a 5×5 interior grid (`[0.2..0.8]²`) of RGBA pixels: returns true ONLY when all 25 interior sample points
- * are transparent (`alpha < 8`) or pure `0,0,0` black (`r + g + b === 0`), so legitimate dark-themed apps with any
- * non-zero UI pixel are never misclassified as failed captures.
+ * Checks a 5×5 interior grid (`[0.2..0.8]²`) of RGBA pixels: returns true when all 25 interior sample points
+ * are transparent (`alpha < 8`), all pure `0,0,0` black (`r + g + b === 0`), or all pure white (`>= 252`),
+ * while preserving any legitimate dark-themed or mixed UI frame containing a non-zero pixel.
  */
 export function isBlankOrPureBlackSample(pixels: ArrayLike<number>, width: number, height: number): boolean {
     if (width <= 0 || height <= 0 || pixels.length < width * height * 4) return true;
+    let allBlackOrTransparent = true;
+    let allWhiteOrTransparent = true;
     for (const fy of INTERIOR_GRID_FRACTIONS) {
         const py = Math.min(height - 1, Math.max(0, Math.floor(fy * height)));
         for (const fx of INTERIOR_GRID_FRACTIONS) {
             const px = Math.min(width - 1, Math.max(0, Math.floor(fx * width)));
             const idx = (py * width + px) * 4;
+            const r = pixels[idx] ?? 0;
+            const g = pixels[idx + 1] ?? 0;
+            const b = pixels[idx + 2] ?? 0;
             const a = pixels[idx + 3] ?? 0;
-            const sum = (pixels[idx] ?? 0) + (pixels[idx + 1] ?? 0) + (pixels[idx + 2] ?? 0);
-            if (a >= 8 && sum > 0) return false;
+            if (a >= 8) {
+                if (r + g + b > 0) allBlackOrTransparent = false;
+                if (r < 252 || g < 252 || b < 252) allWhiteOrTransparent = false;
+            }
+            if (!allBlackOrTransparent && !allWhiteOrTransparent) return false;
         }
     }
-    return true;
+    return allBlackOrTransparent || allWhiteOrTransparent;
 }
 
 export function isBlankOrPureBlackVideoFrame(video: HTMLVideoElement): boolean {
@@ -1532,6 +1609,56 @@ function RealtimeLaunchPrompt(props: { readonly locale: NextMuxDesktopLocale; re
 }
 
 /**
+ * Inline non-blocking recovery banner for general capture/privilege boundaries (Windows UAC elevated apps, GPU/blank frames).
+ * Rendered between header and picture using `.nmx-visual-tab-realtime` so it never covers the controlled window UI.
+ */
+function CaptureRecoveryPrompt(props: {
+    readonly locale: NextMuxDesktopLocale;
+    readonly app: string;
+    readonly kind: 'elevated' | 'blank';
+    readonly captureError?: string;
+    readonly canElevate: boolean;
+    readonly elevating: boolean;
+    readonly keyboardCapture: boolean;
+    readonly busy: boolean;
+    readonly onElevate: () => void;
+    readonly onShowOnDesktop: () => void;
+    readonly onRetryCapture: () => void;
+    readonly onDismiss: () => void;
+}): React.ReactElement {
+    const { locale, kind } = props;
+    const titleId = `nmx-visual-tab-recovery-${(typeof React.useId === 'function' ? React.useId() : '0').replace(/[^\w-]/g, '')}`;
+    const keep = (event: React.SyntheticEvent): void => event.stopPropagation();
+    const onKeyDown = (event: React.KeyboardEvent<HTMLElement>): void => {
+        if (event.key !== 'Escape' || props.keyboardCapture || event.defaultPrevented || event.nativeEvent?.isComposing) return;
+        event.preventDefault();
+        event.stopPropagation();
+        props.onDismiss();
+    };
+    const bodyKey: WindowTextKey = kind === 'elevated'
+        ? (props.captureError === 'window_elevated_uipi' ? 'captureElevatedBlockedBody' : 'captureElevatedBody')
+        : 'captureBlankBody';
+    return <section className='nmx-visual-tab-realtime' role='status' aria-live='polite' aria-labelledby={titleId} onKeyDown={onKeyDown}
+        onPointerDown={keep} onMouseDown={keep} onClick={keep} onDoubleClick={keep} onContextMenu={keep} onWheel={keep}>
+        <i className={`codicon codicon-${kind === 'elevated' ? 'shield' : 'warning'}`} aria-hidden='true'></i>
+        <div className='nmx-visual-tab-realtime-copy'>
+            <strong id={titleId} data-nmx-literal>{conversationWindowText(locale, kind === 'elevated' ? 'captureElevatedTitle' : 'captureBlankTitle', { app: props.app })}</strong>
+            <span>{conversationWindowText(locale, bodyKey)}</span>
+        </div>
+        <div className='nmx-visual-tab-realtime-actions'>
+            {kind === 'elevated' && props.canElevate && <button type='button' className='is-primary' disabled={props.busy || props.elevating}
+                onClick={props.onElevate}>{conversationWindowText(locale, props.elevating ? 'elevatingHelper' : 'elevateHelperAction')}</button>}
+            <button type='button' className={kind === 'blank' || !props.canElevate ? 'is-primary' : undefined} disabled={props.busy || props.elevating}
+                onClick={props.onShowOnDesktop}>{conversationWindowText(locale, 'showOnDesktopAction')}</button>
+            <button type='button' disabled={props.busy || props.elevating}
+                onClick={props.onRetryCapture}>{conversationWindowText(locale, 'retryCaptureAction')}</button>
+        </div>
+        <button type='button' className='nmx-visual-tab-realtime-close' aria-label={conversationWindowText(locale, 'dismissNotice')} title={conversationWindowText(locale, 'dismissNotice')}
+            onClick={props.onDismiss}><i className='codicon codicon-close' aria-hidden='true'></i></button>
+    </section>;
+}
+
+/**
  * The body of an AI-opened tab: the live window (else its last frame, else a waiting state) under a slim toolbar.
  * The tab strip already names the tab, so the body does not repeat it.
  */
@@ -1622,10 +1749,26 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     const [mouse, setMouse] = React.useState(() => Boolean(controls?.state?.userInput));
     // Why the window cannot live only in the tab on this computer (Windows), shown on the disabled choice.
     const [parkReason, setParkReason] = React.useState(controls?.state?.parkReason);
+    const [captureError, setCaptureError] = React.useState(controls?.state?.captureError);
+    const [elevatedState, setElevatedState] = React.useState(() => ({
+        elevated: Boolean(controls?.state?.elevated),
+        canElevate: Boolean(controls?.state?.canElevate),
+        selfElevated: Boolean(controls?.state?.selfElevated)
+    }));
+    const [elevating, setElevating] = React.useState(false);
+    const [recoveryDismissed, setRecoveryDismissed] = React.useState('');
     React.useEffect(() => {
         setMouse(Boolean(latest.current?.state?.userInput));
         setSound(latest.current?.state?.sound);
         if (latest.current?.state?.placement) setPlacement(latest.current.state.placement);
+        setParkReason(latest.current?.state?.parkReason);
+        setCaptureError(latest.current?.state?.captureError);
+        setElevatedState({
+            elevated: Boolean(latest.current?.state?.elevated),
+            canElevate: Boolean(latest.current?.state?.canElevate),
+            selfElevated: Boolean(latest.current?.state?.selfElevated)
+        });
+        setRecoveryDismissed('');
     }, [streamKey]);
     // Where the window's picture sits inside the video element (letterboxed): a plugin's readings are drawn there.
     const screen = React.useRef<HTMLDivElement>(null);
@@ -1726,6 +1869,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         // once per attach or return, with the window's own snapshot.
         let blackChecked = false;
         let blackChecking = false;
+        let blackProbeAttempts = 0;
         let healthTimer: ReturnType<typeof setInterval> | undefined;
         let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
         let activeLoadedListener: (() => void) | undefined;
@@ -1811,9 +1955,14 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                         blackChecking = false;
                         blackTicks = 0;
                         if (disposed || stream !== checkedStream) return;
+                        if (!windowCells) {
+                            blackProbeAttempts += 1;
+                            if (blackProbeAttempts >= 3) blackChecked = true;
+                            return;
+                        }
                         blackChecked = true;
                         // The picture as it is now: a capture that came to life while the snapshot was taken keeps going.
-                        if (!windowCells || typeof isBlankOrPureBlackVideoFrame === 'function' && !isBlankOrPureBlackVideoFrame(element)) return;
+                        if (typeof isBlankOrPureBlackVideoFrame === 'function' && !isBlankOrPureBlackVideoFrame(element)) return;
                         const shownCells = (typeof frameFingerprint === 'function' ? frameFingerprint(element, element.videoWidth, element.videoHeight) : undefined)
                             ?? new Uint8Array(windowCells.length);
                         // Apart somewhere by more than the noise between two pictures of one window (windowIsChanging's allowance).
@@ -1827,6 +1976,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             if (disposed) return;
             blackTicks = 0;
             blackChecked = false;
+            blackProbeAttempts = 0;
             attachStartedAt = Date.now();
             checkActiveHealth();
         };
@@ -1947,6 +2097,28 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             } else setNotice('moveFailed');
         }, () => setNotice('moveFailed')).finally(() => setMoving(false));
     };
+    const requestElevation = (): void => {
+        if (elevating || !latest.current?.elevate) return;
+        setElevating(true);
+        setNotice(undefined);
+        void latest.current.elevate().then(result => {
+            if (!reopenMounted.current) return;
+            if (result?.ok) {
+                setElevatedState(prev => ({ ...prev, canElevate: false, selfElevated: true }));
+                setCaptureError(undefined);
+                setParkReason(undefined);
+                setRecoveryDismissed('');
+                setNotice('elevatedActiveNotice');
+                bumpStreamGeneration();
+            } else {
+                setNotice('elevationDeniedNotice');
+            }
+        }, () => {
+            if (reopenMounted.current) setNotice('elevationDeniedNotice');
+        }).finally(() => {
+            if (reopenMounted.current) setElevating(false);
+        });
+    };
     const [windowMenuOpen, setWindowMenuOpen] = React.useState(false);
     const [terminateModalOpen, setTerminateModalOpen] = React.useState(false);
     const localOverlayOpen = windowMenuOpen || terminateModalOpen || reopenModalOpen || Boolean(props.plugin?.studio);
@@ -1979,6 +2151,14 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         // The realtime prompt reads selfThrottles and tether straight from the state: draw again when they arrive.
         setRealtimeFacts(`${state.selfThrottles === true}:${state.tether || ''}`);
         setParkReason(state.parkReason);
+        setCaptureError(state.captureError);
+        setElevatedState(prev => (
+            prev.elevated === Boolean(state.elevated)
+            && prev.canElevate === Boolean(state.canElevate)
+            && prev.selfElevated === Boolean(state.selfElevated)
+                ? prev
+                : { elevated: Boolean(state.elevated), canElevate: Boolean(state.canElevate), selfElevated: Boolean(state.selfElevated) }
+        ));
         setMouse(state.userInput);
         if (!state.userInput) {
             resetHoverMove();
@@ -2343,6 +2523,10 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         };
     }, [canTerminate, tab.id, tabActive]);
     React.useEffect(() => {
+        notifyModalChromeChanged();
+        return () => { notifyModalChromeChanged(); };
+    }, [reopenModalOpen, terminateModalOpen]);
+    React.useEffect(() => {
         if (!terminateModalOpen || !tabActive) return undefined;
         const onKeyDown = (event: KeyboardEvent): void => {
             if (event.key === 'Escape' && !terminating) setTerminateModalOpen(false);
@@ -2557,6 +2741,21 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         }
     };
     const appDisplayName = tab.title || tab.target;
+    const needsAdminElevation = Boolean(
+        streamKey && tab.platform === 'windows' && !elevatedState.selfElevated
+        && (elevatedState.elevated || parkReason === 'elevated_requires_admin' || captureError === 'window_elevated_uipi')
+    );
+    const blankCaptureIssue = Boolean(
+        streamKey && (captureError === 'window_capture_blank' || captureError === 'parked_gpu_blank' || parkReason === 'parked_gpu_blank')
+    );
+    const recoveryKind: 'elevated' | 'blank' | undefined = !realtimeShown
+        ? (needsAdminElevation && recoveryDismissed !== 'elevated'
+            ? 'elevated'
+            : blankCaptureIssue && recoveryDismissed !== 'blank'
+                ? 'blank'
+                : undefined)
+        : undefined;
+    const noticeIsInfo = notice === 'elevatedActiveNotice';
     // Several tabs can be mounted at once (kept warm): each dialog labels itself by its own ids.
     const dialogIds = `nmx-visual-tab-${(typeof React.useId === 'function' ? React.useId() : tab.id).replace(/[^\w-]/g, '')}`;
     const glyph = (name: ConversationTabGlyphName, size?: number): React.ReactNode => typeof ConversationTabGlyph === 'function' ? <ConversationTabGlyph name={name} size={size} /> : null;
@@ -2656,6 +2855,13 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
             onReopen={() => { answerRealtime(); reopenApp('restart'); }}
             onShowOnDesktop={() => { answerRealtime('desktop'); move('desktop'); }}
             onDismiss={() => { if (typeof dismissRealtimePrompt === 'function') dismissRealtimePrompt(realtimeApp); answerRealtime(); }} />}
+        {recoveryKind && typeof CaptureRecoveryPrompt === 'function' && <CaptureRecoveryPrompt locale={locale} app={appDisplayName} kind={recoveryKind}
+            captureError={captureError} canElevate={elevatedState.canElevate || typeof controls?.elevate === 'function'} elevating={elevating}
+            keyboardCapture={mouse} busy={moving || reopening}
+            onElevate={requestElevation}
+            onShowOnDesktop={() => { setCaptureError(undefined); move('desktop'); }}
+            onRetryCapture={() => { setCaptureError(undefined); setNotice(undefined); bumpStreamGeneration(); }}
+            onDismiss={() => setRecoveryDismissed(recoveryKind)} />}
         <div className='nmx-visual-tab-screen' ref={screen}>
             <video ref={video} muted playsInline aria-label={tab.title} aria-hidden={!live} className={live ? 'is-ready' : undefined} data-window-key={streamKey || undefined}
                 style={pictureStyle} onMouseDown={onMouseDown} onClick={onClick} onAuxClick={onAuxClick} onContextMenu={onContextMenu}
@@ -2673,9 +2879,9 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                 </div>)}
             {live && mouse && controls?.keys && <textarea ref={keyboard} className='nmx-visual-tab-keys' aria-label={conversationWindowText(locale, 'mouse')} tabIndex={-1}
                 autoCapitalize='off' autoCorrect='off' spellCheck={false} onKeyDownCapture={onKeyboardDown} onKeyDown={onKeyboardDown} onInput={onKeyboardInput} onCompositionEnd={onKeyboardCompositionEnd}></textarea>}
-            {live && !realtimeShown && (pluginEscActive || (!mouse && placement === 'tab')) && <p className='nmx-visual-tab-note'><i className='codicon codicon-eye-closed' aria-hidden='true'></i>{conversationWindowText(locale, pluginEscActive ? 'controlHint' : 'inTabHint')}</p>}
+            {live && !realtimeShown && !recoveryKind && (pluginEscActive || (!mouse && placement === 'tab')) && <p className='nmx-visual-tab-note'><i className='codicon codicon-eye-closed' aria-hidden='true'></i>{conversationWindowText(locale, pluginEscActive ? 'controlHint' : 'inTabHint')}</p>}
             {(notice || announced) && <div
-                className={`nmx-visual-tab-toast ${notice ? 'is-error' : 'is-info'}${toastFading ? ' is-fading-out is-leaving' : ''}`}
+                className={`nmx-visual-tab-toast ${notice && !noticeIsInfo ? 'is-error' : 'is-info'}${toastFading ? ' is-fading-out is-leaving' : ''}`}
                 role='status'
                 aria-live='polite'
                 onClick={event => {
@@ -2683,7 +2889,9 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                     dismissToast();
                 }}>
                 {notice
-                    ? <span className='nmx-visual-tab-error'>{conversationWindowText(locale, notice)}</span>
+                    ? (noticeIsInfo
+                        ? <span className='nmx-visual-tab-info'><i className='codicon codicon-sparkle' aria-hidden='true'></i>{conversationWindowText(locale, notice)}</span>
+                        : <span className='nmx-visual-tab-error'>{conversationWindowText(locale, notice)}</span>)
                     : <span className='nmx-visual-tab-info'><i className='codicon codicon-sparkle' aria-hidden='true'></i>{announced}</span>}
                 <button
                     type='button'

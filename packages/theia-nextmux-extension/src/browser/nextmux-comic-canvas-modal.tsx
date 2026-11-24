@@ -1,5 +1,6 @@
 import * as React from '@theia/core/shared/react';
 import { createPortal } from '@theia/core/shared/react-dom';
+import { notifyModalChromeChanged } from './nextmux-modal-chrome';
 
 const THEME_CUSTOM_PROPS = [
     '--nmx-bg', '--nmx-panel', '--nmx-panel-2', '--nmx-panel-hover',
@@ -41,19 +42,46 @@ export function CanvasModalLayer(props: { readonly locale: string; readonly chil
             target.style.colorScheme = isLight ? 'light' : isDark ? 'dark' : style.colorScheme || 'dark';
             target.style.fontFamily = style.fontFamily; target.style.fontSize = style.fontSize; target.style.color = style.color;
         };
-        copyTheme();
-        if (!target.open) target.showModal();
-        // React autoFocus can run while the native dialog is still closed.
-        const initial = props.initialFocusSelector ? target.querySelector<HTMLElement>(props.initialFocusSelector) : undefined;
-        initial?.focus({ preventScroll: true });
-        if (!target.contains(document.activeElement)) {
-            const dialog = target.querySelector<HTMLElement>('[role="dialog"]') ?? target;
-            if (!dialog.hasAttribute('tabindex')) dialog.tabIndex = -1;
-            dialog.focus({ preventScroll: true });
+        const keepAliveHost = source.closest<HTMLElement>('.nmx-keepalive-host');
+        const focusDialog = (): void => {
+            // React autoFocus can run while the native dialog is still closed.
+            const initial = props.initialFocusSelector ? target.querySelector<HTMLElement>(props.initialFocusSelector) : undefined;
+            initial?.focus({ preventScroll: true });
+            if (!target.contains(document.activeElement)) {
+                const dialog = target.querySelector<HTMLElement>('[role="dialog"]') ?? target;
+                if (!dialog.hasAttribute('tabindex')) dialog.tabIndex = -1;
+                dialog.focus({ preventScroll: true });
+            }
+        };
+        const syncVisibility = (): void => {
+            const hidden = Boolean(keepAliveHost?.classList.contains('nmx-keepalive-hidden'));
+            target.hidden = hidden;
+            if (hidden) {
+                if (target.open) target.close();
+            } else {
+                copyTheme();
+                if (!target.open) {
+                    target.showModal();
+                    focusDialog();
+                }
+            }
+            notifyModalChromeChanged();
+        };
+        syncVisibility();
+        const shellTarget = source.closest('.nmx-shell') ?? document.body;
+        const observer = new MutationObserver(() => {
+            if (!keepAliveHost?.classList.contains('nmx-keepalive-hidden')) copyTheme();
+            syncVisibility();
+        });
+        observer.observe(shellTarget, { attributes: true, attributeFilter: ['class', 'style'] });
+        if (keepAliveHost && keepAliveHost !== shellTarget) {
+            observer.observe(keepAliveHost, { attributes: true, attributeFilter: ['class'] });
         }
-        const observer = new MutationObserver(copyTheme);
-        observer.observe(source.closest('.nmx-shell') ?? document.body, { attributes: true, attributeFilter: ['class', 'style'] });
-        return () => { observer.disconnect(); if (target.open) target.close(); };
+        return () => {
+            observer.disconnect();
+            if (target.open) target.close();
+            notifyModalChromeChanged();
+        };
     }, []);
     React.useEffect(() => () => {
         if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true });
