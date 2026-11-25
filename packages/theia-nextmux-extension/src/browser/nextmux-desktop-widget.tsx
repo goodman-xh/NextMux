@@ -674,7 +674,7 @@ import { filesChangedLabel } from './nextmux-files-changed-label';
 import { goalFileBody, goalFileObjective, isGoalFilePath } from './nextmux-goal-file-format';
 import { finalTextAlreadyInActivity, appendAgentActivityEvents, agentThinkingPresentation, autoResumeDelayMs, autoResumeDecision, BUSY_RETRY_DELAYS_MS, isBusyFailure, isVisibleAssistantProgress, modelAttemptPresentation, userCancelledActivityEvents, modelPhasePresentation, shouldShowAgentTaskProgress, summarizeAgentTaskProgress, toolActivitySucceeded, toolCompletionTitle, userQueuedPrompts } from './nextmux-agent-activity';
 import { mergeAgentEventPollSnapshot } from './nextmux-agent-event-poll';
-import { agentOutcomeText, canonicalRuntimeFinal, desktopFailureMessage, isMerchantApiDeletedFailure, normalizeDesktopFailure, normalizePendingManagedReceipt, originalReceiptText, normalizeRuntimeFinalMessage, runtimeFinalText } from './nextmux-agent-outcome-locale';
+import { agentChildFailureDetailsLabel, agentChildReceiptSummary, agentChildReceiptTechnicalDetail, agentOutcomeText, canonicalRuntimeFinal, desktopFailureMessage, isMerchantApiDeletedFailure, normalizeDesktopFailure, normalizePendingManagedReceipt, originalReceiptText, normalizeRuntimeFinalMessage, runtimeFinalText } from './nextmux-agent-outcome-locale';
 import { relayDelistedText, relayFreeHintText, relayText, type RelayUnavailableReason } from './nextmux-relay-locale';
 import { RelayCapacityPoller, RelayCapacityRefresh } from './nextmux-relay-capacity';
 import { relayMerchantIsFull, relayOfferingIsFull, type PublicMerchantCapacityScope, type PublicMerchantCapacitySnapshot } from '../common/nextmux-relay-capacity';
@@ -1510,6 +1510,7 @@ interface CodingTurnRecord {
     /** All managed requests actually used by this assistant reply, in first-use order. */
     readonly relayRequestIds?: readonly string[];
     readonly relayFeedback?: RelayFeedbackVote;
+    readonly councilMode?: boolean;
     readonly resumeCheckpointId?: string;
     /** Stable runtime reason used to distinguish automatic limits from an explicit user pause. */
     readonly stopReason?: DesktopAgentRunResult['stopReason'];
@@ -6005,7 +6006,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.initializeBrowserController();
         this.startBrowserToolBridge();
         if (!this.detachedConversationId) this.scheduleIdleConversationImportScan();
-        const literalExclusionSelector = '[data-nmx-literal], .monaco-editor, .xterm, .nmx-terminal-host, .nmx-context-browser, .nmx-task-view, .nmx-thread-timeline, .nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float';
+        const literalExclusionSelector = '[data-nmx-literal], [data-nmx-i18n="rendered"], .monaco-editor, .xterm, .nmx-terminal-host, .nmx-context-browser, .nmx-task-view, .nmx-thread-timeline, .nmx-thread-files, .nmx-thread-notes-float, .nmx-thread-agents-float, .nmx-board, .nmx-desk, .nmx-comic-chat, .nmx-mt, .nmx-comic-studio-modal-backdrop, .nmx-board-modal-layer';
         const localizationObserver = new MutationObserver(mutations => {
             if (this.localizationMutationSuppressed) return;
             let queued = false;
@@ -6481,6 +6482,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (typeof this.resolvedDesktopTheme === 'function') {
             document.body.classList.toggle('nmx-theme-light-active', this.resolvedDesktopTheme() === 'light');
         }
+        document.body.classList.toggle('nmx-dir-rtl', this.desktopLocale === 'ar');
+        document.body.classList.toggle('nmx-context-collapsed', Boolean(this.contextPanelCollapsed));
+        document.body.classList.toggle('nmx-detached-conversation', Boolean(this.detachedConversationId));
     }
 
     protected paneShellWidth(): number {
@@ -7225,6 +7229,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         markLocaleChosen();
         if (next === this.desktopLocale) return;
         this.desktopLocale = next;
+        this.syncWidgetBodyState?.();
         void window.nextmuxDesktop?.setAppLocale?.(next).catch(() => undefined);
         writeDesktopLocale(this.desktopLocale);
         window.dispatchEvent(new CustomEvent('nextmux:desktop-locale-changed', { detail: this.desktopLocale }));
@@ -7250,10 +7255,22 @@ export class NextMuxDesktopWidget extends ReactWidget {
         window.setTimeout(() => window.location.reload(), 40);
     }
 
+    protected localizedZhSubtrees = new WeakSet<Element>();
+    protected localizedZhLocaleMarker = '';
+
     protected localizeRenderedSurface(root: Element = this.node): void {
         if (!root) return;
         const isRoot = root === this.node;
         if (!isRoot && isSurfaceLiteral(root)) return;
+        if (this.desktopLocale !== this.localizedZhLocaleMarker) {
+            this.localizedZhSubtrees = new WeakSet<Element>();
+            this.localizedZhLocaleMarker = this.desktopLocale;
+        }
+        if (this.desktopLocale === 'zh-CN' && !isRoot && this.initialSurfaceLocalized && this.lastLocalizedLocale === 'zh-CN') {
+            if (this.localizedZhSubtrees.has(root) || root.closest?.('[data-nmx-i18n="rendered"], .nmx-board, .nmx-desk, .nmx-comic-chat, .nmx-mt, .nmx-comic-studio-modal-backdrop, .nmx-board-modal-layer')) {
+                return;
+            }
+        }
         const suppressionGeneration = ++this.localizationMutationSuppressionGeneration;
         this.localizationMutationSuppressed = true;
         try {
@@ -7269,18 +7286,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // Rewriting a focused <select> closes its native popup: its options wait until it loses focus.
             const focusedSelect = this.focusedNativeSelect?.();
             let heldForSelect = false;
+            const skipZhTextWalk = this.desktopLocale === 'zh-CN' && !isRoot && this.localizedZhSubtrees.has(root);
             // Editor, terminal and literal subtrees hold user content and are never entered.
-            forEachSurfaceTextNode(root, textNode => {
-                const value = textNode.data;
-                const previous = this.localizedTextNodes.get(textNode);
-                const source = previous && value === previous.rendered ? previous.source : value;
-                const rendered = localizeDesktopSurface(this.desktopLocale, source);
-                if (value !== rendered) {
-                    if (focusedSelect?.contains(textNode)) { heldForSelect = true; return; }
-                    textNode.data = rendered;
-                }
-                this.localizedTextNodes.set(textNode, { source, rendered });
-            });
+            if (!skipZhTextWalk) {
+                forEachSurfaceTextNode(root, textNode => {
+                    const value = textNode.data;
+                    const previous = this.localizedTextNodes.get(textNode);
+                    const source = previous && value === previous.rendered ? previous.source : value;
+                    const rendered = localizeDesktopSurface(this.desktopLocale, source);
+                    if (value !== rendered) {
+                        if (focusedSelect?.contains(textNode)) { heldForSelect = true; return; }
+                        textNode.data = rendered;
+                    }
+                    this.localizedTextNodes.set(textNode, { source, rendered });
+                });
+            }
             const attributeTargets: HTMLElement[] = [];
             if (!isRoot && root.matches?.('[placeholder],[title],[aria-label]')) {
                 attributeTargets.push(root as HTMLElement);
@@ -7307,6 +7327,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 }
             }
             if (heldForSelect && focusedSelect) this.renderWhenDropdownCloses(focusedSelect);
+            else if (this.desktopLocale === 'zh-CN' && !isRoot) this.localizedZhSubtrees.add(root);
         } finally {
             queueMicrotask(() => {
                 if (this.localizationMutationSuppressionGeneration === suppressionGeneration) {
@@ -7966,8 +7987,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.ensureCouncilConfigsLoaded();
         const key = this.sessionCouncilKey(sessionId);
         if (this.pendingCouncilConfigsBySession.has(key) || this.councilConfigsBySession.has(key)) return undefined;
-        const selected = this.invalidCouncilConfigsBySession.has(key) ? key
-            : key && this.invalidCouncilConfigsBySession.has('') ? '' : undefined;
+        const selected = this.invalidCouncilConfigsBySession.has(key) ? key : undefined;
         if (selected === undefined) return undefined;
         const value = this.invalidCouncilConfigsBySession.get(selected);
         if (value && typeof value === 'object' && (value as { enabled?: boolean }).enabled === false) return undefined;
@@ -7993,13 +8013,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.ensureCouncilConfigsLoaded();
         const key = this.sessionCouncilKey(sessionId);
         if (this.invalidCouncilConfigEntry(sessionId)) return undefined;
-        return this.councilConfigsBySession.get(key) || (key ? this.councilConfigsBySession.get('') : undefined);
+        return this.councilConfigsBySession.get(key);
     }
 
     protected pendingCouncilConfig(sessionId?: string): DesktopAgentCouncilConfig | undefined {
         this.ensureCouncilConfigsLoaded();
         const key = this.sessionCouncilKey(sessionId);
-        return this.pendingCouncilConfigsBySession.get(key) || (key ? this.pendingCouncilConfigsBySession.get('') : undefined);
+        return this.pendingCouncilConfigsBySession.get(key);
     }
 
     protected effectiveCouncilConfig(sessionId?: string): DesktopAgentCouncilConfig | undefined {
@@ -8019,6 +8039,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected migrateDraftCouncilConfigToSession(sessionId: string): void {
         if (!sessionId) return;
         this.ensureCouncilConfigsLoaded();
+        const targetSession = this.codingSessions?.find(item => item.id === sessionId);
+        if (targetSession && targetSession.turns.length > 0) return;
         const draftActive = this.councilConfigsBySession.get('');
         if (draftActive && !this.councilConfigsBySession.has(sessionId)) {
             this.councilConfigsBySession.set(sessionId, draftActive);
@@ -8627,10 +8649,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // renderer drives seeds role rows or keeps a saved child running.
         const running = (conversationAgentRunActive(liveRun) || ownsActiveRun && this.agentStage === 'running')
             && this.isCodingSessionRunning(session.id);
+        const roster = running ? this.councilRunRoster(session.id) : undefined;
+        const councilMode = running
+            ? Boolean(roster?.length)
+            : Boolean(this.hasActiveOrPendingCouncilMode?.(session.id) || session.turns.some(turn => turn.councilMode === true));
         const { children, bindings } = collectSessionCouncilRoleChildren({
             sessionId: session.id, turns: session.turns, liveChildren, running,
             runningTurnId: liveRun?.activeAgentTurnId || (ownsActiveRun ? this.activeAgentTurnId : '') || undefined,
-            councilSlots: running ? this.councilRunRoster(session.id) : undefined
+            councilMode,
+            councilSlots: roster
         });
         for (const [pendingId, childRunId] of bindings) {
             this.councilVisibilityController.adoptEntry(pendingId, childRunId);
@@ -21247,6 +21274,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected comicCanvasCapabilityVersion = 0;
     private comicCanvasCapabilityFlushPending = false;
+    private readonly canvasUsableChoicesCache = new WeakMap<readonly CanvasModelFamily[], readonly CanvasModelChoice[]>();
     private comicCanvasFamiliesCache?: WeakMap<ComicCanvasSession, Map<'image' | 'video', {
         readonly locale: NextMuxDesktopLocale;
         readonly capabilityVersion: number;
@@ -21405,8 +21433,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected canvasUsableChoices(session: ComicCanvasSession, kind: 'image' | 'video'): readonly CanvasModelChoice[] {
-        return this.canvasModelFamilies(session, kind).flatMap(family => family.routes.filter(route => route.available))
+        const families = this.canvasModelFamilies(session, kind);
+        const cached = this.canvasUsableChoicesCache.get(families);
+        if (cached) return cached;
+        const next = families.flatMap(family => family.routes.filter(route => route.available))
             .map(({ available: _available, reason: _reason, ...choice }) => choice);
+        this.canvasUsableChoicesCache.set(families, next);
+        return next;
     }
 
     protected canvasRouteOf(doc: CanvasDocument, node: CanvasNode): CanvasModelChoice | undefined {
@@ -21533,6 +21566,23 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return Boolean(pending && (jobId === undefined || pending.jobId === jobId));
     }
 
+    protected readonly mediaJobsByIdCache = new WeakMap<readonly MediaJob[], ReadonlyMap<string, MediaJob>>();
+
+    protected mediaJobById(jobId: string): MediaJob | undefined {
+        const jobs = this.mediaState.jobs;
+        let byId = this.mediaJobsByIdCache.get(jobs);
+        if (!byId) {
+            byId = new Map(jobs.map(item => [item.id, item] as const));
+            this.mediaJobsByIdCache.set(jobs, byId);
+        }
+        return byId.get(jobId);
+    }
+
+    protected updateComicRegion(): void {
+        if (this.updateRegion) this.updateRegion('comic');
+        else this.update();
+    }
+
     /** Claim before the first await; never let an original-task retry look like a new Generate. */
     protected async resumeComicCanvasGeneration(session: ComicCanvasSession, nodeId: string, renderedJobId?: string, locale = this.desktopLocale): Promise<void> {
         if (this.comicCanvas !== session || !this.comicCanvasIsTracked(session) || this.activeComicWorkspaceRoot !== session.workspaceRoot
@@ -21542,7 +21592,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!node) return;
         const jobId = canvasLatestJob(node)?.jobId;
         if (!jobId || jobId !== renderedJobId || !this.canvasJobOf(node, session)?.resumable) return;
-        const job = this.mediaState.jobs.find(item => item.id === jobId);
+        const job = this.mediaJobById(jobId);
         if (!job) return;
         let retries = this.comicCanvasRetries.get(session);
         if (!retries) { retries = new Map(); this.comicCanvasRetries.set(session, retries); }
@@ -21572,7 +21622,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected canvasJobOf(node: CanvasNode, ownerSession?: ComicCanvasSession): CanvasJobView | undefined {
         const job = canvasLatestJob(node);
-        const live = job?.jobId ? this.mediaState.jobs.find(item => item.id === job.jobId) : undefined;
+        const live = job?.jobId ? this.mediaJobById(job.jobId) : undefined;
         if (!live) return undefined;
         const sameWorkspace = !ownerSession || this.activeComicWorkspaceRoot === ownerSession.workspaceRoot && this.mediaWorkspaceRoot === ownerSession.workspaceRoot;
         const cancellable = sameWorkspace && this.mediaStage === 'idle' && !live.restoredHistoryOnly && !live.checkpoint && !live.cancelRequestedAt
@@ -21607,7 +21657,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.invalidateComicCanvasVideoInputs(session);
         session.save = 'dirty';
         this.scheduleComicCanvasSave(session, record ? 500 : 1_200);
-        this.update();
+        this.updateComicRegion();
     }
 
     protected undoComicCanvas(redo = false): void {
@@ -21626,20 +21676,22 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected scheduleComicCanvasSave(session: ComicCanvasSession, delay: number): void {
-        if (session.saveTimer !== undefined) window.clearTimeout(session.saveTimer);
-        session.saveTimer = window.setTimeout(() => { session.saveTimer = undefined; void this.saveComicCanvas(session); }, delay);
+        const hostTimers = (typeof window !== 'undefined' ? window : globalThis) as unknown as typeof window;
+        if (session.saveTimer !== undefined) hostTimers.clearTimeout(session.saveTimer);
+        session.saveTimer = hostTimers.setTimeout(() => { session.saveTimer = undefined; void this.saveComicCanvas(session); }, delay);
     }
 
     /** Save now (before a generate click, an import or 进入剪辑 the service must read what the user sees). */
     protected async flushComicCanvas(session: ComicCanvasSession): Promise<void> {
+        const hostTimers = (typeof window !== 'undefined' ? window : globalThis) as unknown as typeof window;
         if (session.load) await session.load;
         if (!this.comicCanvasCanWrite(session)) throw Object.assign(new Error(comicCanvasTabsErrorText(this.desktopLocale, { code: 'CANVAS_DELETION_PENDING' })), { code: 'CANVAS_DELETION_PENDING' });
-        if (session.saveTimer !== undefined) { window.clearTimeout(session.saveTimer); session.saveTimer = undefined; }
+        if (session.saveTimer !== undefined) { hostTimers.clearTimeout(session.saveTimer); session.saveTimer = undefined; }
         if (session.saving) await session.saving;
         if (session.save === 'failed') await this.saveComicCanvas(session);
         while (session.save === 'dirty' && this.comicCanvasCanWrite(session)) {
             await this.saveComicCanvas(session);
-            if (session.saveTimer !== undefined) { window.clearTimeout(session.saveTimer); session.saveTimer = undefined; }
+            if (session.saveTimer !== undefined) { hostTimers.clearTimeout(session.saveTimer); session.saveTimer = undefined; }
         }
         if (!this.comicCanvasCanWrite(session)) throw Object.assign(new Error(comicCanvasTabsErrorText(this.desktopLocale, { code: 'CANVAS_DELETION_PENDING' })), { code: 'CANVAS_DELETION_PENDING' });
         if (session.save === 'failed') throw Object.assign(new Error(canvasText(this.desktopLocale, 'saveFailed')), { code: 'CANVAS_SAVE_FAILED' });
@@ -21654,7 +21706,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 const sent = session.doc;
                 if (!sent || !this.comicCanvasCanWrite(session)) return;
                 session.save = 'saving';
-                this.update();
+                this.updateComicRegion();
                 try {
                     const state = await this.platformService.saveComicCanvas({ workspaceRoot: session.workspaceRoot, canvasId: session.canvasId, expectedRevision: session.base?.revision ?? 0, canvas: sent });
                     if (!this.comicCanvasIsTracked(session) || !state.canvas) return;
@@ -21679,7 +21731,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
         })();
         session.saving = run;
-        try { await run; } finally { session.saving = undefined; this.update(); }
+        try { await run; } finally { session.saving = undefined; this.updateComicRegion(); }
     }
 
     /** The service's latest copy (results, job states), merged under the user's unsaved edits. */
@@ -21722,8 +21774,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
         session.noticeAction = action;
         if (session.noticeTimer !== undefined) window.clearTimeout(session.noticeTimer);
         // A notice with something to do stays long enough to do it.
-        session.noticeTimer = window.setTimeout(() => { session.notice = undefined; session.noticeAction = undefined; session.noticeTimer = undefined; this.update(); }, action ? 15_000 : 7_000);
-        this.update();
+        session.noticeTimer = window.setTimeout(() => { session.notice = undefined; session.noticeAction = undefined; session.noticeTimer = undefined; this.updateComicRegion(); }, action ? 15_000 : 7_000);
+        this.updateComicRegion();
     }
 
     /** While anything runs or waits: read the service's copy every few seconds, start nodes whose inputs arrived. */
@@ -22782,7 +22834,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected readonly handleCanvasChange: NonNullable<React.ComponentProps<typeof ComicCanvas>['onChange']> = (next, options) => {
         const session = this.comicCanvasSession();
-        if (session) this.changeComicCanvasSession(session, next, options?.record !== false);
+        if (!session) return;
+        if (options?.record === false && session.doc && next !== session.doc && next.viewport !== session.doc.viewport
+            && next.nodes === session.doc.nodes && next.edges === session.doc.edges
+            && next.settings === session.doc.settings && next.title === session.doc.title) {
+            session.doc = next;
+            session.save = 'dirty';
+            this.scheduleComicCanvasSave(session, 1_200);
+            return;
+        }
+        this.changeComicCanvasSession(session, next, options?.record !== false);
     };
 
     protected readonly handleCanvasPlanStory: NonNullable<React.ComponentProps<typeof ComicCanvas>['onPlanStory']> = nodeId => {
@@ -23029,18 +23090,93 @@ export class NextMuxDesktopWidget extends ReactWidget {
         void this.commitComicCanvasToEditor();
     };
 
+    protected readonly comicCanvasDeskPropsCache = new WeakMap<ComicCanvasSession, {
+        imageChoices?: ReturnType<NextMuxDesktopWidget['canvasUsableChoices']>;
+        videoChoices?: ReturnType<NextMuxDesktopWidget['canvasUsableChoices']>;
+        models?: React.ComponentProps<typeof ComicCanvas>['models'];
+        imageFamilies?: ReturnType<NextMuxDesktopWidget['canvasModelFamilies']>;
+        videoFamilies?: ReturnType<NextMuxDesktopWidget['canvasModelFamilies']>;
+        families?: React.ComponentProps<typeof ComicCanvas>['families'];
+        submitting?: ReadonlySet<string>;
+        aspectRatio?: string;
+        frameRate?: number;
+        defaults?: React.ComponentProps<typeof ComicCanvas>['defaults'];
+        toolProgress?: React.ComponentProps<typeof ComicCanvas>['toolProgress'];
+    }>();
+
     /** The desk's canvas step: the board, its footer note and 进入剪辑. */
-    protected comicCanvasDeskProps(project: ComicProject): Pick<React.ComponentProps<typeof ComicDesk>, 'canvasView' | 'canvasNote' | 'toEditorLabel' | 'toEditorDisabled' | 'onToEditor'> {
+    protected comicCanvasDeskProps(project: ComicProject): Pick<React.ComponentProps<typeof ComicCanvas>, never> & Pick<React.ComponentProps<typeof ComicDesk>, 'canvasView' | 'canvasNote' | 'toEditorLabel' | 'toEditorDisabled' | 'onToEditor'> {
         const session = this.comicCanvasSession();
         const locale = this.desktopLocale;
         const doc = session?.doc;
         const clips = doc?.nodes.filter(node => ['videoGen', 'video', 'composition'].includes(node.kind) && !node.orphaned) ?? [];
         const filmed = clips.filter(node => canvasCurrentVersion(node)).length;
         const notices = Array.isArray(doc?.settings.seedNotices) ? (doc!.settings.seedNotices as readonly string[]).length : 0;
+        let models: React.ComponentProps<typeof ComicCanvas>['models'] | undefined;
+        let families: React.ComponentProps<typeof ComicCanvas>['families'] | undefined;
+        let submittingSet: ReadonlySet<string> | undefined;
+        let defaults: React.ComponentProps<typeof ComicCanvas>['defaults'] | undefined;
+        let toolProgress: React.ComponentProps<typeof ComicCanvas>['toolProgress'] | undefined;
+        if (session && doc) {
+            let cache = this.comicCanvasDeskPropsCache.get(session);
+            if (!cache) { cache = {}; this.comicCanvasDeskPropsCache.set(session, cache); }
+            const imageChoices = this.canvasUsableChoices(session, 'image');
+            const videoChoices = this.canvasUsableChoices(session, 'video');
+            if (!cache.models || cache.imageChoices !== imageChoices || cache.videoChoices !== videoChoices) {
+                cache.imageChoices = imageChoices;
+                cache.videoChoices = videoChoices;
+                cache.models = { image: imageChoices, video: videoChoices };
+            }
+            models = cache.models;
+
+            const imageFamilies = this.canvasModelFamilies(session, 'image');
+            const videoFamilies = this.canvasModelFamilies(session, 'video');
+            if (!cache.families || cache.imageFamilies !== imageFamilies || cache.videoFamilies !== videoFamilies) {
+                cache.imageFamilies = imageFamilies;
+                cache.videoFamilies = videoFamilies;
+                cache.families = { image: imageFamilies, video: videoFamilies };
+            }
+            families = cache.families;
+
+            const videoInputMap = this.comicCanvasVideoInputs.get(session);
+            const submittingSize = session.submitting.size + (videoInputMap?.size ?? 0);
+            const prevSubmitting = cache.submitting;
+            let sameSubmitting = Boolean(prevSubmitting && prevSubmitting.size <= submittingSize);
+            if (sameSubmitting && prevSubmitting) {
+                for (const id of session.submitting) if (!prevSubmitting.has(id)) { sameSubmitting = false; break; }
+                if (sameSubmitting && videoInputMap) for (const id of videoInputMap.keys()) if (!prevSubmitting.has(id)) { sameSubmitting = false; break; }
+                if (sameSubmitting) {
+                    for (const id of prevSubmitting) if (!session.submitting.has(id) && !videoInputMap?.has(id)) { sameSubmitting = false; break; }
+                }
+            }
+            if (!sameSubmitting || !cache.submitting) {
+                cache.submitting = new Set([...session.submitting, ...(videoInputMap?.keys() ?? [])]);
+            }
+            submittingSet = cache.submitting;
+
+            if (!cache.defaults || cache.aspectRatio !== project.canvas.aspectRatio || cache.frameRate !== project.frameRate) {
+                cache.aspectRatio = project.canvas.aspectRatio;
+                cache.frameRate = project.frameRate;
+                cache.defaults = { aspectRatio: project.canvas.aspectRatio, durationSeconds: 5, frameRate: project.frameRate };
+            }
+            defaults = cache.defaults;
+
+            const prevProgress = cache.toolProgress;
+            let sameProgress = Boolean(prevProgress && prevProgress.size === session.tools.size);
+            if (sameProgress && prevProgress) {
+                for (const [nodeId, entry] of session.tools) {
+                    if (prevProgress.get(nodeId) !== entry.fraction) { sameProgress = false; break; }
+                }
+            }
+            if (!sameProgress || !cache.toolProgress) {
+                cache.toolProgress = new Map<string, number | undefined>([...session.tools].map(([nodeId, entry]) => [nodeId, entry.fraction]));
+            }
+            toolProgress = cache.toolProgress;
+        }
         const view = !session || session.loading
             ? <div className='nmx-desk-canvas-loading'><i className='codicon codicon-loading codicon-modifier-spin' aria-hidden='true'></i>{canvasText(locale, 'seeding')}</div>
             : !doc ? <div className='nmx-desk-empty'><strong>{canvasText(locale, 'seedFailed', { error: session.error || canvasText(locale, 'unknown') })}</strong>
-                <button className='nmx-secondary-button' onClick={() => { session.loading = true; this.update(); session.load = this.loadComicCanvas(session); }}>{canvasText(locale, 'retry')}</button></div>
+                <button className='nmx-secondary-button' onClick={() => { session.loading = true; this.updateComicRegion(); session.load = this.loadComicCanvas(session); }}>{canvasText(locale, 'retry')}</button></div>
             : <>
                 <ComicCanvasTabs key={project.id} locale={locale} {...this.comicCanvasTabsSnapshot()}
                     media={doc.nodes.filter(node => {
@@ -23052,8 +23188,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     onResolveDelete={id => this.resolvePendingComicCanvasDelete(id)} />
                 <div className='nmx-canvas-tab-panel' role='tabpanel' id={`nmx-canvas-panel-${session.canvasId}`} aria-labelledby={`nmx-canvas-tab-${session.canvasId}`}>
                 <ComicCanvas key={session.canvasId} locale={locale} canvas={doc} saveState={session.save} canUndo={session.past.length > 0} canRedo={session.future.length > 0}
-                    models={{ image: this.canvasUsableChoices(session, 'image'), video: this.canvasUsableChoices(session, 'video') }}
-                    families={{ image: this.canvasModelFamilies(session, 'image'), video: this.canvasModelFamilies(session, 'video') }}
+                    models={models!}
+                    families={families!}
                     onExportComposition={this.handleCanvasExportComposition}
                     onDownload={this.handleCanvasDownload}
                     compositionProgress={this.handleCanvasCompositionProgress}
@@ -23061,8 +23197,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     defaultRoute={this.handleCanvasDefaultRoute}
                     capabilityOf={this.handleCanvasCapabilityOf} jobOf={this.handleCanvasJobOf}
                     estimateOf={this.handleCanvasEstimateOf}
-                    waiting={session.waiting} submitting={new Set([...session.submitting, ...(this.comicCanvasVideoInputs.get(session)?.keys() ?? [])])} mediaUrl={this.handleCanvasMediaUrl}
-                    defaults={{ aspectRatio: project.canvas.aspectRatio, durationSeconds: 5, frameRate: project.frameRate }}
+                    waiting={session.waiting} submitting={submittingSet!} mediaUrl={this.handleCanvasMediaUrl}
+                    defaults={defaults!}
                     onChange={this.handleCanvasChange}
                     onPlanStory={this.handleCanvasPlanStory} storyBusy={this.comicAdaptation.status === 'running'}
                     storyStatus={this.comicCanvasStoryRun?.session === session ? this.comicCanvasStoryRun.status : undefined}
@@ -23093,7 +23229,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     onImport={this.handleCanvasImport}
                     onUsePortrait={this.handleCanvasUsePortrait}
                     onRetrySave={this.handleCanvasRetrySave} onNotice={this.handleCanvasNotice}
-                    toolProgress={new Map([...session.tools].map(([nodeId, entry]) => [nodeId, entry.fraction]))}
+                    toolProgress={toolProgress!}
                     onTool={this.handleCanvasTool}
                     onCancelTool={this.handleCanvasCancelTool}
                     onPickLut={this.handleCanvasPickLut}
@@ -23104,7 +23240,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 {session.notice && <div className={`nmx-desk-canvas-notice${session.noticeAction ? ' has-action' : ''}`} role='status'>
                     <span data-nmx-literal>{session.notice}</span>
                     {session.noticeAction && <button type='button' className='nmx-desk-canvas-notice-action'
-                        onClick={() => { const action = session.noticeAction; session.notice = undefined; session.noticeAction = undefined; action?.onClick(); this.update(); }}>{session.noticeAction.label}</button>}
+                        onClick={() => { const action = session.noticeAction; session.notice = undefined; session.noticeAction = undefined; action?.onClick(); this.updateComicRegion(); }}>{session.noticeAction.label}</button>}
                 </div>}
             </>;
         return {
@@ -23120,78 +23256,88 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const desk = this.comicDesk;
         const project = this.comicProject();
         if (!desk || !desk.visible || !project || desk.projectId !== project.id) return undefined;
-        const jobs = this.mediaState.jobs.filter(job => !job.restoredHistoryOnly && job.projectId === project.id);
-        const live = ['awaiting_confirmation', 'queued', 'running', 'paused'];
+        const skipDeskProductionWork = desk.step === 'canvas' || desk.step === 'edit';
         const ready = (id: string | undefined) => id ? project.assets.find(asset => asset.id === id && asset.status === 'ready') : undefined;
-        const latest = (shotId: string, kind: string) => jobs.filter(job => job.shotId === shotId && job.kind === kind).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
-        const facts = desk.facts;
-        const clipLengths = facts ? plannedClipSeconds(facts, facts.clipSeconds, { withReferences: videoModelUsesReferences(facts) }) : [];
-        const numbers = project.episodes?.length ? project.episodes.map(episode => episode.number)
-            : [...new Set(project.scenes.filter(scene => scene.episodeNumber !== undefined).map(scene => scene.episodeNumber!))].sort((left, right) => left - right);
-        const episodes: DeskEpisode[] = numbers.map(number => {
-            const script = project.episodes?.find(episode => episode.number === number);
-            const clips: DeskClip[] = project.scenes.filter(scene => scene.episodeNumber === number).flatMap(scene => scene.shots.map(shot => {
-                const video = ready(shot.videoAssetId);
-                const picture = ready(shot.visualAssetId);
-                const lastVideo = latest(shot.id, 'video');
-                const lastPicture = latest(shot.id, 'image');
-                // An opening frame that failed after the last filming holds the clip back (see deskPump).
-                // Failed, cancelled (in the media queue) or interrupted work shows as stopped with a way to retake,
-                // never as “queued” forever (audit A12-003); so does the scene's set plate.
-                const stopped = (status: string | undefined): boolean => status === 'failed' || status === 'cancelled' || status === 'interrupted';
-                const plateJob = jobs.filter(job => job.sceneId === scene.id && job.kind === 'image' && 'comicSetPlate' in job.input && job.input.comicSetPlate)
-                    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-                const plateStopped = !ready(scene.setPlateAssetId) && stopped(plateJob?.status) && !desk.redoFrame.has(shot.id) && !video;
-                const pictureFailed = stopped(lastPicture?.status) && !desk.redoFrame.has(shot.id)
-                    && (!lastVideo || lastPicture!.updatedAt > lastVideo.updatedAt) && (!video || desk.redo.has(shot.id));
-                const state: DeskClip['state'] = lastVideo?.status === 'running' ? 'video' : lastPicture?.status === 'running' ? 'picture'
-                    : live.includes(lastVideo?.status || '') || live.includes(lastPicture?.status || '') ? 'queued'
-                    : video && !desk.redo.has(shot.id) ? 'done' : (stopped(lastVideo?.status) && !desk.redo.has(shot.id)) || pictureFailed || plateStopped ? 'failed' : desk.shooting ? 'queued' : 'waiting';
-                const stoppedJob = pictureFailed ? lastPicture : plateStopped ? plateJob : lastVideo;
-                const failure = state !== 'failed' ? undefined
-                    : stoppedJob?.status !== 'failed' || !stoppedJob.failure ? deskText(this.desktopLocale, 'clipStopped')
-                        : pictureFailed || plateStopped ? `${deskText(this.desktopLocale, 'frameFailed')}${modelFailureText(this.desktopLocale, stoppedJob.failure)}` : modelFailureText(this.desktopLocale, stoppedJob.failure);
+        let episodes: DeskEpisode[] = [];
+        let cards: DeskCard[] = [];
+        let plan: { readonly clips: number; readonly model: string; readonly seconds: number } | undefined;
+        let hasReadyShotVideo = false;
+        if (!skipDeskProductionWork) {
+            const jobs = this.mediaState.jobs.filter(job => !job.restoredHistoryOnly && job.projectId === project.id);
+            const live = ['awaiting_confirmation', 'queued', 'running', 'paused'];
+            const latest = (shotId: string, kind: string) => jobs.filter(job => job.shotId === shotId && job.kind === kind).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0];
+            const facts = desk.facts;
+            const clipLengths = facts ? plannedClipSeconds(facts, facts.clipSeconds, { withReferences: videoModelUsesReferences(facts) }) : [];
+            const numbers = project.episodes?.length ? project.episodes.map(episode => episode.number)
+                : [...new Set(project.scenes.filter(scene => scene.episodeNumber !== undefined).map(scene => scene.episodeNumber!))].sort((left, right) => left - right);
+            episodes = numbers.map(number => {
+                const script = project.episodes?.find(episode => episode.number === number);
+                const clips: DeskClip[] = project.scenes.filter(scene => scene.episodeNumber === number).flatMap(scene => scene.shots.map(shot => {
+                    const video = ready(shot.videoAssetId);
+                    if (video) hasReadyShotVideo = true;
+                    const picture = ready(shot.visualAssetId);
+                    const lastVideo = latest(shot.id, 'video');
+                    const lastPicture = latest(shot.id, 'image');
+                    // An opening frame that failed after the last filming holds the clip back (see deskPump).
+                    // Failed, cancelled (in the media queue) or interrupted work shows as stopped with a way to retake,
+                    // never as “queued” forever (audit A12-003); so does the scene's set plate.
+                    const stopped = (status: string | undefined): boolean => status === 'failed' || status === 'cancelled' || status === 'interrupted';
+                    const plateJob = jobs.filter(job => job.sceneId === scene.id && job.kind === 'image' && 'comicSetPlate' in job.input && job.input.comicSetPlate)
+                        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+                    const plateStopped = !ready(scene.setPlateAssetId) && stopped(plateJob?.status) && !desk.redoFrame.has(shot.id) && !video;
+                    const pictureFailed = stopped(lastPicture?.status) && !desk.redoFrame.has(shot.id)
+                        && (!lastVideo || lastPicture!.updatedAt > lastVideo.updatedAt) && (!video || desk.redo.has(shot.id));
+                    const state: DeskClip['state'] = lastVideo?.status === 'running' ? 'video' : lastPicture?.status === 'running' ? 'picture'
+                        : live.includes(lastVideo?.status || '') || live.includes(lastPicture?.status || '') ? 'queued'
+                        : video && !desk.redo.has(shot.id) ? 'done' : (stopped(lastVideo?.status) && !desk.redo.has(shot.id)) || pictureFailed || plateStopped ? 'failed' : desk.shooting ? 'queued' : 'waiting';
+                    const stoppedJob = pictureFailed ? lastPicture : plateStopped ? plateJob : lastVideo;
+                    const failure = state !== 'failed' ? undefined
+                        : stoppedJob?.status !== 'failed' || !stoppedJob.failure ? deskText(this.desktopLocale, 'clipStopped')
+                            : pictureFailed || plateStopped ? `${deskText(this.desktopLocale, 'frameFailed')}${modelFailureText(this.desktopLocale, stoppedJob.failure)}` : modelFailureText(this.desktopLocale, stoppedJob.failure);
+                    return {
+                        shotId: shot.id, title: shot.title, seconds: Math.round(shot.durationFrames / project.frameRate), prompt: shot.visualPrompt, state,
+                        ...(lastVideo && 'prompt' in lastVideo.input && 'model' in lastVideo.input && videoModelGuide(lastVideo.input.model).promptLanguage === 'en' ? { generatedPrompt: lastVideo.input.prompt } : {}),
+                        ...(desk.looks[shot.id] !== undefined && video && desk.looks[shot.id] !== this.deskLook(shot) ? { outdated: true } : {}),
+                        ...(video ? { video: this.comicMediaUrl(video.uri) } : {}), ...(picture ? { poster: this.comicMediaUrl(picture.uri) } : {}),
+                        ...(shot.dialogueCues.length ? { cues: shot.dialogueCues.map(cue => ({ start: cue.startFrame / project.frameRate,
+                            end: (cue.startFrame + cue.durationFrames) / project.frameRate, text: cue.text.replace(/^[^：:]{1,12}[：:]\s*/, '') })) } : {}),
+                        ...(failure ? { error: failure } : {})
+                    };
+                }));
+                return { number, title: script?.title || '', script: desk.drafts.get(number) ?? script?.script ?? '', clips,
+                    splitting: desk.splitting && (desk.splitCurrent === number || desk.splitQueue.includes(number)) };
+            });
+            // Several cards of one person (“闰土（少年）”, “闰土（成年）”): shown as looks of the same character.
+            const baseName = (name: string): string => name.replace(/\s*[（(][^）)]{1,20}[）)]\s*$/, '').trim() || name;
+            const looksOf = new Map<string, string[]>();
+            for (const character of project.characters) looksOf.set(baseName(character.name), [...(looksOf.get(baseName(character.name)) || []), character.id]);
+            cards = project.characters.map(character => {
+                const portrait = this.deskPortrait(project, character);
+                const siblings = looksOf.get(baseName(character.name)) || [];
                 return {
-                    shotId: shot.id, title: shot.title, seconds: Math.round(shot.durationFrames / project.frameRate), prompt: shot.visualPrompt, state,
-                    ...(lastVideo && 'prompt' in lastVideo.input && 'model' in lastVideo.input && videoModelGuide(lastVideo.input.model).promptLanguage === 'en' ? { generatedPrompt: lastVideo.input.prompt } : {}),
-                    ...(desk.looks[shot.id] !== undefined && video && desk.looks[shot.id] !== this.deskLook(shot) ? { outdated: true } : {}),
-                    ...(video ? { video: this.comicMediaUrl(video.uri) } : {}), ...(picture ? { poster: this.comicMediaUrl(picture.uri) } : {}),
-                    ...(shot.dialogueCues.length ? { cues: shot.dialogueCues.map(cue => ({ start: cue.startFrame / project.frameRate,
-                        end: (cue.startFrame + cue.durationFrames) / project.frameRate, text: cue.text.replace(/^[^：:]{1,12}[：:]\s*/, '') })) } : {}),
-                    ...(failure ? { error: failure } : {})
+                    id: character.id, name: character.name, role: character.description, look: character.appearance,
+                    state: desk.drawing.has(character.id) ? 'drawing' : portrait ? 'ready' : desk.portraitErrors.has(character.id) ? 'failed' : 'waiting',
+                    ...(portrait ? { picture: this.comicMediaUrl(portrait.uri) } : {}), ...(character.sourceBundleId ? { fromLibrary: true } : {}),
+                    ...(desk.portraitErrors.has(character.id) ? { error: desk.portraitErrors.get(character.id) } : {}),
+                    ...(this.deskPortraitOutdated(project, character) ? { outdated: true } : {}),
+                    ...(desk.rewriting?.kind === 'look' && desk.rewriting.id === character.id ? { rewriting: true } : {}),
+                    ...(siblings.length > 1 ? { variant: { index: siblings.indexOf(character.id) + 1, total: siblings.length } } : {})
                 };
-            }));
-            return { number, title: script?.title || '', script: desk.drafts.get(number) ?? script?.script ?? '', clips,
-                splitting: desk.splitting && (desk.splitCurrent === number || desk.splitQueue.includes(number)) };
-        });
-        // Several cards of one person (“闰土（少年）”, “闰土（成年）”): shown as looks of the same character.
-        const baseName = (name: string): string => name.replace(/\s*[（(][^）)]{1,20}[）)]\s*$/, '').trim() || name;
-        const looksOf = new Map<string, string[]>();
-        for (const character of project.characters) looksOf.set(baseName(character.name), [...(looksOf.get(baseName(character.name)) || []), character.id]);
-        const cards: DeskCard[] = project.characters.map(character => {
-            const portrait = this.deskPortrait(project, character);
-            const siblings = looksOf.get(baseName(character.name)) || [];
-            return {
-                id: character.id, name: character.name, role: character.description, look: character.appearance,
-                state: desk.drawing.has(character.id) ? 'drawing' : portrait ? 'ready' : desk.portraitErrors.has(character.id) ? 'failed' : 'waiting',
-                ...(portrait ? { picture: this.comicMediaUrl(portrait.uri) } : {}), ...(character.sourceBundleId ? { fromLibrary: true } : {}),
-                ...(desk.portraitErrors.has(character.id) ? { error: desk.portraitErrors.get(character.id) } : {}),
-                ...(this.deskPortraitOutdated(project, character) ? { outdated: true } : {}),
-                ...(desk.rewriting?.kind === 'look' && desk.rewriting.id === character.id ? { rewriting: true } : {}),
-                ...(siblings.length > 1 ? { variant: { index: siblings.indexOf(character.id) + 1, total: siblings.length } } : {})
-            };
-        });
-        const shots = project.scenes.filter(scene => scene.episodeNumber !== undefined).flatMap(scene => scene.shots);
-        const videoRoute = this.comicStepMediaRoute('video');
-        const plan = shots.length && videoRoute ? {
-            clips: shots.length, model: this.modelDisplayName(videoRoute.model, videoRoute.offering?.displayName || videoRoute.offering?.providerModelCode),
-            seconds: shots.reduce((total, shot) => total + clipSecondsFor(shot.durationFrames / project.frameRate, clipLengths), 0)
-        } : undefined;
+            });
+            const shots = project.scenes.filter(scene => scene.episodeNumber !== undefined).flatMap(scene => scene.shots);
+            const videoRoute = this.comicStepMediaRoute('video');
+            plan = shots.length && videoRoute ? {
+                clips: shots.length, model: this.modelDisplayName(videoRoute.model, videoRoute.offering?.displayName || videoRoute.offering?.providerModelCode),
+                seconds: shots.reduce((total, shot) => total + clipSecondsFor(shot.durationFrames / project.frameRate, clipLengths), 0)
+            } : undefined;
+        } else {
+            hasReadyShotVideo = project.scenes.some(scene => scene.episodeNumber !== undefined && scene.shots.some(shot => Boolean(ready(shot.videoAssetId))));
+        }
         const reachable = new Set<DeskStep>(['canvas', 'edit']);
         // 剪辑 is the window's fourth step: the same editor as a studio's 剪辑 view, with its command bar.
         const editing = desk.step === 'edit';
         const cutClips = editing ? this.comicCutClips(this.comicEditingProject() ?? project) : [];
-        if (this.comicTimelineDocument() || this.comicCanvas?.doc?.nodes.some(node => canvasCurrentVersion(node)?.kind === 'video') || shots.some(shot => ready(shot.videoAssetId))) reachable.add('edit');
+        if (this.comicTimelineDocument() || this.comicCanvas?.doc?.nodes.some(node => canvasCurrentVersion(node)?.kind === 'video') || hasReadyShotVideo) reachable.add('edit');
         const cutLast = cutClips.at(-1);
         const cutSeconds = Math.round(cutLast ? cutLast.start + cutLast.duration : 0);
         const cutBusy = this.comicCutBusy || this.comicTimelineLoading || this.comicStage !== 'idle' || this.comicExternalChange || this.comicHasDirtyDraft();
@@ -23206,15 +23352,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
             {...(plan ? { plan } : {})} noImageModel={!this.comicStepMediaRoute('image')} canShoot={this.deskCanShoot(project) && !desk.shooting && !desk.rewriting && !desk.startAfterSplit}
             {...(desk.error ? { error: desk.error } : {})}
             {...(desk.error && desk.error === desk.balanceError ? { errorAction: { label: mediaBudgetText(this.desktopLocale, 'topUp'), onClick: () => this.openWalletTopup() } } : {})}
-            onStep={step => { if (step === 'edit') { void this.commitComicCanvasToEditor(); return; } if (desk.step !== step) this.rememberNavigation?.(); desk.step = step; desk.countdown = undefined; this.comicEditorController?.pause(); this.persistComicDesk(); this.update(); }}
-            onFocusEpisode={index => { desk.focusEpisode = index; desk.focusClip = 0; desk.clipPickedAt = Date.now(); this.update(); }}
-            onFocusClip={index => { desk.focusClip = index; desk.clipPickedAt = Date.now(); this.update(); }}
-            onFocusCard={index => { desk.focusCard = index; this.update(); }}
-            onScriptChange={(number, script) => { desk.drafts.set(number, script); this.update(); }}
+            onStep={step => { if (step === 'edit') { void this.commitComicCanvasToEditor(); return; } if (desk.step !== step) this.rememberNavigation?.(); desk.step = step; desk.countdown = undefined; this.comicEditorController?.pause(); this.persistComicDesk(); this.updateComicRegion(); }}
+            onFocusEpisode={index => { desk.focusEpisode = index; desk.focusClip = 0; desk.clipPickedAt = Date.now(); this.updateComicRegion(); }}
+            onFocusClip={index => { desk.focusClip = index; desk.clipPickedAt = Date.now(); this.updateComicRegion(); }}
+            onFocusCard={index => { desk.focusCard = index; this.updateComicRegion(); }}
+            onScriptChange={(number, script) => { desk.drafts.set(number, script); this.updateComicRegion(); }}
             onRegenerateScripts={() => void this.deskRegenerateScripts()}
             onScriptsNext={() => void this.deskScriptsNext()}
-            onStartNow={() => { const target = desk.countdown?.target || (desk.step === 'cast' ? 'cast' : 'shoot'); desk.countdown = undefined; if (target === 'cast') void this.deskStartPortraits(); else this.deskStartShooting(); this.update(); }}
-            onStop={() => { desk.countdown = undefined; desk.stopped = true; this.update(); }}
+            onStartNow={() => { const target = desk.countdown?.target || (desk.step === 'cast' ? 'cast' : 'shoot'); desk.countdown = undefined; if (target === 'cast') void this.deskStartPortraits(); else this.deskStartShooting(); this.updateComicRegion(); }}
+            onStop={() => { desk.countdown = undefined; desk.stopped = true; this.updateComicRegion(); }}
             onBind={(characterId, bundleId) => void this.deskBindLibrary(characterId, bundleId)}
             onUpload={characterId => void this.deskUploadPortrait(characterId)}
             onRedraw={characterId => void this.deskDrawPortrait(characterId)}
@@ -23230,9 +23376,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             onRewriteEpisode={number => void this.deskRewriteEpisode(number)}
             onRetrySplit={() => void this.runDeskSplit()}
             onShoot={() => this.deskConfirmShoot()}
-            onPause={() => { desk.paused = true; this.persistComicDesk(); this.update(); }}
+            onPause={() => { desk.paused = true; this.persistComicDesk(); this.updateComicRegion(); }}
             onResume={() => { desk.paused = false; desk.shooting = true; if (desk.error && desk.error === desk.balanceError) desk.error = desk.balanceError = undefined;
-                this.persistComicDesk(); void this.deskPump(); this.update(); }}
+                this.persistComicDesk(); void this.deskPump(); this.updateComicRegion(); }}
             onRegenerateClip={(shotId, prompt) => void this.deskRegenerateClip(shotId, prompt)}
             onReshootEpisode={number => void this.deskReshootEpisode(number)}
             onRetryFailed={() => void this.deskRetryFailed()}
@@ -26917,15 +27063,48 @@ export class NextMuxDesktopWidget extends ReactWidget {
     }
 
     protected scheduleAgentChildScrollPersist(): void {
-        if (this.agentChildScrollPersistTimer !== undefined) window.clearTimeout(this.agentChildScrollPersistTimer);
+        const hostTimers = (typeof window !== 'undefined' ? window : globalThis) as unknown as typeof window;
+        if (this.agentChildScrollPersistTimer !== undefined) hostTimers.clearTimeout(this.agentChildScrollPersistTimer);
         const sessionId = this.activeCodingSessionId;
-        this.agentChildScrollPersistTimer = window.setTimeout(() => {
+        this.agentChildScrollPersistTimer = hostTimers.setTimeout(() => {
             this.agentChildScrollPersistTimer = undefined;
             if (!this.isDisposed && sessionId === this.activeCodingSessionId) this.persistActiveCodingSessionState();
         }, 240);
     }
 
+    protected readonly agentChildDetailElements = new Map<string, HTMLElement>();
+    protected readonly agentChildDetailResizeObservers = new WeakMap<Element, ResizeObserver>();
+
+    protected observeAgentChildDetail(childRunId: string, element: HTMLElement | null): void {
+        if (!element) return;
+        const prevElement = this.agentChildDetailElements.get(childRunId);
+        if (prevElement !== element) {
+            this.agentChildDetailElements.set(childRunId, element);
+            if (!this.agentChildDetailResizeObservers.has(element) && typeof ResizeObserver === 'function') {
+                const observer = new ResizeObserver(() => {
+                    if (this.isDisposed) return;
+                    const state = this.agentChildScrollStates[childRunId];
+                    if (state && !state.wasAtBottom) return;
+                    if (element.clientHeight <= 0 || element.scrollHeight <= element.clientHeight) return;
+                    const maximumTop = Math.max(0, element.scrollHeight - element.clientHeight);
+                    if (Math.abs(element.scrollTop - maximumTop) > 1) element.scrollTop = maximumTop;
+                });
+                observer.observe(element);
+                for (const childNode of Array.from(element.children)) {
+                    if (childNode instanceof Element) observer.observe(childNode);
+                }
+                this.agentChildDetailResizeObservers.set(element, observer);
+            }
+            const previous = this.agentChildScrollStates[childRunId];
+            if (!previous || previous.wasAtBottom) {
+                const maximumTop = Math.max(0, element.scrollHeight - element.clientHeight);
+                if (maximumTop > 0) element.scrollTop = maximumTop;
+            }
+        }
+    }
+
     protected onAgentChildDetailScroll = (childRunId: string, element: HTMLElement): void => {
+        if (element.clientHeight <= 0 || element.scrollHeight <= 0) return;
         const child = this.currentAgentChildren().find(candidate => candidate.childRunId === childRunId);
         if (!child) return;
         const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
@@ -26961,9 +27140,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const child = children.find(candidate => candidate.childRunId === this.activeAgentChildId) || children[0];
         if (!child) return;
         const childRunId = child.childRunId;
-        const detail = this.node.querySelector<HTMLElement>(
-            `.nmx-agent-child-detail[data-agent-child-detail="${CSS.escape(childRunId)}"]`
-        );
+        const detail = this.agentChildDetailElements.get(childRunId)
+            || this.node.querySelector<HTMLElement>(
+                `.nmx-agent-child-detail[data-agent-child-detail="${CSS.escape(childRunId)}"]`
+            );
         if (!detail) return;
         const revision = this.agentChildContentRevision(child);
         const maximumTop = Math.max(0, detail.scrollHeight - detail.clientHeight);
@@ -26998,9 +27178,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected scrollAgentChildToBottom(childRunId: string): void {
         const child = this.currentAgentChildren().find(candidate => candidate.childRunId === childRunId);
-        const detail = this.node.querySelector<HTMLElement>(
-            `.nmx-agent-child-detail[data-agent-child-detail="${CSS.escape(childRunId)}"]`
-        );
+        const detail = this.agentChildDetailElements.get(childRunId)
+            || this.node.querySelector<HTMLElement>(
+                `.nmx-agent-child-detail[data-agent-child-detail="${CSS.escape(childRunId)}"]`
+            );
         if (!child || !detail) return;
         const top = Math.max(0, detail.scrollHeight - detail.clientHeight);
         const previous = this.agentChildScrollStates[childRunId];
@@ -27013,7 +27194,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 contentRevision: this.agentChildContentRevision(child)
             }
         };
-        detail.scrollTo({ top, behavior: 'smooth' });
+        if (typeof detail.scrollTo === 'function') detail.scrollTo({ top, behavior: 'smooth' });
+        else detail.scrollTop = top;
         this.scheduleAgentChildScrollPersist();
         if (!previous || previous.unseenUpdates > 0 || !previous.wasAtBottom) this.update();
     }
@@ -30860,57 +31042,104 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
     }
 
+    protected readonly codingRelayFeedbackTargets = new Map<string, { readonly vote: RelayFeedbackVote; readonly requestIds: readonly string[]; readonly generation: number }>();
+    protected readonly codingRelayFeedbackRetryTimers = new Map<string, number>();
+    protected readonly comicRelayFeedbackTargets = new Map<string, { readonly vote: RelayFeedbackVote; readonly requestIds: readonly string[]; readonly generation: number }>();
+    protected readonly comicRelayFeedbackRetryTimers = new Map<string, number>();
+
     protected async executeCodingTurnRelayFeedback(
         sessionId: string,
         turn: CodingTurnRecord,
         vote: Exclude<RelayFeedbackVote, null>
     ): Promise<void> {
-        const notificationSessionId = sessionId;
-        if (!this.conversationHistoryReady() || this.relayFeedbackSubmittingVotes.has(turn.id)) return;
+        if (!this.conversationHistoryReady()) return;
         const reply = this.codingSessions.find(session => session.id === sessionId)
             ?.turns.find(candidate => candidate.id === turn.id);
         if (!reply || reply.branchUserOnly || reply.stage === 'running') return;
         const requestIds = normalizeRelayFeedbackRequestIds(reply.relayRequestIds, reply.relayRequestId);
         const nextVote: RelayFeedbackVote = reply.relayFeedback === vote ? null : vote;
-        if (!canRateRelayReply(reply.stage, requestIds)) {
-            this.updateCodingTurn(sessionId, turn.id, { relayFeedback: nextVote || undefined });
-            this.update();
+        const hostTimers = (typeof window !== 'undefined' ? window : globalThis) as unknown as typeof window;
+        const existingTimer = this.codingRelayFeedbackRetryTimers.get(turn.id);
+        if (existingTimer !== undefined) {
+            hostTimers.clearTimeout(existingTimer);
+            this.codingRelayFeedbackRetryTimers.delete(turn.id);
+        }
+        // Apply optimistic highlight immediately with zero spinner and zero blocking.
+        this.updateCodingTurn(sessionId, turn.id, { relayFeedback: nextVote || undefined });
+        this.update();
+        if (!canRateRelayReply(reply.stage, requestIds)) return;
+        const generation = (this.codingRelayFeedbackTargets.get(turn.id)?.generation || 0) + 1;
+        this.codingRelayFeedbackTargets.set(turn.id, { vote: nextVote, requestIds, generation });
+        await this.dispatchCodingTurnRelayFeedback(sessionId, turn.id, requestIds, nextVote, generation, 0);
+    }
+
+    protected async dispatchCodingTurnRelayFeedback(
+        sessionId: string,
+        turnId: string,
+        requestIds: readonly string[],
+        vote: RelayFeedbackVote,
+        generation: number,
+        attempt: number
+    ): Promise<void> {
+        const retryDelaysMs = [1_500, 3_000, 6_000] as const;
+        const target = this.codingRelayFeedbackTargets.get(turnId);
+        if (!target || target.generation !== generation) return;
+        const currentTurn = this.codingSessions.find(session => session.id === sessionId)
+            ?.turns.find(candidate => candidate.id === turnId);
+        const currentRequestIds = normalizeRelayFeedbackRequestIds(currentTurn?.relayRequestIds, currentTurn?.relayRequestId);
+        const sameReplyLineage = currentRequestIds.length === requestIds.length
+            && currentRequestIds.every((requestId, index) => requestId === requestIds[index]);
+        if (!sameReplyLineage) {
+            this.codingRelayFeedbackTargets.delete(turnId);
             return;
         }
-        this.relayFeedbackSubmittingVotes.set(turn.id, vote);
-        this.update();
         try {
             // Only opaque platform request IDs and the vote leave the device.
             // Conversation content and queued follow-ups are never part of feedback.
-            const submitted = await this.platformService.submitRelayFeedbackBatch(requestIds, nextVote);
-            // Closing stopped waiting for this rating (settleRelayFeedbackForExit): the history it saved is final.
+            const submitted = await this.platformService.submitRelayFeedbackBatch(requestIds, vote);
             if (this.applicationExitPreparing && this.relayFeedbackLeftForExit === this.applicationExitGeneration) return;
-            const currentTurn = this.codingSessions.find(session => session.id === sessionId)
-                ?.turns.find(candidate => candidate.id === turn.id);
-            const currentRequestIds = normalizeRelayFeedbackRequestIds(
-                currentTurn?.relayRequestIds, currentTurn?.relayRequestId
-            );
-            const sameReplyLineage = currentRequestIds.length === requestIds.length
-                && currentRequestIds.every((requestId, index) => requestId === requestIds[index]);
-            if (!sameReplyLineage) {
-                // A checkpoint continuation expanded this reply while the
-                // request was in flight. Keep its new footer unselected.
+            const latestTarget = this.codingRelayFeedbackTargets.get(turnId);
+            if (!latestTarget || latestTarget.generation !== generation) return;
+            const latestTurn = this.codingSessions.find(session => session.id === sessionId)
+                ?.turns.find(candidate => candidate.id === turnId);
+            const latestIds = normalizeRelayFeedbackRequestIds(latestTurn?.relayRequestIds, latestTurn?.relayRequestId);
+            const stillSameLineage = latestIds.length === requestIds.length
+                && latestIds.every((requestId, index) => requestId === requestIds[index]);
+            if (!stillSameLineage) {
                 void this.loadCatalog();
                 return;
             }
-            this.updateCodingTurn(sessionId, turn.id, { relayFeedback: submitted.feedback.vote || undefined });
+            const status = (submitted as { status?: string; feedback?: { status?: string } } | undefined)?.status
+                || (submitted as { feedback?: { status?: string } } | undefined)?.feedback?.status;
+            const hostTimers = (typeof window !== 'undefined' ? window : globalThis) as unknown as typeof window;
+            if (status === 'pending') {
+                if (attempt < retryDelaysMs.length && !this.isDisposed && !this.applicationExitPreparing) {
+                    const timer = hostTimers.setTimeout(() => {
+                        this.codingRelayFeedbackRetryTimers.delete(turnId);
+                        void this.dispatchCodingTurnRelayFeedback(sessionId, turnId, requestIds, vote, generation, attempt + 1);
+                    }, retryDelaysMs[attempt]);
+                    this.codingRelayFeedbackRetryTimers.set(turnId, timer);
+                }
+                return;
+            }
+            this.codingRelayFeedbackTargets.delete(turnId);
+            if (submitted?.feedback && 'vote' in submitted.feedback) {
+                this.updateCodingTurn(sessionId, turnId, { relayFeedback: submitted.feedback.vote || undefined });
+                this.update();
+            }
             void this.loadCatalog();
-        } catch (error) {
-            // An offline rating that failed after the app stopped waiting for it is not news while it closes.
+        } catch {
+            // Keep optimistic UI highlight and silently retry in background; never pop error/success toasts.
             if (this.applicationExitPreparing && this.relayFeedbackLeftForExit === this.applicationExitGeneration) return;
-            this.addNotification(
-                'error',
-                relayMarketplaceText(this.desktopLocale, 'feedbackFailed'),
-                error instanceof Error ? error.message : relayMarketplaceText(this.desktopLocale, 'feedbackFailedBody'), notificationSessionId
-            );
-        } finally {
-            this.relayFeedbackSubmittingVotes.delete(turn.id);
-            this.update();
+            const latestTarget = this.codingRelayFeedbackTargets.get(turnId);
+            if (latestTarget?.generation === generation && attempt < retryDelaysMs.length && !this.isDisposed && !this.applicationExitPreparing) {
+                const hostTimers = (typeof window !== 'undefined' ? window : globalThis) as unknown as typeof window;
+                const timer = hostTimers.setTimeout(() => {
+                    this.codingRelayFeedbackRetryTimers.delete(turnId);
+                    void this.dispatchCodingTurnRelayFeedback(sessionId, turnId, requestIds, vote, generation, attempt + 1);
+                }, retryDelaysMs[attempt]);
+                this.codingRelayFeedbackRetryTimers.set(turnId, timer);
+            }
         }
     }
 
@@ -32371,7 +32600,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected async submitComicTurnFeedback(turnId: string, vote: 'up' | 'down'): Promise<void> {
         const chatId = this.comicChatUi().chatId;
         const turn = this.activeComicChat()?.turns.find(item => item.id === turnId);
-        if (!chatId || turn?.mode !== 'agent' || this.comicRelayFeedbackSubmitting.has(turnId)) return;
+        if (!chatId || turn?.mode !== 'agent') return;
         const current = this.comicFeedbackByTurnId[turnId] === null ? undefined : this.comicFeedbackByTurnId[turnId] ?? turn.feedback;
         const next: RelayFeedbackVote = current === vote ? null : vote;
         const keep = (recorded: RelayFeedbackVote): void => {
@@ -32381,22 +32610,71 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 return recorded ? { ...rest, feedback: recorded } : rest;
             });
         };
+        const hostTimers = (typeof window !== 'undefined' ? window : globalThis) as unknown as typeof window;
+        const existingTimer = this.comicRelayFeedbackRetryTimers?.get(turnId);
+        if (existingTimer !== undefined) {
+            hostTimers.clearTimeout(existingTimer);
+            this.comicRelayFeedbackRetryTimers.delete(turnId);
+        }
+        // Apply active highlight optimistically with zero loading spinner and zero toast.
+        keep(next);
+        this.update();
         const requestIds = normalizeRelayFeedbackRequestIds(turn.relayRequestIds);
         // An own API's reply has no platform request to rate: the vote only steers the next reply.
-        if (!requestIds.length) { keep(next); this.update(); return; }
-        this.comicRelayFeedbackSubmitting.set(turnId, vote);
-        this.update();
+        if (!requestIds.length) return;
+        const generation = (this.comicRelayFeedbackTargets?.get(turnId)?.generation || 0) + 1;
+        this.comicRelayFeedbackTargets?.set(turnId, { vote: next, requestIds, generation });
+        await this.dispatchComicTurnFeedback(chatId, turnId, requestIds, next, generation, 0);
+    }
+
+    protected async dispatchComicTurnFeedback(
+        chatId: string,
+        turnId: string,
+        requestIds: readonly string[],
+        vote: RelayFeedbackVote,
+        generation: number,
+        attempt: number
+    ): Promise<void> {
+        const retryDelaysMs = [1_500, 3_000, 6_000] as const;
+        if (this.comicRelayFeedbackTargets?.get(turnId)?.generation !== generation) return;
         try {
             // Only the opaque request IDs and the vote leave the device, never the conversation.
-            const submitted = await this.platformService.submitRelayFeedbackBatch(requestIds, next);
-            keep(submitted.feedback.vote);
+            const submitted = await this.platformService.submitRelayFeedbackBatch(requestIds, vote);
+            if (this.comicRelayFeedbackTargets?.get(turnId)?.generation !== generation) return;
+            const status = (submitted as { status?: string; feedback?: { status?: string } } | undefined)?.status
+                || (submitted as { feedback?: { status?: string } } | undefined)?.feedback?.status;
+            const hostTimers = (typeof window !== 'undefined' ? window : globalThis) as unknown as typeof window;
+            if (status === 'pending') {
+                if (attempt < retryDelaysMs.length && !this.isDisposed && !this.applicationExitPreparing) {
+                    const timer = hostTimers.setTimeout(() => {
+                        this.comicRelayFeedbackRetryTimers?.delete(turnId);
+                        void this.dispatchComicTurnFeedback(chatId, turnId, requestIds, vote, generation, attempt + 1);
+                    }, retryDelaysMs[attempt]);
+                    this.comicRelayFeedbackRetryTimers?.set(turnId, timer);
+                }
+                return;
+            }
+            this.comicRelayFeedbackTargets?.delete(turnId);
+            if (submitted?.feedback && 'vote' in submitted.feedback) {
+                this.comicFeedbackByTurnId = { ...this.comicFeedbackByTurnId, [turnId]: submitted.feedback.vote };
+                this.patchComicChatTurn(chatId, turnId, item => {
+                    const { feedback: _previous, ...rest } = item;
+                    return submitted.feedback.vote ? { ...rest, feedback: submitted.feedback.vote } : rest;
+                });
+                this.update();
+            }
             void this.loadCatalog();
-        } catch (error) {
-            this.addNotification('error', relayMarketplaceText(this.desktopLocale, 'feedbackFailed'),
-                error instanceof Error ? error.message : relayMarketplaceText(this.desktopLocale, 'feedbackFailedBody'), '');
-        } finally {
-            this.comicRelayFeedbackSubmitting.delete(turnId);
-            this.update();
+        } catch {
+            // Silently retry transient errors in background without disturbing the UI or popping toasts.
+            if (this.comicRelayFeedbackTargets?.get(turnId)?.generation === generation
+                && attempt < retryDelaysMs.length && !this.isDisposed && !this.applicationExitPreparing) {
+                const hostTimers = (typeof window !== 'undefined' ? window : globalThis) as unknown as typeof window;
+                const timer = hostTimers.setTimeout(() => {
+                    this.comicRelayFeedbackRetryTimers?.delete(turnId);
+                    void this.dispatchComicTurnFeedback(chatId, turnId, requestIds, vote, generation, attempt + 1);
+                }, retryDelaysMs[attempt]);
+                this.comicRelayFeedbackRetryTimers?.set(turnId, timer);
+            }
         }
     }
 
@@ -38698,10 +38976,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
         this.schedulePaneResizeUpdate();
     }
 
+    protected isCouncilChildForTurn(
+        session: CodingSessionRecord | undefined,
+        child: DesktopAgentChildSnapshot,
+        turn?: CodingTurnRecord
+    ): boolean {
+        if (!child.role || normalizeAgentCouncilRoleId(child.role) === 'lead') return false;
+        if (turn?.councilMode === false) return false;
+        if (turn?.councilMode === true) return true;
+        const sessionId = session?.id || this.activeCodingSessionId;
+        const liveRoster = sessionId ? this.councilRunRosters?.get(sessionId) : undefined;
+        if (liveRoster !== undefined) return liveRoster.length > 0;
+        return this.hasActiveOrPendingCouncilMode?.(sessionId) ?? false;
+    }
+
     protected openAgentChildContext(childRunId: string): void {
         this.captureThreadReadingAnchor();
         const session = this.activeCodingSession();
-        const persistedChild = session?.turns.flatMap(turn => [...(turn.childAgents || [])]).find(candidate => candidate.childRunId === childRunId);
+        const persistedTurn = session?.turns.find(turn => turn.childAgents?.some(candidate => candidate.childRunId === childRunId));
+        const persistedChild = persistedTurn?.childAgents?.find(candidate => candidate.childRunId === childRunId);
         const liveChild = session && this.activeAgentSessionId === session.id && this.activeAgentTurnId
             ? this.liveAgentChildren.find(candidate => candidate.childRunId === childRunId)
             : undefined;
@@ -38710,7 +39003,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // window between conversation navigation and view-state restoration.
         const child = persistedChild || liveChild;
         if (!child) return;
-        if (child.role && child.role !== 'lead') {
+        if (this.isCouncilChildForTurn(session, child, persistedTurn)) {
             this.openCouncilRoleSubConversation(session?.id || this.activeCodingSessionId, child.childRunId);
             return;
         }
@@ -38951,6 +39244,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (!state) return;
         state.controller.abort();
         if (state.runId) await this.platformService.cancelAgentRun(state.runId).catch(() => undefined);
+        const located = this.findAgentChild(childRunId, { sessionId: state.sessionId, turnId: state.turnId });
+        this.clearConversationWakeup?.(state.sessionId);
+        void this.platformService.consumePendingParentWakeup?.(state.sessionId, located?.child.rootRunId).catch(() => undefined);
         this.updateCodingChildSnapshot(state.sessionId, state.turnId, childRunId, child => ({
             ...child,
             status: 'cancelled',
@@ -38958,6 +39254,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
             error: undefined,
             result: child.result
         }));
+    }
+
+    protected async consumeAgentChildParentWakeup(sessionId: string, rootRunId?: string): Promise<void> {
+        if (!sessionId || this.isDisposed || this.applicationExitPreparing) return;
+        if (typeof this.platformService.consumePendingParentWakeup !== 'function') return;
+        const wakeup = await this.platformService.consumePendingParentWakeup(sessionId, rootRunId).catch(() => undefined);
+        if (!wakeup?.summaryPrompt || this.isDisposed || this.applicationExitPreparing) return;
+        if (this.enqueueFollowUpTask(sessionId, 'coding', wakeup.summaryPrompt, [], { automaticGoal: true })) {
+            this.requestFollowUpQueueDrain(sessionId);
+        }
+        this.update();
     }
 
     protected async continueAgentChild(childRunId: string): Promise<void> {
@@ -38983,12 +39290,44 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const draftOwner = { sessionId: session.id, turnId: turn.id, rootRunId: child.rootRunId, childRunId };
         const submittedDraft = this.childDraft(childRunId, draftOwner);
         const prompt = submittedDraft.trim();
-        if (!checkpointId) {
+        if (!prompt) return;
+        if (child.status === 'running' && typeof this.platformService.steerAgentChildRun === 'function') {
+            this.agentChildSubmitting.add(childRunId);
+            try {
+                const steered = await this.platformService.steerAgentChildRun({
+                    ...(child.parentRunId || child.rootRunId ? { parentRunId: child.parentRunId || child.rootRunId } : {}),
+                    childRunId: child.childRunId,
+                    message: prompt,
+                    kind: 'direction'
+                });
+                if (steered?.accepted !== false) {
+                    this.setAgentChildDraft(draftOwner, '', submittedDraft);
+                    this.scrollAgentChildToBottom(childRunId);
+                    this.update();
+                    return;
+                }
+            } catch (error) {
+                this.addNotification('warning', agentChildText(this.desktopLocale, 'continuationFailed'), desktopFailureMessage(this.desktopLocale, error), notificationSessionId);
+                return;
+            } finally {
+                this.agentChildSubmitting.delete(childRunId);
+            }
+            const refreshed = this.findAgentChild(childRunId, { sessionId: session.id, turnId: turn.id });
+            if (!refreshed || refreshed.child.status === 'running') {
+                this.addNotification('warning', agentChildText(this.desktopLocale, 'continuationFailed'), agentChildText(this.desktopLocale, 'continuationFailed'), notificationSessionId);
+                return;
+            }
+        }
+        const effectiveCheckpointId = checkpointId || this.childContinuationHandle(this.findAgentChild(childRunId, { sessionId: session.id, turnId: turn.id })?.child || child);
+        const supportsDelegatedResume = typeof this.platformService.resumeDelegatedChildRun === 'function';
+        const recoverableWithoutCheckpoint = supportsDelegatedResume && (child.status === 'limit_reached' || child.status === 'paused' || child.status === 'error' || child.status === 'tool_failed' || child.status === 'rate_limited' || child.status === 'interrupted');
+        if (!effectiveCheckpointId && !recoverableWithoutCheckpoint) {
             this.addNotification('warning', agentChildText(this.desktopLocale, 'continue'), agentChildText(this.desktopLocale, 'noCheckpoint'), notificationSessionId);
             return;
         }
-        if (!prompt) return;
-        const recoveryApproval = await this.prepareDurableRecovery(session, turn, checkpointId, child.taskContext.permissionMode, false, childRunId);
+        const recoveryApproval = effectiveCheckpointId
+            ? await this.prepareDurableRecovery(session, turn, effectiveCheckpointId, child.taskContext.permissionMode, false, childRunId)
+            : { proceed: true };
         if (!recoveryApproval.proceed || this.childDraft(childRunId, draftOwner) !== submittedDraft
             || this.agentChildContinuationStates.has(childRunId)) return;
         let route = bindPriceQuote(this.codingRouteForSession(session), turn.keyPriceQuoteId);
@@ -39037,7 +39376,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             if (permissionMode === 'full_access' && !sharedTerminal?.widget) {
                 throw new DesktopDomainError('TERMINAL_RUNTIME_UNSUPPORTED', 'Interactive terminals are unavailable on this system.');
             }
-            const started = await this.platformService.startAgentRun({
+            const runRequest: DesktopAgentRunRequest = {
                 route: route.kind === 'managed_gateway'
                     ? {
                         kind: 'managed_gateway',
@@ -39061,16 +39400,25 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 terminalProfileId: this.selectedTerminalProfile()?.id,
                 ...(sharedTerminal?.widget ? { terminalId: sharedTerminal.widget.terminalId } : {}),
                 skills,
-                resumeCheckpointId: checkpointId,
-                resumeStrategy: 'continue',
+                ...(effectiveCheckpointId ? { resumeCheckpointId: effectiveCheckpointId, resumeStrategy: 'continue' as const } : {}),
                 childContinuation: {
                     childRunId: child.childRunId,
                     parentRunId: child.parentRunId,
                     rootRunId: child.rootRunId,
                     depth: child.depth,
-                    resumeCheckpointId: checkpointId
+                    resumeCheckpointId: effectiveCheckpointId || child.childRunId
                 } satisfies DesktopAgentChildContinuation
-            });
+            };
+            const started = supportsDelegatedResume
+                ? await this.platformService.resumeDelegatedChildRun!({
+                    run: runRequest,
+                    ...(child.parentRunId ? { parentRunId: child.parentRunId } : {}),
+                    childRunId: child.childRunId,
+                    message: prompt,
+                    ...(effectiveCheckpointId ? { resumeCheckpointId: effectiveCheckpointId } : {}),
+                    wakeParentOnComplete: true
+                })
+                : await this.platformService.startAgentRun(runRequest);
             state.runId = started.runId;
             this.setAgentChildDraft(draftOwner, '', submittedDraft);
             if (controller.signal.aborted || this.applicationExitPreparing || dispatchGeneration !== this.applicationExitGeneration) {
@@ -39079,6 +39427,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 return;
             }
             await this.pollAgentChildRun(state);
+            if (!controller.signal.aborted && !this.applicationExitPreparing && dispatchGeneration === this.applicationExitGeneration) {
+                await this.consumeAgentChildParentWakeup(session.id, child.rootRunId);
+            }
         } catch (error) {
             // startAgentRun may have succeeded before polling/merging failed.
             // Always cancel that backend job on the error path so a detached
@@ -39152,11 +39503,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
 
     protected renderAgentChildLinks(children: readonly DesktopAgentChildSnapshot[]): React.ReactNode {
         if (!children.length) return undefined;
+        const session = this.activeCodingSession();
         return <section className='nmx-agent-child-links' aria-label={agentChildText(this.desktopLocale, 'agents')}>
             {children.map(child => {
-                const rolePrefix = child.role && child.role !== 'lead' ? `（${councilRoleLabel(this.desktopLocale, child.role)}）` : '';
+                const ownerTurn = session?.turns.find(turn => turn.childAgents?.some(candidate => candidate.childRunId === child.childRunId));
+                const councilChild = this.isCouncilChildForTurn(session, child, ownerTurn);
+                const rolePrefix = councilChild && child.role ? `（${councilRoleLabel(this.desktopLocale, child.role)}）` : '';
                 const label = `${rolePrefix}${child.task}`;
-                return <button key={child.childRunId} className='nmx-agent-child-link' data-agent-child-id={child.childRunId} data-agent-status={child.status} data-agent-role={child.role}
+                return <button key={child.childRunId} className='nmx-agent-child-link' data-agent-child-id={child.childRunId} data-agent-status={child.status} data-agent-role={councilChild ? child.role : undefined}
                 title={`${label} · ${this.agentChildStatusLabel(child.status)} · ${child.eventCount ?? child.events.length} ${agentChildText(this.desktopLocale, 'events')}`}
                 aria-label={`${agentChildText(this.desktopLocale, 'openAgent')}: ${label}`}
                 onClick={() => this.openAgentChildContext(child.childRunId)}>
@@ -39184,6 +39538,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const continuationHandle = this.childContinuationHandle(active);
         const continuationState = this.agentChildContinuationStates.get(activeChildId);
         const continuationRunning = Boolean(continuationState);
+        const liveChildRunning = active.status === 'running' && !continuationRunning;
+        const canRecoverWithoutCheckpoint = active.status === 'limit_reached' || active.status === 'paused' || active.status === 'error' || active.status === 'tool_failed' || active.status === 'rate_limited' || active.status === 'interrupted';
+        const canComposeDirection = liveChildRunning || Boolean(continuationHandle) || continuationRunning || Boolean(draftText)
+            || (typeof this.platformService.resumeDelegatedChildRun === 'function' && canRecoverWithoutCheckpoint);
         const unseenAgentEvents = this.agentChildScrollStates[activeChildId]?.unseenUpdates || 0;
         const receipt = active.receipt || active.result?.receipt;
         return <div id='nmx-context-panel-agents' role='tabpanel' aria-labelledby='nmx-context-tab-agents' className='nmx-context-agent'>
@@ -39197,7 +39555,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     <i className={`codicon codicon-${this.agentChildStatusIcon(child.status)}`} aria-hidden='true'></i><span data-nmx-literal>{child.task}</span>
                 </button>)}
             </nav>
-            <article id={agentChildDomId('nmx-context-panel-agent-child', activeChildId)} role='tabpanel' aria-labelledby={agentChildDomId('nmx-context-tab-agent', activeChildId)} className='nmx-agent-child-detail' data-agent-child-detail={activeChildId}
+            <article key={activeChildId} id={agentChildDomId('nmx-context-panel-agent-child', activeChildId)} role='tabpanel' aria-labelledby={agentChildDomId('nmx-context-tab-agent', activeChildId)} className='nmx-agent-child-detail' data-agent-child-detail={activeChildId}
+                ref={element => this.observeAgentChildDetail(activeChildId, element)}
                 onClickCapture={event => this.handleAssistantContentClick(event)}
                 onScroll={event => this.onAgentChildDetailScroll(activeChildId, event.currentTarget as HTMLElement)}>
                 {/* Run ids, parent ids and context counters are diagnostics, not user copy (Codex shows the task and its state only). */}
@@ -39213,7 +39572,17 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     <small>{receipt.unknownSideEffect || !receipt.retrySafe
                         ? agentChildText(this.desktopLocale, 'manualReview')
                         : agentChildText(this.desktopLocale, 'retrySafe')}</small>
-                    {receipt.failure && <span>{modelFailureText(this.desktopLocale, receipt.failure)}</span>}
+                    {receipt.failure && (() => {
+                        const summary = agentChildReceiptSummary(this.desktopLocale, receipt.failure);
+                        const detail = agentChildReceiptTechnicalDetail(receipt.failure);
+                        return <>
+                            <span className='nmx-agent-child-receipt-summary'>{summary}</span>
+                            {detail && detail !== summary && <details className='nmx-agent-child-receipt-details'>
+                                <summary>{agentChildFailureDetailsLabel(this.desktopLocale)}</summary>
+                                <code data-nmx-literal>{detail}</code>
+                            </details>}
+                        </>;
+                    })()}
                 </aside>}
                 {unseenAgentEvents > 0 && <button type='button' className='nmx-agent-child-new-events'
                     aria-label={`${unseenAgentEvents} ${agentChildText(this.desktopLocale, 'events')}`}
@@ -39226,16 +39595,22 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 )}</div>}
                 {(active.result?.finalText || active.result?.outputParts?.length) && <CitationList locale={this.desktopLocale} citations={active.result.citations} onOpen={url => this.openExternalUrl(url)} />}
                 {active.error && <p className={`nmx-agent-child-error${active.error.code === 'COUNCIL_SPECIALIST_TIMEOUT' ? ' is-timeout' : ''}`} data-nmx-literal data-error-code={active.error.code}>{active.error.code === 'COUNCIL_SPECIALIST_TIMEOUT' ? agentChildText(this.desktopLocale, 'specialistTimeout') : active.error.message}</p>}
-                {!this.privacySettings.saveConversationHistory && (continuationHandle || draftText)
+                {!this.privacySettings.saveConversationHistory && (canComposeDirection || draftText)
                     && <small className='nmx-agent-child-draft-privacy'>{agentChildDraftText(this.desktopLocale, 'private')}</small>}
-                {(continuationHandle || continuationRunning || draftText) ? <form className='nmx-agent-child-composer' data-agent-child-composer={activeChildId}
+                {canComposeDirection ? <form className='nmx-agent-child-composer' data-agent-child-composer={activeChildId}
                     onSubmit={event => { event.preventDefault(); if (continuationRunning) void this.stopAgentChild(activeChildId); else void this.continueAgentChild(activeChildId); }}>
                     <ImeTextarea value={draftText} maxLength={AGENT_CHILD_DRAFT_MAX_LENGTH} disabled={continuationRunning || !draftOwner}
                         placeholder={agentChildText(this.desktopLocale, 'continuePlaceholder')}
                         aria-label={agentChildText(this.desktopLocale, 'continue')}
                         onChange={event => { if (draftOwner) this.setAgentChildDraft(draftOwner, event.currentTarget.value); }}
-                        onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (continuationRunning) void this.stopAgentChild(activeChildId); else void this.continueAgentChild(activeChildId); } }} />
-                    <button type='submit' className={`nmx-agent-child-send${continuationRunning ? ' is-stop' : ''}`} disabled={!continuationRunning && (!continuationHandle || !draftText.trim())}
+                        onKeyDown={event => {
+                            const native = event.nativeEvent as KeyboardEvent | undefined;
+                            if (event.key === 'Enter' && !event.shiftKey && !native?.isComposing && event.keyCode !== 229 && native?.keyCode !== 229) {
+                                event.preventDefault();
+                                if (continuationRunning) void this.stopAgentChild(activeChildId); else void this.continueAgentChild(activeChildId);
+                            }
+                        }} />
+                    <button type='submit' className={`nmx-agent-child-send${continuationRunning ? ' is-stop' : ''}`} disabled={!continuationRunning && (!canComposeDirection || !draftOwner || !draftText.trim())}
                         onClick={event => { event.preventDefault(); if (continuationRunning) void this.stopAgentChild(activeChildId); else void this.continueAgentChild(activeChildId); }}
                         aria-label={continuationRunning ? agentChildText(this.desktopLocale, 'stop') : agentChildText(this.desktopLocale, 'send')}
                         title={continuationRunning ? agentChildText(this.desktopLocale, 'stop') : agentChildText(this.desktopLocale, 'send')}>
@@ -46005,13 +46380,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return { ...result, connection: { ...connection, model: defaultModel } };
     }
 
-    /** Selects the imported connection's default chat/coding model route immediately in the active workbench. */
+    /** Selects the imported connection's default chat/coding model route immediately when nothing is configured yet. */
     protected activateImportedOfficialModelRoute(connection: OfficialModelConnection): void {
         if (!connection || connection.providerId === 'custom_media'
             || isOfficialMediaProtocol(connection.protocol)
             || connection.protocol === 'async_media_template') {
             return;
         }
+        const hasConfiguredSelection = Boolean(
+            this.activeRelayKey?.trim()
+            || this.activeModelRouteId?.trim()
+            || this.selectedModelIds?.coding?.trim()
+        );
+        if (hasConfiguredSelection) return;
         const chosenModel = connection.model.trim() || pickDefaultImportedChatModel(connection.discoveredModels || [], this.globalModels);
         if (!chosenModel) return;
         this.codingUserExplicitlySelected = true;
@@ -48573,6 +48954,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected async stopConversationAgentRun(sessionId: string, awaitCompletion = false): Promise<void> {
         const notificationSessionId = sessionId;
         this.clearConversationWakeup?.(sessionId);
+        void this.platformService.consumePendingParentWakeup?.(sessionId).catch(() => undefined);
         const childStops = Promise.all([...(this.agentChildContinuationStates?.entries() || [])]
             .filter(([, state]) => state.sessionId === sessionId).map(([id]) => this.stopAgentChild(id)));
         try {
@@ -49973,7 +50355,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
             }
             // The sidebar gives each specialist of this run's roster a row from the start (sessionCouncilRoleChildren);
             // a single-model run records an empty roster, so a Council config enabled meanwhile seeds nothing for it.
-            if (workbench === 'coding' && codingSession) this.councilRunRosters?.set(codingSession.id, startRequest.councilConfig?.slots ?? []);
+            if (workbench === 'coding' && codingSession) {
+                this.councilRunRosters?.set(codingSession.id, startRequest.councilConfig?.slots ?? []);
+                if (codingTurn) this.updateCodingTurn(codingSession.id, codingTurn.id, { councilMode: Boolean(startRequest.councilConfig) });
+            }
             // Live app tabs of this conversation (and their plugins) for this turn only: never written into the turn's text,
             // so history and its cached prefix stay unchanged. A resumed run continues its own checkpoint.
             if (workbench === 'coding' && codingSession && !resumedExecution) {
@@ -51379,7 +51764,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected render(): React.ReactNode {
         this.inRenderPass = true;
         try {
+            this.syncWidgetBodyState?.();
             const workContextSectionActive = this.workContextOpen && (this.isWorkContextSectionActive?.() ?? (this.activeSection === 'coding'));
+            const workContextMaximized = Boolean(workContextSectionActive && this.workContextIsOverlay?.());
             const shellStyle = {
                 '--nmx-titlebar-left': `${this.contextPanelCollapsed ? 0 : this.contextPanelWidth}px`,
                 '--nmx-titlebar-right': `${workContextSectionActive ? this.effectiveWorkContextWidth() : 0}px`,
@@ -51389,7 +51776,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 '--nmx-terminal-list-width': `${this.effectiveTerminalListWidth()}px`,
                 '--nmx-terminal-drawer-height': `${this.terminalDrawerHeight}px`
             } as React.CSSProperties;
-            return <div className={`nmx-shell nmx-theme-${this.resolvedDesktopTheme()} ${this.detachedConversationId ? 'is-detached-conversation' : ''}${this.detachedWindowHighlighted ? ' is-window-highlighted' : ''} ${this.contextPanelCollapsed ? 'is-context-collapsed' : ''} ${workContextSectionActive ? 'is-work-context-open' : ''} ${this.titlebarCompact ? 'is-titlebar-compact' : ''} ${this.titlebarCrowded ? 'is-titlebar-crowded' : ''} ${this.titlebarContextCloseOnly ? 'is-titlebar-context-close-only' : ''}`} style={shellStyle} onMouseDown={event => {
+            return <div className={`nmx-shell nmx-theme-${this.resolvedDesktopTheme()} ${this.detachedConversationId ? 'is-detached-conversation' : ''}${this.detachedWindowHighlighted ? ' is-window-highlighted' : ''} ${this.contextPanelCollapsed ? 'is-context-collapsed' : ''} ${workContextSectionActive ? 'is-work-context-open' : ''} ${this.terminalDrawerOpen ? 'is-terminal-open' : ''} ${workContextMaximized ? 'is-editor-maximized' : ''} ${this.titlebarCompact ? 'is-titlebar-compact' : ''} ${this.titlebarCrowded ? 'is-titlebar-crowded' : ''} ${this.titlebarContextCloseOnly ? 'is-titlebar-context-close-only' : ''}`} style={shellStyle} onMouseDown={event => {
                 this.captureEditingCommandTarget(event.target);
                 const target = event.target instanceof Element ? event.target : undefined;
                 this.threadFocusActive = Boolean(target?.closest('.nmx-coding-topbar, .nmx-coding-stage'))
@@ -52450,7 +52837,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             });
             const recent = ui.managed ? (ui.lists.get(ui.managed) || []).filter(chat => matches(chat.title)) : [];
             if (ui.managed && !ui.lists.has(ui.managed) && !ui.loading.has(ui.managed)) void this.loadComicChatList(ui.managed);
-            return <aside id='nmx-context-panel' className={`nmx-context-panel nmx-comic-context ${this.comicProjectDragActive ? 'is-project-dragging' : ''}`}
+            return <aside id='nmx-context-panel' data-nmx-i18n='rendered' className={`nmx-context-panel nmx-comic-context ${this.comicProjectDragActive ? 'is-project-dragging' : ''}`}
                 onDragOver={event => { if (this.comicProjectDragContainsFolders(event)) { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = 'copy'; if (!this.comicProjectDragActive) { this.comicProjectDragActive = true; this.update(); } } }}
                 onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { this.comicProjectDragActive = false; this.update(); } }}
                 onDrop={event => this.handleComicProjectDrop(event)}>
@@ -58050,12 +58437,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 onFocus={event => this.openModelEffortPicker(model.id, event.currentTarget, cardSettings().settingsRowCount)}
                 onBlur={() => this.scheduleModelEffortPickerClose()}
                 onPointerLeave={() => { this.cancelModelHoverIntent?.(model.id); this.scheduleModelEffortPickerClose(); }}>
-                <button aria-disabled={!supported} onClick={event => {
+                <button aria-disabled={!supported} onClick={() => {
                     if (!supported) return;
                     this.selectModelOptionOnRelay(baseModelId, 'coding', modelPickerRelayKey,
                         optionRoute?.kind === 'managed_gateway' ? { id: optionRoute.offering.keyPriceQuoteId } : undefined, model.variantRouteId);
-                    if (optionRoute) openCard(event.currentTarget.closest('.nmx-model-option') as HTMLElement);
-                    else this.completeNavigationSurface();
+                    this.closeModelEffortPickerImmediately?.();
+                    this.completeNavigationSurface();
                     this.update();
                 }} aria-label={optionTitle}><span><strong>{model.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
                     onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)} onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
@@ -58355,7 +58742,6 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             : undefined;
                         const assistantMessageMenuId = `assistant:${turn.id}`;
                         const routeEvidence = agentRouteEvidencePresentation(this.desktopLocale, turn.routeLabel, turn.failoverCount);
-                        const relayFeedbackSubmittingVote = this.relayFeedbackSubmittingVotes.get(turn.id);
                         const turnSessionId = codingSession?.id || this.activeCodingSessionId;
                         const turnWakeupStatus = resolveTurnWakeupStatus({
                             locale: this.desktopLocale,
@@ -58495,15 +58881,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                     <time>{this.formatConversationTime(conversationMessageTime(turn) ?? turn.createdAt)}</time>
                                         <button type='button' data-relay-feedback='up' className={`nmx-relay-feedback ${turn.relayFeedback === 'up' ? 'is-active' : ''}`}
                                             aria-label={relayMarketplaceText(this.desktopLocale, 'helpful')} title={relayMarketplaceText(this.desktopLocale, 'helpful')} data-help={relayMarketplaceText(this.desktopLocale, 'helpful')}
-                                            aria-pressed={turn.relayFeedback === 'up'} aria-busy={relayFeedbackSubmittingVote === 'up'} disabled={!this.conversationHistoryReady() || relayFeedbackSubmittingVote !== undefined}
+                                            aria-pressed={turn.relayFeedback === 'up'} disabled={!this.conversationHistoryReady()}
                                             onClick={event => { event.stopPropagation(); void this.submitCodingTurnRelayFeedback(codingSession?.id || this.activeCodingSessionId, turn, 'up'); }}>
-                                            <i aria-hidden='true' className={`codicon codicon-${relayFeedbackSubmittingVote === 'up' ? 'loading codicon-modifier-spin' : 'thumbsup'}`}></i>
+                                            <i aria-hidden='true' className='codicon codicon-thumbsup'></i>
                                         </button>
                                         <button type='button' data-relay-feedback='down' className={`nmx-relay-feedback ${turn.relayFeedback === 'down' ? 'is-active is-negative' : ''}`}
                                             aria-label={relayMarketplaceText(this.desktopLocale, 'notHelpful')} title={relayMarketplaceText(this.desktopLocale, 'notHelpful')} data-help={relayMarketplaceText(this.desktopLocale, 'notHelpful')}
-                                            aria-pressed={turn.relayFeedback === 'down'} aria-busy={relayFeedbackSubmittingVote === 'down'} disabled={!this.conversationHistoryReady() || relayFeedbackSubmittingVote !== undefined}
+                                            aria-pressed={turn.relayFeedback === 'down'} disabled={!this.conversationHistoryReady()}
                                             onClick={event => { event.stopPropagation(); void this.submitCodingTurnRelayFeedback(codingSession?.id || this.activeCodingSessionId, turn, 'down'); }}>
-                                            <i aria-hidden='true' className={`codicon codicon-${relayFeedbackSubmittingVote === 'down' ? 'loading codicon-modifier-spin' : 'thumbsdown'}`}></i>
+                                            <i aria-hidden='true' className='codicon codicon-thumbsdown'></i>
                                         </button>
                                         <button type='button' data-message-action='create-branch' className='nmx-message-branch nmx-turn-branch'
                                             data-message-role='assistant' disabled={branchDisabled}
@@ -58540,7 +58926,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             {...(this.computerPermissionWait.appName ? { appName: this.computerPermissionWait.appName,
                                 onCancel: () => this.cancelPickerPermissionWait(this.computerPermissionWait?.conversationId ?? this.activeCodingSessionId) } : {})}
                             {...(/win/i.test(navigator.platform) ? { onInstallAgain: () => void window.nextmuxDesktop?.requestComputerPermission?.() } : {})} />}
-                    <div className={`nmx-composer-wrap is-rows-${this.composerRows()}`}
+                    <div className={`nmx-composer-wrap is-rows-${this.composerRows()}${(codingGoal || (this.goalComposerActive && this.goalComposerSessionId === codingSession?.id)) ? ' has-coding-goal' : ''}`}
                     ref={node => { if (node) node.inert = Boolean(this.incognitoModeOperation && this.incognitoModeSessionId === codingSession?.id || this.draftWorkspaceBindingOperation && this.draftWorkspaceBindingSessionId === codingSession?.id); }}
                     aria-busy={Boolean(this.incognitoModeOperation && this.incognitoModeSessionId === codingSession?.id || this.draftWorkspaceBindingOperation && this.draftWorkspaceBindingSessionId === codingSession?.id)}
                     onPaste={event => this.handleComposerPaste(event)}>
@@ -59564,7 +59950,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (this.activeComicWorkspaceRoot === path && ui.surface === 'chat') { ui.chatId = undefined; this.closeComicProject(); }
         if (leaving) { this.restoreComicChatDraft?.(); this.rememberComicChatActive?.(); }
         this.persistComicChatUi();
-        this.update();
+        if (this.updateRegion) this.updateRegion(['comic', 'sidebar']); else this.update();
     }
 
     /** Loads a conversation folder's project (it is listed among the comic workspaces only so it can be selected). */
@@ -59579,7 +59965,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (ui.expanded.has(path)) ui.expanded.delete(path);
         else { ui.expanded.add(path); if (!ui.lists.has(path)) void this.loadComicChatList(path); }
         this.persistComicChatUi();
-        this.update();
+        if (this.updateRegion) this.updateRegion(['comic', 'sidebar']); else this.update();
     }
 
     /** The four kinds' studio (简单模式). */
@@ -59892,7 +60278,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         ui.models = models;
         this.reconcileComicChatParamsAndReferences?.();
         this.persistComicChatUi();
-        this.update();
+        this.updateComicRegion();
     }
 
     /** A relay's name for the chat (from the directory pages or favorites), before its models are loaded. */
@@ -60383,7 +60769,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         ui.recommended = on;
         this.reconcileComicChatParamsAndReferences?.();
         this.persistComicChatUi();
-        this.update();
+        this.updateComicRegion();
     }
 
     /**
@@ -60548,7 +60934,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         if (ui.skill && COMIC_CHAT_SKILLS.find(skill => skill.id === ui.skill)?.mode !== mode) ui.skill = undefined;
         this.rememberComicChatDraft?.();
         this.persistComicChatUi();
-        this.update();
+        this.updateComicRegion();
     }
 
     protected pickComicChatSkill(skill: ComicChatSkill): void {
@@ -60569,7 +60955,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         }
         this.rememberComicChatDraft?.();
         this.persistComicChatUi();
-        this.update();
+        this.updateComicRegion();
         this.focusComicChatComposer();
     }
 
@@ -62160,36 +62546,54 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const { root, project, loading } = context;
         const chat = this.activeComicChat();
         const turns = chat ? chat.turns.map(turn => this.comicChatTurnView(chat, turn)) : [];
-        const allViews = project ? this.comicMaterialViews(project) : [];
-        const mine = project ? this.comicChatAssetIds(chat, project) : new Set<string>();
         const scopes: ComicMaterialScope[] = [...(chat ? ['chat' as const] : []), 'project', 'all'];
         const scope = scopes.includes(ui.materialScope) ? ui.materialScope : scopes[0];
-        // 素材库 shows what the user kept (right-click → 加入素材库) plus global 素材库 entries, most recently kept first.
         const library = root ? this.comicMaterialLibrary(root) : undefined;
-        const order = new Map((library || []).map((id, index) => [id, index]));
-        const keptLocal = allViews.filter(item => order.has(item.assetId)).sort((left, right) => order.get(left.assetId)! - order.get(right.assetId)!);
-        const localLibraryIds = new Set(keptLocal.map(item => item.libraryAssetId).filter((id): id is string => Boolean(id)));
-        const localPaths = new Set(keptLocal.map(item => item.path).filter((p): p is string => Boolean(p)));
-        const globalViews = this.comicGlobalLibraryMaterialViews().filter(item =>
-            (!item.libraryAssetId || !localLibraryIds.has(item.libraryAssetId)) && (!item.path || !localPaths.has(item.path)));
-        const kept = [...keptLocal, ...globalViews];
-        const keptLibraryIds = new Set(kept.map(item => item.libraryAssetId).filter((id): id is string => Boolean(id)));
-        const keptAssetIds = new Set([
-            ...kept.map(item => item.assetId),
-            ...this.comicAssetLibraryEntries.map(entry => entry.source.versionId).filter((id): id is string => Boolean(id))
-        ]);
-        const keptPaths = new Set(kept.map(item => item.path).filter((p): p is string => Boolean(p)));
-        const externalViews = scope === 'all'
-            ? this.comicExternalMaterialViews(true).filter(item =>
-                (!item.libraryAssetId || !keptLibraryIds.has(item.libraryAssetId))
-                && !keptAssetIds.has(item.assetId)
-                && (!item.path || !keptPaths.has(item.path)))
-            : [];
-        const scoped = scope === 'chat' ? keptLocal.filter(item => mine.has(assetIdOf(item))) : scope === 'all' ? [...kept, ...externalViews] : kept;
+        let scoped: ComicMaterialView[] = [];
+        let emptyText = '';
+        let keptCount = 0;
+        let libraryHint = false;
+        if (ui.materials) {
+            const allViews = project ? this.comicMaterialViews(project) : [];
+            const mine = project ? this.comicChatAssetIds(chat, project) : new Set<string>();
+            // 素材库 shows what the user kept (right-click → 加入素材库) plus global 素材库 entries, most recently kept first.
+            const order = new Map((library || []).map((id, index) => [id, index]));
+            const keptLocal = allViews.filter(item => order.has(item.assetId)).sort((left, right) => order.get(left.assetId)! - order.get(right.assetId)!);
+            const localLibraryIds = new Set(keptLocal.map(item => item.libraryAssetId).filter((id): id is string => Boolean(id)));
+            const localPaths = new Set(keptLocal.map(item => item.path).filter((p): p is string => Boolean(p)));
+            const globalViews = this.comicGlobalLibraryMaterialViews().filter(item =>
+                (!item.libraryAssetId || !localLibraryIds.has(item.libraryAssetId)) && (!item.path || !localPaths.has(item.path)));
+            const kept = [...keptLocal, ...globalViews];
+            const keptLibraryIds = new Set(kept.map(item => item.libraryAssetId).filter((id): id is string => Boolean(id)));
+            const keptAssetIds = new Set([
+                ...kept.map(item => item.assetId),
+                ...this.comicAssetLibraryEntries.map(entry => entry.source.versionId).filter((id): id is string => Boolean(id))
+            ]);
+            const keptPaths = new Set(kept.map(item => item.path).filter((p): p is string => Boolean(p)));
+            const externalViews = scope === 'all'
+                ? this.comicExternalMaterialViews(true).filter(item =>
+                    (!item.libraryAssetId || !keptLibraryIds.has(item.libraryAssetId))
+                    && !keptAssetIds.has(item.assetId)
+                    && (!item.path || !keptPaths.has(item.path)))
+                : [];
+            scoped = scope === 'chat' ? keptLocal.filter(item => mine.has(assetIdOf(item))) : scope === 'all' ? [...kept, ...externalViews] : kept;
+            emptyText = scope !== 'all' && kept.length === 0 || scope === 'all' && scoped.length === 0 ? t('libraryEmpty') : t('noMaterials');
+            keptCount = kept.length;
+        } else {
+            const librarySet = new Set(library || []);
+            const readyProjectAssets = project ? project.assets.filter(asset => asset.status === 'ready' && (asset.kind === 'image' || asset.kind === 'video' || asset.kind === 'audio' || asset.kind === 'music')) : [];
+            const readyAssetIds = new Set(readyProjectAssets.map(asset => asset.id));
+            const localKeptCount = (library || []).filter(id => readyAssetIds.has(id)).length;
+            const globalKeptCount = this.comicAssetLibraryEntries.filter(entry => !entry.source.versionId || !librarySet.has(entry.source.versionId)).length;
+            keptCount = localKeptCount + globalKeptCount;
+            if (project && library && !ui.libraryHintDone && keptCount === 0 && readyProjectAssets.length > 0) {
+                libraryHint = readyProjectAssets.some(asset => {
+                    const job = asset.jobId ? this.mediaJobById(asset.jobId) : undefined;
+                    return Boolean(job && comicChatJobOrigin(job.sceneId, job.shotId));
+                });
+            }
+        }
         function assetIdOf(item: ComicMaterialView): string { return item.assetId; }
-        const emptyText = scope !== 'all' && kept.length === 0 || scope === 'all' && scoped.length === 0 ? t('libraryEmpty') : t('noMaterials');
-        // The hint appears once the folder has something made in a conversation, until closed or the first material is kept.
-        const libraryHint = Boolean(project && library && !ui.libraryHintDone && kept.length === 0 && !ui.materials && allViews.some(item => item.origin === 'chat'));
         const mode = ui.mode;
         const candidate = this.comicChatCandidate(mode);
         const picker = this.comicChatModelPicker();
@@ -62215,10 +62619,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         <div className='nmx-studio-header-actions'>
                             <span className='nmx-comic-library-anchor'>
                                 <button type='button' data-nmx-library-button className={`nmx-studio-desk ${ui.materials && !picking ? 'is-active' : ''} ${libraryHint ? 'has-hint' : ''}`}
-                                    aria-label={kept.length ? `${t('materials')} · ${t('libraryCount', { n: kept.length })}` : t('materials')}
-                                    onClick={() => { ui.materials = ui.materials && !picking ? undefined : {}; if (ui.materials) void this.refreshComicAssetLibrary?.(); if (libraryHint) this.dismissComicLibraryHint(); this.update(); }}>
+                                    aria-label={keptCount ? `${t('materials')} · ${t('libraryCount', { n: keptCount })}` : t('materials')}
+                                    onClick={() => { ui.materials = ui.materials && !picking ? undefined : {}; if (ui.materials) void this.refreshComicAssetLibrary?.(); if (libraryHint) this.dismissComicLibraryHint(); this.updateComicRegion(); }}>
                                     <i className='codicon codicon-library' aria-hidden='true'></i><span>{t('materials')}</span>
-                                    {kept.length > 0 && <small className='nmx-comic-library-badge' data-nmx-literal>{kept.length > 99 ? '99+' : kept.length}</small>}</button>
+                                    {keptCount > 0 && <small className='nmx-comic-library-badge' data-nmx-literal>{keptCount > 99 ? '99+' : keptCount}</small>}</button>
                                 {libraryHint && <div className='nmx-comic-library-hint' role='note'>
                                     <span className='nmx-comic-library-hint-icon' aria-hidden='true'><i className='codicon codicon-library'></i></span>
                                     <div><strong>{t('libraryHintTitle')}</strong><p>{t('libraryHint')}</p></div>
@@ -62241,7 +62645,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 readAloudLabel={this.handleComicChatReadAloudLabel}
                                 feedbackLabels={this.comicChatFeedbackLabels()}
                                 onFeedback={this.handleComicChatFeedback}
-                                feedbackSubmitting={Object.fromEntries(this.comicRelayFeedbackSubmitting)}
+                                feedbackSubmitting={{}}
                                 feedbackByTurnId={{ ...Object.fromEntries(turns.filter(view => view.turn.feedback).map(view => [view.turn.id, view.turn.feedback])), ...this.comicFeedbackByTurnId } as Record<string, 'up' | 'down' | null | undefined>}
                                 onMenu={this.handleComicChatTurnMenu}
                                 onOpen={this.handleComicChatTurnOpen}
@@ -62261,16 +62665,16 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         {ui.materials && <ComicMaterialsPanel locale={this.desktopLocale} items={picking ? scoped.filter(item => item.kind === 'image') : scoped}
                             scope={scope} scopes={scopes} loading={scope === 'all' && ui.allMaterialsLoading || Boolean(root && !library)} emptyText={emptyText}
                             {...(ui.materials.focus ? { focus: ui.materials.focus } : {})} {...(picking ? { pick: 'image' as const } : {})}
-                            onScope={next => { ui.materialScope = next; if (next === 'all') void this.loadComicAllMaterials(); this.update(); }}
+                            onScope={next => { ui.materialScope = next; if (next === 'all') void this.loadComicAllMaterials(); this.updateComicRegion(); }}
                             onPick={item => {
                                 ui.materials = undefined;
                                 this.addComicChatReferences([item.path ? { key: `file:${item.path}`, path: item.path, ...(item.url ? { url: item.url } : {}), name: item.title }
                                     : { key: `asset:${item.assetId}`, assetId: item.assetId, ...(item.url ? { url: item.url } : {}), name: item.title }], policy.limit);
                                 this.focusComicChatComposer();
                             }}
-                            onOpen={item => { if (item.url) this.openComicViewerMedia(item.url, item.title, item.kind, item.path); else this.update(); }}
-                            onMenu={(item, event) => { ui.menu = { x: event.clientX, y: event.clientY, target: this.comicMaterialTarget(item), origin: event.currentTarget as HTMLElement }; this.update(); }}
-                            onClose={() => { ui.materials = undefined; this.update(); }} />}
+                            onOpen={item => { if (item.url) this.openComicViewerMedia(item.url, item.title, item.kind, item.path); else this.updateComicRegion(); }}
+                            onMenu={(item, event) => { ui.menu = { x: event.clientX, y: event.clientY, target: this.comicMaterialTarget(item), origin: event.currentTarget as HTMLElement }; this.updateComicRegion(); }}
+                            onClose={() => { ui.materials = undefined; this.updateComicRegion(); }} />}
                     </div>
                 </>;
                 return this.island ? this.island('comic-thread', renderComicThread, 'section') : renderComicThread();
@@ -62291,24 +62695,24 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         cast={cast} {...(ui.notice ? { notice: ui.notice } : {})} {...(ui.error ? { error: ui.error } : {})}
                         onMode={next => this.setComicChatMode(next)}
                         onPrompt={value => this.setComicChatPrompt(value)}
-                        onParams={patch => { ui.params = { ...ui.params, [mode]: { ...(ui.params[mode] || {}), ...patch } }; this.update(); }}
+                        onParams={patch => { ui.params = { ...ui.params, [mode]: { ...(ui.params[mode] || {}), ...patch } }; this.updateComicRegion(); }}
                         onSend={() => void this.sendComicChat()}
-                        onStop={() => { if (ui.agent) { ui.agent.cancel = true; if (ui.agent.runId) void this.platformService.cancelAgentRun(ui.agent.runId).catch(() => undefined); this.update(); } }}
+                        onStop={() => { if (ui.agent) { ui.agent.cancel = true; if (ui.agent.runId) void this.platformService.cancelAgentRun(ui.agent.runId).catch(() => undefined); this.updateComicRegion(); } }}
                         onRecommended={on => this.setComicChatRecommended(on)}
                         relayOpen={this.comicRelayPickerOpen} onOpenRelay={() => this.openComicChatRelayPicker()}
                         modelOpen={this.comicModelPickerOpen} onOpenModel={() => this.openComicChatModelPicker()}
                         onSignIn={() => void this.startDeviceLink()}
                         onModel={(which, key) => this.pickComicChatModel(which, key)}
-                        onModels={keys => { ui.recommended = false; ui.models = { ...ui.models, ...keys }; for (const mode of Object.keys(keys)) ui.modelsPinned.add(mode as ComicChatMode); this.reconcileComicChatParamsAndReferences?.(); this.persistComicChatUi(); this.update(); }}
+                        onModels={keys => { ui.recommended = false; ui.models = { ...ui.models, ...keys }; for (const mode of Object.keys(keys)) ui.modelsPinned.add(mode as ComicChatMode); this.reconcileComicChatParamsAndReferences?.(); this.persistComicChatUi(); this.updateComicRegion(); }}
                         onFiles={files => void this.addComicChatFiles(files)}
-                        onPickMaterials={() => { ui.materials = { pick: true }; if (!project) void this.ensureComicChatFolder().then(() => this.update(), error => { ui.error = modelFailureText(this.desktopLocale, error); this.update(); }); this.update(); }}
+                        onPickMaterials={() => { ui.materials = { pick: true }; if (!project) void this.ensureComicChatFolder().then(() => this.updateComicRegion(), error => { ui.error = modelFailureText(this.desktopLocale, error); this.updateComicRegion(); }); this.updateComicRegion(); }}
                         onPickCast={id => this.pickComicChatCast(id)}
                         onOpenCast={() => this.openComicCastLibrary()}
-                        onRemoveReference={key => { ui.references = ui.references.filter(item => item.key !== key); this.rememberComicChatDraft?.(); this.update(); }}
+                        onRemoveReference={key => { ui.references = ui.references.filter(item => item.key !== key); this.rememberComicChatDraft?.(); this.updateComicRegion(); }}
                         onOpenReference={reference => { if (reference.url) this.openComicViewerMedia(reference.url, reference.name, reference.kind === 'video' ? 'video' : 'image'); }}
                         onVoice={() => void this.openComicChatVoiceInput()}
                         onChooseFolder={() => void this.chooseComicChatDraftFolder()}
-                        onClearFolder={() => { ui.target = ''; this.update(); }}
+                        onClearFolder={() => { ui.target = ''; this.updateComicRegion(); }}
                         onSetUpModels={() => this.openComicModelSetup()} />
                 </div>;
                 return this.island ? this.island('comic-composer', renderComicComposer, 'section') : renderComicComposer();
@@ -62393,7 +62797,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const music = this.comicProjectKind(project) === 'music';
         const studioCutView = Boolean(project && view === 'timeline' && ['image', 'topic', 'music'].includes(this.comicProjectKind(project)));
         return <div className='nmx-comic-studio' data-comic-studio>
-            <header className='nmx-studio-header'>
+            <header className='nmx-studio-header' data-nmx-i18n='rendered'>
                 <div className='nmx-studio-project'><span className='nmx-studio-project-icon'><i className={`codicon codicon-${music ? 'music' : 'device-camera-video'}`}></i></span><div>
                     <strong data-nmx-literal={project ? true : undefined}>{project?.title || '漫剧工作室'}</strong>
                     <small data-nmx-literal={workspace ? true : undefined} title={workspace?.path}>{[project && workspace?.label === project.title ? '' : workspace?.label || '独立漫剧工程',
@@ -62559,7 +62963,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             { id: 'canvas', label: deskText(this.desktopLocale, 'canvas'), done: done.workflow, active: deskStep === 'canvas' || deskStep === 'cast' || deskStep === 'shoot', open: () => { if (!this.comicDesk?.visible || this.comicDesk.step !== 'canvas') this.rememberNavigation?.(); this.openComicDesk('canvas'); } },
             { id: 'timeline', label: deskText(this.desktopLocale, 'edit'), done: false, active: deskStep === 'edit', open: () => this.openComicEditor() }
         ] : [];
-        return <nav className='nmx-studio-viewbar nmx-comic-stepper' aria-label={this.tx('comic')}>
+        return <nav className='nmx-studio-viewbar nmx-comic-stepper' data-nmx-i18n='rendered' aria-label={this.tx('comic')}>
             {desk ? <div role='tablist'>{deskSteps.map((step, index) => <button key={step.id} id={`nmx-comic-tab-${step.id}`} role='tab' aria-selected={step.active} disabled={!project}
                 className={`${step.active ? 'is-active' : ''} ${step.done ? 'is-done' : ''}`} onClick={step.open}>
                 <span className='nmx-comic-step-index'>{step.done && !step.active ? <i className='codicon codicon-check'></i> : index + 1}</span><span>{step.label}</span></button>)}</div>
@@ -65604,7 +66008,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 projects: this.orderedComicProjects(this.comicLibrary.projects).map(item => this.comicHomeProject(item)),
                 folders: (this.comicLibrary.folders ?? []).map(folder => ({ id: folder.id, name: folder.name }))
             };
-        return <section className='nmx-comic-empty-v4 nmx-comic-home is-v6'>
+        return <section className='nmx-comic-empty-v4 nmx-comic-home is-v6' data-nmx-i18n='rendered'>
             <div className='nmx-comic-hero'>
                 <div className='nmx-comic-hero-glow' aria-hidden='true'></div>
                 <div className='nmx-comic-hero-copy'>

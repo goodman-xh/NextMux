@@ -381,7 +381,7 @@ export function ComicCreationLibraryPicker(props: {
  * The comic home: the four kinds as tabs; each shows its projects under 全部 / 草稿 / 进行中 / 已完成 / 已导出 /
  * 失败待处理, newest first, with its own 新建 button. A kind without projects shows what it makes and how to start.
  */
-export function ComicHomeCategories(props: {
+export const ComicHomeCategories = React.memo(function ComicHomeCategories(props: {
     readonly locale: NextMuxDesktopLocale;
     readonly kind: ComicProjectKind;
     readonly status: ComicHomeStatus;
@@ -609,7 +609,7 @@ export function ComicHomeCategories(props: {
                     })}</div>}
         </div>
     </section>;
-}
+});
 
 export interface ComicImageCreateItem {
     readonly file?: File;

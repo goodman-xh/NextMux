@@ -31,8 +31,8 @@ export function SurfaceTooltips({ scope }: { readonly scope: string }): React.Re
     React.useEffect(() => {
         let active: HTMLElement | undefined, timer: ReturnType<typeof setTimeout> | undefined;
         let title: string | null = null, described: string | null = null;
-        let ancestorTitles: Array<[HTMLElement, string]> = [];
         let anchorLeft = 0, anchorTop = 0;
+        let tipVisible = false;
         let changes: MutationObserver | undefined, resize: ResizeObserver | undefined;
         const label = (button: HTMLElement): string => (button.getAttribute('data-help') || button.getAttribute('title')
             || (button === active ? title : null) || button.getAttribute('aria-label')
@@ -46,11 +46,11 @@ export function SurfaceTooltips({ scope }: { readonly scope: string }): React.Re
                 if (title !== null && !active.hasAttribute('title')) active.setAttribute('title', title);
                 if (described === null) active.removeAttribute('aria-describedby'); else active.setAttribute('aria-describedby', described);
             }
-            for (const [node, saved] of ancestorTitles) {
-                if (!node.hasAttribute('title')) node.setAttribute('title', saved);
+            active = undefined;
+            if (tipVisible) {
+                tipVisible = false;
+                setTip(undefined);
             }
-            ancestorTitles = [];
-            active = undefined; setTip(undefined);
         };
         const show = (target: EventTarget | null, immediate = false): void => {
             const button = target instanceof Element ? target.closest<HTMLElement>('button, summary, [role="button"], [role="menuitem"], [role="switch"], select[aria-label], [data-help], [title]') : null;
@@ -59,42 +59,43 @@ export function SurfaceTooltips({ scope }: { readonly scope: string }): React.Re
             clear();
             const text = label(button);
             if (!text) return;
-            const rect = button.getBoundingClientRect();
-            anchorLeft = rect.left; anchorTop = rect.top;
             active = button; title = button.getAttribute('title'); described = button.getAttribute('aria-describedby');
             if (title !== null) button.removeAttribute('title');
-            for (let parent = button.parentElement; parent && parent.closest(scope); parent = parent.parentElement) {
-                const parentTitle = parent.getAttribute('title');
-                if (parentTitle !== null) {
-                    ancestorTitles.push([parent, parentTitle]);
-                    parent.removeAttribute('title');
+            const reveal = (): void => {
+                if (active !== button || !button.isConnected || !button.getClientRects().length) { clear(); return; }
+                const rect = button.getBoundingClientRect();
+                anchorLeft = rect.left; anchorTop = rect.top;
+                // Observe only the hovered control once its tooltip is actually shown, not on transient mouseovers.
+                // React may update its action (Play/Pause, Mute/Unmute) without a mouseleave.
+                changes = new MutationObserver(() => {
+                    if (!button.isConnected || !button.getClientRects().length) { clear(); return; }
+                    const updatedTitle = button.getAttribute('title');
+                    if (updatedTitle !== null) { title = updatedTitle; button.removeAttribute('title'); }
+                    const updated = label(button);
+                    if (!updated) { clear(); return; }
+                    setTip(current => current?.anchor === button && current.text !== updated ? { ...current, text: updated } : current);
+                });
+                changes.observe(button, { attributes: true, attributeFilter: ['title', 'aria-label', 'aria-labelledby', 'data-help', 'dir', 'lang'], childList: true, characterData: true, subtree: true });
+                for (const key of button.getAttribute('aria-labelledby')?.split(/\s+/) || []) {
+                    const reference = document.getElementById(key);
+                    if (reference && !button.contains(reference)) changes.observe(reference, { childList: true, characterData: true, subtree: true });
                 }
+                resize = new ResizeObserver(() => {
+                    if (!button.isConnected || !button.getClientRects().length) clear();
+                });
+                resize.observe(button);
+                button.setAttribute('aria-describedby', [described, id].filter(Boolean).join(' '));
+                tipVisible = true;
+                setTip({ text: label(button), anchor: button, host: button.closest('dialog[open]') ?? document.body, seal: button.hasAttribute('data-deposit-verified') });
+            };
+            if (immediate) {
+                reveal();
+                return;
             }
-            // Observe only the hovered control, not playback updates across the whole editor.
-            // React may update its action (Play/Pause, Mute/Unmute) without a mouseleave.
-            changes = new MutationObserver(() => {
-                if (!button.isConnected || !button.getClientRects().length) { clear(); return; }
-                const updatedTitle = button.getAttribute('title');
-                if (updatedTitle !== null) { title = updatedTitle; button.removeAttribute('title'); }
-                const updated = label(button);
-                if (!updated) { clear(); return; }
-                setTip(current => current?.anchor === button && current.text !== updated ? { ...current, text: updated } : current);
-            });
-            changes.observe(button, { attributes: true, attributeFilter: ['title', 'aria-label', 'aria-labelledby', 'data-help', 'dir', 'lang'], childList: true, characterData: true, subtree: true });
-            for (const key of button.getAttribute('aria-labelledby')?.split(/\s+/) || []) {
-                const reference = document.getElementById(key);
-                if (reference && !button.contains(reference)) changes.observe(reference, { childList: true, characterData: true, subtree: true });
-            }
-            resize = new ResizeObserver(() => {
-                if (!button.isConnected || !button.getClientRects().length) clear();
-            });
-            resize.observe(button);
             timer = setTimeout(() => {
                 timer = undefined;
-                if (!button.isConnected || !button.getClientRects().length) { clear(); return; }
-                button.setAttribute('aria-describedby', [described, id].filter(Boolean).join(' '));
-                setTip({ text: label(button), anchor: button, host: button.closest('dialog[open]') ?? document.body, seal: button.hasAttribute('data-deposit-verified') });
-            }, immediate ? 0 : 220);
+                reveal();
+            }, 220);
         };
         const over = (event: MouseEvent): void => show(event.target);
         const out = (event: MouseEvent): void => {
@@ -105,7 +106,7 @@ export function SurfaceTooltips({ scope }: { readonly scope: string }): React.Re
         const focus = (event: FocusEvent): void => show(event.target, true);
         const key = (event: KeyboardEvent): void => { if (event.key === 'Escape') clear(); };
         const onScroll = (): void => {
-            if (active?.isConnected) {
+            if (tipVisible && active?.isConnected) {
                 const rect = active.getBoundingClientRect();
                 if (Math.abs(rect.left - anchorLeft) < 0.5 && Math.abs(rect.top - anchorTop) < 0.5) return;
             }

@@ -628,10 +628,16 @@
     display: inline-grid; place-items: center; min-width: 18px; height: 18px; box-sizing: border-box; padding: 0 5px; border-radius: 999px;
     color: #fff; background: linear-gradient(135deg, #7b5cff, #d9468b); box-shadow: 0 0 0 2px var(--nmx-panel); font-size: 10.5px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
 }
-.nmx-shell .nmx-comic-chat-header .nmx-studio-desk.has-hint { border-color: color-mix(in srgb, #7b5cff 60%, var(--nmx-border)); animation: nmx-library-glow 2.4s ease-in-out infinite; }
+.nmx-shell .nmx-comic-chat-header .nmx-studio-desk.has-hint { position: relative; border-color: color-mix(in srgb, #7b5cff 60%, var(--nmx-border)); }
+.nmx-shell .nmx-comic-chat-header .nmx-studio-desk.has-hint::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    box-shadow: 0 0 0 4px rgba(123, 92, 255, .28);
+    will-change: opacity;
+    animation: nmx-library-glow 2.4s ease-in-out infinite;
+}
 @keyframes nmx-library-glow {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(123, 92, 255, 0); }
-    50% { box-shadow: 0 0 0 4px rgba(123, 92, 255, .28); }
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
 }
 .nmx-shell .nmx-comic-library-hint {
     position: absolute; top: calc(100% + 10px); inset-inline-end: 0; z-index: 30; display: grid; grid-template-columns: auto 1fr; align-items: start; gap: 10px 11px;
@@ -661,7 +667,7 @@
 .nmx-comic-library-ghost.is-icon { border: 1px solid rgba(255, 255, 255, .16); border-radius: 14px; color: #fff; background: linear-gradient(135deg, #14b8a6, #6366f1); }
 .nmx-comic-library-ghost.is-icon > .codicon { font-size: 22px; }
 @media (prefers-reduced-motion: reduce) {
-    .nmx-shell .nmx-comic-chat-header .nmx-studio-desk.has-hint, .nmx-shell .nmx-comic-library-hint { animation: none; }
+    .nmx-shell .nmx-comic-chat-header .nmx-studio-desk.has-hint::after, .nmx-shell .nmx-comic-library-hint { animation: none; }
 }
 .nmx-shell .nmx-comic-chat-header .nmx-comic-chat-folder-open {
     display: inline-flex; align-items: center; gap: 5px; margin: 0; padding: 1px 6px; border: 0; border-radius: 6px;

@@ -77,9 +77,15 @@
 .nmx-mc-merchants { display: grid; gap: 8px; align-items: stretch; }
 .nmx-mc-merchant { min-width: 0; padding: 12px 14px; display: grid; grid-template-columns: minmax(140px, 1fr) 304px auto; align-items: center; gap: 12px; border: 1px solid var(--mc-line); border-color: var(--mc-line) !important; border-radius: 9px; background: var(--mc-surface); }
 .nmx-mc-identity { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nmx-mc-identity-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; width: 100%; }
+.nmx-mc-identity-title { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; }
+.nmx-mc-identity-head > .nmx-mc-hint { flex: none; }
 /* Long merchant names fade out at the inline end; the full name stays in the hover hint. */
-.nmx-mc-identity > .nmx-mc-hint { width: 100%; max-width: 100%; }
+.nmx-mc-identity > .nmx-mc-hint,
+.nmx-mc-identity-title > .nmx-mc-hint { width: 100%; max-width: 100%; }
 .nmx-mc-identity strong { min-width: 0; flex: 1 1 auto; max-width: 100%; font-size: 14px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: clip; -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }
+.nmx-shell[dir='rtl'] .nmx-mc-identity strong,
+.nmx-shell[dir='rtl'] .nmx-mc-identity code { -webkit-mask-image: linear-gradient(270deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(270deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }
 .nmx-mc-capabilities { gap: 5px; flex-wrap: wrap; }
 .nmx-mc-capabilities small { border: 0; background: color-mix(in srgb, var(--mc-text) 5%, transparent); padding: 1px 4px; border-radius: 3px; }
 /* Some of the store's APIs are off sale, or every check of the last day failed (apiStatus.detailReason). The amber is
@@ -91,12 +97,13 @@
 .nmx-mc-identity > span { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .nmx-mc-identity code, .nmx-mc-identity small { color: var(--mc-muted); font-size: 10px; }
 .nmx-mc-identity code { min-width: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); mask-image: linear-gradient(90deg, #000 0%, #000 calc(100% - 18px), transparent 100%); }
-.nmx-shell .nmx-mc-identity button { padding: 0; width: 20px; height: 18px; }
+.nmx-shell .nmx-mc-identity button:not([data-model-center-list]) { padding: 0; width: 20px; height: 18px; }
+.nmx-shell .nmx-mc-identity-head button[data-model-center-list] { height: 24px; padding: 0 7px; font-size: 12px; white-space: nowrap; }
 .nmx-mc-identity .codicon { color: var(--mc-muted); font-size: 12px; }
 /* A store holding the platform's security deposit: its name in the deposit rainbow (the gold stays its colour, under
    the clipped gradient), the gold seal right after it. Beside the seal the name is only as wide as its text, so all
    seven stops fall on it and an ellipsis marks a cut (the fade would cut every name short). */
-.nmx-mc-identity > .nmx-mc-name-line { display: flex; align-items: center; gap: 5px; width: 100%; max-width: 100%; min-width: 0; }
+.nmx-mc-identity-title > .nmx-mc-name-line { display: flex; align-items: center; gap: 5px; width: 100%; max-width: 100%; min-width: 0; }
 .nmx-mc-name-line > .nmx-mc-hint:first-child { flex: 0 1 auto; min-width: 0; }
 .nmx-mc-name-line > .nmx-mc-hint:first-child > strong { text-overflow: ellipsis; -webkit-mask-image: none; mask-image: none; }
 .nmx-mc-name-line > .nmx-mc-hint:last-child { flex: none; border-radius: 50%; }
@@ -137,7 +144,8 @@
 .nmx-mc-merchants--grid > .nmx-mc-merchant { height: 100%; box-sizing: border-box; display: grid; grid-row: span 3; grid-template-rows: subgrid; grid-template-columns: minmax(0, 1fr); row-gap: 12px; align-items: stretch; }
 .nmx-mc-merchants--grid .nmx-mc-identity { grid-row: 1; grid-column: 1; min-width: 0; align-self: start; }
 .nmx-mc-merchants--grid .nmx-mc-metrics { grid-row: 2; grid-column: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; align-items: center; min-height: 24px; font-variant-numeric: tabular-nums; }
-.nmx-mc-merchants--grid .nmx-mc-actions { grid-row: 3; grid-column: 1; align-self: end; margin: 0; border-top: 1px solid var(--mc-line); padding-top: 8px; justify-content: space-between; }
+.nmx-mc-merchants--grid .nmx-mc-actions { grid-row: 3; grid-column: 1; align-self: end; margin: 0; border-top: 1px solid var(--mc-line); padding-top: 8px; justify-content: flex-end; }
+.nmx-mc-merchants--grid .nmx-mc-merchant.is-unavailable .nmx-mc-actions { justify-content: space-between; }
 .nmx-mc-delisted { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border: 1px solid var(--mc-line); border-radius: 999px; font-size: 10px; line-height: 1; }
 .nmx-shell .nmx-mc-merchant.is-unavailable .nmx-mc-actions button { display: inline-flex; align-items: center; gap: 5px; width: auto; padding: 0 8px; color: var(--mc-muted); }
 .nmx-shell .nmx-mc-merchant.is-unavailable .nmx-mc-actions button:hover { color: var(--mc-text); }
@@ -260,8 +268,8 @@
     .nmx-mc-metrics { grid-column: 1; grid-row: 2; grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .nmx-mc-actions { grid-column: 2; grid-row: 1 / 3; }
 }
-@container (max-width: 680px) {
-    .nmx-mc-merchants--grid { gap: 8px; }
+@container (max-width: 720px) {
+    .nmx-mc-merchants--grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 }
 @container (max-width: 550px) {
     .nmx-mc-merchant { display: flex; flex-direction: column; align-items: stretch; padding: 12px; gap: 12px; }
@@ -269,8 +277,8 @@
     .nmx-mc-actions { border-top: 1px solid var(--mc-line); padding-top: 8px; justify-content: space-between; }
     .nmx-mc-directory-toolbar { flex-wrap: wrap; }
 }
-@container (max-width: 460px) {
-    .nmx-mc-merchants--grid { gap: 6px; }
+@container (max-width: 480px) {
+    .nmx-mc-merchants--grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 }
 @media (max-height: 480px) {
     /* The drawer only spans the tab content area: keep the model list usable. */

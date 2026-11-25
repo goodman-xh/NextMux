@@ -4,6 +4,9 @@
  */
 
 export const DEFAULT_CANVAS_CULL_OVERSCAN_PX = 300;
+export const DEFAULT_CANVAS_CULL_EXIT_OVERSCAN_PX = 600;
+export const CANVAS_CULL_PAN_THRESHOLD_PX = 120;
+export const CANVAS_CULL_ZOOM_THRESHOLD_RATIO = 0.1;
 
 export interface CanvasCullingViewport {
     readonly x: number;
@@ -41,6 +44,8 @@ export interface ComputeCulledCanvasNodesOptions {
     readonly viewport: CanvasCullingViewport;
     readonly viewportSize: CanvasCullingViewportSize;
     readonly overscanPx?: number;
+    readonly cullOverscanPx?: number;
+    readonly previouslyCulledIds?: ReadonlySet<string>;
     readonly selectedIds?: ReadonlySet<string>;
     readonly draggedIds?: ReadonlySet<string>;
     readonly focusedIds?: ReadonlySet<string>;
@@ -95,11 +100,21 @@ export function canvasRectIntersectsWorldBounds(rect: CanvasCullingRect, bounds:
  * Compute the set of offscreen canvas node IDs that should be marked `.is-culled`.
  * Follows tldraw-style exclusions: selected, dragged, focused, editing, or actively playing
  * media nodes are NEVER culled; offscreen generating/busy nodes MAY be culled.
+ * When `previouslyCulledIds` is supplied, applies hysteresis: previously culled nodes stay
+ * culled until entering `overscanPx` (300px), and visible nodes stay visible until leaving
+ * `cullOverscanPx` (600px).
  */
 export function computeCulledCanvasNodeIds(options: ComputeCulledCanvasNodesOptions): Set<string> {
-    const bounds = computeCanvasViewportWorldBounds(options.viewport, options.viewportSize, options.overscanPx);
+    const uncullOverscan = options.overscanPx ?? DEFAULT_CANVAS_CULL_OVERSCAN_PX;
+    const bounds = computeCanvasViewportWorldBounds(options.viewport, options.viewportSize, uncullOverscan);
     const culled = new Set<string>();
     if (!bounds) return culled;
+
+    const { previouslyCulledIds } = options;
+    const exitOverscan = options.cullOverscanPx ?? Math.max(uncullOverscan, DEFAULT_CANVAS_CULL_EXIT_OVERSCAN_PX);
+    const exitBounds = previouslyCulledIds && exitOverscan > uncullOverscan
+        ? (computeCanvasViewportWorldBounds(options.viewport, options.viewportSize, exitOverscan) ?? bounds)
+        : bounds;
 
     const { nodes, selectedIds, draggedIds, focusedIds, editingIds, playingIds } = options;
     for (const node of nodes) {
@@ -112,15 +127,133 @@ export function computeCulledCanvasNodeIds(options: ComputeCulledCanvasNodesOpti
         ) {
             continue;
         }
-        const visible = canvasRectIntersectsWorldBounds(
-            { x: node.position.x, y: node.position.y, width: node.size.width, height: node.size.height },
-            bounds
-        );
-        if (!visible) {
+        const rect = { x: node.position.x, y: node.position.y, width: node.size.width, height: node.size.height };
+        const activeBounds = previouslyCulledIds && !previouslyCulledIds.has(node.id) ? exitBounds : bounds;
+        if (!canvasRectIntersectsWorldBounds(rect, activeBounds)) {
             culled.add(node.id);
         }
     }
     return culled;
+}
+
+/** Return true when panning (>120px) or zooming (>10%) exceeds the viewport culling quantize threshold. */
+export function shouldRecomputeCanvasCullingViewport(
+    prev: CanvasCullingViewport | undefined,
+    next: CanvasCullingViewport
+): boolean {
+    if (!prev) return true;
+    if (Math.abs(next.x - prev.x) > CANVAS_CULL_PAN_THRESHOLD_PX) return true;
+    if (Math.abs(next.y - prev.y) > CANVAS_CULL_PAN_THRESHOLD_PX) return true;
+    if (!Number.isFinite(prev.zoom) || prev.zoom <= 0 || !Number.isFinite(next.zoom) || next.zoom <= 0) return true;
+    return Math.abs(next.zoom - prev.zoom) / prev.zoom > CANVAS_CULL_ZOOM_THRESHOLD_RATIO;
+}
+
+/** Per-canvas external store with quantized viewport updates and 300px/600px hysteresis. */
+export class CanvasCullingStore {
+    private viewport: CanvasCullingViewport;
+    private evaluatedViewport: CanvasCullingViewport | undefined;
+    private viewportSize: CanvasCullingViewportSize = { width: 0, height: 0 };
+    private nodes: readonly CanvasCullingNodeInput[] = [];
+    private selectedIds: ReadonlySet<string> = new Set();
+    private draggedIds: ReadonlySet<string> = new Set();
+    private focusedIds: Set<string> = new Set();
+    private editingIds: ReadonlySet<string> = new Set();
+    private playingIds: Set<string> = new Set();
+    private culledIds: Set<string> = new Set();
+    private listeners: Map<string, Set<() => void>> = new Map();
+
+    constructor(initialViewport: CanvasCullingViewport) {
+        this.viewport = initialViewport.zoom > 0 ? initialViewport : { x: 0, y: 0, zoom: 1 };
+    }
+
+    isCulled(id: string): boolean {
+        return this.culledIds.has(id);
+    }
+
+    subscribe(id: string, listener: () => void): () => void {
+        let bucket = this.listeners.get(id);
+        if (!bucket) {
+            bucket = new Set();
+            this.listeners.set(id, bucket);
+        }
+        bucket.add(listener);
+        return () => {
+            const current = this.listeners.get(id);
+            if (!current) return;
+            current.delete(listener);
+            if (current.size === 0) this.listeners.delete(id);
+        };
+    }
+
+    setViewport(viewport: CanvasCullingViewport): void {
+        if (viewport.x === this.viewport.x && viewport.y === this.viewport.y && viewport.zoom === this.viewport.zoom) return;
+        this.viewport = viewport;
+        if (!shouldRecomputeCanvasCullingViewport(this.evaluatedViewport, viewport)) return;
+        this.recompute();
+    }
+
+    setViewportSize(size: CanvasCullingViewportSize): void {
+        if (size.width === this.viewportSize.width && size.height === this.viewportSize.height) return;
+        this.viewportSize = size;
+        this.recompute();
+    }
+
+    setInputs(inputs: {
+        readonly nodes: readonly CanvasCullingNodeInput[];
+        readonly selectedIds: ReadonlySet<string>;
+        readonly draggedIds: ReadonlySet<string>;
+        readonly editingIds: ReadonlySet<string>;
+    }): void {
+        this.nodes = inputs.nodes;
+        this.selectedIds = inputs.selectedIds;
+        this.draggedIds = inputs.draggedIds;
+        this.editingIds = inputs.editingIds;
+        const alive = new Set(inputs.nodes.map(node => node.id));
+        for (const id of [...this.focusedIds]) if (!alive.has(id)) this.focusedIds.delete(id);
+        for (const id of [...this.playingIds]) if (!alive.has(id)) this.playingIds.delete(id);
+        this.recompute();
+    }
+
+    setFocusedIds(ids: ReadonlySet<string>): void {
+        if (sameCulledNodeIdSet(this.focusedIds, ids)) return;
+        this.focusedIds = new Set(ids);
+        this.recompute();
+    }
+
+    setPlayingIds(ids: ReadonlySet<string>): void {
+        if (sameCulledNodeIdSet(this.playingIds, ids)) return;
+        this.playingIds = new Set(ids);
+        this.recompute();
+    }
+
+    private recompute(): void {
+        const hasValidBounds = Boolean(computeCanvasViewportWorldBounds(this.viewport, this.viewportSize, DEFAULT_CANVAS_CULL_OVERSCAN_PX));
+        const next = computeCulledCanvasNodeIds({
+            nodes: this.nodes,
+            viewport: this.viewport,
+            viewportSize: this.viewportSize,
+            overscanPx: DEFAULT_CANVAS_CULL_OVERSCAN_PX,
+            cullOverscanPx: DEFAULT_CANVAS_CULL_EXIT_OVERSCAN_PX,
+            ...(this.evaluatedViewport ? { previouslyCulledIds: this.culledIds } : {}),
+            selectedIds: this.selectedIds,
+            draggedIds: this.draggedIds,
+            focusedIds: this.focusedIds,
+            editingIds: this.editingIds,
+            playingIds: this.playingIds
+        });
+        if (hasValidBounds) this.evaluatedViewport = this.viewport;
+        if (sameCulledNodeIdSet(this.culledIds, next)) return;
+        const prev = this.culledIds;
+        this.culledIds = next;
+        const changed: string[] = [];
+        for (const id of prev) if (!next.has(id)) changed.push(id);
+        for (const id of next) if (!prev.has(id)) changed.push(id);
+        for (const id of changed) {
+            const bucket = this.listeners.get(id);
+            if (!bucket) continue;
+            for (const listener of [...bucket]) listener();
+        }
+    }
 }
 
 /** Fast structural equality helper for culled node ID sets. */

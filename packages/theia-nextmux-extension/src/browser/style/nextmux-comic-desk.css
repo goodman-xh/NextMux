@@ -53,7 +53,7 @@
     background: radial-gradient(circle, var(--nmx-panel) 12px, transparent 13px), conic-gradient(var(--nmx-accent) calc(var(--nmx-left) * 360deg), var(--nmx-border) 0);
 }
 
-.nmx-desk-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; perspective: 1400px; }
+.nmx-desk-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; perspective: 1400px; contain: layout paint style; }
 .nmx-desk-empty { display: flex; flex-direction: column; height: 100%; align-items: center; justify-content: center; gap: 10px; color: var(--nmx-muted); font-size: 14px; }
 .nmx-desk-empty .codicon { font-size: 26px; color: var(--nmx-accent); }
 .nmx-desk-empty strong { font-size: 16px; font-weight: 600; color: var(--nmx-text); }

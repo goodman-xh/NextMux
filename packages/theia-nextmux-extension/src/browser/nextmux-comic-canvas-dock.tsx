@@ -13,14 +13,13 @@ export function canvasDockText(locale: string, key: keyof typeof messages): stri
 function read(key: string): boolean { try { return localStorage.getItem(key) === 'true'; } catch { return false; } }
 
 /** Display-only docking. It never changes grid snapping, the canvas document, or any model input. */
-export function CanvasAutoDock(props: {
+export const CanvasAutoDock = React.memo(function CanvasAutoDock(props: {
     readonly locale: string; readonly storageKey: string; readonly root: React.RefObject<HTMLDivElement>;
     readonly keepOpen: boolean; readonly children: React.ReactNode;
 }): React.ReactElement {
     const [enabled, setEnabled] = React.useState(() => read(props.storageKey));
     const [hidden, setHidden] = React.useState(false);
     const [hovered, setHovered] = React.useState(false), [focused, setFocused] = React.useState(false);
-    const [panelOpen, setPanelOpen] = React.useState(false);
     const delay = React.useRef(1200), dock = React.useRef<HTMLDivElement>(null);
     const focusRevealed = React.useRef(false);
     React.useLayoutEffect(() => {
@@ -30,20 +29,10 @@ export function CanvasAutoDock(props: {
     }, [hidden]);
     React.useEffect(() => { setEnabled(read(props.storageKey)); setHidden(false); delay.current = 1200; }, [props.storageKey]);
     React.useEffect(() => {
-        if (!enabled) { setPanelOpen(false); return; }
-        const board = props.root.current;
-        if (!board) return;
-        const check = (): void => setPanelOpen(Boolean(board.querySelector('[role="dialog"], .nmx-board-side, .nmx-board-menu, .nmx-board-tools')));
-        check();
-        const observer = new MutationObserver(check);
-        observer.observe(board, { childList: true, subtree: true, attributes: true, attributeFilter: ['role'] });
-        return () => observer.disconnect();
-    }, [props.root, enabled]);
-    React.useEffect(() => {
-        if (!enabled || props.keepOpen || panelOpen || hovered || focused) { setHidden(false); return; }
+        if (!enabled || props.keepOpen || hovered || focused) { setHidden(false); return; }
         const timer = window.setTimeout(() => setHidden(true), delay.current);
         return () => window.clearTimeout(timer);
-    }, [enabled, props.keepOpen, panelOpen, hovered, focused]);
+    }, [enabled, props.keepOpen, hovered, focused]);
     const toggle = (): void => {
         const value = !enabled; delay.current = 1200; setHidden(false); setEnabled(value);
         try { localStorage.setItem(props.storageKey, String(value)); } catch { /* The preference still works this session. */ }
@@ -59,4 +48,4 @@ export function CanvasAutoDock(props: {
         <button type='button' className={enabled ? 'is-on' : ''} aria-pressed={enabled} aria-label={canvasDockText(props.locale, 'autoHide')}
             title={canvasDockText(props.locale, 'autoHide')} onMouseDown={event => event.preventDefault()} onClick={toggle}><i className='codicon codicon-pin' aria-hidden='true' /></button>
     </div>;
-}
+});

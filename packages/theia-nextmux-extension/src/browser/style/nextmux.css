@@ -231,20 +231,20 @@
     line-height: 39px !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-left-content-panel,
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-right-content-panel,
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-statusBar,
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-TabBar.theia-app-centers.theia-app-main {
+body.nmx-widget-active #theia-app-shell #theia-left-content-panel,
+body.nmx-widget-active #theia-app-shell #theia-right-content-panel,
+body.nmx-widget-active #theia-app-shell #theia-statusBar,
+body.nmx-widget-active #theia-app-shell .lm-TabBar.theia-app-centers.theia-app-main {
     display: none !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-left-right-split-panel {
+body.nmx-widget-active #theia-app-shell #theia-left-right-split-panel {
     top: 40px !important;
     height: calc(100% - 40px) !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-bottom-split-panel,
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-main-content-panel {
+body.nmx-widget-active #theia-app-shell #theia-bottom-split-panel,
+body.nmx-widget-active #theia-app-shell #theia-main-content-panel {
     left: 0 !important;
     width: 100% !important;
     height: 100% !important;
@@ -5914,18 +5914,18 @@
     }
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-left-right-split-panel {
+body.nmx-widget-active #theia-app-shell #theia-left-right-split-panel {
     top: 0 !important;
     height: 100% !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-top-panel {
+body.nmx-widget-active #theia-app-shell #theia-top-panel {
     z-index: 1200 !important;
     border-bottom: 0 !important;
     background: linear-gradient(90deg, transparent 0 109px, #251d20 109px, #251d20 385px, #222020 100%) !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-top-panel::before {
+body.nmx-widget-active #theia-app-shell #theia-top-panel::before {
     position: absolute;
     top: 0;
     right: 0;
@@ -5936,30 +5936,30 @@
     pointer-events: none;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar {
+body.nmx-widget-active #theia-app-shell #theia\:menubar {
     left: 204px !important;
     z-index: 3 !important;
     pointer-events: auto !important;
     -webkit-app-region: no-drag !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar *,
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar .lm-MenuBar-item {
+body.nmx-widget-active #theia-app-shell #theia\:menubar *,
+body.nmx-widget-active #theia-app-shell #theia\:menubar .lm-MenuBar-item {
     -webkit-app-region: no-drag !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar .lm-MenuBar-item {
+body.nmx-widget-active #theia-app-shell #theia\:menubar .lm-MenuBar-item {
     min-width: 52px !important;
     padding: 0 11px !important;
     color: #a9a3a6 !important;
     font-size: 13px !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-custom-title {
+body.nmx-widget-active #theia-app-shell #theia-custom-title {
     display: none !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu {
+body.nmx-widget-active .lm-Menu {
     padding: 5px !important;
     border: 1px solid #484245 !important;
     border-radius: 9px !important;
@@ -5968,42 +5968,42 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu {
     box-shadow: 0 18px 48px rgba(0, 0, 0, .46) !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-MenuBar-menu {
+body.nmx-widget-active .lm-MenuBar-menu {
     margin-top: 9px !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item {
+body.nmx-widget-active .lm-Menu-item {
     min-height: 29px !important;
     border-radius: 6px !important;
     color: #c9c4c6 !important;
     background: transparent !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item.lm-mod-active {
+body.nmx-widget-active .lm-Menu-item.lm-mod-active {
     color: #eeeaec !important;
     background: #343032 !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item.lm-mod-disabled {
+body.nmx-widget-active .lm-Menu-item.lm-mod-disabled {
     color: #696366 !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-itemLabel {
+body.nmx-widget-active .lm-Menu-itemLabel {
     padding-left: 7px !important;
     font-size: 14px !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-itemShortcut {
+body.nmx-widget-active .lm-Menu-itemShortcut {
     padding-right: 7px !important;
     color: #8a8386 !important;
     font-size: 13px !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type='separator'] {
+body.nmx-widget-active .lm-Menu-item[data-type='separator'] {
     min-height: 9px !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type='separator']::after {
+body.nmx-widget-active .lm-Menu-item[data-type='separator']::after {
     border-top-color: #3d383a !important;
 }
 
@@ -8685,7 +8685,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     .nmx-titlebar-actions {
         left: 93px;
     }
-    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar {
+    body.nmx-widget-active #theia-app-shell #theia\:menubar {
         left: 188px !important;
     }
     .nmx-rail-button {
@@ -10860,7 +10860,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
 }
 
 .nmx-shell::after,
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-top-panel::before {
+body.nmx-widget-active #theia-app-shell #theia-top-panel::before {
     left: 56px;
 }
 
@@ -10868,11 +10868,11 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     left: 60px;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-top-panel {
+body.nmx-widget-active #theia-app-shell #theia-top-panel {
     background: linear-gradient(90deg, transparent 0 56px, #251d20 56px, #251d20 332px, #222020 100%) !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar {
+body.nmx-widget-active #theia-app-shell #theia\:menubar {
     left: 151px !important;
 }
 
@@ -12402,7 +12402,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
 }
 
 .nmx-shell::after,
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-top-panel::before {
+body.nmx-widget-active #theia-app-shell #theia-top-panel::before {
     left: 0;
 }
 
@@ -12410,11 +12410,11 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     left: 4px;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-top-panel {
+body.nmx-widget-active #theia-app-shell #theia-top-panel {
     background: linear-gradient(90deg, #211e20 0, #211e20 276px, #222020 276px, #222020 100%) !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar {
+body.nmx-widget-active #theia-app-shell #theia\:menubar {
     left: 95px !important;
 }
 
@@ -12693,7 +12693,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
         grid-template-columns: minmax(0, 1fr);
     }
 
-    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-top-panel {
+    body.nmx-widget-active #theia-app-shell #theia-top-panel {
         background: linear-gradient(90deg, #211e20 0, #211e20 250px, #222020 250px, #222020 100%) !important;
     }
 }
@@ -12833,7 +12833,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type=
     background: transparent;
 }
 
-.nmx-shell:has(.nmx-terminal-drawer.is-open) .nmx-work-context {
+.nmx-shell.is-terminal-open .nmx-work-context {
     bottom: var(--nmx-terminal-drawer-height, 264px);
 }
 
@@ -12880,11 +12880,11 @@ html.nmx-pane-resizing-y * {
     -webkit-app-region: no-drag !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-top-panel {
+body.nmx-widget-active #theia-app-shell #theia-top-panel {
     background: linear-gradient(90deg, #211e20 0, #211e20 var(--nmx-context-panel-width, 276px), #222020 var(--nmx-context-panel-width, 276px), #222020 100%) !important;
 }
 
-#theia-app-shell:has(.nmx-shell.is-context-collapsed) #theia-top-panel {
+body.nmx-widget-active.nmx-context-collapsed #theia-app-shell #theia-top-panel {
     background: #222020 !important;
 }
 
@@ -13080,14 +13080,14 @@ html.nmx-pane-resizing-y * {
     }
 }
 
-#theia-app-shell:has(.nmx-theme-light) #theia-top-panel {
+body.nmx-theme-light-active #theia-app-shell #theia-top-panel {
     color: #343034 !important;
     background: #f5f3f4 !important;
     border-color: #d9d5d7 !important;
 }
 
-#theia-app-shell:has(.nmx-theme-light) #theia-top-panel .lm-MenuBar-item:hover,
-#theia-app-shell:has(.nmx-theme-light) #theia-top-panel .lm-MenuBar-item.lm-mod-active {
+body.nmx-theme-light-active #theia-app-shell #theia-top-panel .lm-MenuBar-item:hover,
+body.nmx-theme-light-active #theia-app-shell #theia-top-panel .lm-MenuBar-item.lm-mod-active {
     background: #e9e6e8 !important;
 }
 
@@ -14728,7 +14728,7 @@ body.theia-dark .nmx-file-editor-tabs:hover::-webkit-scrollbar-thumb,
     display: block;
 }
 
-.nmx-shell:has(.nmx-work-context.is-editor-maximized) .nmx-workspace {
+.nmx-shell.is-editor-maximized .nmx-workspace {
     margin-right: 0;
 }
 
@@ -15494,7 +15494,7 @@ body.theia-dark .nmx-file-editor-tabs:hover::-webkit-scrollbar-thumb,
     background: #fff7f7 !important;
 }
 
-.nmx-shell:has(.nmx-terminal-drawer.is-open) .nmx-work-context {
+.nmx-shell.is-terminal-open .nmx-work-context {
     bottom: 0;
 }
 
@@ -18520,7 +18520,7 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     text-align: center;
 }
 
-.nmx-shell:has(.nmx-terminal-drawer.is-open) .nmx-model-picker-popover > .nmx-model-picker-list {
+.nmx-shell.is-terminal-open .nmx-model-picker-popover > .nmx-model-picker-list {
     max-height: none;
 }
 
@@ -18906,8 +18906,7 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     color: #494346;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden))
-    #theia-left-right-split-panel > .lm-SplitPanel-handle {
+body.nmx-widget-active #theia-app-shell #theia-left-right-split-panel > .lm-SplitPanel-handle {
     display: none !important;
     pointer-events: none !important;
 }
@@ -18970,14 +18969,14 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     background: var(--nmx-bg);
 }
 
-#theia-app-shell:has(.nmx-theme-light) #theia-top-panel {
+body.nmx-theme-light-active #theia-app-shell #theia-top-panel {
     color: #302c2f !important;
     background: #e9e6e3 !important;
     border-color: #ded9d5 !important;
 }
 
-#theia-app-shell:has(.nmx-theme-light) #theia-main-content-panel,
-#theia-app-shell:has(.nmx-theme-light) #nextmux\.desktop\.widget {
+body.nmx-theme-light-active #theia-app-shell #theia-main-content-panel,
+body.nmx-theme-light-active #theia-app-shell #nextmux\.desktop\.widget {
     background: #f1efed !important;
 }
 
@@ -19027,11 +19026,11 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
 }
 
 /* Filled buttons (primary, danger, send) keep their own hover fill; see nextmux-light-contrast.css. */
-.nmx-theme-light :is(button:hover:not(.nmx-primary-button, .is-primary, .is-danger, .nmx-send-button, .nmx-plugin-chat-send-btn, .nmx-comic-editor-mic.is-active, .nmx-zoom-button, .nmx-board-chips button.is-active, .nmx-board-marks-group button.is-on, .nmx-canvas-tabs-dialog button:last-child, .nmx-camera-confirm, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate, .nmx-comic-setup-toggle, .nmx-comic-chat-recommend.is-on, [role='switch'], .nmx-library-upload-btn, .nmx-library-use-btn, .nmx-comic-studio-lib-zoom, .nmx-library-zoom-btn, .nmx-library-lightbox-close, .nmx-library-delete-ok, .nmx-library-toolbar button[aria-pressed='true'], .nmx-cut-export, .nmx-comic-export-start, .nmx-account-update, .nmx-director-stage button[aria-pressed='true'], .nmx-director-stage .nmx-director-modes > button.is-active, .nmx-director-stage .nmx-director-Play, .nmx-director-stage .nmx-director-Generate, .nmx-director-stage .nmx-director-Primary, .nmx-director-stage .nmx-director-inspector nav button, .nmx-director-stage .nmx-director-catalogue nav button, .nmx-director-stage .nmx-director-colors button, .nmx-director-stage .nmx-director-track button, .nmx-comic-studio-modal button, .nmx-comic-studio-context-menu button, .nmx-comic-studio-lightbox button, .nmx-attachment-lightbox button, .nmx-library-lightbox button), button.is-active:not(.nmx-primary-button, .is-primary, .is-danger, .nmx-send-button, .nmx-plugin-chat-send-btn, .nmx-comic-editor-mic, .nmx-zoom-button, .nmx-board-chips button, .nmx-board-marks-group button.is-on, .nmx-canvas-tabs-dialog button:last-child, .nmx-camera-confirm, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate, .nmx-comic-setup-toggle, .nmx-comic-chat-recommend.is-on, [role='switch'], .nmx-library-upload-btn, .nmx-library-use-btn, .nmx-comic-studio-lib-zoom, .nmx-library-zoom-btn, .nmx-library-lightbox-close, .nmx-library-delete-ok, .nmx-library-toolbar button[aria-pressed='true'], .nmx-cut-export, .nmx-comic-export-start, .nmx-account-update, .nmx-director-stage button[aria-pressed='true'], .nmx-director-stage .nmx-director-modes > button.is-active, .nmx-director-stage .nmx-director-Play, .nmx-director-stage .nmx-director-Generate, .nmx-director-stage .nmx-director-Primary, .nmx-director-stage .nmx-director-inspector nav button, .nmx-director-stage .nmx-director-catalogue nav button, .nmx-director-stage .nmx-director-colors button, .nmx-director-stage .nmx-director-track button, .nmx-comic-studio-modal button, .nmx-comic-studio-context-menu button, .nmx-comic-studio-lightbox button, .nmx-attachment-lightbox button, .nmx-library-lightbox button), .nmx-session-row:hover, .nmx-session-row.is-current, .nmx-model-option.is-selected > button) {
+.nmx-theme-light :is(button:hover:not(.nmx-primary-button, .is-primary, .is-danger, .nmx-send-button, .nmx-agent-child-send, .nmx-plugin-chat-send-btn, .nmx-comic-editor-mic.is-active, .nmx-zoom-button, .nmx-board-chips button.is-active, .nmx-board-marks-group button.is-on, .nmx-canvas-tabs-dialog button:last-child, .nmx-camera-confirm, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate, .nmx-comic-setup-toggle, .nmx-comic-chat-recommend.is-on, [role='switch'], .nmx-library-upload-btn, .nmx-library-use-btn, .nmx-comic-studio-lib-zoom, .nmx-library-zoom-btn, .nmx-library-lightbox-close, .nmx-library-delete-ok, .nmx-library-toolbar button[aria-pressed='true'], .nmx-cut-export, .nmx-comic-export-start, .nmx-account-update, .nmx-director-stage button[aria-pressed='true'], .nmx-director-stage .nmx-director-modes > button.is-active, .nmx-director-stage .nmx-director-Play, .nmx-director-stage .nmx-director-Generate, .nmx-director-stage .nmx-director-Primary, .nmx-director-stage .nmx-director-inspector nav button, .nmx-director-stage .nmx-director-catalogue nav button, .nmx-director-stage .nmx-director-colors button, .nmx-director-stage .nmx-director-track button, .nmx-comic-studio-modal button, .nmx-comic-studio-context-menu button, .nmx-comic-studio-lightbox button, .nmx-attachment-lightbox button, .nmx-library-lightbox button), button.is-active:not(.nmx-primary-button, .is-primary, .is-danger, .nmx-send-button, .nmx-agent-child-send, .nmx-plugin-chat-send-btn, .nmx-comic-editor-mic, .nmx-zoom-button, .nmx-board-chips button, .nmx-board-marks-group button.is-on, .nmx-canvas-tabs-dialog button:last-child, .nmx-camera-confirm, .nmx-comic-cats-new, .nmx-cast-new, .nmx-board-generate, .nmx-comic-setup-toggle, .nmx-comic-chat-recommend.is-on, [role='switch'], .nmx-library-upload-btn, .nmx-library-use-btn, .nmx-comic-studio-lib-zoom, .nmx-library-zoom-btn, .nmx-library-lightbox-close, .nmx-library-delete-ok, .nmx-library-toolbar button[aria-pressed='true'], .nmx-cut-export, .nmx-comic-export-start, .nmx-account-update, .nmx-director-stage button[aria-pressed='true'], .nmx-director-stage .nmx-director-modes > button.is-active, .nmx-director-stage .nmx-director-Play, .nmx-director-stage .nmx-director-Generate, .nmx-director-stage .nmx-director-Primary, .nmx-director-stage .nmx-director-inspector nav button, .nmx-director-stage .nmx-director-catalogue nav button, .nmx-director-stage .nmx-director-colors button, .nmx-director-stage .nmx-director-track button, .nmx-comic-studio-modal button, .nmx-comic-studio-context-menu button, .nmx-comic-studio-lightbox button, .nmx-attachment-lightbox button, .nmx-library-lightbox button), .nmx-session-row:hover, .nmx-session-row.is-current, .nmx-model-option.is-selected > button) {
     background-color: #ddd9d6 !important;
 }
 
-.theia-ApplicationShell:has(.nmx-theme-light) {
+body.nmx-theme-light-active .theia-ApplicationShell {
     --theia-titleBar-activeBackground: #e9e6e3 !important;
     --theia-titleBar-activeForeground: #302c2f !important;
     --theia-titleBar-inactiveBackground: #e9e6e3 !important;
@@ -19148,17 +19147,17 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     background: #242124 !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)):has(.nmx-theme-light) #theia-top-panel {
+body.nmx-widget-active.nmx-theme-light-active #theia-app-shell #theia-top-panel {
     color: #302c2f !important;
     background: #e9e6e3 !important;
     border-color: #ded9d5 !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)):has(.nmx-theme-light) #theia-top-panel::before {
+body.nmx-widget-active.nmx-theme-light-active #theia-app-shell #theia-top-panel::before {
     background: #ded9d5 !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)):has(.nmx-theme-light) #theia\:menubar .lm-MenuBar-item {
+body.nmx-widget-active.nmx-theme-light-active #theia-app-shell #theia\:menubar .lm-MenuBar-item {
     color: #514b4f !important;
 }
 
@@ -20048,44 +20047,44 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
 
 /* Lumino menus are mounted under <body>, outside .nmx-shell. Theme them via
    the visible NextMux widget instead of relying on Theia's stale body theme. */
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Menu {
+body.nmx-widget-active.nmx-theme-light-active .lm-Menu {
     color: #393438 !important;
     border-color: #d8d2ce !important;
     background: #f8f6f3 !important;
     box-shadow: 0 16px 42px rgba(53, 45, 49, .16) !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Menu-item {
+body.nmx-widget-active.nmx-theme-light-active .lm-Menu-item {
     color: #4a4448 !important;
     background: transparent !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Menu-item.lm-mod-active {
+body.nmx-widget-active.nmx-theme-light-active .lm-Menu-item.lm-mod-active {
     color: #211e20 !important;
     background: #e8e4e1 !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Menu-item.lm-mod-disabled {
+body.nmx-widget-active.nmx-theme-light-active .lm-Menu-item.lm-mod-disabled {
     color: #948d91 !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Menu-itemShortcut {
+body.nmx-widget-active.nmx-theme-light-active .lm-Menu-itemShortcut {
     color: #756e72 !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Menu :is(.lm-Menu-itemIcon, .lm-Menu-itemSubmenuIcon),
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Menu-item :is(i, svg) {
+body.nmx-widget-active.nmx-theme-light-active .lm-Menu :is(.lm-Menu-itemIcon, .lm-Menu-itemSubmenuIcon),
+body.nmx-widget-active.nmx-theme-light-active .lm-Menu-item :is(i, svg) {
     color: currentColor !important;
     fill: currentColor !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Menu-content {
+body.nmx-widget-active.nmx-theme-light-active .lm-Menu-content {
     max-height: min(420px, calc(100dvh - 56px));
     overflow-y: auto;
     padding-block: 5px !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Menu-item[data-type='separator']::after {
+body.nmx-widget-active.nmx-theme-light-active .lm-Menu-item[data-type='separator']::after {
     border-top-color: #e2ddda !important;
 }
 
@@ -20093,26 +20092,26 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Men
    titlebar. Compact padding before they collide so Help never slips under the
    switcher in a narrow window. */
 @media (max-width: 1180px) {
-    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar {
+    body.nmx-widget-active #theia-app-shell #theia\:menubar {
         left: 92px !important;
         max-width: calc(50vw - 248px);
         overflow: hidden;
     }
 
-    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar > .lm-MenuBar-content {
+    body.nmx-widget-active #theia-app-shell #theia\:menubar > .lm-MenuBar-content {
         max-width: 100%;
         display: flex;
         flex-wrap: nowrap;
         overflow: hidden;
     }
 
-    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar .lm-MenuBar-item {
+    body.nmx-widget-active #theia-app-shell #theia\:menubar .lm-MenuBar-item {
         min-width: 0 !important;
         flex: 0 1 auto;
         padding-inline: 7px !important;
     }
 
-    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar .lm-MenuBar-itemLabel {
+    body.nmx-widget-active #theia-app-shell #theia\:menubar .lm-MenuBar-itemLabel {
         overflow: hidden;
         text-overflow: clip;
         white-space: nowrap;
@@ -20120,19 +20119,19 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Men
 }
 
 @media (max-width: 900px) {
-    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar {
+    body.nmx-widget-active #theia-app-shell #theia\:menubar {
         left: 88px !important;
         max-width: calc(50vw - 146px);
     }
 
-    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar .lm-MenuBar-item {
+    body.nmx-widget-active #theia-app-shell #theia\:menubar .lm-MenuBar-item {
         padding-inline: 5px !important;
     }
 }
 
 @media (max-width: 720px) {
-    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar .lm-MenuBar-item,
-    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar .lm-MenuBar-itemLabel {
+    body.nmx-widget-active #theia-app-shell #theia\:menubar .lm-MenuBar-item,
+    body.nmx-widget-active #theia-app-shell #theia\:menubar .lm-MenuBar-itemLabel {
         padding-inline: 3px !important;
         font-size: 13px !important;
     }
@@ -20140,7 +20139,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Men
 
 /* Product-menu interaction must survive both locale refreshes and Electron's
    draggable titlebar region. All four product menus are real controls. */
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar .lm-MenuBar-item {
+body.nmx-widget-active #theia-app-shell #theia\:menubar .lm-MenuBar-item {
     display: list-item !important;
     pointer-events: auto !important;
     -webkit-app-region: no-drag !important;
@@ -20282,12 +20281,12 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Men
    pushed File/Edit outside the window. Keep the native window chrome in its
    physical LTR coordinate system; translated labels and menu content still
    retain their own language and bidi shaping. */
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-top-panel,
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar {
+body.nmx-widget-active #theia-app-shell #theia-top-panel,
+body.nmx-widget-active #theia-app-shell #theia\:menubar {
     direction: ltr !important;
 }
 
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar .lm-MenuBar-itemLabel {
+body.nmx-widget-active #theia-app-shell #theia\:menubar .lm-MenuBar-itemLabel {
     unicode-bidi: plaintext;
 }
 
@@ -20814,7 +20813,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Men
 
 /* Title-bar menus are rendered as body-level Lumino portals. Give them one
    semantic palette instead of accumulating per-theme hard-coded overrides. */
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) {
+body.nmx-widget-active {
     --nmx-menu-background: #242123;
     --nmx-menu-border: #3b373a;
     --nmx-menu-foreground: #ece9eb;
@@ -20822,7 +20821,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) {
     --nmx-menu-hover: #343033;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) {
+body.nmx-widget-active.nmx-theme-light-active {
     --nmx-menu-background: #f8f6f3;
     --nmx-menu-border: #d8d2ce;
     --nmx-menu-foreground: #393438;
@@ -20830,7 +20829,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) {
     --nmx-menu-hover: #e8e4e1;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu {
+body.nmx-widget-active .lm-Menu {
     max-width: min(360px, calc(100vw - 16px));
     color: var(--nmx-menu-foreground) !important;
     border: 1px solid var(--nmx-menu-border) !important;
@@ -20840,14 +20839,14 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu {
     overflow: hidden;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-content {
+body.nmx-widget-active .lm-Menu-content {
     max-height: min(420px, calc(100dvh - 56px));
     overflow-x: hidden;
     overflow-y: auto;
     padding: 5px !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item {
+body.nmx-widget-active .lm-Menu-item {
     min-height: 30px;
     margin: 1px 0;
     color: var(--nmx-menu-foreground) !important;
@@ -20855,39 +20854,39 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item {
     background: transparent !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item.lm-mod-active {
+body.nmx-widget-active .lm-Menu-item.lm-mod-active {
     color: var(--nmx-menu-foreground) !important;
     background: var(--nmx-menu-hover) !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item:hover:not(.lm-mod-disabled),
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item.lm-mod-active:not(.lm-mod-disabled) {
+body.nmx-widget-active .lm-Menu-item:hover:not(.lm-mod-disabled),
+body.nmx-widget-active .lm-Menu-item.lm-mod-active:not(.lm-mod-disabled) {
     color: var(--nmx-menu-foreground) !important;
     background: var(--nmx-menu-hover) !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item.lm-mod-disabled {
+body.nmx-widget-active .lm-Menu-item.lm-mod-disabled {
     color: var(--nmx-menu-muted) !important;
     opacity: .52;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item.lm-mod-disabled:hover {
+body.nmx-widget-active .lm-Menu-item.lm-mod-disabled:hover {
     background: transparent !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-itemShortcut {
+body.nmx-widget-active .lm-Menu-itemShortcut {
     color: var(--nmx-menu-muted) !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type='separator'],
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item + .lm-Menu-item.lm-mod-separator {
+body.nmx-widget-active .lm-Menu-item[data-type='separator'],
+body.nmx-widget-active .lm-Menu-item + .lm-Menu-item.lm-mod-separator {
     min-height: 7px;
     margin: 1px 5px;
     border: 0 !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type='separator']::after,
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item + .lm-Menu-item.lm-mod-separator::after {
+body.nmx-widget-active .lm-Menu-item[data-type='separator']::after,
+body.nmx-widget-active .lm-Menu-item + .lm-Menu-item.lm-mod-separator::after {
     border-top: 1px solid color-mix(in srgb, var(--nmx-menu-border) 72%, transparent) !important;
 }
 
@@ -21079,14 +21078,14 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item + .lm-Menu
 }
 
 /* Menu separators are grouping hints, not dark horizontal rules. */
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type='separator'],
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item + .lm-Menu-item.lm-mod-separator {
+body.nmx-widget-active .lm-Menu-item[data-type='separator'],
+body.nmx-widget-active .lm-Menu-item + .lm-Menu-item.lm-mod-separator {
     min-height: 5px;
     margin: 0 8px;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item[data-type='separator']::after,
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item + .lm-Menu-item.lm-mod-separator::after {
+body.nmx-widget-active .lm-Menu-item[data-type='separator']::after,
+body.nmx-widget-active .lm-Menu-item + .lm-Menu-item.lm-mod-separator::after {
     border-top-color: color-mix(in srgb, var(--nmx-menu-border) 40%, transparent) !important;
 }
 
@@ -21134,7 +21133,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu-item + .lm-Menu
 
 .nmx-desktop-widget,
 .nmx-shell,
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) {
+body.nmx-widget-active {
     /* Desktop Codex stack: Latin/system faces first, CJK fallbacks after. The
        declarations are important because the platform font presets in
        nextmux-composer-attachments.css load later and otherwise replace this
@@ -21159,8 +21158,8 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) {
 
 .nmx-desktop-widget,
 .nmx-desktop-widget .nmx-shell,
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)),
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .lm-Menu),
+body.nmx-widget-active,
+body.nmx-widget-active :is(#theia-top-panel, .lm-Menu),
 .nmx-model-effort-portal {
     font-family: var(--nmx-ui-font) !important;
 }

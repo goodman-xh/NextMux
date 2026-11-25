@@ -33,7 +33,7 @@
 .nmx-model-effort-portal,
 .nmx-floating-file-window,
 .nmx-floating-note-window,
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) {
+body.nmx-widget-active {
     --nmxv-font-ui: -apple-system-body, ui-sans-serif, -apple-system, system-ui, "Segoe UI", "Helvetica", "Apple Color Emoji", "Arial", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
     --nmxv-font-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", "PingFang SC", "Microsoft YaHei UI", monospace;
     --nmxv-text-base: 14px;
@@ -321,12 +321,12 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) {
 }
 
 /* No 1px band above the window content (Windows caption area included). */
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #theia-top-panel, #theia-main-content-panel, #theia-left-right-split-panel) {
+body.nmx-widget-active :is(#theia-app-shell, #theia-top-panel, #theia-main-content-panel, #theia-left-right-split-panel) {
     border-top: 0 !important;
     box-shadow: none !important;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #nextmux\.desktop\.widget, .nmx-shell) {
+body.nmx-widget-active :is(#theia-app-shell, #nextmux\.desktop\.widget, .nmx-shell) {
     min-width: 0 !important;
 }
 
@@ -796,13 +796,13 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-app-shell, #n
 /* ===========================================================================
  * 9. Goal banner docked on the composer, elapsed time, editor drawer, close dialog
  * ======================================================================== */
-#nextmux\.desktop\.widget .nmx-shell :has(> .nmx-coding-goal + .nmx-composer) {
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-wrap.has-coding-goal {
     row-gap: 0 !important;
 }
 
 /* Composer notices now sit in the row under the composer (nextmux-coding-workspace.css), so only the attachments
    strip can precede the goal banner. */
-#nextmux\.desktop\.widget .nmx-shell :has(> .nmx-coding-goal + .nmx-composer) > .nmx-composer-assets:has(+ .nmx-coding-goal) {
+#nextmux\.desktop\.widget .nmx-shell .nmx-composer-wrap.has-coding-goal > .nmx-composer-assets:has(+ .nmx-coding-goal) {
     margin-bottom: 8px !important;
 }
 

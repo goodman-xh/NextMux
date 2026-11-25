@@ -496,7 +496,7 @@ export interface ComicDeskProps {
 }
 
 /** The whole desk; the widget renders it inside the comic studio. */
-export function ComicDesk(props: ComicDeskProps): React.ReactElement {
+export const ComicDesk = React.memo(function ComicDesk(props: ComicDeskProps): React.ReactElement {
     const t = (key: Key, values?: Record<string, string | number>) => deskText(props.locale, key, values);
     const steps: readonly DeskStep[] = ['canvas', 'edit'];
     const at = steps.indexOf(props.step);
@@ -594,7 +594,7 @@ export function ComicDesk(props: ComicDeskProps): React.ReactElement {
         {zoomed && <Lightbox item={zoomed} close={t('closeZoom')} onClose={() => setZoomed(undefined)} />}
         {props.confirm && <ConfirmSheet confirm={props.confirm} />}
     </div>;
-}
+});
 
 /** Collapsible reasoning/thinking disclosure for the production desk (auto-expands while streaming, auto-collapses when complete, click to toggle). */
 function DeskThinkingDisclosure(props: {

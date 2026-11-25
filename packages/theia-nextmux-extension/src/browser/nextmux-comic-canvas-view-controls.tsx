@@ -1,5 +1,5 @@
 import * as React from '@theia/core/shared/react';
-import { useReactFlow, useViewport } from '@xyflow/react';
+import { useReactFlow, useStore } from '@xyflow/react';
 import type { CanvasSettings } from './nextmux-comic-canvas-settings';
 import { CanvasModalLayer } from './nextmux-comic-canvas-modal';
 import { canvasText, CanvasTextKey } from './nextmux-comic-canvas-text';
@@ -7,12 +7,13 @@ import { toolText } from './nextmux-comic-canvas-tools-text';
 import '../../src/browser/style/nextmux-comic-canvas-view-controls.css';
 
 /** Neowow CanvasControls: grid, minimap, zoom menu, then separate compare/help buttons. */
-export function CanvasViewControls(props: {
+export const CanvasViewControls = React.memo(function CanvasViewControls(props: {
     readonly locale: string; readonly settings: CanvasSettings; readonly onSettings: (settings: CanvasSettings) => void;
     readonly root: React.RefObject<HTMLDivElement>; readonly compareCount: number; readonly onCompare: () => void;
     readonly onSelectAll: () => void;
 }): React.ReactElement {
-    const flow = useReactFlow(), { zoom } = useViewport();
+    const flow = useReactFlow();
+    const zoomPercent = useStore(s => Math.round(s.transform[2] * 100));
     const zh = props.locale.startsWith('zh'), t = (key: CanvasTextKey): string => canvasText(props.locale, key);
     const copy = (cn: string, en: string): string => zh ? cn : en;
     const [open, setOpen] = React.useState(false), [guide, setGuide] = React.useState(false);
@@ -48,15 +49,15 @@ export function CanvasViewControls(props: {
                 <button type='button' aria-pressed={props.settings.minimap} className={props.settings.minimap ? 'is-on' : ''} title={t('minimap')} aria-label={t('minimap')}
                     onClick={() => props.onSettings({ ...props.settings, minimap: !props.settings.minimap })}><i className='codicon codicon-preview' aria-hidden='true' /></button>
                 <button ref={trigger} type='button' className='nmx-board-zoom' aria-label={copy('缩放', 'Zoom')} title={copy('缩放', 'Zoom')} aria-haspopup='menu' aria-expanded={open}
-                    onClick={() => setOpen(value => !value)}><i className='codicon codicon-search' aria-hidden='true' /><span data-nmx-literal>{Math.round(zoom * 100)}%</span></button>
+                    onClick={() => setOpen(value => !value)}><i className='codicon codicon-search' aria-hidden='true' /><span data-nmx-literal>{zoomPercent}%</span></button>
             </div>
             <button type='button' className='nmx-board-view-round' title={toolText(props.locale, 'compare')} aria-label={toolText(props.locale, 'compare')} onClick={props.onCompare}>
                 <i className='codicon codicon-diff' aria-hidden='true' />{props.compareCount > 0 && <span className='nmx-board-dock-count'>{props.compareCount}</span>}</button>
             <button type='button' className='nmx-board-view-round' title={copy('画布使用指南', 'Canvas guide')} aria-label={t('shortcuts')} onClick={() => { setOpen(false); setGuide(true); }}><i className='codicon codicon-question' aria-hidden='true' /></button>
             {open && <div ref={menu} className='nmx-board-zoom-menu' role='menu' tabIndex={-1} data-canvas-keyboard-exclude aria-label={copy('缩放与导航', 'Zoom and navigation')} style={{ maxHeight: availableHeight }}
                 onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); } }}>
-                <label className='nmx-board-view-slider'><input type='range' min='4' max='300' step='1' aria-label={copy('缩放比例', 'Zoom level')} value={Math.round(zoom * 100)}
-                    onChange={event => { const value = Number(event.currentTarget.value); zoomTo(Math.abs(value - 100) <= 5 ? 1 : value / 100, 0); }} /><output data-nmx-literal>{Math.round(zoom * 100)}%</output></label>
+                <label className='nmx-board-view-slider'><input type='range' min='4' max='300' step='1' aria-label={copy('缩放比例', 'Zoom level')} value={zoomPercent}
+                    onChange={event => { const value = Number(event.currentTarget.value); zoomTo(Math.abs(value - 100) <= 5 ? 1 : value / 100, 0); }} /><output data-nmx-literal>{zoomPercent}%</output></label>
                 {item(copy('缩放至 50%', 'Zoom to 50%'), '', () => zoomTo(.5))}
                 {item(copy('缩放至 100%', 'Zoom to 100%'), '', () => zoomTo(1))}
                 {item(t('fit'), `${mod} 0`, () => { void flow.fitView({ padding: .2, duration: 300, minZoom: .15 }); close(); })}
@@ -80,7 +81,7 @@ export function CanvasViewControls(props: {
         </div>
         {guide && <CanvasGuide locale={props.locale} onClose={() => setGuide(false)} onSelectAll={() => { setGuide(false); props.onSelectAll(); props.root.current?.focus({ preventScroll: true }); }} />}
     </>;
-}
+});
 
 function CanvasGuide(props: { readonly locale: string; readonly onClose: () => void; readonly onSelectAll: () => void }): React.ReactElement {
     const zh = props.locale.startsWith('zh'), copy = (cn: string, en: string): string => zh ? cn : en;

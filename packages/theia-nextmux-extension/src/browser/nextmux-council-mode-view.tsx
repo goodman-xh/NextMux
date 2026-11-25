@@ -363,6 +363,7 @@ export interface CouncilRoleChildSource {
         readonly prompt?: string;
         readonly stage?: string;
         readonly createdAt?: number;
+        readonly councilMode?: boolean;
         readonly childAgents?: readonly DesktopAgentChildSnapshot[];
     }[];
     /** Children the host reports for this conversation's run. */
@@ -371,6 +372,8 @@ export interface CouncilRoleChildSource {
     readonly running: boolean;
     /** The turn of that run (else its last running turn). */
     readonly runningTurnId?: string;
+    /** Explicit council-mode gate for this session; when false and no turn has `councilMode: true`, regular subagents never render as 臭皮匠 rows. */
+    readonly councilMode?: boolean;
     /** The roster of the running Council run. Each non-lead role gets a row as the run starts. */
     readonly councilSlots?: readonly {
         readonly slotId: string;
@@ -402,6 +405,11 @@ function isCouncilRoleSubConversation(child: DesktopAgentChildSnapshot): boolean
  * saved mid-run reads `interrupted`, so a restart never revives it as running.
  */
 export function collectSessionCouncilRoleChildren(source: CouncilRoleChildSource): CouncilRoleChildren {
+    const rosterActive = Boolean(source.councilSlots?.length);
+    const hasCouncilHistory = source.turns.some(turn => turn.councilMode === true);
+    if (source.councilMode === false && !rosterActive && !hasCouncilHistory) {
+        return { children: [], bindings: new Map() };
+    }
     const settled = (child: DesktopAgentChildSnapshot): CouncilRoleChild => child.status === 'running' ? { ...child, status: 'interrupted' } : child;
     const live = new Map((source.liveChildren || []).filter(isCouncilRoleSubConversation).map(child => [child.childRunId, child] as const));
     const runningTurn = source.running
@@ -417,11 +425,15 @@ export function collectSessionCouncilRoleChildren(source: CouncilRoleChildSource
         else history.push(settled(latest));
     };
     for (const turn of source.turns) {
+        if (turn.councilMode === false) continue;
+        if (source.councilMode === false && turn.councilMode !== true) continue;
         for (const child of turn.childAgents || []) {
             if (isCouncilRoleSubConversation(child) && !listed.has(child.childRunId)) place(child, turn === runningTurn);
         }
     }
-    for (const child of live.values()) if (!listed.has(child.childRunId)) place(child, true);
+    if (source.councilMode !== false || rosterActive) {
+        for (const child of live.values()) if (!listed.has(child.childRunId)) place(child, true);
+    }
     const dispatched = [...current.values()].sort((left, right) => left.startedAt - right.startedAt);
     const bindings = new Map<string, string>();
     const turnId = runningTurn?.id || source.runningTurnId;

@@ -707,3 +707,43 @@ const originalReceiptLabels: Readonly<Record<NextMuxDesktopLocale, readonly stri
 export function originalReceiptText(locale: NextMuxDesktopLocale, key: 'check' | 'checking' | 'pending' | 'review' | 'expired' | 'recovered' | 'unavailable' | 'toolsDisplayOnly'): string {
     return (originalReceiptLabels[locale] || originalReceiptLabels.en)[['check', 'checking', 'pending', 'review', 'expired', 'recovered', 'unavailable', 'toolsDisplayOnly'].indexOf(key)] ?? String(key);
 }
+
+const receiptDetailLabels: Readonly<Record<NextMuxDesktopLocale, string>> = {
+    en: 'Technical details',
+    'zh-CN': '查看技术详情',
+    'zh-TW': '查看技術詳情',
+    ja: '技術的な詳細を表示',
+    ko: '기술 세부 정보 보기',
+    es: 'Ver detalles técnicos',
+    fr: 'Afficher les détails techniques',
+    de: 'Technische Details anzeigen',
+    'pt-BR': 'Ver detalhes técnicos',
+    ru: 'Технические подробности',
+    ar: 'عرض التفاصيل التقنية',
+    hi: 'तकनीकी विवरण देखें'
+};
+
+export function agentChildFailureDetailsLabel(locale: NextMuxDesktopLocale): string {
+    return receiptDetailLabels[locale] || receiptDetailLabels.en;
+}
+
+export function agentChildReceiptSummary(
+    locale: NextMuxDesktopLocale,
+    failure: Partial<DesktopAgentRunFailure> & { readonly code?: string; readonly message?: string }
+): string {
+    const formatted = formatModelError(failure, locale).text?.trim();
+    const opaqueGeneric = !formatted || /^(?:操作未能完成[，,]?\s*请查看详情[。.]?|operation could not be completed[.,;]?\s*see details\.?)$/i.test(formatted);
+    if (!opaqueGeneric) return formatted;
+    return desktopFailureMessage(locale, failure);
+}
+
+export function agentChildReceiptTechnicalDetail(
+    failure: Partial<DesktopAgentRunFailure> & { readonly code?: string; readonly message?: string }
+): string | undefined {
+    const parts = [
+        failure.code && !/^AGENT_RUN_FAILED$/i.test(failure.code) ? failure.code : '',
+        failure.httpStatus ? `HTTP ${failure.httpStatus}` : '',
+        failure.message?.trim() || ''
+    ].filter(Boolean);
+    return parts.length ? parts.join(' · ') : undefined;
+}

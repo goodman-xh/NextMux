@@ -301,7 +301,7 @@ const ComicChatVirtuosoScroller = React.forwardRef<HTMLDivElement, VirtualScroll
 
 const THREAD_VIRTUAL_COMPONENTS = { Scroller: ComicChatVirtuosoScroller, List: ComicChatThreadColumn } as const;
 
-export function ComicChatThread(props: {
+export const ComicChatThread = React.memo(function ComicChatThread(props: {
     readonly locale: NextMuxDesktopLocale;
     readonly turns: readonly ComicChatTurnView[];
     readonly onMenu: (media: ComicChatMediaView, event: React.MouseEvent) => void;
@@ -499,7 +499,7 @@ export function ComicChatThread(props: {
         aria-label={bottomLabel} title={bottomLabel} onClick={toBottom}>
         <i className='codicon codicon-chevron-down' aria-hidden='true'></i>{unseen ? <span aria-hidden='true'></span> : undefined}</button>}
     </>;
-}
+});
 
 const ComicChatTurnCard = React.memo(function ComicChatTurnCard(props: {
     readonly view: ComicChatTurnView;
@@ -943,7 +943,7 @@ const ComicChatModelOptionRow = React.memo(function ComicChatModelOptionRow(prop
     </div>;
 });
 
-export function ComicChatComposer(props: ComicChatComposerProps): React.ReactElement {
+export const ComicChatComposer = React.memo(function ComicChatComposer(props: ComicChatComposerProps): React.ReactElement {
     const [keepAliveAnchor, hiddenInKeepAlive] = useKeepAliveHostHidden();
     const t = (key: ComicChatTextKey, values?: Readonly<Record<string, string | number>>): string => comicChatText(props.locale, key, values);
     const [popover, setPopover] = React.useState<'add' | 'cast' | 'models'>();
@@ -1363,7 +1363,7 @@ export function ComicChatComposer(props: ComicChatComposerProps): React.ReactEle
         {preview && !hiddenInKeepAlive && createPortal(<ComicChatReferencePreview locale={props.locale} reference={preview} onClose={() => setPreview(undefined)} />,
             box.current?.closest<HTMLElement>('.nmx-shell') ?? document.body)}
     </div>;
-}
+});
 
 export interface ComicMaterialView {
     readonly assetId: string;

@@ -19,6 +19,7 @@ import type {
 export interface AgentDelegationHydrationTurn {
     readonly id: string;
     readonly agentRootRunId?: string;
+    readonly councilMode?: boolean;
     readonly childAgents?: readonly DesktopAgentChildSnapshot[];
 }
 
@@ -150,9 +151,10 @@ function childFailure(child: AgentDelegationLedgerChild, status: DesktopAgentChi
 
 function diagnosticSnapshot(
     child: AgentDelegationLedgerChild,
-    options: AgentDelegationHydrationOptions
+    options: AgentDelegationHydrationOptions,
+    now = options.now ?? Date.now(),
+    allowCouncilMetadata = true
 ): DesktopAgentChildSnapshot {
-    const now = options.now ?? Date.now();
     const startedAt = timestamp(child.startedAt, now);
     const updatedAt = Math.max(startedAt, timestamp(child.updatedAt, startedAt));
     // A ledger is only consulted after the live host job is gone.  A child
@@ -179,11 +181,11 @@ function diagnosticSnapshot(
         finishedAt: Math.max(updatedAt, timestamp(child.finishedAt, updatedAt)),
         taskContext: safeTaskContext(child, options, now),
         ...(child.receipt ? { receipt: child.receipt as AgentChildReceipt } : {}),
-        ...(child.role ? { role: child.role } : {}),
-        ...(child.slotId ? { slotId: child.slotId } : {}),
+        ...(allowCouncilMetadata && child.role ? { role: child.role } : {}),
+        ...(allowCouncilMetadata && child.slotId ? { slotId: child.slotId } : {}),
         ...(child.acceptanceCriteria?.length ? { acceptanceCriteria: [...child.acceptanceCriteria] } : {}),
-        ...(child.routeSource ? { routeSource: child.routeSource } : {}),
-        ...(child.invocationKey ? { invocationKey: child.invocationKey } : {}),
+        ...(allowCouncilMetadata && child.routeSource ? { routeSource: child.routeSource } : {}),
+        ...(allowCouncilMetadata && child.invocationKey ? { invocationKey: child.invocationKey } : {}),
         ...(child.checkpointError ? { checkpointError: { ...child.checkpointError } } : {}),
         ...(failure ? { error: failure } : {}),
         // Paused, cancelled, or stopped at a limit can still resume from its checkpoint.
@@ -194,7 +196,8 @@ function diagnosticSnapshot(
 
 function mergeChild(
     current: DesktopAgentChildSnapshot,
-    incoming: DesktopAgentChildSnapshot
+    incoming: DesktopAgentChildSnapshot,
+    allowCouncilMetadata = true
 ): DesktopAgentChildSnapshot {
     const incomingIsNewer = incoming.updatedAt >= current.updatedAt;
     const shouldAdoptStatus = current.status === 'running' || incomingIsNewer && (
@@ -209,11 +212,11 @@ function mergeChild(
             ? { finishedAt: incoming.finishedAt } : {}),
         eventCount: count,
         nextEventIndex: Math.max(current.nextEventIndex, incoming.nextEventIndex, count),
-        ...(incoming.role && !current.role ? { role: incoming.role } : {}),
-        ...(incoming.slotId && !current.slotId ? { slotId: incoming.slotId } : {}),
+        ...(allowCouncilMetadata && incoming.role && !current.role ? { role: incoming.role } : {}),
+        ...(allowCouncilMetadata && incoming.slotId && !current.slotId ? { slotId: incoming.slotId } : {}),
         ...(incoming.acceptanceCriteria?.length && !current.acceptanceCriteria?.length ? { acceptanceCriteria: incoming.acceptanceCriteria } : {}),
-        ...(incoming.routeSource && !current.routeSource ? { routeSource: incoming.routeSource } : {}),
-        ...(incoming.invocationKey && !current.invocationKey ? { invocationKey: incoming.invocationKey } : {}),
+        ...(allowCouncilMetadata && incoming.routeSource && !current.routeSource ? { routeSource: incoming.routeSource } : {}),
+        ...(allowCouncilMetadata && incoming.invocationKey && !current.invocationKey ? { invocationKey: incoming.invocationKey } : {}),
         ...(incoming.receipt && (!current.receipt || incomingIsNewer) ? { receipt: incoming.receipt } : {}),
         ...(incoming.checkpointError && (!current.checkpointError || incomingIsNewer)
             ? { checkpointError: incoming.checkpointError } : {}),
@@ -251,15 +254,16 @@ export function hydrateAgentDelegationLedger<T extends AgentDelegationHydrationT
 
     for (const ledgerChild of ledger.children) {
         if (ledgerChild.rootRunId !== ledger.rootRunId) continue;
-        const incoming = diagnosticSnapshot(ledgerChild, options);
-        let ownerIndex = next.findIndex(turn => (turn.childAgents || []).some(child => child.childRunId === incoming.childRunId));
+        let ownerIndex = next.findIndex(turn => (turn.childAgents || []).some(child => child.childRunId === ledgerChild.childRunId));
         if (ownerIndex < 0) ownerIndex = next.findIndex(turn => turn.agentRootRunId === ledger.rootRunId);
         if (ownerIndex < 0) continue;
         const owner = next[ownerIndex];
+        const allowCouncilMetadata = owner.councilMode !== false;
+        const incoming = diagnosticSnapshot(ledgerChild, options, undefined, allowCouncilMetadata);
         const children = [...(owner.childAgents || [])];
         const childIndex = children.findIndex(child => child.childRunId === incoming.childRunId);
         if (childIndex >= 0) {
-            const merged = mergeChild(children[childIndex], incoming);
+            const merged = mergeChild(children[childIndex], incoming, allowCouncilMetadata);
             if (JSON.stringify(merged) !== JSON.stringify(children[childIndex])) {
                 children[childIndex] = merged;
                 next[ownerIndex] = { ...owner, childAgents: children };

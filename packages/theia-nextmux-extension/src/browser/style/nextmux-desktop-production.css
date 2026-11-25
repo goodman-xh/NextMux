@@ -37,7 +37,7 @@ body,
 .nmx-model-effort-portal,
 .nmx-floating-file-window,
 .nmx-floating-note-window,
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) {
+body.nmx-widget-active {
     --nmx-ui-font: -apple-system-body, ui-sans-serif, -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol" !important;
     --nmx-font-sans: var(--nmx-ui-font) !important;
     --nmx-numeric-font: var(--nmx-ui-font) !important;
@@ -52,7 +52,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) {
    Lumino renders them outside the widget subtree. */
 .nmx-desktop-widget,
 .nmx-desktop-widget .nmx-shell,
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)),
+body.nmx-widget-active,
 .nmx-model-effort-portal,
 body,
 .nmx-shell,
@@ -66,7 +66,7 @@ body,
     .monaco-editor, .monaco-editor *, .xterm, .xterm *,
     .codicon, .fa, .fas, .far, .fab, [class^='fa-'], [class*=' fa-']
 )),
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .lm-Menu) {
+body.nmx-widget-active :is(#theia-top-panel, .lm-Menu) {
     font-family: var(--nmx-ui-font) !important;
 }
 
@@ -248,11 +248,11 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) :is(#theia-top-panel, .l
     color-scheme: light;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) .lm-Menu {
+body.nmx-widget-active .lm-Menu {
     color-scheme: dark;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Menu {
+body.nmx-widget-active.nmx-theme-light-active .lm-Menu {
     color-scheme: light;
 }
 
@@ -393,7 +393,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Men
 
 /* The right file/browser drawer stops above the live terminal instead of
    covering it. Both panels remain independently dismissible at every size. */
-.nmx-shell:has(.nmx-terminal-drawer.is-open) .nmx-work-context {
+.nmx-shell.is-terminal-open .nmx-work-context {
     bottom: 0;
 }
 
@@ -479,14 +479,14 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden) .nmx-theme-light) .lm-Men
     unicode-bidi: plaintext;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)[dir='rtl']) :where(
+body.nmx-widget-active.nmx-dir-rtl :where(
     .nmx-model-effort-menu,
     .lm-Menu-content
 ) {
     direction: rtl;
 }
 
-body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)[dir='rtl']) :where(
+body.nmx-widget-active.nmx-dir-rtl :where(
     .nmx-model-effort-menu strong,
     .lm-Menu-itemLabel,
     .lm-Menu-itemShortcut
@@ -671,7 +671,7 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)[dir='rtl']) :where(
 @media (max-width: 760px) {
     /* Long translated File/Edit/View/Help labels stay reachable by horizontal
        scrolling rather than being clipped underneath the centered switcher. */
-    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar > .lm-MenuBar-content {
+    body.nmx-widget-active #theia-app-shell #theia\:menubar > .lm-MenuBar-content {
         max-width: 100%;
         overflow-x: auto !important;
         overflow-y: hidden !important;
@@ -679,11 +679,11 @@ body:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)[dir='rtl']) :where(
         scrollbar-width: none;
     }
 
-    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar > .lm-MenuBar-content::-webkit-scrollbar {
+    body.nmx-widget-active #theia-app-shell #theia\:menubar > .lm-MenuBar-content::-webkit-scrollbar {
         display: none;
     }
 
-    #theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar .lm-MenuBar-item {
+    body.nmx-widget-active #theia-app-shell #theia\:menubar .lm-MenuBar-item {
         flex: 0 0 auto;
     }
 
@@ -1136,6 +1136,10 @@ body:is(.windows, :has(#window-controls)) .nmx-shell .nmx-titlebar-context {
     overscroll-behavior: contain;
 }
 
+.nmx-shell .nmx-agent-child-detail > * {
+    flex-shrink: 0;
+}
+
 .nmx-shell .nmx-agent-child-detail > header {
     display: flex;
     flex-direction: column;
@@ -1300,13 +1304,14 @@ body:is(.windows, :has(#window-controls)) .nmx-shell .nmx-titlebar-context {
 
 .nmx-shell .nmx-agent-child-receipt {
     min-width: 0;
+    flex-shrink: 0;
     margin: 0;
     padding: 10px 12px;
-    overflow: hidden;
     border: 1px solid var(--nmx-border);
     border-radius: 10px;
     color: var(--nmx-subtle);
     background: var(--nmx-panel);
+    overflow-wrap: anywhere;
 }
 
 .nmx-shell .nmx-agent-child-receipt-heading {
@@ -1316,29 +1321,45 @@ body:is(.windows, :has(#window-controls)) .nmx-shell .nmx-titlebar-context {
     min-width: 0;
 }
 
-.nmx-shell .nmx-agent-child-receipt-heading strong,
-.nmx-shell .nmx-agent-child-receipt-heading span,
-.nmx-shell .nmx-agent-child-receipt small,
-.nmx-shell .nmx-agent-child-receipt code {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 .nmx-shell .nmx-agent-child-receipt-heading strong {
     flex: 0 0 auto;
+    min-width: 0;
+    white-space: nowrap;
     color: var(--nmx-text);
 }
 
 .nmx-shell .nmx-agent-child-receipt-heading span {
     flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .nmx-shell .nmx-agent-child-receipt small {
     display: block;
     margin-top: 4px;
     color: var(--nmx-muted);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.nmx-shell .nmx-agent-child-receipt-summary {
+    display: block;
+    margin-top: 6px;
+    color: var(--nmx-text);
+    line-height: 1.5;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.nmx-shell .nmx-agent-child-receipt-details {
+    margin-top: 6px;
+}
+
+.nmx-shell .nmx-agent-child-receipt-details summary {
+    cursor: pointer;
+    color: var(--nmx-muted);
+    font-size: .82em;
+    user-select: none;
 }
 
 .nmx-shell .nmx-agent-child-receipt code {
@@ -1346,6 +1367,8 @@ body:is(.windows, :has(#window-controls)) .nmx-shell .nmx-titlebar-context {
     margin-top: 4px;
     color: var(--nmx-danger);
     font-size: .76em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 
 .nmx-shell .nmx-agent-child-receipt.is-completed .nmx-agent-child-receipt-heading i {
@@ -1467,8 +1490,19 @@ body:is(.windows, :has(#window-controls)) .nmx-shell .nmx-titlebar-context {
 }
 
 .nmx-shell.nmx-theme-light .nmx-agent-child-send {
-    color: #fff;
-    background: #353134;
+    color: #ffffff !important;
+    background: #1f1d1e !important;
+}
+
+.nmx-shell.nmx-theme-light .nmx-agent-child-send:disabled {
+    color: #655f63 !important;
+    background: #d8d3cf !important;
+    opacity: 1;
+}
+
+.nmx-shell.nmx-theme-light .nmx-agent-child-send.is-stop:not(:disabled) {
+    color: #ffffff !important;
+    background: var(--nmx-danger, #b54848) !important;
 }
 
 .nmx-shell .nmx-agent-child-empty {
@@ -2001,19 +2035,19 @@ body:is(.windows, :has(#window-controls)) .nmx-shell .nmx-coding-topbar .nmx-wor
 /* A full-workspace drawer has no remaining conversation column to center on.
    Keep the global navigation at the window center and reserve its right half
    for the drawer tabs/close control instead of overlapping the two toolbars. */
-.nmx-shell:has(.nmx-work-context.is-editor-maximized) .nmx-titlebar-primary-nav {
+.nmx-shell.is-editor-maximized .nmx-titlebar-primary-nav {
     left: 50vw;
     max-width: 320px;
 }
-.nmx-shell:has(.nmx-work-context.is-editor-maximized) .nmx-titlebar-context {
+.nmx-shell.is-editor-maximized .nmx-titlebar-context {
     min-width: 0;
     width: min(var(--nmx-work-context-width, 358px), calc(50vw - 176px - var(--nmx-caption-width)));
 }
 @media (max-width: 1120px) {
-    .nmx-shell:has(.nmx-work-context.is-editor-maximized) .nmx-titlebar-primary-nav {
+    .nmx-shell.is-editor-maximized .nmx-titlebar-primary-nav {
         max-width: 132px;
     }
-    .nmx-shell:has(.nmx-work-context.is-editor-maximized) .nmx-titlebar-context {
+    .nmx-shell.is-editor-maximized .nmx-titlebar-context {
         width: min(var(--nmx-work-context-width, 358px), calc(50vw - 72px - var(--nmx-caption-width)));
     }
 }
@@ -2176,18 +2210,18 @@ body.mac.nmx-window-fullscreen .nmx-shell.is-detached-conversation .nmx-conversa
 body:is(.windows, :has(#window-controls)) .nmx-shell.is-detached-conversation .nmx-titlebar-drag-region {
     display: none !important;
 }
-body:is(.windows, :has(#window-controls)):has(.nmx-shell.is-detached-conversation) #theia-top-panel {
+body:is(.windows, :has(#window-controls)).nmx-detached-conversation #theia-top-panel {
     height: 34px !important;
     min-height: 34px !important;
     pointer-events: none;
 }
-body:is(.windows, :has(#window-controls)):has(.nmx-shell.is-detached-conversation) #window-controls {
+body:is(.windows, :has(#window-controls)).nmx-detached-conversation #window-controls {
     height: 34px;
     z-index: 30;
     pointer-events: auto;
     -webkit-app-region: no-drag;
 }
-body:is(.windows, :has(#window-controls)):has(.nmx-shell.is-detached-conversation) #window-controls .control-button {
+body:is(.windows, :has(#window-controls)).nmx-detached-conversation #window-controls .control-button {
     height: 34px;
     line-height: 34px;
 }
@@ -2246,13 +2280,13 @@ body:is(.windows, :has(#window-controls)) .nmx-shell.is-detached-conversation .n
 /* Seamless top titlebar: remove the legacy 4px dark-red strip and opaque top-panel band
    so the sidebar and workspace surfaces extend cleanly to the top window edge on Windows and macOS. */
 .nmx-shell::after,
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-top-panel::before {
+body.nmx-widget-active #theia-app-shell #theia-top-panel::before {
     display: none !important;
     content: none !important;
 }
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia-top-panel,
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)):has(.nmx-theme-light) #theia-top-panel,
-#theia-app-shell:has(.nmx-shell.is-context-collapsed) #theia-top-panel {
+body.nmx-widget-active #theia-app-shell #theia-top-panel,
+body.nmx-widget-active.nmx-theme-light-active #theia-app-shell #theia-top-panel,
+body.nmx-widget-active.nmx-context-collapsed #theia-app-shell #theia-top-panel {
     background: transparent !important;
     border-bottom: 0 !important;
     box-shadow: none !important;
@@ -2273,7 +2307,7 @@ body:is(.windows, :has(#window-controls)) .nmx-shell.is-detached-conversation .n
     top: 3px !important;
     height: 34px !important;
 }
-#theia-app-shell:has(#nextmux\.desktop\.widget:not(.lm-mod-hidden)) #theia\:menubar {
+body.nmx-widget-active #theia-app-shell #theia\:menubar {
     display: none !important;
 }
 

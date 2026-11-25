@@ -210,6 +210,14 @@ const BusyAwareScroller = React.forwardRef<HTMLDivElement, VirtualScrollerContai
     return <div {...props} ref={ref} aria-busy={busy} />;
 });
 
+const BusyAwareListContainer = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(function BusyAwareListContainer(props, ref) {
+    const busy = React.useContext(BusyScrollerContext);
+    return <div {...props} ref={ref} aria-busy={busy} />;
+});
+
+const GRID_VIRTUAL_COMPONENTS = { Scroller: BusyAwareScroller, List: BusyAwareListContainer } as const;
+const LIST_VIRTUAL_COMPONENTS = { Scroller: BusyAwareScroller, List: BusyAwareListContainer } as const;
+
 /**
  * Portalled hints cannot be clipped by the scroll area or the price drawer. `depositVerified` puts the gold seal before
  * the first line: the hint of a store's name when the store holds the platform's security deposit.
@@ -372,7 +380,15 @@ function renderMerchantCardElement({
         ? <ModelCenterHint text={depositVerifiedHintText(locale, merchant)} locale={locale} focusable depositVerified><strong className='is-deposit-verified'>{merchant.name}</strong></ModelCenterHint>
         : <ModelCenterHint text={() => `${merchant.name}\n${storeIntroDisplay}`} ariaLabel={merchant.name} locale={locale} focusable><strong>{merchant.name}</strong></ModelCenterHint>;
     return <article className={isCapacityFull ? 'nmx-mc-merchant is-capacity-full' : 'nmx-mc-merchant'} key={merchant.id} data-model-center-merchant={merchant.id} data-deposit-verified={deposit ? 'true' : undefined} data-relay-capacity={isCapacityFull ? 'full' : undefined}>
-        <div className='nmx-mc-identity'>{deposit ? <span className='nmx-mc-name-line'>{nameHint}<ModelCenterHint text={deposit} locale={locale} focusable><DepositVerifiedSeal /></ModelCenterHint></span> : nameHint}
+        <div className='nmx-mc-identity'>
+            <div className='nmx-mc-identity-head'>
+                <div className='nmx-mc-identity-title'>
+                    {deposit ? <span className='nmx-mc-name-line'>{nameHint}<ModelCenterHint text={deposit} locale={locale} focusable><DepositVerifiedSeal /></ModelCenterHint></span> : nameHint}
+                </div>
+                <ModelCenterHint text={() => `${merchant.name} · ${text('supported')}`} locale={locale} focusable={false}>
+                    <button type='button' data-model-center-list onPointerEnter={() => onPrefetch(merchant.id)} onClick={() => onOpenDetail(merchant)}>{text('supported')}</button>
+                </ModelCenterHint>
+            </div>
             {hint(<p className={`nmx-mc-tagline nmx-mc-merchant-bio${storeIntro ? '' : ' is-empty'}`} data-testid={`mc-store-tagline-${merchant.id}`} data-nmx-literal dir='auto'>
                 {storeIntroDisplay}
             </p>, () => `${merchant.name} · ${storeIntroDisplay}`, true, storeIntroDisplay)}<span><ModelCenterHint text={publicCode || market('copyNumber')} ariaLabel={publicCode || market('copyNumber')} locale={locale} focusable><code dir='ltr'>{publicCode || '—'}</code></ModelCenterHint>
@@ -398,7 +414,6 @@ function renderMerchantCardElement({
         <div className='nmx-mc-actions'>
             <ModelCenterHint text={() => modelUsageText(locale, favorite ? 'removeFavorite' : 'favorites')} locale={locale} focusable={false}><button type='button' data-model-center-favorite={merchant.id} aria-pressed={favorite} aria-label={modelUsageText(locale, favorite ? 'removeFavorite' : 'favorites')}
                 onClick={() => onFavorite(merchant.id, merchant.name)}><FavoriteHeartIcon active={favorite} /></button></ModelCenterHint>
-            <ModelCenterHint text={() => `${merchant.name} · ${text('supported')}`} locale={locale} focusable={false}><button type='button' data-model-center-list onPointerEnter={() => onPrefetch(merchant.id)} onClick={() => onOpenDetail(merchant)}>{text('supported')}</button></ModelCenterHint>
         </div>
     </article>;
 }
@@ -658,7 +673,7 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
         />
     ), [locale, favoriteIdSet, capacitySnapshot, capacityScope, props.copiedNumber, handleCopy, handleCopyError, onFavorite, handlePrefetch, openDetail]);
     const drawer = detail && <MerchantModelDrawer service={service} merchant={detail} locale={locale} closing={detailClosing} onClose={closeDetail} modelRank={props.modelRank} />;
-    return <section ref={directoryRef} className='nmx-mc-directory' dir={locale === 'ar' ? 'rtl' : 'ltr'} lang={locale} data-nmx-literal>
+    return <section ref={directoryRef} className='nmx-mc-directory' data-loaded-merchant-count={merchantsList.length} aria-busy={loading} dir={locale === 'ar' ? 'rtl' : 'ltr'} lang={locale} data-nmx-literal>
         <header className='nmx-mc-directory-toolbar'>
             <span className='nmx-mc-directory-count'>
                 <span>{page?.totalCount !== undefined ? text('listed', page.totalCount) : loading ? modelUsageText(locale, 'loading') : '—'}</span>
@@ -722,7 +737,7 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
                         customScrollParent={scrollParent}
                         style={scrollParent ? undefined : { height: 'min(70vh, 640px)' }}
                         initialItemCount={Math.min(merchantsList.length, 15)}
-                        components={{ Scroller: BusyAwareScroller }}
+                        components={GRID_VIRTUAL_COMPONENTS}
                         endReached={page?.nextCursor && !loading && !error ? handleEndReached : undefined}
                         renderItem={renderMerchantItem}
                     />
@@ -735,7 +750,7 @@ export function ModelCenterMerchants(props: Props): React.ReactElement {
                         style={scrollParent ? undefined : { height: 'min(70vh, 640px)' }}
                         initialItemCount={Math.min(merchantsList.length, 15)}
                         defaultItemHeight={84}
-                        components={{ Scroller: BusyAwareScroller }}
+                        components={LIST_VIRTUAL_COMPONENTS}
                         endReached={page?.nextCursor && !loading && !error ? handleEndReached : undefined}
                         renderItem={renderMerchantItem}
                     />
