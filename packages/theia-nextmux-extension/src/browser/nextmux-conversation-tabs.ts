@@ -82,6 +82,8 @@ export interface ConversationVisualTab {
     readonly followed?: boolean;
     /** The app's bundle id (macOS) or program name (Windows), so the AI finds the tab of the app the user picked. */
     readonly appId?: string;
+    /** Executable or shortcut path on disk so a disconnected tab can still reopen portable or unlisted apps. */
+    readonly launchPath?: string;
     /**
      * Windows program names (file name without .exe) of the window's process and of the program launched for it
      * (e.g. "Notepad", "LeagueClientUx"): what skill plugins declare as `program`.
@@ -184,7 +186,13 @@ export function parseConversationTabs(raw: string | null | undefined): Conversat
             const valid = list.filter((tab): tab is ConversationVisualTab => Boolean(tab) && typeof tab.id === 'string' && tab.id !== CONVERSATION_TAB_ID
                 && typeof tab.title === 'string' && typeof tab.target === 'string'
                 && ['remote-desktop', 'local-desktop', 'virtual-machine'].includes(tab.kind)).slice(-MAX_TABS_PER_CONVERSATION);
-            if (valid.length) tabs[id] = valid.map(({ windowRef: _window, windows: _windows, familyId: _family, ...tab }) => ({ ...tab, status: tab.status === 'error' ? 'error' : 'disconnected', frameUrl: undefined }));
+            if (valid.length) tabs[id] = valid.map(({ windowRef: _window, windows: _windows, familyId: _family, launchPath, ...tab }) => ({
+                ...tab,
+                ...(typeof launchPath === 'string' && launchPath.trim() && launchPath.length <= 512 && !/[\r\n\0]/.test(launchPath)
+                    ? { launchPath: launchPath.trim() } : {}),
+                status: tab.status === 'error' ? 'error' : 'disconnected',
+                frameUrl: undefined
+            }));
         }
         const active: Record<string, string> = {};
         for (const [id, tab] of Object.entries(value.active || {})) if (typeof tab === 'string' && tabs[id]?.some(item => item.id === tab)) active[id] = tab;
@@ -267,7 +275,7 @@ function tabWindowStageRank(item: Pick<ConversationTabWindowItem, 'app' | 'title
  */
 export function attachTabWindow(
     tab: ConversationVisualTab,
-    opened: { readonly pid: number; readonly windowId: number; readonly app?: string; readonly title?: string; readonly followed?: boolean; readonly appId?: string; readonly programs?: readonly string[]; readonly familyId?: string; readonly role?: ConversationTabWindowItem['role']; readonly windows?: readonly ConversationTabWindowItem[] }
+    opened: { readonly pid: number; readonly windowId: number; readonly app?: string; readonly title?: string; readonly followed?: boolean; readonly appId?: string; readonly launchPath?: string; readonly programs?: readonly string[]; readonly familyId?: string; readonly role?: ConversationTabWindowItem['role']; readonly windows?: readonly ConversationTabWindowItem[] }
         & ConversationTabRealtimeFacts,
     activate = true
 ): ConversationVisualTab {
@@ -308,6 +316,7 @@ export function attachTabWindow(
         windows: nextWindows,
         ...(opened.familyId ? { familyId: opened.familyId } : {}),
         ...(opened.appId?.trim() && !tab.appId ? { appId: opened.appId.trim().slice(0, 160) } : {}),
+        ...(opened.launchPath?.trim() ? { launchPath: opened.launchPath.trim().slice(0, 512) } : {}),
         ...(mergedPrograms.length ? { programs: mergedPrograms } : {})
     };
 }
@@ -384,7 +393,7 @@ export function findConversationTabByTarget(
  * The tab for an app the AI opened with tabs.open_app. Tabs are the AI's own surfaces, apart from the user's
  * desktop: controlling a desktop window with computer.* never opens one.
  */
-export function appWindowTab(opened: { readonly pid: number; readonly windowId: number; readonly app: string; readonly title?: string; readonly followed?: boolean; readonly appId?: string;
+export function appWindowTab(opened: { readonly pid: number; readonly windowId: number; readonly app: string; readonly title?: string; readonly followed?: boolean; readonly appId?: string; readonly launchPath?: string;
     readonly programs?: readonly string[]; readonly familyId?: string; readonly role?: ConversationTabWindowItem['role']; readonly windows?: readonly ConversationTabWindowItem[] }
     & ConversationTabRealtimeFacts, platform: string): Omit<ConversationVisualTab, 'createdAt'> {
     const name = opened.app.trim().slice(0, 120) || `PID ${opened.pid}`;
@@ -395,7 +404,9 @@ export function appWindowTab(opened: { readonly pid: number; readonly windowId: 
         platform: computerPlatform(platform), status: 'connected', windowRef: { pid: opened.pid, windowId: opened.windowId }, ...(opened.followed ? { followed: true } : {}),
         ...(opened.familyId ? { familyId: opened.familyId } : {}),
         windows: opened.windows?.length ? opened.windows : [{ pid: opened.pid, windowId: opened.windowId, app: name, title: opened.title || name, alive: true, ...(opened.role ? { role: opened.role } : {}), ...tabRealtimeFacts(opened) }],
-        ...(opened.appId?.trim() ? { appId: opened.appId.trim().slice(0, 160) } : {}), ...(programs.length ? { programs } : {}) };
+        ...(opened.appId?.trim() ? { appId: opened.appId.trim().slice(0, 160) } : {}),
+        ...(opened.launchPath?.trim() ? { launchPath: opened.launchPath.trim().slice(0, 512) } : {}),
+        ...(programs.length ? { programs } : {}) };
 }
 
 /**

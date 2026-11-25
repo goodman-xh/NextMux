@@ -18750,6 +18750,61 @@ html.nmx-pane-resizing-y :is(.nmx-terminal-drawer, .nmx-terminal-layout, .nmx-te
     color: #655f68;
     border-bottom-color: color-mix(in srgb, #655f68 52%, transparent);
 }
+.nmx-model-evidence-auth-dd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: nowrap;
+}
+.nmx-model-auth-test-btn {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 19px;
+    padding: 0 7px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--nmx-border, #3e3a3c) 88%, transparent);
+    background: color-mix(in srgb, var(--nmx-surface-elevated, #2a2729) 92%, transparent);
+    color: var(--nmx-text, #ece8ea);
+    font-size: 10.5px;
+    line-height: 1;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 140ms ease, border-color 140ms ease, opacity 140ms ease;
+}
+.nmx-model-auth-test-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--nmx-accent, #7e9ff5) 18%, var(--nmx-surface-elevated, #2a2729));
+    border-color: color-mix(in srgb, var(--nmx-accent, #7e9ff5) 55%, var(--nmx-border, #3e3a3c));
+}
+.nmx-model-auth-test-btn.is-unsupported,
+.nmx-model-auth-test-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    color: var(--nmx-muted, #9a9396);
+    background: color-mix(in srgb, var(--nmx-surface-elevated, #262325) 55%, transparent);
+}
+.nmx-model-auth-test-btn.is-testing {
+    cursor: wait;
+    opacity: 0.78;
+}
+:is(.nmx-theme-light, .nmx-model-effort-portal.nmx-theme-light) .nmx-model-auth-test-btn {
+    background: rgba(15, 23, 42, 0.05);
+    border-color: rgba(15, 23, 42, 0.16);
+    color: #242126;
+}
+:is(.nmx-theme-light, .nmx-model-effort-portal.nmx-theme-light) .nmx-model-auth-test-btn:hover:not(:disabled) {
+    background: rgba(37, 99, 235, 0.1);
+    border-color: rgba(37, 99, 235, 0.38);
+}
+:is(.nmx-theme-light, .nmx-model-effort-portal.nmx-theme-light) .nmx-model-auth-test-btn.is-unsupported,
+:is(.nmx-theme-light, .nmx-model-effort-portal.nmx-theme-light) .nmx-model-auth-test-btn:disabled {
+    opacity: 0.48;
+    color: #7d7680;
+    background: rgba(15, 23, 42, 0.03);
+}
 .nmx-model-evidence-note, .nmx-model-effort-caption { margin: 7px; color: var(--nmx-muted, #a9a2a5); font-size: 11px; overflow-wrap: anywhere; }
 
 .nmx-model-context-readonly,

@@ -59,8 +59,7 @@ export function merchantModelLatency(locale: NextMuxDesktopLocale, model: Pick<P
     const observedAt = typeof rawAt === 'number' && Number.isFinite(rawAt) && rawAt > 0 ? rawAt : undefined;
     const stale = (own !== undefined && model.network?.state === 'stale')
         || (observedAt !== undefined && observedAt < now - 86_400_000);
-    const notes = [api !== undefined ? relayMeasurementNote(locale, 'latencyFromApi') : '',
-        stale || observedAt !== undefined ? relayMeasurementNote(locale, 'latencyStale', observedAt) : ''].filter(Boolean);
+    const notes = [api !== undefined ? relayMeasurementNote(locale, 'latencyFromApi') : ''].filter(Boolean);
     return {
         value: `${api !== undefined ? '≈' : ''}${relayLatencyText(locale, shown)}`,
         ...(notes.length ? { note: notes.join(' · ') } : {}),
@@ -369,10 +368,7 @@ function renderMerchantCardElement({
         return `${market('authenticity')} · ${authenticityValue === undefined ? relayText(locale, 'authenticityPending') : percent(authenticityValue / 100)}${authenticityNote ? ` · ${authenticityNote}` : ''}`;
     };
     const latencyHintLazy = (): string => {
-        const latencyNote = latencyValue !== undefined && (latencyStale || latencyObservedAt !== undefined)
-            ? relayMeasurementNote(locale, 'latencyStale', latencyObservedAt)
-            : '';
-        return `${market('latency')} · ${latencyValue === undefined ? relayEvidenceText(locale, 'unmeasured') : `${latencyValue} ms`}${latencyNote ? ` · ${latencyNote}` : ''}`;
+        return `${market('latency')} · ${latencyValue === undefined ? relayEvidenceText(locale, 'unmeasured') : `${latencyValue} ms`}`;
     };
     const hint = (content: React.ReactNode, label: string | (() => string), focusable = true, ariaLabel?: string): React.ReactElement =>
         <ModelCenterHint text={label} ariaLabel={ariaLabel} locale={locale} focusable={focusable}>{content}</ModelCenterHint>;

@@ -457,3 +457,132 @@ const hiddenModelsHintLabels: Readonly<Record<NextMuxDesktopLocale, string>> = {
     ar: 'حدّد لإظهاره في قائمة النماذج',
     hi: 'मॉडल सूची में दिखाने के लिए चेक करें'
 };
+
+export interface OwnAuthenticityTestStrings {
+    readonly test: string;
+    readonly retest: string;
+    readonly testing: string;
+    readonly costHint: string;
+    readonly unsupportedHint: string;
+    readonly inconclusiveHint: string;
+    readonly failed: string;
+}
+
+const ownAuthenticityTestLabels: Readonly<Record<NextMuxDesktopLocale, OwnAuthenticityTestStrings>> = {
+    'zh-CN': {
+        test: '测试',
+        retest: '再次测试',
+        testing: '测试中…',
+        costHint: '会消耗 API 的 token（约 {tokens} tokens）',
+        unsupportedHint: '当前模型暂不支持本地真实度测试',
+        inconclusiveHint: '结果暂不确定，可再次测试',
+        failed: '真实度测试失败'
+    },
+    'zh-TW': {
+        test: '測試',
+        retest: '再次測試',
+        testing: '測試中…',
+        costHint: '會消耗 API 的 token（約 {tokens} tokens）',
+        unsupportedHint: '目前模型暫不支援本機真實度測試',
+        inconclusiveHint: '結果暫不確定，可再次測試',
+        failed: '真實度測試失敗'
+    },
+    en: {
+        test: 'Test',
+        retest: 'Retest',
+        testing: 'Testing…',
+        costHint: 'Consumes API tokens (~{tokens} tokens)',
+        unsupportedHint: 'Local authenticity test is not supported for this model',
+        inconclusiveHint: 'Result inconclusive; click to retest',
+        failed: 'Authenticity test failed'
+    },
+    ja: {
+        test: 'テスト',
+        retest: '再テスト',
+        testing: 'テスト中…',
+        costHint: 'API トークンを消費します（約 {tokens} tokens）',
+        unsupportedHint: 'このモデルはローカル真正性テストに対応していません',
+        inconclusiveHint: '判定が保留されました。再テストできます',
+        failed: '真正性テストに失敗しました'
+    },
+    ko: {
+        test: '테스트',
+        retest: '다시 테스트',
+        testing: '테스트 중…',
+        costHint: 'API 토큰이 소모됩니다 (약 {tokens} tokens)',
+        unsupportedHint: '이 모델은 로컬 진위 테스트를 지원하지 않습니다',
+        inconclusiveHint: '결과가 불확실합니다. 다시 테스트할 수 있습니다',
+        failed: '진위 테스트 실패'
+    },
+    es: {
+        test: 'Probar',
+        retest: 'Volver a probar',
+        testing: 'Probando…',
+        costHint: 'Consume tokens de la API (~{tokens} tokens)',
+        unsupportedHint: 'Este modelo no admite la prueba local de autenticidad',
+        inconclusiveHint: 'Resultado no concluyente; haz clic para repetir',
+        failed: 'La prueba de autenticidad falló'
+    },
+    fr: {
+        test: 'Tester',
+        retest: 'Retester',
+        testing: 'Test en cours…',
+        costHint: 'Consomme des tokens de l’API (~{tokens} tokens)',
+        unsupportedHint: 'Ce modèle ne prend pas en charge le test local d’authenticité',
+        inconclusiveHint: 'Résultat non concluant ; cliquez pour retester',
+        failed: 'Échec du test d’authenticité'
+    },
+    de: {
+        test: 'Testen',
+        retest: 'Erneut testen',
+        testing: 'Wird getestet…',
+        costHint: 'Verbraucht API-Tokens (ca. {tokens} Tokens)',
+        unsupportedHint: 'Dieser lokale Authentizitätstest wird für dieses Modell nicht unterstützt',
+        inconclusiveHint: 'Ergebnis nicht eindeutig; zum Wiederholen klicken',
+        failed: 'Authentizitätstest fehlgeschlagen'
+    },
+    'pt-BR': {
+        test: 'Testar',
+        retest: 'Testar novamente',
+        testing: 'Testando…',
+        costHint: 'Consome tokens da API (~{tokens} tokens)',
+        unsupportedHint: 'Este modelo não oferece suporte ao teste local de autenticidade',
+        inconclusiveHint: 'Resultado inconclusivo; clique para testar novamente',
+        failed: 'Falha no teste de autenticidade'
+    },
+    ru: {
+        test: 'Тест',
+        retest: 'Повторить',
+        testing: 'Проверка…',
+        costHint: 'Расходует токены API (~{tokens} токенов)',
+        unsupportedHint: 'Локальная проверка подлинности не поддерживается для этой модели',
+        inconclusiveHint: 'Результат неоднозначный; нажмите для повтора',
+        failed: 'Ошибка проверки подлинности'
+    },
+    ar: {
+        test: 'اختبار',
+        retest: 'إعادة الاختبار',
+        testing: 'جارٍ الاختبار…',
+        costHint: 'يستهلك رموز API (حوالي {tokens} رمزاً)',
+        unsupportedHint: 'اختبار الأصالة المحلي غير مدعوم لهذا النموذج',
+        inconclusiveHint: 'النتيجة غير حاسمة؛ انقر لإعادة الاختبار',
+        failed: 'فشل اختبار الأصالة'
+    },
+    hi: {
+        test: 'जाँचें',
+        retest: 'फिर जाँचें',
+        testing: 'जाँच जारी…',
+        costHint: 'API टोकन खर्च होंगे (लगभग {tokens} tokens)',
+        unsupportedHint: 'यह मॉडल स्थानीय प्रामाणिकता जाँच का समर्थन नहीं करता',
+        inconclusiveHint: 'परिणाम अनिर्णायक है; फिर जाँचने के लिए क्लिक करें',
+        failed: 'प्रामाणिकता जाँच विफल'
+    }
+};
+
+export function ownAuthenticityTestText(locale: NextMuxDesktopLocale, tokens = 800): OwnAuthenticityTestStrings {
+    const entry = ownAuthenticityTestLabels[locale] || ownAuthenticityTestLabels.en;
+    return {
+        ...entry,
+        costHint: entry.costHint.replaceAll('{tokens}', String(tokens))
+    };
+}

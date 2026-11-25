@@ -1548,11 +1548,14 @@ export function answerRealtimePrompt(tabId: string): void { if (tabId) realtimeP
 export function realtimePromptVisible(input: {
     readonly tabId: string; readonly app: string; readonly windows: boolean; readonly placement?: ConversationWindowPlacement;
     readonly selfThrottles?: boolean; readonly realtimeLaunch?: boolean; readonly realtimeLaunchReason?: string; readonly tether?: string; readonly live: boolean;
+    /** Only offer realtime relaunch when capture/bridge actually detects a stall, mismatch, blank frame, or snapshot fallback. */
+    readonly captureProblem?: boolean;
     /** Something else owns the tab right now (plugin control, a reopen in progress). */
     readonly busy?: boolean; readonly now?: number
 }): boolean {
     if (input.live && input.tabId) realtimePromptLiveTabs.add(input.tabId);
     return input.windows && input.placement === 'tab' && input.selfThrottles === true && input.realtimeLaunch === false
+        && input.captureProblem === true
         && input.realtimeLaunchReason !== 'disabled' && input.realtimeLaunchReason !== 'excluded'
         && input.tether !== 'behind' && !input.busy && realtimePromptLiveTabs.has(input.tabId)
         && !realtimePromptAnswered.has(input.tabId) && !realtimePromptDismissed(input.app, input.now);
@@ -1685,6 +1688,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     const [notice, setNotice] = React.useState<WindowTextKey>();
     const [reopening, setReopening] = React.useState(false);
     const [reopenModalOpen, setReopenModalOpen] = React.useState(false);
+    const [bridgeFallbackActive, setBridgeFallbackActive] = React.useState(false);
     const reopenDialog = React.useRef<HTMLDivElement>(null);
     const reopenBusy = React.useRef(false);
     const reopenMounted = React.useRef(true);
@@ -1694,6 +1698,19 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
         reopenBusy.current = true;
         setReopening(true);
         setNotice(undefined);
+        if (mode === 'restart') {
+            // Tear down live WGC MediaStreamTracks before terminating the target HWND/process on Windows.
+            const element = video.current;
+            const stream = element?.srcObject as MediaStream | null | undefined;
+            if (stream && typeof stream.getTracks === 'function') {
+                for (const track of stream.getTracks()) {
+                    try { track.stop(); } catch { /* already stopped */ }
+                }
+            }
+            if (element) element.srcObject = null;
+            setBridgeFallbackActive(false);
+            setLive(false);
+        }
         void props.onReopenApp(mode).then(result => {
             reopenBusy.current = false;
             if (!reopenMounted.current) return;
@@ -2653,7 +2670,10 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     // bridge that has to keep going for 4 s restarts the capture the same way (once per stall, with the same backoff).
     React.useEffect(() => {
         const element = video.current, owner = latest.current;
-        if (!live || !visible || !element || !owner?.snapshot || typeof watchLiveVideoFrames !== 'function') return undefined;
+        if (!live || !visible || !element || !owner?.snapshot || typeof watchLiveVideoFrames !== 'function') {
+            setBridgeFallbackActive(false);
+            return undefined;
+        }
         let restart: ReturnType<typeof setTimeout> | undefined;
         const stop = watchLiveVideoFrames(element, {
             windowFingerprint: async () => snapshotFingerprint(await owner.snapshot!(256, { binary: true }).catch(() => undefined)),
@@ -2677,6 +2697,7 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
                 stop();
                 restart = setTimeout(bumpStreamGeneration, liveStallRestartDelay(owner));
             },
+            onBridgeState: state => setBridgeFallbackActive(state.active),
             // The black-frame fallback can switch this stream to snapshots without a new effect run.
             enabled: () => !snapshotStreamRef.current
         }) : undefined;
@@ -2697,11 +2718,14 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     const realtimeFacts = realtimeWindow && typeof realtimeWindow.realtimeLaunch === 'boolean' ? realtimeWindow
         : windows.find(item => tab.windowRef && item.pid === tab.windowRef.pid && typeof item.realtimeLaunch === 'boolean') || realtimeWindow;
     const realtimeApp = (tab.appId || tab.title || tab.target || '').trim().toLowerCase();
+    const blankCaptureIssue = Boolean(
+        streamKey && (captureError === 'window_capture_blank' || captureError === 'parked_gpu_blank' || parkReason === 'parked_gpu_blank')
+    );
     const realtimeShown = typeof realtimePromptVisible === 'function' && Boolean(streamKey) && realtimePromptVisible({
         tabId: tab.id, app: realtimeApp, windows: tab.platform === 'windows', placement,
         selfThrottles: realtimeFacts?.selfThrottles === true || controls?.state?.selfThrottles === true,
         realtimeLaunch: realtimeFacts?.realtimeLaunch, realtimeLaunchReason: realtimeFacts?.realtimeLaunchReason,
-        tether: controls?.state?.tether, live, busy: pluginEscActive || reopening
+        tether: controls?.state?.tether, live, captureProblem: bridgeFallbackActive || blankCaptureIssue || snapshotStreamRef.current, busy: pluginEscActive || reopening
     });
     // Answered: the bar closes. Keyboard focus inside it moves to the tab's placement switch instead of falling to the page.
     const answerRealtime = (focus: 'pressed' | 'desktop' = 'pressed'): void => {
@@ -2744,9 +2768,6 @@ function LiveTabView(props: { readonly locale: NextMuxDesktopLocale; readonly ta
     const needsAdminElevation = Boolean(
         streamKey && tab.platform === 'windows' && !elevatedState.selfElevated
         && (elevatedState.elevated || parkReason === 'elevated_requires_admin' || captureError === 'window_elevated_uipi')
-    );
-    const blankCaptureIssue = Boolean(
-        streamKey && (captureError === 'window_capture_blank' || captureError === 'parked_gpu_blank' || parkReason === 'parked_gpu_blank')
     );
     const recoveryKind: 'elevated' | 'blank' | undefined = !realtimeShown
         ? (needsAdminElevation && recoveryDismissed !== 'elevated'

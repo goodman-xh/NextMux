@@ -685,6 +685,7 @@ import {
     type MerchantFreeScope,
     modelPickerEvidenceText,
     modelPickerListText,
+    ownAuthenticityTestText,
     relayMetricSignal,
     relayLatencyText,
     relayMeasurementExplanation,
@@ -701,6 +702,7 @@ import {
     usableRelaysFirst,
     RelaySourceTab
 } from './nextmux-relay-picker';
+import { estimateAuthenticityProbeTokens, isLocalAuthenticityModelSupported } from '@nextmux/model-runtime/model-authenticity';
 import { FavoriteHeartIcon } from './nextmux-favorite-icon';
 import { relayCategoryVerdict } from './nextmux-relay-category';
 import { DepositVerifiedHint, DepositVerifiedSeal, depositVerifiedHintText, type DepositVerifiedHintAnchor } from './nextmux-deposit-verified';
@@ -4824,6 +4826,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
     protected officialModelListOpenId = '';
     protected ownModelListTrigger?: HTMLElement;
     protected ownModelListFocusToken = 0;
+    protected readonly ownAuthenticityTestingKeys = new Set<string>();
+    protected readonly ownAuthenticityErrors = new Map<string, string>();
     protected privacySettings: DesktopPrivacySettings = DEFAULT_PRIVACY_SETTINGS;
     protected privacyDraft: DesktopPrivacySettings = DEFAULT_PRIVACY_SETTINGS;
     protected privacyStage: PrivacyStage = 'idle';
@@ -8185,6 +8189,9 @@ export class NextMuxDesktopWidget extends ReactWidget {
             seen.add(route.id);
             const offering = route.kind === 'managed_gateway' ? route.offering : undefined;
             const multiplier = offering ? offeringMultiplierBps(offering) : undefined;
+            const ownConnection = !offering && route.kind === 'official_connection' ? route.connection : undefined;
+            const modelId = this.modelKeyForRoute(route);
+            const ownAuthenticity = ownConnection ? this.ownModelAuthenticityState(ownConnection, modelId) : undefined;
             const providerId = route.kind === 'managed_gateway'
                 ? (this.offeringMerchantId?.(route.offering) || route.offering.providerName)
                 : (route.connection?.providerId || route.connection?.providerName);
@@ -8193,7 +8200,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const reasoningSettings = this.reasoningSettingsForRoute?.(route);
             result.push({
                 routeId: route.id,
-                modelId: this.modelKeyForRoute(route),
+                modelId,
                 label: this.scheduleRouteModelLabel(route),
                 ...(relayKey ? { relayKey } : {}),
                 ...(relayLabel ? { relayLabel } : {}),
@@ -8205,8 +8212,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 ...(reasoningSettings?.reasoningBudgetTokens !== undefined ? { reasoningBudgetTokens: reasoningSettings.reasoningBudgetTokens } : {}),
                 variantTag: offering ? offeringIsOwnPriced(offering) ? offeringPriceText(this.desktopLocale, 'ownTag')
                     : multiplier === undefined || multiplier === null ? undefined : relayMultiplierTag(this.desktopLocale, multiplier) || undefined : undefined,
-                // A relay route always shows its 真实性 after the multiplier ("—" while unmeasured); an own API has none to show.
-                ...(offering ? { authenticity: { value: this.offeringAuthenticity?.(offering) } } : {}),
+                // Managed relay routes always show 真实性 ("—" while unmeasured); own API routes show it once tested locally.
+                ...(offering
+                    ? { authenticity: { value: this.offeringAuthenticity?.(offering) } }
+                    : ownAuthenticity?.score !== undefined
+                        ? { authenticity: { value: ownAuthenticity.score } }
+                        : {}),
                 detail: route.kind === 'managed_gateway' ? route.offering.providerName : route.connection.providerName
             });
         }
@@ -8871,11 +8882,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const contextCapped = learnedContextCap !== undefined && rawContextMaximum !== undefined && learnedContextCap < rawContextMaximum;
         const contextShown = contextMaximum !== undefined && contextChoices.length > 1;
         const offering = optionRoute?.kind === 'managed_gateway' ? optionRoute.offering : undefined;
+        const ownConnection = !offering && optionRoute?.kind === 'official_connection' ? optionRoute.connection : undefined;
+        const ownModelId = optionRoute?.kind === 'official_connection' ? (baseModelId || optionRoute.connection.model) : baseModelId;
+        const ownAuthState = ownConnection ? this.ownModelAuthenticityState(ownConnection, ownModelId) : undefined;
         const officialOffering = !offering && optionRoute?.kind === 'official_connection' ? this.officialRoutePriceOffering?.(optionRoute, candidate.label) : undefined;
         const rawFidelity = offering?.fidelity || modelOption?.fidelity;
-        const fidelity = measuredModelFidelity(rawFidelity);
-        const authenticityPending = Boolean(offering) && fidelity === undefined;
-        const authenticityDefault = Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
+        const fidelity = ownAuthState?.score ?? measuredModelFidelity(rawFidelity);
+        const authenticityPending = !ownConnection && Boolean(offering) && fidelity === undefined;
+        const authenticityDefault = !ownConnection && Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
         const authenticityHint = authenticityPending
             ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint')
             : authenticityDefault
@@ -8884,14 +8898,21 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const quality = offering ? measuredRelayQuality([offering]) : undefined;
         const ownPriced = Boolean(offering && offeringIsOwnPriced(offering));
         const multiplier = offering ? offeringMultiplierBps(offering) : modelOption?.discoveredMultiplierBps;
-        const metrics: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = [
-            { label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'), value: relayPercentText(this.desktopLocale, fidelity), unmeasured: authenticityPending, hint: authenticityHint },
+        type CouncilMetricRow = { readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string; readonly renderValue?: () => React.ReactNode };
+        const metrics: ReadonlyArray<CouncilMetricRow> = [
+            {
+                label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'),
+                value: relayPercentText(this.desktopLocale, fidelity),
+                unmeasured: authenticityPending,
+                hint: authenticityHint,
+                renderValue: ownConnection ? () => this.renderOwnAuthenticityRowValue(ownConnection, ownModelId) : undefined
+            },
             { label: relayText(this.desktopLocale, 'quality'), value: relayPercentText(this.desktopLocale, quality) },
             { label: relayText(this.desktopLocale, 'price'), value: ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag')
                 : relayMultiplierTag(this.desktopLocale, multiplier) || '—' }
         ];
-        const contextRow: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
-        const evidenceRows = [...(offering || officialOffering ? metrics.slice(0, 2) : metrics), ...(!contextShown ? contextRow : [])];
+        const contextRow: ReadonlyArray<CouncilMetricRow> = contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
+        const evidenceRows: ReadonlyArray<CouncilMetricRow> = [...(offering || officialOffering ? metrics.slice(0, 2) : metrics), ...(!contextShown ? contextRow : [])];
         const taxonomyTarget = modelOption || {
             model: candidate.modelId,
             label: candidate.label,
@@ -8958,7 +8979,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
                         onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
                         onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
-                        onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd></div>)}</dl>
+                        onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-unmeasured={(!metric.renderValue && metric.value === '—') || metric.unmeasured || undefined}>{metric.renderValue ? metric.renderValue() : metric.value}</dd></div>)}</dl>
                     {(offering || officialOffering) && <OfferingPriceCard locale={this.desktopLocale} offering={(offering || officialOffering)!} collapsible pullOutDrawer officialOnly={!offering && Boolean(officialOffering)} />}
                 </section>
             </div>,
@@ -10200,6 +10221,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         try {
             const result = await this.handleTabToolRequest({ id: `reopen-${Date.now()}`, conversationId,
                 expiresAt: Date.now() + 60_000, action: 'tabOpenApp', input: { app: selector, tabId: tab.id,
+                    ...(current.launchPath ? { launchPath: current.launchPath } : {}),
                     ...(mode === 'restart' ? { restartIfRunning: true } : { checkOrOpen: true }) } },
                 navigator.userAgent.includes('Windows') ? 'win32' : 'darwin');
             if (result.ok && (result.output as { requiresRestart?: boolean })?.requiresRestart) return 'running';
@@ -10365,9 +10387,12 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // Only the model's tabs.open_app is the AI acting; the user's Reopen (and any check) never lights the frame.
         const source = internalUiRequest ? 'user' as const : 'agent' as const;
         // resultVersion 2: a failure says which stage failed and whether this call launched the app (see appOpenFailureForModel).
+        const launchPath = typeof request.input?.launchPath === 'string' && request.input.launchPath.trim()
+            ? request.input.launchPath.trim().slice(0, 512) : undefined;
         const opened = await bridge.openAppInTab(conversationId, app, explicitReopen
-            ? { onlyIfRunning: false, checkOrOpen: request.input?.checkOrOpen === true, restartIfRunning: request.input?.restartIfRunning === true, source, resultVersion: 2 }
-            : onlyIfRunning ? { onlyIfRunning: true, source, resultVersion: 2 } : { source, resultVersion: 2 });
+            ? { onlyIfRunning: false, checkOrOpen: request.input?.checkOrOpen === true, restartIfRunning: request.input?.restartIfRunning === true,
+                ...(launchPath ? { launchPath } : {}), source, resultVersion: 2 }
+            : onlyIfRunning ? { onlyIfRunning: true, source, resultVersion: 2 } : { ...(launchPath ? { launchPath } : {}), source, resultVersion: 2 });
         if (explicitReopen && opened?.ok && opened.requiresRestart) return done({ requiresRestart: true });
         if (!opened?.ok && opened?.error === 'computer_window_owned') {
             const message = tabWindowText(this.desktopLocale, 'windowOwned');
@@ -10396,7 +10421,10 @@ export class NextMuxDesktopWidget extends ReactWidget {
         // Windows: an app running as administrator ignores the clicks and keys of a program without those rights (UIPI). The
         // model hears it, so it explains instead of retrying input that never lands.
         const elevatedHint = opened.elevated === true ? { elevated: true, elevatedNote: 'This app runs as administrator. If clicks or keys have no effect, Windows is blocking input from programs without administrator rights: ask the user to restart the app without administrator rights, or to run NextMux as administrator.' } : {};
+        const resolvedLaunchPath = typeof opened.launchPath === 'string' && opened.launchPath.trim()
+            ? opened.launchPath.trim().slice(0, 512) : launchPath;
         const tab = appWindowTab({ pid: opened.pid, windowId: opened.windowId, app: opened.app || app, title: opened.title, appId: opened.appId, familyId: opened.familyId, role: opened.role, windows: opened.windows,
+            ...(resolvedLaunchPath ? { launchPath: resolvedLaunchPath } : {}),
             ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}), ...realtime }, platform);
         if (explicitReopen && (!this.codingSessions.some(session => session.id === conversationId)
             || !visualTabsFor(this.conversationTabs, conversationId).some(item => item.id === tabId))) {
@@ -10406,6 +10434,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
         const same = !explicitReopen && await liveTabFor(item => item.id === tab.id || Boolean(tab.appId && item.appId === tab.appId));
         if (same) {
             const attachedSame = attachTabWindow(same, { pid: opened.pid, windowId: opened.windowId, app: opened.app || app, title: opened.title, appId: opened.appId, familyId: opened.familyId, role: opened.role, windows: opened.windows,
+                ...(resolvedLaunchPath ? { launchPath: resolvedLaunchPath } : {}),
                 ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}), ...realtime }, true);
             const shouldSelectSame = !isReconnect || activeTabFor(this.conversationTabs, conversationId) === same.id;
             this.setConversationTabs(openVisualTab(this.conversationTabs, conversationId, attachedSame, shouldSelectSame));
@@ -10435,6 +10464,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 : (hostTab.id.startsWith('window:0:0:') || !hostTab.windowRef || hostTab.status === 'disconnected')
                 ? { ...hostTab, id: tab.id } : hostTab;
             const attached = attachTabWindow(upgradedHost, { pid: opened.pid, windowId: opened.windowId, app: opened.app || app, title: opened.title, appId: opened.appId, familyId: opened.familyId, role: opened.role, windows: opened.windows,
+                ...(resolvedLaunchPath ? { launchPath: resolvedLaunchPath } : {}),
                 ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}), ...realtime }, true);
             const shouldSelectHost = !isReconnect || activeTabFor(state, conversationId) === hostTab.id;
             const baseState = hostTab.id !== attached.id ? closeVisualTab(state, conversationId, hostTab.id) : state;
@@ -10445,6 +10475,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 next: 'Take tabs.screenshot of this tab to see the app, then act with tabs.click / tabs.type / tabs.key (or computer.* on this pid and windowId).', ...throttleHint, ...elevatedHint });
         }
         const createdTab = attachTabWindow({ ...tab, createdAt: Date.now() }, { pid: opened.pid, windowId: opened.windowId, app: opened.app || app, title: opened.title, appId: opened.appId, familyId: opened.familyId, role: opened.role, windows: opened.windows,
+            ...(resolvedLaunchPath ? { launchPath: resolvedLaunchPath } : {}),
             ...(Array.isArray(opened.programs) ? { programs: opened.programs } : {}), ...realtime }, true);
         this.setConversationTabs(openVisualTab(state, conversationId, createdTab, !isReconnect));
         return done({ tabId: createdTab.id, pid: opened.pid, windowId: opened.windowId, app: createdTab.title, window: createdTab.target,
@@ -15455,14 +15486,19 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             const renderStudioOption = (item: typeof filtered[number]): React.ReactNode => {
                                 const selected = item.key === selectedCandidate?.key;
                                 const offering = item.offering;
+                                const ownConnection = item.source.kind === 'official'
+                                    ? (pickerConnection || this.officialPickerConnectionState(item.source.key).connection)
+                                    : undefined;
+                                const ownAuthMeta = capability !== 'text' ? { outputModalities: [capability] } : undefined;
+                                const ownAuthState = ownConnection ? this.ownModelAuthenticityState(ownConnection, item.model, ownAuthMeta) : undefined;
                                 const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
                                 const variantTag = offering
                                     ? (ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering)))
                                     : '';
                                 const rawFidelity = offering?.fidelity;
-                                const fidelity = measuredModelFidelity(rawFidelity);
-                                const authenticityPending = Boolean(offering) && fidelity === undefined;
-                                const authenticityDefault = Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
+                                const fidelity = ownAuthState?.score ?? measuredModelFidelity(rawFidelity);
+                                const authenticityPending = !ownConnection && Boolean(offering) && fidelity === undefined;
+                                const authenticityDefault = !ownConnection && Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
                                 const authenticityHint = authenticityPending
                                     ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint')
                                     : authenticityDefault
@@ -15471,7 +15507,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
                                 const hoverOpen = this.comicModelHoverKey === item.key;
                                 const hoverPlacement = hoverOpen ? this.comicModelHoverPlacement : undefined;
-                                const evidenceRows: { readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }[] = [
+                                const evidenceRows: { readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string; readonly renderValue?: () => React.ReactNode }[] = [
                                     {
                                         label: item.source.kind === 'official'
                                             ? relayText(this.desktopLocale, 'apiName')
@@ -15481,12 +15517,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         value: offering?.providerName || comicStepSourceLabel(this.desktopLocale, item.source)
                                     }
                                 ];
-                                if (offering) {
+                                if (offering || ownConnection) {
                                     evidenceRows.push({
                                         label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'),
                                         value: relayPercentText(this.desktopLocale, fidelity),
                                         unmeasured: authenticityPending,
-                                        hint: authenticityHint
+                                        hint: authenticityHint,
+                                        renderValue: ownConnection ? () => this.renderOwnAuthenticityRowValue(ownConnection, item.model, ownAuthMeta) : undefined
                                     });
                                 }
                                 if (!offering) {
@@ -15542,7 +15579,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                 {variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
                                                     onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)}
                                                     onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
-                                                {offering && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}
+                                                {(offering || ownAuthState?.score !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}
                                             </span>
                                             {selected && <i className='codicon codicon-check' />}
                                         </button>
@@ -15580,7 +15617,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                         onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
                                                         onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
                                                         onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
-                                                        onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-nmx-literal data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd></div>)}</dl>
+                                                        onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-nmx-literal data-unmeasured={(!metric.renderValue && metric.value === '—') || metric.unmeasured || undefined}>{metric.renderValue ? metric.renderValue() : metric.value}</dd></div>)}</dl>
                                                     {offering && <OfferingPriceCard locale={this.desktopLocale} offering={offering} collapsible pullOutDrawer />}
                                                 </section>
                                             </div>,
@@ -46987,6 +47024,139 @@ export class NextMuxDesktopWidget extends ReactWidget {
         return { connection, loading, failed, authFailed };
     }
 
+    protected liveOfficialConnection(connection: OfficialModelConnection): OfficialModelConnection {
+        return this.officialModels?.connections?.find(item => item.id === connection.id) || connection;
+    }
+
+    protected ownModelAuthenticityState(
+        connection: OfficialModelConnection,
+        modelId: string,
+        metadata?: { readonly outputModalities?: readonly string[]; readonly category?: string }
+    ): {
+        readonly key: string;
+        readonly supported: boolean;
+        readonly estimatedTokens: number;
+        readonly score: number | undefined;
+        readonly verdict: 'verified' | 'mismatch' | 'inconclusive' | undefined;
+        readonly testing: boolean;
+        readonly error: string;
+    } {
+        const liveConn = this.liveOfficialConnection(connection);
+        const exactModel = String(modelId || liveConn.model || '').trim();
+        const key = `${liveConn.id}\0${exactModel.toLowerCase()}`;
+        const matchFn = typeof sameModelId === 'function'
+            ? sameModelId
+            : (left: string | undefined, right: string | undefined) => typeof left === 'string' && typeof right === 'string' && left.toLowerCase() === right.toLowerCase();
+        const entry = liveConn.discoveredModels?.find(item => matchFn(item.id, exactModel) || matchFn(item.label, exactModel));
+        const mediaCaps = entry?.capabilities?.length
+            ? entry.capabilities.filter(cap => ['image', 'video', 'audio', 'speech', 'music', 'sound_effect', '3d'].includes(cap))
+            : [];
+        const supported = typeof isLocalAuthenticityModelSupported === 'function'
+            ? isLocalAuthenticityModelSupported({
+                modelId: exactModel,
+                protocol: liveConn.protocol,
+                ...(metadata?.category ? { category: metadata.category } : {}),
+                ...(metadata?.outputModalities?.length
+                    ? { outputModalities: metadata.outputModalities }
+                    : mediaCaps.length > 0 ? { outputModalities: mediaCaps } : {})
+            })
+            : false;
+        const estimatedTokens = typeof estimateAuthenticityProbeTokens === 'function'
+            ? estimateAuthenticityProbeTokens(exactModel)
+            : 800;
+        const auth = entry?.authenticity;
+        const score = auth && typeof auth.score === 'number' && Number.isFinite(auth.score)
+            ? auth.score : undefined;
+        return {
+            key,
+            supported,
+            estimatedTokens,
+            score,
+            verdict: auth?.verdict,
+            testing: this.ownAuthenticityTestingKeys.has(key),
+            error: this.ownAuthenticityErrors.get(key) || ''
+        };
+    }
+
+    protected async testOwnModelAuthenticity(connectionId: string, modelId: string): Promise<void> {
+        const exactModel = String(modelId || '').trim();
+        if (!connectionId || !exactModel) return;
+        const key = `${connectionId}\0${exactModel.toLowerCase()}`;
+        if (this.ownAuthenticityTestingKeys.has(key)) return;
+        this.ownAuthenticityTestingKeys.add(key);
+        this.ownAuthenticityErrors.delete(key);
+        this.cancelModelEffortPickerClose?.();
+        this.update();
+        try {
+            const response = await this.platformService.testOfficialModelAuthenticity(connectionId, exactModel);
+            if (response?.connection) {
+                const existing = this.officialModels?.connections || [];
+                const next = existing.some(item => item.id === response.connection.id)
+                    ? existing.map(item => item.id === response.connection.id ? response.connection : item)
+                    : [response.connection, ...existing];
+                this.officialModels = { ...this.officialModels, connections: next };
+            }
+        } catch (error) {
+            const fallbackText = ownAuthenticityTestText(this.desktopLocale).failed;
+            const message = error instanceof Error && error.message.trim() ? error.message.trim() : fallbackText;
+            this.ownAuthenticityErrors.set(key, message);
+        } finally {
+            this.ownAuthenticityTestingKeys.delete(key);
+            this.update();
+        }
+    }
+
+    protected renderOwnAuthenticityRowValue(
+        connection: OfficialModelConnection,
+        modelId: string,
+        metadata?: { readonly outputModalities?: readonly string[]; readonly category?: string }
+    ): React.ReactNode {
+        const liveConn = this.liveOfficialConnection(connection);
+        const exactModel = String(modelId || liveConn.model || '').trim();
+        const state = this.ownModelAuthenticityState(liveConn, exactModel, metadata);
+        const labels = ownAuthenticityTestText(this.desktopLocale, state.estimatedTokens);
+        const hasResult = state.verdict !== undefined;
+        const btnLabel = state.testing ? labels.testing : hasResult ? labels.retest : labels.test;
+        const tip = state.error
+            ? `${labels.failed}: ${state.error}`
+            : state.supported
+                ? labels.costHint
+                : labels.unsupportedHint;
+        const scoreNode = state.score !== undefined
+            ? <span>{relayPercentText(this.desktopLocale, state.score)}</span>
+            : <span data-unmeasured='true' title={state.verdict === 'inconclusive' ? labels.inconclusiveHint : undefined}>—</span>;
+        return (
+            <span className='nmx-model-evidence-auth-dd'>
+                {scoreNode}
+                <span
+                    className='nmx-model-auth-test-wrap'
+                    title={tip}
+                    onPointerEnter={event => this.showModelEvidenceTooltip?.(tip, event.currentTarget)}
+                    onPointerLeave={() => this.hideModelEvidenceTooltip?.()}
+                >
+                    <button
+                        type='button'
+                        disabled={!state.supported || state.testing}
+                        className={`nmx-model-auth-test-btn${state.supported ? '' : ' is-unsupported'}${state.testing ? ' is-testing' : ''}`}
+                        aria-label={`${btnLabel} · ${tip}`}
+                        onPointerDown={event => { event.stopPropagation(); this.cancelModelEffortPickerClose?.(); }}
+                        onMouseDown={event => { event.stopPropagation(); this.cancelModelEffortPickerClose?.(); }}
+                        onClick={event => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            this.cancelModelEffortPickerClose?.();
+                            if (state.supported && !state.testing) {
+                                void this.testOwnModelAuthenticity(liveConn.id, exactModel);
+                            }
+                        }}
+                    >
+                        {btnLabel}
+                    </button>
+                </span>
+            </span>
+        );
+    }
+
     /** An own API whose list could not be read, shown in place of the empty list: 重试, or the Model Center for a refused key. */
     protected renderOfficialPickerFailedState(
         connection: OfficialModelConnection,
@@ -52018,9 +52188,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                 || option.measurement?.latency?.state === 'stale'
                 || (latencyObservedAt !== undefined && latencyObservedAt < now - 86_400_000)
             );
-            const latencyNote = option.latencyMs !== undefined && (latencyStale || latencyObservedAt !== undefined)
-                ? relayMeasurementNote(this.desktopLocale, 'latencyStale', latencyObservedAt)
-                : undefined;
+            const latencyNote = undefined;
             const computed = [
                 { kind: 'quality' as const, icon: 'star-full', value: option.quality, text: relayPercentText(this.desktopLocale, option.quality), fallback: false },
                 // A value the directory supplies for want of a current one carries a note saying so (relayMeasurementNote).
@@ -55995,10 +56163,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 const selected = activeRoute?.id === candidate.routeId;
                                 const candidateRoute = activeRelayRoutes.find(route => route.id === candidate.routeId);
                                 const offering = candidateRoute?.kind === 'managed_gateway' ? candidateRoute.offering : undefined;
+                                const ownConnection = !offering && candidateRoute?.kind === 'official_connection' ? candidateRoute.connection : undefined;
+                                const ownModelId = candidateRoute?.kind === 'official_connection' ? (candidate.modelId || candidateRoute.connection.model) : candidate.modelId;
+                                const ownAuthState = ownConnection ? this.ownModelAuthenticityState(ownConnection, ownModelId) : undefined;
                                 const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
                                 const variantTag = candidate.variantTag;
                                 const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
-                                const fidelity = candidate.authenticity?.value ?? (offering ? measuredModelFidelity(offering.fidelity) : undefined);
+                                const fidelity = ownAuthState?.score ?? candidate.authenticity?.value ?? (offering ? measuredModelFidelity(offering.fidelity) : undefined);
                                 const hoverOpen = this.appPluginChatHoverRouteId === candidate.routeId ? this.appPluginChatHoverPlacement : undefined;
                                 const openHover = (anchor: HTMLElement): void => this.openAppPluginChatModelHover(candidateRoute, candidate, anchor, placement);
                                 const onHover = (event: React.PointerEvent<HTMLElement>): void =>
@@ -56050,8 +56221,8 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                 const activeContextTokens = this.contextWindowForRoute?.(candidateRoute) ?? contextMaximum;
                                                 const contextChecked = contextChoices.some(tokens => tokens === activeContextTokens);
                                                 const rawFidelity = offering?.fidelity;
-                                                const authenticityPending = Boolean(offering) && fidelity === undefined;
-                                                const authenticityDefault = Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
+                                                const authenticityPending = !ownConnection && Boolean(offering) && fidelity === undefined;
+                                                const authenticityDefault = !ownConnection && Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
                                                 const authenticityHint = authenticityPending
                                                     ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint')
                                                     : authenticityDefault
@@ -56066,12 +56237,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                 const routingSourceLabel = candidateRoute?.kind === 'managed_gateway'
                                                     ? (activeRelayOption?.label || candidateRoute.offering.providerName || candidate.relayLabel || candidateRoute.offering.merchantId || '')
                                                     : (candidateRoute?.connection?.label || activeRelayOption?.label || candidate.relayLabel || '');
-                                                const metrics: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = [
+                                                type PluginMetricRow = { readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string; readonly renderValue?: () => React.ReactNode };
+                                                const metrics: ReadonlyArray<PluginMetricRow> = [
                                                     {
                                                         label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'),
                                                         value: relayPercentText(this.desktopLocale, fidelity),
                                                         unmeasured: authenticityPending,
-                                                        hint: authenticityHint
+                                                        hint: authenticityHint,
+                                                        renderValue: ownConnection ? () => this.renderOwnAuthenticityRowValue(ownConnection, ownModelId) : undefined
                                                     },
                                                     { label: relayText(this.desktopLocale, 'quality'), value: relayPercentText(this.desktopLocale, quality) },
                                                     {
@@ -56079,11 +56252,11 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                         value: ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, multiplier) || '—'
                                                     }
                                                 ];
-                                                const contextRow: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> =
+                                                const contextRow: ReadonlyArray<PluginMetricRow> =
                                                     contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
-                                                const routingRow: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> =
+                                                const routingRow: ReadonlyArray<PluginMetricRow> =
                                                     routingSourceLabel ? [{ label: appPluginText(this.desktopLocale, 'relay'), value: routingSourceLabel }] : [];
-                                                const evidenceRows = [...(offering || officialOffering ? metrics.slice(0, 2) : metrics), ...(!contextShown ? contextRow : []), ...routingRow];
+                                                const evidenceRows: ReadonlyArray<PluginMetricRow> = [...(offering || officialOffering ? metrics.slice(0, 2) : metrics), ...(!contextShown ? contextRow : []), ...routingRow];
                                                 const modelMatch = this.codingModelOptions?.(activeRelayKey || undefined)?.find(option => (option.variantOf ?? option.id) === candidate.modelId);
                                                 const taxonomyTarget = modelMatch || {
                                                     model: candidate.modelId,
@@ -56186,7 +56359,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                                 onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
                                                                 onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}>
                                                                 <dt>{metric.label}</dt>
-                                                                <dd data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd>
+                                                                <dd data-unmeasured={(!metric.renderValue && metric.value === '—') || metric.unmeasured || undefined}>{metric.renderValue ? metric.renderValue() : metric.value}</dd>
                                                             </div>)}</dl>
                                                             {(offering || officialOffering) && <OfferingPriceCard locale={this.desktopLocale} offering={(offering || officialOffering)!} collapsible pullOutDrawer officialOnly={!offering && Boolean(officialOffering)} />}
                                                         </section>
@@ -57696,7 +57869,13 @@ export class NextMuxDesktopWidget extends ReactWidget {
             await this.initComputerWindowView?.();
             // resultVersion 2: failures say which stage failed, whether this call launched the app and whether it was the
             // user's own running copy, so the notice below can say what to do.
-            const openOptions = { source: 'user' as const, resultVersion: 2 as const };
+            const pickedPath = 'path' in picked && typeof picked.path === 'string' && picked.path.trim()
+                ? picked.path.trim().slice(0, 512) : undefined;
+            const openOptions = {
+                ...(pickedPath ? { launchPath: pickedPath } : {}),
+                source: 'user' as const,
+                resultVersion: 2 as const
+            };
             let opened = await bridge.openAppInTab(targetSessionId, picked.id || picked.name, openOptions);
             // A grant revoked between the check and the open: wait once more, then try once more.
             if (mac && opened?.ok === false && opened.error === 'permission_required' && typeof bridge.getComputerCapability === 'function') {
@@ -57757,12 +57936,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // Immediate tab opening in the top tab bar (keeping the Conversation tab active so the composer & chips stay visible).
             const platform = /win/i.test(navigator.platform) ? 'win32' : 'darwin';
             const realtime = typeof tabRealtimeFacts === 'function' ? tabRealtimeFacts(opened) : {};
+            const pickedLaunchPath = typeof opened.launchPath === 'string' && opened.launchPath.trim()
+                ? opened.launchPath.trim().slice(0, 512) : pickedPath;
             const tab = appWindowTab({
                 pid: opened.pid!,
                 windowId: opened.windowId!,
                 app: opened.app || picked.name,
                 title: opened.title || picked.name,
                 appId: opened.appId || picked.id,
+                ...(pickedLaunchPath ? { launchPath: pickedLaunchPath } : {}),
                 familyId: opened.familyId,
                 role: opened.role,
                 windows: opened.windows,
@@ -57790,6 +57972,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         app: opened.app || picked.name,
                         title: opened.title || picked.name,
                         appId: opened.appId || picked.id,
+                        ...(pickedLaunchPath ? { launchPath: pickedLaunchPath } : {}),
                         familyId: opened.familyId,
                         role: opened.role,
                         windows: opened.windows,
@@ -57807,6 +57990,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                         app: opened.app || picked.name,
                         title: opened.title || picked.name,
                         appId: opened.appId || picked.id,
+                        ...(pickedLaunchPath ? { launchPath: pickedLaunchPath } : {}),
                         familyId: opened.familyId,
                         role: opened.role,
                         windows: opened.windows,
@@ -58405,11 +58589,14 @@ export class NextMuxDesktopWidget extends ReactWidget {
             // nothing in the app tests models (saving spends nothing), so a tag could never go away. Kept for diagnostics only.
             const routeHint = supported ? this.ownRouteHint?.(optionRoute) : undefined;
             const offering = optionRoute?.kind === 'managed_gateway' ? optionRoute.offering : undefined;
+            const ownConnection = !offering && optionRoute?.kind === 'official_connection' ? optionRoute.connection : undefined;
+            const ownModelId = optionRoute?.kind === 'official_connection' ? (model.model || baseModelId || optionRoute.connection.model) : model.model;
+            const ownAuthState = ownConnection ? this.ownModelAuthenticityState(ownConnection, ownModelId) : undefined;
             const rawFidelity = offering?.fidelity || model.fidelity;
-            const fidelity = measuredModelFidelity(rawFidelity);
+            const fidelity = ownAuthState?.score ?? measuredModelFidelity(rawFidelity);
             const managedRow = Boolean(offering || model.sourceName === 'NextMux' || model.sourceName === 'API 模型目录');
-            const authenticityPending = managedRow && fidelity === undefined;
-            const authenticityDefault = Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
+            const authenticityPending = !ownConnection && managedRow && fidelity === undefined;
+            const authenticityDefault = !ownConnection && Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
             const authenticityHint = authenticityPending
                 ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint')
                 : authenticityDefault
@@ -58418,8 +58605,15 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const quality = offering ? measuredRelayQuality([offering]) : undefined;
             const ownPriced = Boolean(offering && offeringIsOwnPriced(offering));
             const multiplier = offering ? offeringMultiplierBps(offering) : model.discoveredMultiplierBps;
-            const metrics: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = [
-                { label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'), value: relayPercentText(this.desktopLocale, fidelity), unmeasured: authenticityPending, hint: authenticityHint },
+            type ComposerMetricRow = { readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string; readonly renderValue?: () => React.ReactNode };
+            const metrics: ReadonlyArray<ComposerMetricRow> = [
+                {
+                    label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'),
+                    value: relayPercentText(this.desktopLocale, fidelity),
+                    unmeasured: authenticityPending,
+                    hint: authenticityHint,
+                    renderValue: ownConnection ? () => this.renderOwnAuthenticityRowValue(ownConnection, ownModelId) : undefined
+                },
                 { label: relayText(this.desktopLocale, 'quality'), value: relayPercentText(this.desktopLocale, quality) },
                 { label: relayText(this.desktopLocale, 'price'), value: ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag')
                     : relayMultiplierTag(this.desktopLocale, multiplier) || '—' }
@@ -58428,7 +58622,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
             const variantTag = offering ? ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, multiplier) : '';
             // Hovering the tag says what it is: 倍率, or for an own price that the multiplier does not apply (the hover card has the price).
             const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
-            const contextRow: ReadonlyArray<{ readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }> = contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
+            const contextRow: ReadonlyArray<ComposerMetricRow> = contextMaximum === undefined ? [] : [{ label: contextBudgetText(this.desktopLocale, 'window'), value: contextWindowTokenLabel(contextMaximum) }];
             const optionTitle = [model.label, optionRouteLabel, ...[...metrics, ...contextRow].map(metric => `${metric.label}: ${metric.value}`), !supported && unavailableLabel].filter(Boolean).join(' · ');
             return <div className={`nmx-model-option ${supported ? '' : 'is-unsupported'} ${selected ? 'is-selected' : ''}`} key={model.id} data-model-id={model.id}
                 data-capability-gate={supported ? routeHint ? `own_api_${routeHint}` : 'verified_generation_and_tools' : model.listingPending ? 'listing_pending' : unavailableReason}
@@ -58446,7 +58640,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                     this.update();
                 }} aria-label={optionTitle}><span><strong>{model.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
                     onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)} onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
-                    {(managedRow || fidelity !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}</span>{selected && <i className='codicon codicon-check'></i>}</button>
+                    {(managedRow || fidelity !== undefined || ownAuthState?.score !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}</span>{selected && <i className='codicon codicon-check'></i>}</button>
                 {card && placement && (() => {
                     const { depth, learnedContextCap, contextChoices, contextCapped, contextShown } = card;
                     const activeDepth = this.activeReasoningDepthId(optionRoute, depth);
@@ -58511,7 +58705,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                 onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
                                 onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
                                 onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
-                                onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd></div>)}</dl>
+                                onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-unmeasured={(!metric.renderValue && metric.value === '—') || metric.unmeasured || undefined}>{metric.renderValue ? metric.renderValue() : metric.value}</dd></div>)}</dl>
                             {(offering || officialOffering) && <OfferingPriceCard locale={this.desktopLocale} offering={(offering || officialOffering)!} collapsible pullOutDrawer officialOnly={!offering && Boolean(officialOffering)} />}
                             {!supported && <p className='nmx-model-evidence-note'>{unavailableLabel}</p>}
                         </section>
@@ -60590,13 +60784,18 @@ export class NextMuxDesktopWidget extends ReactWidget {
                             const renderComicModelOption = (item: typeof filtered[number]): React.ReactNode => {
                                 const selected = item.key === selectedCandidate?.key;
                                 const offering = item.offering;
+                                const ownConnection = item.source.kind === 'official'
+                                    ? (pickerConnection || this.officialPickerConnectionState(item.source.key).connection)
+                                    : undefined;
+                                const ownAuthMeta = ['image', 'video', 'audio', 'speech', 'voice', 'music', '3d'].includes(activeTab as string) ? { outputModalities: [activeTab] } : undefined;
+                                const ownAuthState = ownConnection ? this.ownModelAuthenticityState(ownConnection, item.model, ownAuthMeta) : undefined;
                                 const ownPriced = offering ? offeringIsOwnPriced(offering) : false;
                                 const variantTag = offering ? (ownPriced ? offeringPriceText(this.desktopLocale, 'ownTag') : relayMultiplierTag(this.desktopLocale, offeringMultiplierBps(offering))) : '';
                                 const variantTip = ownPriced ? offeringPriceText(this.desktopLocale, 'own') : relayText(this.desktopLocale, 'price');
                                 const rawFidelity = offering?.fidelity;
-                                const fidelity = measuredModelFidelity(rawFidelity);
-                                const authenticityPending = Boolean(offering) && fidelity === undefined;
-                                const authenticityDefault = Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
+                                const fidelity = ownAuthState?.score ?? measuredModelFidelity(rawFidelity);
+                                const authenticityPending = !ownConnection && Boolean(offering) && fidelity === undefined;
+                                const authenticityDefault = !ownConnection && Boolean(fidelity !== undefined && (rawFidelity?.defaultScore === true || rawFidelity?.confidence === 'default'));
                                 const authenticityHint = authenticityPending
                                     ? modelPickerEvidenceText(this.desktopLocale, 'authenticityPendingHint')
                                     : authenticityDefault
@@ -60604,19 +60803,20 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         : undefined;
                                 const hoverOpen = this.comicModelHoverKey === item.key;
                                 const hoverPlacement = hoverOpen ? this.comicModelHoverPlacement : undefined;
-                                const evidenceRows: { readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string }[] = [
+                                const evidenceRows: { readonly label: string; readonly value: string; readonly unmeasured?: boolean; readonly hint?: string; readonly renderValue?: () => React.ReactNode }[] = [
                                     {
                                         label: item.source.kind === 'official' ? relayText(this.desktopLocale, 'apiName')
                                             : item.source.kind === 'local' ? relayText(this.desktopLocale, 'local') : relayText(this.desktopLocale, 'relayTitle'),
                                         value: offering?.providerName || comicStepSourceLabel(this.desktopLocale, item.source)
                                     }
                                 ];
-                                if (offering) {
+                                if (offering || ownConnection) {
                                     evidenceRows.push({
                                         label: modelPickerEvidenceText(this.desktopLocale, 'authenticity'),
                                         value: relayPercentText(this.desktopLocale, fidelity),
                                         unmeasured: authenticityPending,
-                                        hint: authenticityHint
+                                        hint: authenticityHint,
+                                        renderValue: ownConnection ? () => this.renderOwnAuthenticityRowValue(ownConnection, item.model, ownAuthMeta) : undefined
                                     });
                                 }
                                 if (!offering) {
@@ -60659,7 +60859,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                         }}>
                                         <span><strong data-nmx-literal>{item.label}</strong>{variantTag && <small className='nmx-model-price-variant' dir='ltr' title={variantTip}
                                             onPointerEnter={event => this.showModelEvidenceTooltip?.(variantTip, event.currentTarget)} onPointerLeave={() => this.hideModelEvidenceTooltip?.()}>{variantTag}</small>}
-                                            {offering && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}</span>
+                                            {(offering || ownAuthState?.score !== undefined) && <ModelAuthenticityTag locale={this.desktopLocale} value={fidelity} onHover={(text, element) => this.showModelEvidenceTooltip?.(text, element)} onLeave={() => this.hideModelEvidenceTooltip?.()} />}</span>
                                         {selected && <i className='codicon codicon-check'></i>}
                                     </button>
                                     {hoverOpen && hoverPlacement && ReactDOM.createPortal(
@@ -60687,7 +60887,7 @@ export class NextMuxDesktopWidget extends ReactWidget {
                                                     onPointerEnter={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
                                                     onPointerLeave={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}
                                                     onFocus={metric.hint ? event => this.showModelEvidenceTooltip?.(metric.hint!, event.currentTarget) : undefined}
-                                                    onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-nmx-literal data-unmeasured={metric.value === '—' || metric.unmeasured || undefined}>{metric.value}</dd></div>)}</dl>
+                                                    onBlur={metric.hint ? () => this.hideModelEvidenceTooltip?.() : undefined}><dt>{metric.label}</dt><dd data-nmx-literal data-unmeasured={(!metric.renderValue && metric.value === '—') || metric.unmeasured || undefined}>{metric.renderValue ? metric.renderValue() : metric.value}</dd></div>)}</dl>
                                                 {offering && <OfferingPriceCard locale={this.desktopLocale} offering={offering} collapsible pullOutDrawer />}
                                             </section>
                                         </div>,

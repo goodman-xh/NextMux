@@ -24,7 +24,13 @@ const NUDGE_SETTLE_MS = 250;
 // Mean difference of 32×18 grey thumbnails (0–255) of a picture's inner part (the edges differ between captures):
 // up to STILL_DIFF it stands still; past CHANGED_DIFF the window changed between two snapshots; past MISMATCH_DIFF a
 // snapshot shows something else than the video.
-const THUMB_W = 32, THUMB_H = 18, THUMB_INSET = 0.06, STILL_DIFF = 1.5, CHANGED_DIFF = 2.5, MISMATCH_DIFF = 12;
+const THUMB_W = 32, THUMB_H = 18, THUMB_INSET = 0.06, STILL_DIFF = 1.5, CHANGED_DIFF = 2.5;
+// WGC (<video>) includes DWM/shadow hairlines whereas PrintWindow (<canvas>) crops to extended frame bounds, shifting
+// thin borders by 1–8 px across thumbnails. Only treat cross-pipeline comparison as a genuine mismatch when the mean
+// difference across the interior thumbnail exceeds CROSS_PIPELINE_MEAN_DIFF (22); otherwise establish a same-pipeline
+// PrintWindow baseline first and compare within PrintWindow (0 px crop shift) so static windows never oscillate.
+const CROSS_PIPELINE_MEAN_DIFF = 22;
+const HAND_BACK_COOLDOWN_MS = 1500;
 // A stalled video stays the picture (it is sharper than any snapshot) until a snapshot differs from it somewhere by
 // more than SHOWN_DIFF: a typed word does, JPEG noise or a blinking caret does not.
 const SHOWN_DIFF = 8;
@@ -58,6 +64,8 @@ export interface LiveBridgeOptions {
     readonly maxSize: () => number;
     /** The canvas became (true) or stopped being (false) the picture. */
     readonly onShown?: (shown: boolean) => void;
+    /** Bridge fallback state transitions (includes blank/stale mismatch detection before or during reveal). */
+    readonly onBridgeState?: (state: { readonly active: boolean; readonly reason?: 'stall' | 'mismatch' | 'blank' }) => void;
     /** Bridged for LIVE_BRIDGE_LONG_STALL_MS while the window keeps changing (once per bridge). */
     readonly onLongStall?: () => void;
     /** False while the bridge has nothing to do (the tab already shows the window's snapshots as its stream). */
@@ -117,10 +125,12 @@ export function nudgeLiveVideoBridge(video: object | null | undefined): void {
 
 type Thumb = Float32Array;
 let thumbContext: CanvasRenderingContext2D | null | undefined;
+let thumbDocument: Document | undefined;
 function thumbnail(source: CanvasImageSource, width: number, height: number): Thumb | undefined {
     try {
         if (!(width > 0 && height > 0) || typeof document === 'undefined') return undefined;
-        if (thumbContext === undefined) {
+        if (thumbContext === undefined || thumbDocument !== document) {
+            thumbDocument = document;
             const canvas = document.createElement('canvas');
             canvas.width = THUMB_W;
             canvas.height = THUMB_H;
@@ -188,6 +198,7 @@ interface Bridge {
     readonly total: number | undefined;
     readonly presented: number;
     frozen: Thumb | undefined;
+    baseline: Thumb | undefined;
     last: { bytes?: Uint8Array; data?: string } | undefined;
     same: number;
     failures: number;
@@ -242,6 +253,7 @@ export function bridgeLiveVideo(video: HTMLVideoElement, canvas: HTMLCanvasEleme
         notViewable: false,
         thumbAt: started, stillSince: started, stillThumb: undefined as Thumb | undefined, nudgedAt: undefined as number | undefined,
         probeShot: undefined as Thumb | undefined, probeLast: undefined as { bytes?: Uint8Array; data?: string } | undefined,
+        lastHandBackAt: 0,
         bridge: undefined as Bridge | undefined
     };
     const setShown = (shown: boolean): void => {
@@ -284,28 +296,34 @@ export function bridgeLiveVideo(video: HTMLVideoElement, canvas: HTMLCanvasEleme
         current.probeShot = undefined;
         current.probeLast = undefined;
     };
-    const reveal = (bridge: Bridge): void => {
+    const reveal = (bridge: Bridge, reason?: 'stall' | 'mismatch' | 'blank'): void => {
         if (bridge.shown) return;
         bridge.shown = true;
         bridge.shownAt = now();
         setShown(true);
+        options.onBridgeState?.({ active: true, reason: reason ?? (bridge.reason === 'stale' ? 'mismatch' : 'stall') });
     };
     // The video moves again: it is the picture once more.
     const handBack = (): void => {
         const bridge = current.bridge;
         if (!bridge) return;
         current.bridge = undefined;
+        bridge.baseline = undefined;
         cancel(bridge.timer);
         setShown(false);
+        options.onBridgeState?.({ active: false });
         const at = now();
         current.lastFrameAt = at;
         current.probeAt = at;
+        current.lastHandBackAt = at;
         pictureMoved(at, undefined);
     };
-    const engage = (reason: Bridge['reason'], seed?: { picture: DecodedWindowPicture; last: Bridge['last']; frozen: Thumb | undefined }): void => {
+    const crossPipelineMismatch = (snapshotThumb: Thumb | undefined, videoThumb: Thumb | undefined): boolean =>
+        Boolean(snapshotThumb && videoThumb && difference(snapshotThumb, videoThumb) > CROSS_PIPELINE_MEAN_DIFF);
+    const engage = (reason: Bridge['reason'], seed?: { picture: DecodedWindowPicture; last: Bridge['last']; frozen: Thumb | undefined; bridgeReason?: 'stall' | 'mismatch' | 'blank' }): void => {
         if (!watching() || current.bridge) { seed?.picture.release(); return; }
         const at = now();
-        const bridge: Bridge = { reason, total: current.total, presented: current.presented, frozen: seed ? seed.frozen : videoThumbnail(), last: seed?.last,
+        const bridge: Bridge = { reason, total: current.total, presented: current.presented, frozen: seed ? seed.frozen : videoThumbnail(), baseline: undefined, last: seed?.last,
             same: 0, failures: 0, timer: undefined, shown: false, shownAt: 0, changedAt: at, longStallTold: false };
         current.bridge = bridge;
         // The probe's snapshot already shows the window moved on: it is the picture at once. A stalled video stays the
@@ -313,7 +331,7 @@ export function bridgeLiveVideo(video: HTMLVideoElement, canvas: HTMLCanvasEleme
         if (seed) {
             paint(seed.picture);
             seed.picture.release();
-            reveal(bridge);
+            reveal(bridge, seed.bridgeReason);
         }
         const bridging = (): boolean => watching() && current.bridge === bridge;
         const poll = bridge.poll = async (): Promise<void> => {
@@ -337,9 +355,21 @@ export function bridgeLiveVideo(video: HTMLVideoElement, canvas: HTMLCanvasEleme
                     if (!bridging()) { picture?.release(); return; }
                     if (picture) {
                         const thumb = thumbnail(picture.image, picture.width, picture.height);
-                        if (!blank(thumb) && (bridge.shown || peakDifference(thumb, bridge.frozen) > SHOWN_DIFF)) {
-                            paint(picture);
-                            reveal(bridge);
+                        if (!blank(thumb)) {
+                            if (bridge.shown) {
+                                paint(picture);
+                            } else {
+                                const videoBlank = Boolean(bridge.frozen && blank(bridge.frozen));
+                                const majorCrossMismatch = crossPipelineMismatch(thumb, bridge.frozen);
+                                const baselineMoved = Boolean(bridge.baseline && peakDifference(thumb, bridge.baseline) > SHOWN_DIFF);
+                                if (videoBlank || majorCrossMismatch || baselineMoved) {
+                                    paint(picture);
+                                    reveal(bridge, videoBlank ? 'blank' : majorCrossMismatch ? 'mismatch' : 'stall');
+                                } else if (!bridge.baseline && thumb) {
+                                    // Record Snapshot #1 as same-pipeline PrintWindow baseline so 1–8px WGC crop offsets never oscillate.
+                                    bridge.baseline = thumb;
+                                }
+                            }
                         }
                         picture.release();
                     }
@@ -393,11 +423,12 @@ export function bridgeLiveVideo(video: HTMLVideoElement, canvas: HTMLCanvasEleme
             const last = shot.bytes ? { bytes: shot.bytes } : { data: shot.data };
             current.probeShot = thumb;
             current.probeLast = last;
-            if (difference(thumb, current.stillThumb) > MISMATCH_DIFF || previous && difference(thumb, previous) > CHANGED_DIFF) {
+            const videoBlank = Boolean(current.stillThumb && blank(current.stillThumb));
+            if (videoBlank || crossPipelineMismatch(thumb, current.stillThumb) || previous && difference(thumb, previous) > CHANGED_DIFF) {
                 // The video may have started moving while the window was captured: then it is live after all.
                 const still = videoThumbnail();
                 if (still && !blank(still) && difference(still, current.stillThumb) > STILL_DIFF) { picture.release(); pictureMoved(now(), still); return; }
-                engage('stale', { picture, last, frozen: current.stillThumb });
+                engage('stale', { picture, last, frozen: current.stillThumb, bridgeReason: videoBlank ? 'blank' : 'mismatch' });
                 return;
             }
             picture.release();
@@ -438,9 +469,11 @@ export function bridgeLiveVideo(video: HTMLVideoElement, canvas: HTMLCanvasEleme
                 const thumb = videoThumbnail();
                 if (thumb && !blank(thumb) && difference(thumb, bridge.frozen) > STILL_DIFF) handBack();
             }
-        } else if (at - current.lastFrameAt > STALL_MS && !current.notViewable) {
+        } else if (at - current.lastFrameAt > STALL_MS && at - current.lastHandBackAt >= HAND_BACK_COOLDOWN_MS && !current.notViewable) {
             current.nudgedAt = undefined;
             engage('stall');
+        } else if (at - current.lastFrameAt > STALL_MS && current.lastHandBackAt > 0 && at - current.lastHandBackAt < HAND_BACK_COOLDOWN_MS) {
+            // Within cooldown after handBack(): keep watching without immediate re-engage.
         } else if (!current.notViewable && (at - current.thumbAt >= STILL_CHECK_MS || nudgeSettled)) {
             if (nudgeSettled) current.nudgedAt = undefined;
             current.thumbAt = at;
@@ -495,9 +528,10 @@ export function bridgeLiveVideo(video: HTMLVideoElement, canvas: HTMLCanvasEleme
         stopped = true;
         if (bridgeNudgers.get(video) === nudge) bridgeNudgers.delete(video);
         cancel(current.timer);
-        if (current.bridge) cancel(current.bridge.timer);
+        if (current.bridge) { current.bridge.baseline = undefined; cancel(current.bridge.timer); }
         current.bridge = undefined;
         if (current.frameHandle !== undefined) { try { video.cancelVideoFrameCallback?.(current.frameHandle); } catch { /* already gone */ } }
         setShown(false);
+        options.onBridgeState?.({ active: false });
     };
 }
